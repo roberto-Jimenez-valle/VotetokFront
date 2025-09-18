@@ -1,0 +1,12 @@
+[
+    {"id":271,"lat":55.0,"lng":12.0,"p":2,"src":"https://randomuser.me/api/portraits/women/10.jpg"},
+    {"id":272,"lat":52.0,"lng":20.0,"p":3,"src":"https://randomuser.me/api/portraits/men/11.jpg"},
+    {"id":273,"lat":50.0,"lng":14.0,"p":4,"src":"https://randomuser.me/api/portraits/women/12.jpg"},
+    {"id":274,"lat":48.0,"lng":19.0,"p":5,"src":"https://randomuser.me/api/portraits/men/13.jpg"},
+    {"id":275,"lat":47.0,"lng":9.0,"p":1,"src":"https://randomuser.me/api/portraits/women/14.jpg"},
+    {"id":276,"lat":46.0,"lng":25.0,"p":2,"src":"https://randomuser.me/api/portraits/men/15.jpg"},
+    {"id":277,"lat":58.0,"lng":16.0,"p":3,"src":"https://randomuser.me/api/portraits/women/16.jpg"},
+    {"id":278,"lat":57.0,"lng":24.0,"p":4,"src":"https://randomuser.me/api/portraits/men/17.jpg"},
+    {"id":279,"lat":53.0,"lng":23.0,"p":5,"src":"https://randomuser.me/api/portraits/women/18.jpg"}
+   
+]

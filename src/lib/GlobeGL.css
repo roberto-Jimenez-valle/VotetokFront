@@ -1,0 +1,597 @@
+:global(html, body) {
+  background-color: #181a20; /* fondo base oscuro para móvil (evita parches blancos) */
+  min-height: 100%;
+  overflow-x: hidden; /* desactiva scroll horizontal global */
+}
+
+.globe-wrap {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #010e3a38; /* fondo negro */
+}
+
+/* La apertura del panel se hace desde la barra de leyenda */
+
+/* Panel de ajustes flotante (ahora junto a la leyenda) */
+.settings-panel {
+  position: fixed;
+  top: 52px;
+  left: 10px;
+  min-width: 320px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #e5e7eb;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  font:
+    13px/1.3 system-ui,
+    sans-serif;
+  z-index: 1001;
+}
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 1000;
+}
+.panel-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.panel-row input[type="range"] {
+  width: 100%;
+}
+.val {
+  opacity: 0.8;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Leyenda (modo tendencia) */
+.legend-panel {
+  position: fixed;
+  left: 10px;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  min-width: 120px;
+  max-width: 160px;
+  padding: 0;
+  color: #e5e7eb;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
+  font:
+    13px/1.3 system-ui,
+    sans-serif;
+  z-index: 1000;
+}
+.legend-title {
+  font-weight: 600;
+  opacity: 0.9;
+  margin-bottom: 6px;
+}
+.legend-item {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 0;
+}
+.legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid #00000055;
+}
+.legend-key {
+  opacity: 0.95;
+}
+.legend-count {
+  opacity: 0.8;
+}
+.legend-gradient {
+  height: 10px;
+  border-radius: 5px;
+  border: 1px solid #00000055;
+  margin: 4px 0 2px;
+}
+.legend-grad-row {
+  display: grid;
+  grid-template-columns: 12px 1fr 12px;
+  align-items: center;
+  gap: 6px;
+}
+.legend-mark {
+  opacity: 0.9;
+  font-weight: 600;
+  text-align: center;
+  font-size: 12px;
+}
+.legend-grad-row {
+  cursor: pointer;
+}
+
+/* Botón tres puntos para abrir el panel de ajustes */
+.legend-menu-btn {
+  position: fixed;
+  top: 174px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  color: #e5e7eb;
+  cursor: pointer;
+  z-index: 1003;
+}
+.legend-menu-btn:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+/* Botón localizar (arriba derecha, debajo del botón de 3 puntos) */
+.locate-btn {
+  position: fixed;
+  top: 222px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  color: #e5e7eb;
+  cursor: pointer;
+  z-index: 1003;
+}
+.locate-btn:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+/* Puntos de voto (HTML) */
+:global(.vote-dot) {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+:global(.vote-cluster) {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.18);
+  color: #e5e7eb;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font:
+    700 12px/1 system-ui,
+    sans-serif;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+}
+
+/* Barra de etiquetas trending */
+.tagbar {
+  position: fixed;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  max-width: min(100vw, 980px);
+  width: calc(100%);
+  padding: 0;
+  color: #e5e7eb;
+  background: transparent; /* sin fondo negro */
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
+  z-index: 1002;
+}
+.top-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #e5e7eb;
+  cursor: pointer;
+  position: fixed;
+  top: 8px;
+  right: 10px;
+  z-index: 1003;
+}
+.top-search-btn:hover {
+  opacity: 0.9;
+}
+/* Posicionar el dropdown de tabs al lado de la lupa */
+.tabs-float {
+  position: fixed;
+  top: 8px;
+  right: 56px; /* a la izquierda del botón de la lupa */
+  z-index: 1100; /* por encima de overlays livianos */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.search-icon {
+  position: absolute;
+  left: 20px;
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.floating-search {
+  position: fixed;
+  top: 8px;
+  right: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    width 180ms ease,
+    opacity 180ms ease;
+  z-index: 1200; /* por encima de la tagbar y otros overlays */
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+.floating-search.open {
+  width: clamp(220px, 33vw, 480px);
+  opacity: 1;
+  pointer-events: auto;
+}
+.tag-search {
+  flex: 1;
+  min-width: 160px;
+  background: transparent; /* dejar ver el glass del contenedor */
+  border: none;
+  color: #e5e7eb;
+  padding: 8px 12px 8px 36px;
+  border-radius: 999px;
+  outline: none;
+  height: 36px;
+}
+.tags-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 10px;
+  white-space: nowrap;
+  /* Ocultar barras de scroll en todos los navegadores */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE y Edge legacy */
+}
+.tags-row::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.friends-row {
+  display: flex;
+  gap: 1px; /* aún menos margen entre tiles */
+  align-items: center;
+  padding: 0px 0px 0px 0; /* sin margen a la izquierda y menos respiro a la derecha */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.friends-row::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.friend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 82px;
+  width: 98px; /* ancho fijo para controlar el truncado del texto */
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  object-fit: cover;
+  box-sizing: border-box;
+  position: relative;
+  display: block;
+}
+.avatar-circle {
+  width: 68px;
+  height: 68px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font:
+    700 24px/1 system-ui,
+    sans-serif;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+  position: relative;
+}
+/* Ring profesional visto/no visto */
+/* Unseen: aro degradado tipo Instagram */
+.avatar.unseen,
+.avatar-circle.unseen {
+  padding: 2px; /* crea el aro alrededor */
+  background: conic-gradient(from 0deg, #22d3ee, #3b82f6, #a3e635, #22d3ee);
+  border: none;
+}
+/* El contenido interior mantiene el fondo/imagen con un círculo completo */
+.avatar.unseen {
+  background-clip: padding-box;
+}
+.avatar-circle.unseen {
+  background-clip: padding-box;
+}
+
+/* Seen: aro neutro sutil */
+.avatar.seen,
+.avatar-circle.seen {
+  padding: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(148, 163, 184, 0.45),
+    rgba(148, 163, 184, 0.25)
+  );
+  border: none;
+}
+/* Fondo opaco específico para ubicaciones */
+.avatar-loc {
+  background: #000000; /* negro, opaco */
+  border-color: rgba(255, 255, 255, 0.4);
+}
+/* Icono circular (diana) para ubicaciones */
+.loc-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-block;
+}
+.friend-name {
+  font:
+    13px/1 system-ui,
+    sans-serif;
+  opacity: 0.95;
+  color: #cbd5e1; /* gris más oscuro para mayor legibilidad */
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+/* Desplazar la esfera ligeramente hacia abajo para dar respiro bajo el degradado */
+.globe-wrap :global(canvas) {
+  transform: translateY(30px);
+  margin-bottom: 0;
+}
+/* Degradado superior suave para evitar corte recto */
+.globe-top-fade {
+  position: fixed;
+  top: 20;
+  left: 0;
+  right: 0;
+  height: 136px; /* altura del degradado aumentada */
+  pointer-events: none;
+  z-index: 10; /* por encima del canvas, por debajo de la UI */
+}
+/* Bottom sheet estilo Google Maps */
+.bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(
+    60px + env(safe-area-inset-bottom)
+  ); /* sentada justo encima del menú inferior */
+  height: calc(
+    100vh - (60px + env(safe-area-inset-bottom))
+  ); /* altura útil por encima del menú */
+  transform: translateY(100vh);
+  transition: transform 220ms ease;
+  z-index: 20000; /* por encima de la barra inferior y cualquier overlay */
+  color: #e5e7eb;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+.bottom-sheet.solid {
+  background: #181a20;
+  border-top: 1px solid #23272f;
+}
+.bottom-sheet.glass {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.45) 0%,
+    rgba(0, 0, 0, 0.7) 100%
+  );
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.sheet-header {
+  padding: 16px 14px 18px; /* área de arrastre más grande */
+  cursor: grab;
+  user-select: none;
+  position: relative;
+}
+.sheet-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  cursor: pointer;
+  z-index: 5; /* por encima del área de drag del header */
+  pointer-events: auto;
+}
+.sheet-close:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+}
+.sheet-close svg {
+  pointer-events: none;
+}
+.sheet-grabber {
+  width: 56px;
+  height: 6px;
+  border-radius: 999px; /* más grande, más fácil de acertar */
+  background: rgba(255, 255, 255, 0.45);
+  margin: 6px auto 10px;
+}
+.sheet-title {
+  font:
+    600 16px/1.2 system-ui,
+    sans-serif;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.sheet-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 14px 20px;
+}
+/* Feed en modo expandido */
+.feed-list {
+  display: grid;
+  gap: 10px;
+}
+.feed-post {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 10px;
+}
+.feed-title {
+  font:
+    600 14px/1.2 system-ui,
+    sans-serif;
+  margin-bottom: 6px;
+}
+.feed-actions {
+  display: flex;
+  gap: 8px;
+}
+.feed-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+}
+.feed-btn:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+}
+/* Country chart */
+.country-chart {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  margin: 6px 0 8px;
+}
+.country-chart .seg {
+  height: 100%;
+}
+.country-chart-pcts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 6px 0 8px;
+}
+.country-chart-pcts .pct-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font:
+    12px/1.2 system-ui,
+    sans-serif;
+}
+.country-chart-pcts .sw {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid #00000055;
+}
+.country-chart-pcts .pct {
+  opacity: 0.9;
+}

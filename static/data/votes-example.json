@@ -1,0 +1,81 @@
+{
+  "meta": {
+    "description": "Ejemplo de votos geolocalizados (uno por punto). Principalmente España.",
+    "schema": {
+      "id": "string",
+      "iso3": "string",
+      "lat": "number",
+      "lng": "number",
+      "tag": "string (opcional)",
+      "timestamp": "string ISO (opcional)",
+      "city": "string (opcional)"
+    }
+  },
+  "votes": [
+    { "id": "ES-0001", "iso3": "ESP", "city": "Madrid", "lat": 40.4168, "lng": -3.7038, "tag": "Si" },
+    { "id": "ES-0002", "iso3": "ESP", "city": "Madrid", "lat": 40.42, "lng": -3.70, "tag": "No" },
+    { "id": "ES-0003", "iso3": "ESP", "city": "Madrid", "lat": 40.41, "lng": -3.71, "tag": "Tal vez" },
+    { "id": "ES-0004", "iso3": "ESP", "city": "Madrid", "lat": 40.418, "lng": -3.69, "tag": "La Muerte" },
+
+    { "id": "ES-0005", "iso3": "ESP", "city": "Barcelona", "lat": 41.3874, "lng": 2.1686, "tag": "Si" },
+    { "id": "ES-0006", "iso3": "ESP", "city": "Barcelona", "lat": 41.39, "lng": 2.16, "tag": "No" },
+    { "id": "ES-0007", "iso3": "ESP", "city": "Barcelona", "lat": 41.385, "lng": 2.17, "tag": "Tal vez" },
+    { "id": "ES-0008", "iso3": "ESP", "city": "Barcelona", "lat": 41.382, "lng": 2.15, "tag": "La Muerte" },
+
+    { "id": "ES-0009", "iso3": "ESP", "city": "Valencia", "lat": 39.4699, "lng": -0.3763, "tag": "Si" },
+    { "id": "ES-0010", "iso3": "ESP", "city": "Valencia", "lat": 39.47, "lng": -0.37, "tag": "No" },
+    { "id": "ES-0011", "iso3": "ESP", "city": "Valencia", "lat": 39.465, "lng": -0.38, "tag": "Tal vez" },
+
+    { "id": "ES-0012", "iso3": "ESP", "city": "Sevilla", "lat": 37.3891, "lng": -5.9845, "tag": "Si" },
+    { "id": "ES-0013", "iso3": "ESP", "city": "Sevilla", "lat": 37.392, "lng": -5.98, "tag": "No" },
+    { "id": "ES-0014", "iso3": "ESP", "city": "Sevilla", "lat": 37.385, "lng": -5.99, "tag": "Tal vez" },
+
+    { "id": "ES-0015", "iso3": "ESP", "city": "Bilbao", "lat": 43.2630, "lng": -2.9350, "tag": "Si" },
+    { "id": "ES-0016", "iso3": "ESP", "city": "Bilbao", "lat": 43.27, "lng": -2.94, "tag": "No" },
+
+    { "id": "ES-0017", "iso3": "ESP", "city": "Zaragoza", "lat": 41.6488, "lng": -0.8891, "tag": "Si" },
+    { "id": "ES-0018", "iso3": "ESP", "city": "Zaragoza", "lat": 41.64, "lng": -0.88, "tag": "Tal vez" },
+
+    { "id": "ES-0019", "iso3": "ESP", "city": "Málaga", "lat": 36.7213, "lng": -4.4214, "tag": "Si" },
+    { "id": "ES-0020", "iso3": "ESP", "city": "Málaga", "lat": 36.72, "lng": -4.42, "tag": "No" },
+
+    { "id": "ES-0021", "iso3": "ESP", "city": "Alicante", "lat": 38.3452, "lng": -0.4810, "tag": "Si" },
+    { "id": "ES-0022", "iso3": "ESP", "city": "Alicante", "lat": 38.35, "lng": -0.49, "tag": "Tal vez" },
+
+    { "id": "ES-0023", "iso3": "ESP", "city": "Murcia", "lat": 37.9922, "lng": -1.1307, "tag": "Si" },
+    { "id": "ES-0024", "iso3": "ESP", "city": "Murcia", "lat": 38.0, "lng": -1.12, "tag": "La Muerte" },
+
+    { "id": "ES-0025", "iso3": "ESP", "city": "Valladolid", "lat": 41.6523, "lng": -4.7245, "tag": "Si" },
+    { "id": "ES-0026", "iso3": "ESP", "city": "Valladolid", "lat": 41.65, "lng": -4.73, "tag": "No" },
+
+    { "id": "ES-0027", "iso3": "ESP", "city": "Gijón", "lat": 43.5322, "lng": -5.6611, "tag": "Si" },
+    { "id": "ES-0028", "iso3": "ESP", "city": "Gijón", "lat": 43.54, "lng": -5.66, "tag": "Tal vez" },
+
+    { "id": "ES-0029", "iso3": "ESP", "city": "A Coruña", "lat": 43.3623, "lng": -8.4115, "tag": "Si" },
+    { "id": "ES-0030", "iso3": "ESP", "city": "A Coruña", "lat": 43.36, "lng": -8.41, "tag": "No" },
+
+    { "id": "ES-0031", "iso3": "ESP", "city": "Las Palmas", "lat": 28.1235, "lng": -15.4363, "tag": "Si" },
+    { "id": "ES-0032", "iso3": "ESP", "city": "Las Palmas", "lat": 28.12, "lng": -15.44, "tag": "Tal vez" },
+
+    { "id": "ES-0033", "iso3": "ESP", "city": "Santa Cruz de Tenerife", "lat": 28.4636, "lng": -16.2518, "tag": "Si" },
+    { "id": "ES-0034", "iso3": "ESP", "city": "Santa Cruz de Tenerife", "lat": 28.47, "lng": -16.25, "tag": "No" },
+
+    { "id": "ES-0035", "iso3": "ESP", "city": "Pamplona", "lat": 42.8125, "lng": -1.6458, "tag": "Tal vez" },
+    { "id": "ES-0036", "iso3": "ESP", "city": "Pamplona", "lat": 42.81, "lng": -1.64, "tag": "Si" },
+
+    { "id": "ES-0037", "iso3": "ESP", "city": "Salamanca", "lat": 40.9701, "lng": -5.6635, "tag": "Si" },
+    { "id": "ES-0038", "iso3": "ESP", "city": "Salamanca", "lat": 40.97, "lng": -5.66, "tag": "No" },
+
+    { "id": "ES-0039", "iso3": "ESP", "city": "Granada", "lat": 37.1773, "lng": -3.5986, "tag": "Si" },
+    { "id": "ES-0040", "iso3": "ESP", "city": "Granada", "lat": 37.18, "lng": -3.60, "tag": "Tal vez" },
+
+    { "id": "FR-0001", "iso3": "FRA", "city": "Paris", "lat": 48.8566, "lng": 2.3522, "tag": "Si" },
+    { "id": "FR-0002", "iso3": "FRA", "city": "Lyon", "lat": 45.7640, "lng": 4.8357, "tag": "No" },
+
+    { "id": "PT-0001", "iso3": "PRT", "city": "Lisboa", "lat": 38.7223, "lng": -9.1393, "tag": "Si" },
+    { "id": "PT-0002", "iso3": "PRT", "city": "Porto", "lat": 41.1579, "lng": -8.6291, "tag": "Tal vez" },
+
+    { "id": "GB-0001", "iso3": "GBR", "city": "London", "lat": 51.5074, "lng": -0.1278, "tag": "No" },
+    { "id": "GB-0002", "iso3": "GBR", "city": "Manchester", "lat": 53.4808, "lng": -2.2426, "tag": "Si" }
+  ]
+}
