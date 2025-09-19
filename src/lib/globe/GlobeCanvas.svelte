@@ -31,7 +31,8 @@
     if (!world || typeof world.globeTileEngineUrl !== 'function') return;
     try {
       if (enabled) {
-        world.globeTileEngineUrl((x: number, y: number, l: number) => `https://tile.openstreetmap.org/${l}/${x}/${y}.png`);
+        // Activar tiles raster por coordenadas XYZ desde directorio estático exportado
+        world.globeTileEngineUrl((x: number, y: number, l: number) => `/tiles/world_xyz/${l}/${x}/${y}.png`);
       } else {
         world.globeTileEngineUrl(null);
         world.globeImageUrl(null);
@@ -67,6 +68,23 @@
   }
   export function htmlElement(fn: (d: any) => HTMLElement) {
     try { world && world.htmlElement && world.htmlElement(fn); } catch {}
+  }
+
+  // Camera params for better bbox estimation
+  export function getCameraParams(): { fov: number; aspect: number } | undefined {
+    try {
+      if (!world) return undefined;
+      const cam = world.camera && world.camera();
+      const fov = (cam && typeof cam.fov === 'number') ? cam.fov : 50;
+      const aspect = (cam && typeof cam.aspect === 'number') ? cam.aspect : (() => {
+        const w = rootEl?.clientWidth || 1;
+        const h = rootEl?.clientHeight || 1;
+        return h > 0 ? w / h : 1.6;
+      })();
+      return { fov, aspect };
+    } catch {
+      return undefined;
+    }
   }
 
   // Force re-apply cap color mapping from parent
@@ -146,6 +164,9 @@
 
     // Notificar al padre que el canvas está listo
     dispatch('ready');
+
+    // Activar tiles por defecto
+    try { setTilesEnabled(true); } catch {}
   });
 
   onDestroy(() => {
