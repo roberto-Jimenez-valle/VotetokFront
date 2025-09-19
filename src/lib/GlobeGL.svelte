@@ -205,7 +205,7 @@
             ...poly.properties, 
             _isParent: true, 
             _opacity: parentOpacity,
-            _elevation: 0.0001 // Elevación muy baja para polígonos padre
+            _elevation: 0.002 // Elevación más alta para polígonos padre
           } 
         };
         combined.push(parentPoly);
@@ -222,7 +222,7 @@
             ...poly.properties, 
             _isChild: true, 
             _opacity: 1.0,
-            _elevation: 0.0008 // Elevación ligeramente mayor para subdivisiones
+            _elevation: 0.004 // Elevación más alta para subdivisiones
           } 
         };
         console.log('[CombinePolygons] Child polygon:', childPoly.properties._subdivisionName, 'isChild:', childPoly.properties._isChild);
@@ -591,8 +591,32 @@
 
     private async renderSubdivisionView(countryIso: string, subdivisionId: string, subdivisionPolygons: any[]) {
       try {
+        // Filter out null or invalid polygons first
+        const validPolygons = subdivisionPolygons.filter(poly => {
+          if (!poly) {
+            console.warn('[Navigation] Filtering out null polygon in subdivision view');
+            return false;
+          }
+          if (!poly.geometry || !poly.geometry.type) {
+            console.warn('[Navigation] Filtering out polygon with invalid geometry in subdivision view:', poly);
+            return false;
+          }
+          if (!poly.properties) {
+            console.warn('[Navigation] Filtering out polygon without properties in subdivision view:', poly);
+            return false;
+          }
+          return true;
+        });
+        
+        console.log('[Navigation] Filtered', subdivisionPolygons.length - validPolygons.length, 'invalid polygons in subdivision view, keeping', validPolygons.length, 'valid ones');
+        
+        if (validPolygons.length === 0) {
+          console.error('[Navigation] No valid polygons found for subdivision view');
+          return;
+        }
+        
         // Show ONLY the selected subdivision (no country or world background)
-        const markedPolygons = subdivisionPolygons.map(poly => ({
+        const markedPolygons = validPolygons.map(poly => ({
           ...poly,
           properties: {
             ...poly.properties,
@@ -816,8 +840,32 @@
           const subSubPolygons = await loadSubregionTopoAsGeoFeatures(countryIso, subdivisionFile);
           
           if (subSubPolygons?.length) {
+            // Filter out null or invalid polygons
+            const validPolygons = subSubPolygons.filter(poly => {
+              if (!poly) {
+                console.warn('[Labels] Filtering out null polygon');
+                return false;
+              }
+              if (!poly.geometry || !poly.geometry.type) {
+                console.warn('[Labels] Filtering out polygon with invalid geometry:', poly);
+                return false;
+              }
+              if (!poly.properties) {
+                console.warn('[Labels] Filtering out polygon without properties:', poly);
+                return false;
+              }
+              return true;
+            });
+            
+            console.log('[Labels] Filtered', subSubPolygons.length - validPolygons.length, 'invalid polygons, keeping', validPolygons.length, 'valid ones');
+            
+            if (validPolygons.length === 0) {
+              console.warn('[Labels] No valid polygons found in', subdivisionFile);
+              return;
+            }
+            
             // Mark polygons as level 2 (sub-subdivisions) so they use NAME_2
-            const markedPolygons = subSubPolygons.map(poly => ({
+            const markedPolygons = validPolygons.map(poly => ({
               ...poly,
               properties: {
                 ...poly.properties,
@@ -1525,45 +1573,48 @@
   }}
   on:polygonClick={async (e) => {
     if (!navigationManager) return;
-    
     try {
       const feat = e.detail?.feat;
       if (!feat) return;
       
-      const iso = isoOf(feat);
-      const c = centroidOf(feat);
+      // Hide bottom sheet when clicking on polygons
+      setSheetState('hidden');
+      
       const currentLevel = navigationManager.getCurrentLevel();
+      const iso = isoOf(feat);
+      const name = nameOf(feat);
       
-      // Determine polygon type and handle navigation
-      if (currentLevel === 'world') {
+      console.log('[Click] Polygon clicked:', { iso, name, currentLevel, feat: feat.properties });
+      
+      if (currentLevel === 'world' && iso) {
         // Click on country from world view
-        const isWorldPolygon = worldPolygons.some(p => isoOf(p) === iso);
-        if (isWorldPolygon) {
-          const countryName = nameOf(feat);
-          selectedCountryName = countryName;
-          selectedCountryIso = iso;
-          
-          // Zoom to country
-          globe?.pointOfView({ lat: c.lat, lng: c.lng, altitude: 0.3 }, 700);
-          
-          // Navigate using manager
-          await navigationManager.navigateToCountry(iso, countryName);
-        }
-      } else if (currentLevel === 'country') {
-        // Click on subdivision from country view
-        const subdivisionId = feat.properties?.ID_1 || feat.properties?.id_1 || feat.properties?.GID_1 || feat.properties?.gid_1;
-        const subdivisionName = feat.properties?.NAME_1 || feat.properties?.name_1 || subdivisionId;
+        console.log('[Click] Country clicked from world:', iso, name);
         
-        if (subdivisionId) {
-          // Zoom to subdivision
-          globe?.pointOfView({ lat: c.lat, lng: c.lng, altitude: 0.15 }, 700);
-          
-          // Navigate using manager
-          await navigationManager.navigateToSubdivision(iso, String(subdivisionId), String(subdivisionName));
-        }
+        // Set selected country info
+        selectedCountryName = name;
+        selectedCountryIso = iso;
+        
+        // Zoom to country
+        const centroid = centroidOf(feat);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.3 }, 700);
+        
+        // Navigate using manager
+        await navigationManager.navigateToCountry(iso, name);
+        
+      } else if (currentLevel === 'country' && feat.properties?.ID_1) {
+        // Click on subdivision from country view
+        const subdivisionId = feat.properties.ID_1;
+        const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1 || name;
+        
+        console.log('[Click] Subdivision clicked from country:', subdivisionId, subdivisionName);
+        
+        // Zoom to subdivision
+        const centroid = centroidOf(feat);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.1 }, 500);
+        
+        // Navigate using manager
+        await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
       }
-      // Note: subdivision level clicks could be extended for sub-subdivisions
-      
     } catch (e) {
       console.error('[Click] Error handling polygon click:', e);
     }
