@@ -1398,6 +1398,53 @@
   // Segmentos de chart por país seleccionado (top categorías por votos)
   type ChartSeg = { key: string; value: number; pct: number; color: string };
   let countryChartSegments: ChartSeg[] = [];
+  
+  // Function to generate chart segments from data
+  function generateCountryChartSegments(data: any[]): ChartSeg[] {
+    if (!data || data.length === 0) return [];
+    
+    // Aggregate data by key
+    const aggregated: Record<string, number> = {};
+    data.forEach(item => {
+      if (item && typeof item === 'object') {
+        Object.entries(item).forEach(([key, value]) => {
+          if (key !== 'iso' && key !== 'subdivision') {
+            const numValue = typeof value === 'number' ? value : Number(value) || 0;
+            aggregated[key] = (aggregated[key] || 0) + numValue;
+          }
+        });
+      }
+    });
+    
+    const entries = Object.entries(aggregated).map(([k, v]) => [k, v] as [string, number]);
+    const total = entries.reduce((a, [, n]) => a + n, 0);
+    if (total <= 0) return [];
+    
+    entries.sort((a, b) => b[1] - a[1]);
+    const TOP_N = 6;
+    const top = entries.slice(0, TOP_N);
+    const rest = entries.slice(TOP_N);
+    const restSum = rest.reduce((a, [, n]) => a + n, 0);
+    
+    const segs: ChartSeg[] = top.map(([k, n]) => ({ 
+      key: k, 
+      value: n, 
+      pct: (n / total) * 100, 
+      color: colorMap?.[k] ?? '#9ca3af' 
+    }));
+    
+    if (restSum > 0) {
+      segs.push({ 
+        key: 'Otros', 
+        value: restSum, 
+        pct: (restSum / total) * 100, 
+        color: 'rgba(148,163,184,0.45)' 
+      });
+    }
+    
+    return segs;
+  }
+  
   $: countryChartSegments = (() => {
     if (!selectedCountryIso) return [];
     const rec = answersData?.[selectedCountryIso];
@@ -1577,8 +1624,8 @@
       const feat = e.detail?.feat;
       if (!feat) return;
       
-      // Hide bottom sheet when clicking on polygons
-      setSheetState('hidden');
+      // Show bottom sheet with polygon data when clicking on polygons
+      setSheetState('collapsed');
       
       const currentLevel = navigationManager.getCurrentLevel();
       const iso = isoOf(feat);
@@ -1590,9 +1637,18 @@
         // Click on country from world view
         console.log('[Click] Country clicked from world:', iso, name);
         
-        // Set selected country info
+        // Set selected country info for bottom sheet
         selectedCountryName = name;
         selectedCountryIso = iso;
+        
+        // Update country chart segments for bottom sheet
+        const countryRecord = answersData?.[iso];
+        if (countryRecord) {
+          const countryData = [countryRecord];
+          countryChartSegments = generateCountryChartSegments(countryData);
+        } else {
+          countryChartSegments = [];
+        }
         
         // Zoom to country
         const centroid = centroidOf(feat);
@@ -1607,6 +1663,20 @@
         const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1 || name;
         
         console.log('[Click] Subdivision clicked from country:', subdivisionId, subdivisionName);
+        
+        // Update selected country info for bottom sheet
+        selectedCountryName = subdivisionName;
+        selectedCountryIso = iso;
+        
+        // Update subdivision data for bottom sheet
+        const countryRecord = answersData?.[iso];
+        if (countryRecord) {
+          // For subdivisions, we still use the country-level data since answersData is organized by country ISO
+          const subdivisionData = [countryRecord];
+          countryChartSegments = generateCountryChartSegments(subdivisionData);
+        } else {
+          countryChartSegments = [];
+        }
         
         // Zoom to subdivision
         const centroid = centroidOf(feat);
