@@ -5,7 +5,7 @@
   import { worldMap$, worldData$, loadGlobeData } from './stores/globeData';
   import { get as getStore } from 'svelte/store';
   import { clamp, hexToRgba } from './utils/colors';
-  import { centroidOf, isoOf } from './utils/geo';
+  import { centroidOf, isoOf, pointInFeature } from './utils/geo';
   import LegendPanel from './globe/LegendPanel.svelte';
   import SettingsPanel from './globe/SettingsPanel.svelte';
   import SearchBar from './globe/SearchBar.svelte';
@@ -29,15 +29,57 @@
   let isoIntensity: Record<string, number> = {};
   let intensityMin = 0;
   let intensityMax = 1;
-  // Detección de doble clic
-  let lastClickAt = 0;
-  let lastClickIso: string | null = null;
+  // Professional 3-level navigation system
+  type NavigationLevel = 'world' | 'country' | 'subdivision';
+  type NavigationState = {
+    level: NavigationLevel;
+    countryIso: string | null;
+    subdivisionId: string | null;
+    path: string[];
+  };
+
+  let navigationState: NavigationState = {
+    level: 'world',
+    countryIso: null,
+    subdivisionId: null,
+    path: []
+  };
+
+  // Navigation history for breadcrumbs
+  let navigationHistory: Array<{
+    level: NavigationLevel;
+    name: string;
+    iso?: string;
+    id?: string;
+  }> = [{ level: 'world', name: 'World' }];
   // Visibilidad de polígonos (capa coroplética)
   let polygonsVisible = true;
   // Polígonos del dataset global (choropleth): se preservan siempre
   let worldPolygons: any[] = [];
   const ALT_THRESHOLD = 0.6; // si la altitud es menor, ocultamos polígonos
   const VERY_CLOSE_ALT = 0.15; // por debajo de este valor, sin clustering: puntos exactos
+
+  // Polígonos locales por país (zoom cercano)
+  let localPolygons: any[] = [];
+  let currentLocalIso: string | null = null;
+  const countryPolygonsCache = new Map<string, any[]>();
+  const countryCentroidCache = new Map<string, { lat: number; lng: number }>();
+  // Subregiones: cuando estamos aún más cerca, cargar TopoJSON por ID_1 (ej.: ESP.1.topojson)
+  let currentSubregionId1: string | null = null;
+  const SUBREGION_ALT = 0.2; // umbral de altitud para activar subregión (por debajo de 0.50 activa)
+  const SUBREGION_EXIT_ALT = 0.25; // histéresis: salir de subregión solo al superar este valor
+  const subregionPolygonsCache = new Map<string, any[]>(); // clave: `${ISO}/${ID_1}`
+  const subregionCentroidCache = new Map<string, { lat: number; lng: number }>();
+  let lastSubregionSwitchAt = 0;
+
+  // Variables for globe data processing
+  let mode: 'intensity' | 'trend' = 'intensity';
+  let isoDominantKey: Record<string, string> = {}; // ISO -> categoría dominante
+  let legendItems: Array<{ key: string; color: string; count: number }> = [];
+  let trendingTags: Array<{ key: string; count: number }> = [];
+  let tagTotals: Record<string, number> = {};
+  let tagMin = 0;
+  let tagMax = 1;
 
   // Inicialización desde datos externos o stores
   let _initVersion = 0;
@@ -58,11 +100,23 @@
     intensityMin = vm.intensityMin;
     intensityMax = vm.intensityMax;
     worldPolygons = vm.polygons;
+    // Pre-cache centroides por ISO para búsqueda rápida del país centrado
+    try {
+      countryCentroidCache.clear();
+      for (const feat of worldPolygons) {
+        const iso = isoOf(feat);
+        if (iso && !countryCentroidCache.has(iso)) {
+          countryCentroidCache.set(iso, centroidOf(feat));
+        }
+      }
+    } catch {}
     try {
       globe && globe.setPolygonsData && globe.setPolygonsData(vm.polygons);
       polygonsVisible = true;
       setTilesEnabled(false);
       globe?.refreshPolyColors?.();
+      globe?.refreshPolyAltitudes?.();
+      globe?.refreshPolyLabels?.();
     } catch {}
     // Solo establecer POV inicial la primera vez
     if (_initVersion === 0) {
@@ -71,6 +125,208 @@
     _initVersion++;
     // Ajustar visibilidad según POV actual (evitar reactivar polígonos si estamos cerca)
     try { updatePolygonsVisibilityExt(); } catch {}
+  }
+
+  // Encontrar el ID_1 del polígono local más cercano al centro de la vista
+  function nearestLocalFeatureId1(pov: { lat: number; lng: number }): string | null {
+    try {
+      console.log(localPolygons);
+      if (!localPolygons || localPolygons.length === 0) return null;
+      
+      // First, try point-in-polygon detection
+      for (const feat of localPolygons) {
+        const props = feat?.properties || {};
+        let id1: any = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || null;
+        if (!id1) continue;
+        
+        if (pointInFeature(pov.lat, pov.lng, feat)) {
+          if (typeof id1 === 'string') {
+            if (!id1.includes('.') && currentLocalIso) {
+              id1 = `${currentLocalIso}.${id1}`;
+            }
+            const us = id1.indexOf('_');
+            if (us > 0) id1 = id1.slice(0, us);
+          } else if (typeof id1 === 'number' && currentLocalIso) {
+            id1 = `${currentLocalIso}.${id1}`;
+          }
+          console.log('[Subregion] Point-in-polygon match:', String(id1), 'at', pov.lat.toFixed(4), pov.lng.toFixed(4));
+          return String(id1);
+        }
+      }
+      
+      // Fallback: nearest centroid
+      let bestId: string | null = null;
+      let bestD = Infinity;
+      for (const feat of localPolygons) {
+        const props = feat?.properties || {};
+        let id1: any = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || null;
+        console.log(id1);
+        if (!id1) continue;
+        if (typeof id1 === 'string') {
+          if (!id1.includes('.') && currentLocalIso) {
+            id1 = `${currentLocalIso}.${id1}`;
+          }
+          // Quitar sufijo después de '_'
+          const us = id1.indexOf('_');
+          if (us > 0) id1 = id1.slice(0, us);
+        } else if (typeof id1 === 'number' && currentLocalIso) {
+          id1 = `${currentLocalIso}.${id1}`;
+        }
+        const c = centroidOf(feat);
+        const d = Math.abs(c.lat - pov.lat) + Math.abs((((pov.lng - c.lng + 540) % 360) - 180));
+        if (d < bestD) { bestD = d; bestId = String(id1); }
+      }
+      
+      if (bestId) {
+        console.log('[Subregion] Fallback centroid match:', bestId, 'at', pov.lat.toFixed(4), pov.lng.toFixed(4));
+      }
+      
+      return bestId;
+    } catch { return null; }
+  }
+
+  // DISABLED: Zoom-based subdivision loading removed - now handled by NavigationManager only
+  async function ensureSubregionPolygons(pov: { lat: number; lng: number; altitude: number }) {
+    // This function is now disabled - subdivision loading only happens via clicks
+    console.log('[Subregion] Zoom-based subdivision loading disabled - use click navigation instead');
+    return;
+  }
+
+  // Función helper para combinar polígonos padre e hijos con diferentes opacidades y elevaciones
+  function combinePolygonsWithOpacity(parentPolygons: any[], childPolygons: any[], parentOpacity: number = 0.3): any[] {
+    const combined = [];
+    
+    // Agregar polígonos padre con opacidad reducida y elevación base
+    if (parentPolygons && parentPolygons.length > 0) {
+      for (const poly of parentPolygons) {
+        const parentPoly = { 
+          ...poly, 
+          properties: { 
+            ...poly.properties, 
+            _isParent: true, 
+            _opacity: parentOpacity,
+            _elevation: 0.0001 // Elevación muy baja para polígonos padre
+          } 
+        };
+        combined.push(parentPoly);
+      }
+    }
+    
+    // Agregar polígonos hijos con opacidad completa y elevación mayor
+    if (childPolygons && childPolygons.length > 0) {
+      console.log('[CombinePolygons] Adding', childPolygons.length, 'child polygons');
+      for (const poly of childPolygons) {
+        const childPoly = { 
+          ...poly, 
+          properties: { 
+            ...poly.properties, 
+            _isChild: true, 
+            _opacity: 1.0,
+            _elevation: 0.0008 // Elevación ligeramente mayor para subdivisiones
+          } 
+        };
+        console.log('[CombinePolygons] Child polygon:', childPoly.properties._subdivisionName, 'isChild:', childPoly.properties._isChild);
+        combined.push(childPoly);
+      }
+    }
+    
+    return combined;
+  }
+
+  async function loadSubregionTopoAsGeoFeatures(iso: string, id1: string): Promise<any[]> {
+    const path = `/geojson/${iso}/${id1}.topojson`;
+    const resp = await fetch(path);
+    if (!resp.ok) {
+      console.warn(`[Subregion] No se encontró el archivo: ${path} (HTTP ${resp.status})`);
+      throw new Error(`HTTP ${resp.status} al cargar ${path}`);
+    }
+    const topo = await resp.json();
+    const mod = await import(/* @vite-ignore */ 'topojson-client');
+    const objects = topo.objects || {};
+    const firstKey = Object.keys(objects)[0];
+    if (!firstKey) return [];
+    const fc = (mod as any).feature(topo, objects[firstKey]);
+    const feats: any[] = Array.isArray(fc?.features) ? fc.features : [];
+    for (const f of feats) {
+      if (!f.properties) f.properties = {};
+      if (!f.properties.ISO_A3) f.properties.ISO_A3 = iso;
+      if (!f.properties.ID_1) f.properties.ID_1 = id1;
+      
+      // Extraer nombre de la subdivisión de varias propiedades posibles
+      const name = f.properties.NAME_2 || f.properties.name_2 || 
+                   f.properties.NAME || f.properties.name ||
+                   f.properties.VARNAME_2 || f.properties.varname_2 ||
+                   f.properties.NL_NAME_2 || f.properties.nl_name_2 ||
+                   `Subdivisión ${id1}`;
+      f.properties._subdivisionName = name;
+      
+      // Debug: log para verificar extracción de nombres
+      console.log('[Subregion] Extracted name:', name, 'from properties:', Object.keys(f.properties));
+    }
+    return feats;
+  }
+
+  // Generar etiquetas tanto para países (NAME_1) como subdivisiones (NAME_2)
+  function generateSubdivisionLabels(polygons: any[]): SubdivisionLabel[] {
+    const labels: SubdivisionLabel[] = [];
+    console.log('[Labels] Processing', polygons.length, 'polygons for labels');
+    
+    for (const poly of polygons) {
+      let name = null;
+      let labelType = '';
+      
+      console.log('[Labels] Polygon properties:', poly?.properties);
+      
+      // Prioridad: nivel 2 (NAME_2), luego subdivisiones (hijos), luego países (padres)
+      if (poly?.properties?._isLevel2) {
+        // Para sub-subdivisiones (nivel 2), extraer NAME_2
+        name = poly.properties.NAME_2 || poly.properties.name_2 || 
+               poly.properties.NAME || poly.properties.name ||
+               poly.properties.VARNAME_2 || poly.properties.varname_2 ||
+               poly.properties.NL_NAME_2 || poly.properties.nl_name_2;
+        labelType = 'level2';
+        console.log('[Labels] Found level 2 subdivision (NAME_2):', name);
+      } else if (poly?.properties?._isChild && poly?.properties?._subdivisionName) {
+        name = poly.properties._subdivisionName;
+        labelType = 'subdivision';
+        console.log('[Labels] Found child subdivision:', name);
+      } else if (poly?.properties?._isParent) {
+        // Para países, extraer NAME_1
+        name = poly.properties.NAME_1 || poly.properties.name_1 || 
+               poly.properties.NAME || poly.properties.name ||
+               poly.properties.VARNAME_1 || poly.properties.varname_1 ||
+               poly.properties.NL_NAME_1 || poly.properties.nl_name_1;
+        labelType = 'country';
+        console.log('[Labels] Found parent country subdivision (NAME_1):', name);
+      } else {
+        // Fallback: try to extract any name from properties (prefer NAME_1, then NAME_2)
+        name = poly.properties?.NAME_1 || poly.properties?.name_1 || 
+               poly.properties?.NAME_2 || poly.properties?.name_2 ||
+               poly.properties?.NAME || poly.properties?.name ||
+               poly.properties?.VARNAME_1 || poly.properties?.varname_1;
+        labelType = 'fallback';
+        console.log('[Labels] Fallback name extraction:', name);
+      }
+      
+      if (name) {
+        try {
+          const centroid = centroidOf(poly);
+          const label: SubdivisionLabel = {
+            id: `label_${labelType}_${poly.properties.ID_1 || poly.properties.id_1 || poly.properties.ISO_A3 || Math.random()}`,
+            name: name,
+            lat: centroid.lat,
+            lng: centroid.lng
+          };
+          labels.push(label);
+          console.log('[Labels] Generated', labelType, 'label:', label.name, 'at precise centroid:', 
+                     `${centroid.lat.toFixed(4)}, ${centroid.lng.toFixed(4)}`);
+        } catch (e) {
+          console.warn('[Labels] Failed to generate label for polygon:', poly.properties);
+        }
+      }
+    }
+    
+    return labels;
   }
 
   // Configuración de marcadores HTML para votos
@@ -121,52 +377,515 @@
     } catch {}
   }
 
-  function updateMarkers(visible: boolean) {
-    if (!globe) return;
-    ensureMarkerSetup();
+  // Configuración de etiquetas HTML para subdivisiones
+  function ensureLabelsSetup() {
+    if (labelsInitialized || !globe) return;
     try {
-      if (visible && regionVotes?.length) {
-        const pov = globe?.pointOfView?.();
-        const cam = globe?.getCameraParams?.();
-        // Si estamos MUY cerca, pintar puntos exactos (sin clustering)
-        const filtered = regionVotes.filter((v) => {
-          const t = (v.tag ?? '').toString();
-          return !!t && !!colorMap?.[t];
-        });
-        if (pov && pov.altitude <= VERY_CLOSE_ALT) {
-          // Modo puntos exactos: sin clustering, sin animación y altitud fija mínima
-          try {
-            globe.htmlTransitionDuration(0);
-            globe.htmlAltitude(() => 0.000002);
-          } catch {}
-          globe.htmlElementsData(filtered);
-        } else {
-          // Modo clusters: restaurar una transición suave y altitud dinámica estable
-          const markerAlt = Math.max(0.000002, Math.min(0.002, (pov?.altitude ?? 1) * 0.6));
-          try {
-            globe.htmlTransitionDuration(200);
-            globe.htmlAltitude(() => markerAlt);
-          } catch {}
-          // Recalcular SOLO si cambia significativamente la altitud o cambian los votos
-          const shouldRecluster = (() => {
-            if (!pov) return false;
-            if (!clusteredVotes || clusteredVotes.length === 0) return true;
-            if (lastClusterAlt < 0) return true;
-            const delta = Math.abs(pov.altitude - lastClusterAlt);
-            return delta > 0.05; // umbral de cambio de altitud
-          })();
-          if (shouldRecluster) {
-            clusteredVotes = clusterRegionalVotes(filtered as any, pov, cam);
-            lastClusterAlt = pov?.altitude ?? lastClusterAlt;
-          }
-          // En vista más alejada (clúster), mostrar números
-          const withLabels = (clusteredVotes as any[]).map((c) => ({ ...c, showLabel: true }));
-          globe.htmlElementsData(withLabels);
-        }
-      } else {
-        globe.htmlElementsData([]);
-      }
+      // Usar un segundo conjunto de elementos HTML para las etiquetas
+      // Como globe.gl solo permite un conjunto de htmlElements, vamos a usar los labels de polígonos
+      // pero configurados para ser siempre visibles
+      labelsInitialized = true;
     } catch {}
+  }
+
+  // Update labels for both countries and subdivisions
+  function updateSubdivisionLabels(visible: boolean) {
+    if (!globe) return;
+    try {
+      if (visible && subdivisionLabels?.length) {
+        console.log('[Labels] Showing', subdivisionLabels.length, 'labels (countries + subdivisions)');
+        globe.setTextLabels?.(subdivisionLabels);
+      } else {
+        console.log('[Labels] Clearing all labels');
+        globe.setTextLabels?.([]);
+      }
+    } catch (e) {
+      console.warn('Error updating labels:', e);
+    }
+  }
+
+  // Professional Navigation Manager Class
+  class NavigationManager {
+    private globe: any;
+    private state: NavigationState;
+    private history: Array<{level: NavigationLevel; name: string; iso?: string; id?: string;}>;
+    private polygonCache: Map<string, any[]> = new Map();
+    private labelCache: Map<string, SubdivisionLabel[]> = new Map();
+
+    constructor(globeRef: any) {
+      this.globe = globeRef;
+      this.state = {
+        level: 'world',
+        countryIso: null,
+        subdivisionId: null,
+        path: []
+      };
+      this.history = [{ level: 'world', name: 'World' }];
+    }
+
+    // Public API
+    async navigateToCountry(iso: string, countryName: string) {
+      console.log('[Navigation] Navigating to country:', iso);
+      
+      try {
+        // Load country data
+        const countryPolygons = await this.loadCountryPolygons(iso);
+        if (!countryPolygons?.length) {
+          throw new Error(`No polygons found for country ${iso}`);
+        }
+
+        // Update state
+        this.state = {
+          level: 'country',
+          countryIso: iso,
+          subdivisionId: null,
+          path: [iso]
+        };
+
+        // Update history
+        this.history = [
+          { level: 'world', name: 'World' },
+          { level: 'country', name: countryName, iso }
+        ];
+
+        // Render country view
+        await this.renderCountryView(iso, countryPolygons);
+        
+        // Try to load subdivisions automatically
+        await this.loadSubdivisions(iso);
+
+      } catch (error) {
+        console.error('[Navigation] Error navigating to country:', error);
+        await this.navigateToWorld();
+      }
+    }
+
+    async navigateToSubdivision(countryIso: string, subdivisionId: string, subdivisionName: string) {
+      console.log('[Navigation] Navigating to subdivision:', subdivisionId);
+      
+      try {
+        // Ensure we're in country context
+        if (this.state.countryIso !== countryIso) {
+          throw new Error('Invalid navigation: subdivision without country context');
+        }
+
+        // Load subdivision data
+        const subdivisionPolygons = await this.loadSubdivisionPolygons(countryIso, subdivisionId);
+        if (!subdivisionPolygons?.length) {
+          console.warn('[Navigation] No subdivision polygons found for', subdivisionId);
+          return;
+        }
+
+        // Update state
+        this.state = {
+          level: 'subdivision',
+          countryIso,
+          subdivisionId,
+          path: [countryIso, subdivisionId]
+        };
+
+        // Update history
+        this.history = [
+          { level: 'world', name: 'World' },
+          { level: 'country', name: this.history[1]?.name || countryIso, iso: countryIso },
+          { level: 'subdivision', name: subdivisionName, iso: countryIso, id: subdivisionId }
+        ];
+
+        // Render subdivision view
+        await this.renderSubdivisionView(countryIso, subdivisionId, subdivisionPolygons);
+
+      } catch (error) {
+        console.error('[Navigation] Error navigating to subdivision:', error);
+      }
+    }
+
+    async navigateToWorld() {
+      console.log('[Navigation] Navigating to world view');
+      
+      this.state = {
+        level: 'world',
+        countryIso: null,
+        subdivisionId: null,
+        path: []
+      };
+
+      this.history = [{ level: 'world', name: 'World' }];
+
+      await this.renderWorldView();
+    }
+
+    async navigateBack() {
+      console.log('[Navigation] Navigating back from', this.state.level);
+      
+      if (this.state.level === 'subdivision') {
+        // From subdivision back to country
+        const countryIso = this.state.countryIso;
+        const countryName = this.history.find(h => h.level === 'country')?.name || countryIso;
+        
+        if (countryIso && countryName) {
+          await this.navigateToCountry(countryIso, countryName);
+        } else {
+          await this.navigateToWorld();
+        }
+      } else if (this.state.level === 'country') {
+        // From country back to world
+        await this.navigateToWorld();
+      }
+      // Already at world level - do nothing
+    }
+
+    // Private rendering methods
+    private async renderWorldView() {
+      try {
+        // Show ALL countries
+        if (worldPolygons?.length) {
+          this.globe?.setPolygonsData(worldPolygons);
+          polygonsVisible = true;
+        }
+        this.globe?.refreshPolyColors?.();
+        this.globe?.refreshPolyAltitudes?.();
+        this.globe?.refreshPolyLabels?.();
+        
+        // Clear subdivision labels
+        subdivisionLabels = [];
+        updateSubdivisionLabels(false);
+        
+        console.log('[Navigation] World view rendered - showing all countries');
+      } catch (error) {
+        console.error('[Navigation] Error rendering world view:', error);
+      }
+    }
+
+    private async renderCountryView(iso: string, countryPolygons: any[]) {
+      try {
+        // Show ONLY the selected country with its subdivisions (NO world background)
+        const markedPolygons = countryPolygons.map(poly => ({
+          ...poly,
+          properties: {
+            ...poly.properties,
+            _isParent: true,
+            _parentCountry: iso
+          }
+        }));
+        
+        // Set ONLY the country polygons (no world background)
+        this.globe?.setPolygonsData(markedPolygons);
+        this.globe?.refreshPolyColors?.();
+        this.globe?.refreshPolyAltitudes?.();
+        this.globe?.refreshPolyLabels?.();
+        
+        // Generate and show subdivision labels
+        const labels = generateSubdivisionLabels(markedPolygons);
+        console.log('[Navigation] Raw polygons for labels:', markedPolygons.length, 'polygons');
+        console.log('[Navigation] Generated labels:', labels);
+        subdivisionLabels = labels;
+        updateSubdivisionLabels(true);
+        
+        console.log('[Navigation] Generated', labels.length, 'subdivision labels for country view');
+        
+        console.log('[Navigation] Country view rendered for', iso, '- showing ONLY this country (no world background)');
+      } catch (error) {
+        console.error('[Navigation] Error rendering country view:', error);
+      }
+    }
+
+    private async renderSubdivisionView(countryIso: string, subdivisionId: string, subdivisionPolygons: any[]) {
+      try {
+        // Show ONLY the selected subdivision (no country or world background)
+        const markedPolygons = subdivisionPolygons.map(poly => ({
+          ...poly,
+          properties: {
+            ...poly.properties,
+            _isChild: true,
+            _parentCountry: countryIso,
+            _parentSubdivision: subdivisionId,
+            _subdivisionName: poly.properties?.NAME_2 || poly.properties?.name_2 || 
+                             poly.properties?.NAME || poly.properties?.name ||
+                             poly.properties?.VARNAME_2 || poly.properties?.varname_2
+          }
+        }));
+        
+        // Set ONLY the subdivision polygons (no background)
+        this.globe?.setPolygonsData(markedPolygons);
+        this.globe?.refreshPolyColors?.();
+        this.globe?.refreshPolyAltitudes?.();
+        this.globe?.refreshPolyLabels?.();
+        
+        // Generate and show sub-subdivision labels
+        const labels = generateSubdivisionLabels(markedPolygons);
+        subdivisionLabels = labels;
+        updateSubdivisionLabels(true);
+        
+        console.log('[Navigation] Generated', labels.length, 'sub-subdivision labels for subdivision view');
+        
+        console.log('[Navigation] Subdivision view rendered for', subdivisionId, '- showing ONLY this subdivision (no background)');
+      } catch (error) {
+        console.error('[Navigation] Error rendering subdivision view:', error);
+      }
+    }
+
+    // Private data loading methods
+    private async loadCountryPolygons(iso: string): Promise<any[]> {
+      // Check cache first
+      if (this.polygonCache.has(iso)) {
+        return this.polygonCache.get(iso)!;
+      }
+
+      try {
+        const polygons = await loadCountryTopoAsGeoFeatures(iso);
+        this.polygonCache.set(iso, polygons);
+        localPolygons = polygons; // Update global reference
+        currentLocalIso = iso;
+        return polygons;
+      } catch (error) {
+        console.error('[Navigation] Error loading country polygons:', error);
+        return [];
+      }
+    }
+
+    private async loadSubdivisions(iso: string): Promise<void> {
+      try {
+        const firstSubdivision = await findFirstAvailableSubdivision(iso);
+        if (firstSubdivision) {
+          await this.loadSubdivisionPolygons(iso, firstSubdivision);
+        }
+      } catch (error) {
+        console.warn('[Navigation] Could not load subdivisions for', iso, error);
+      }
+    }
+
+    private async loadSubdivisionPolygons(countryIso: string, subdivisionId: string): Promise<any[]> {
+      const key = `${countryIso}/${subdivisionId}`;
+      
+      // Check cache first
+      if (this.polygonCache.has(key)) {
+        return this.polygonCache.get(key)!;
+      }
+
+      try {
+        const polygons = await loadSubregionTopoAsGeoFeatures(countryIso, subdivisionId);
+        this.polygonCache.set(key, polygons);
+        return polygons;
+      } catch (error) {
+        console.error('[Navigation] Error loading subdivision polygons:', error);
+        return [];
+      }
+    }
+
+    // Getters
+    getState(): NavigationState { return { ...this.state }; }
+    getHistory(): typeof this.history { return [...this.history]; }
+    getCurrentLevel(): NavigationLevel { return this.state.level; }
+  }
+
+  // Initialize navigation manager
+  let navigationManager: NavigationManager;
+  $: if (globe && !navigationManager) {
+    navigationManager = new NavigationManager(globe);
+  }
+
+  // Find first available subdivision for a country
+  async function findFirstAvailableSubdivision(iso: string): Promise<string | null> {
+    // Try common subdivision patterns
+    const patterns = [`${iso}.1`, `${iso}.01`, `${iso}.001`];
+    
+    for (const pattern of patterns) {
+      try {
+        const path = `/geojson/${iso}/${pattern}.topojson`;
+        const resp = await fetch(path, { method: 'HEAD' });
+        if (resp.ok) {
+          return pattern;
+        }
+      } catch {}
+    }
+    
+    return null;
+  }
+
+  // Label generation functions for zoom-based display
+  async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }) {
+    try {
+      const currentLevel = navigationManager?.getCurrentLevel() || 'world';
+      
+      if (currentLevel === 'world') {
+        // At world level with close zoom - show country labels
+        await generateWorldCountryLabels();
+      } else if (currentLevel === 'country') {
+        // At country level with close zoom - show subdivision labels
+        const state = navigationManager?.getState();
+        if (state?.countryIso) {
+          await generateCountrySubdivisionLabels(state.countryIso, pov);
+        }
+      } else if (currentLevel === 'subdivision') {
+        // At subdivision level - show sub-subdivision labels if available
+        const state = navigationManager?.getState();
+        if (state?.countryIso && state?.subdivisionId) {
+          await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
+        }
+      }
+    } catch (e) {
+      console.warn('[Labels] Error updating labels for current view:', e);
+    }
+  }
+
+  async function generateWorldCountryLabels() {
+    try {
+      if (!worldPolygons?.length) return;
+      
+      // Generate labels for world countries
+      const labels = worldPolygons.map((feat, index) => {
+        const centroid = centroidOf(feat);
+        const name = nameOf(feat);
+        const iso = isoOf(feat);
+        
+        return {
+          id: `country-${iso || index}`,
+          name: name || iso || `Country-${index}`,
+          lat: centroid.lat,
+          lng: centroid.lng,
+          text: name || iso,
+          size: 12,
+          color: '#ffffff',
+          opacity: 0.8
+        };
+      }).filter(label => label.text);
+      
+      subdivisionLabels = labels;
+      updateSubdivisionLabels(true);
+      
+      console.log('[Labels] Generated', labels.length, 'world country labels');
+    } catch (e) {
+      console.warn('[Labels] Error generating world country labels:', e);
+    }
+  }
+
+  async function generateCountrySubdivisionLabels(iso: string, pov: { lat: number; lng: number; altitude: number }) {
+    try {
+      // Level 1 subdivisions are in ISO.topojson (e.g., RUS.topojson, ESP.topojson)
+      // First try to get from NavigationManager cache
+      let countryPolygons = navigationManager?.['polygonCache']?.get(iso);
+      
+      if (!countryPolygons?.length) {
+        // If not in cache, load the subdivision file directly
+        console.log('[Labels] Loading subdivision file for zoom labels:', `${iso}.topojson`);
+        try {
+          countryPolygons = await loadSubregionTopoAsGeoFeatures(iso, iso);
+        } catch (e) {
+          console.warn('[Labels] Could not load subdivision file:', `${iso}.topojson`, e);
+          return;
+        }
+      }
+      
+      if (countryPolygons?.length) {
+        // Use the existing generateSubdivisionLabels function that works correctly
+        const labels = generateSubdivisionLabels(countryPolygons);
+        subdivisionLabels = labels;
+        updateSubdivisionLabels(true);
+        
+        console.log('[Labels] Generated', labels.length, 'subdivision labels for', iso, 'from', `${iso}.topojson`);
+      } else {
+        console.warn('[Labels] No subdivision polygons found for', iso);
+      }
+    } catch (e) {
+      console.warn('[Labels] Error generating country subdivision labels:', e);
+    }
+  }
+
+  async function generateSubSubdivisionLabels(countryIso: string, subdivisionId: string, pov: { lat: number; lng: number; altitude: number }) {
+    try {
+      // For sub-subdivisions, look for separate files like ESP.1.topojson, RUS.40.topojson, etc.
+      // Extract the numeric part from subdivisionId (e.g., "RUS.40" -> "40", "ESP.1" -> "1")
+      const numericPart = subdivisionId.split('.').pop();
+      if (!numericPart) {
+        console.log('[Labels] Cannot extract numeric part from subdivisionId:', subdivisionId);
+        return;
+      }
+      
+      // The pattern is always: ISO.number.topojson (e.g., ESP.1, RUS.40)
+      const subdivisionFile = `${countryIso}.${numericPart}`;
+      
+      console.log('[Labels] Looking for sub-subdivision file:', subdivisionFile);
+      
+      try {
+        // Check if the subdivision file exists
+        const path = `/geojson/${countryIso}/${subdivisionFile}.topojson`;
+        const resp = await fetch(path, { method: 'HEAD' });
+        
+        if (resp.ok) {
+          console.log('[Labels] Found sub-subdivision file:', path);
+          const subSubPolygons = await loadSubregionTopoAsGeoFeatures(countryIso, subdivisionFile);
+          
+          if (subSubPolygons?.length) {
+            // Mark polygons as level 2 (sub-subdivisions) so they use NAME_2
+            const markedPolygons = subSubPolygons.map(poly => ({
+              ...poly,
+              properties: {
+                ...poly.properties,
+                _isLevel2: true, // Mark as level 2 for NAME_2 extraction
+                _parentCountry: countryIso,
+                _parentSubdivision: subdivisionId
+              }
+            }));
+            
+            const labels = generateSubdivisionLabels(markedPolygons);
+            subdivisionLabels = labels;
+            updateSubdivisionLabels(true);
+            
+            console.log('[Labels] Generated', labels.length, 'sub-subdivision labels (NAME_2) for', subdivisionId, 'from file', subdivisionFile);
+            return;
+          }
+        } else {
+          console.log('[Labels] Sub-subdivision file not found:', path, '(this is normal if no level 2 subdivisions exist)');
+        }
+      } catch (e) {
+        console.log('[Labels] Error loading sub-subdivision file:', subdivisionFile, e instanceof Error ? e.message : String(e));
+      }
+      
+      // Fallback: keep current subdivision labels (level 1)
+      console.log('[Labels] No sub-subdivision file available for', subdivisionId, '- keeping current labels');
+    } catch (e) {
+      console.warn('[Labels] Error generating sub-subdivision labels:', e);
+    }
+  }
+
+  // Debounce functions for map movement
+  function onMapMovementStart() {
+    isMapMoving = true;
+    if (mapMovementTimeout) {
+      clearTimeout(mapMovementTimeout);
+      mapMovementTimeout = null;
+    }
+    console.log('[Movement] Map movement started - pausing polygon/label updates');
+  }
+
+  function onMapMovementEnd() {
+    if (mapMovementTimeout) {
+      clearTimeout(mapMovementTimeout);
+    }
+    
+    mapMovementTimeout = setTimeout(async () => {
+      isMapMoving = false;
+      console.log('[Movement] Map stopped - resuming polygon/label updates');
+      
+      // Trigger polygon and label updates now that map is stopped
+      const pov = globe?.pointOfView?.();
+      if (pov) {
+        try {
+          await ensureLocalCountryPolygons(pov);
+          await ensureSubregionPolygons(pov);
+          updateMarkers(true);
+        } catch (e) {
+          console.warn('[Movement] Error updating after map stop:', e);
+        }
+      }
+    }, MAP_STOP_DELAY);
+  }
+
+
+  // Disabled vote markers - now using subdivision labels instead
+  function updateMarkers(visible: boolean) {
+    // Vote markers disabled - subdivision labels are used instead
+    return;
   }
 
   // Cluster regional votes by tag using a viewport-dependent grid
@@ -279,18 +998,10 @@
   let showSettings = false;
   let panelTop = 52; // posición vertical del panel de ajustes
   let panelEl: HTMLDivElement | null = null;
-  let mode: 'intensity' | 'trend' = 'intensity';
-  let isoDominantKey: Record<string, string> = {}; // ISO -> categoría dominante
-  let legendItems: Array<{ key: string; color: string; count: number }> = [];
   // Fondo del lienzo (color de background del globo)
   let bgColor = '#111827';
   // Filtros/Trending
   let activeTag: string | null = null; // etiqueta seleccionada para resaltar
-  let trendingTags: Array<{ key: string; count: number }> = [];
-  // Totales por hashtag para normalizar intensidad visual de avatares
-  let tagTotals: Record<string, number> = {};
-  let tagMin = 0;
-  let tagMax = 1;
   // Votos regionales (para renderizar marcadores cuando estamos cerca)
   type VotePoint = { id: string; iso3: string; lat: number; lng: number; tag?: string };
   type ClusterPoint = { lat: number; lng: number; tag: string; count: number };
@@ -298,6 +1009,16 @@
   // Cache de clústeres para evitar "bailes" al rotar
   let clusteredVotes: ClusterPoint[] = [];
   let lastClusterAlt = -1;
+  
+  // Etiquetas de subdivisiones (para mostrar nombres permanentemente)
+  type SubdivisionLabel = { id: string; name: string; lat: number; lng: number };
+  let subdivisionLabels: SubdivisionLabel[] = [];
+  let labelsInitialized = false;
+  
+  // Debounce para cargar polígonos solo cuando el mapa esté parado
+  let mapMovementTimeout: NodeJS.Timeout | null = null;
+  let isMapMoving = false;
+  const MAP_STOP_DELAY = 300; // ms para considerar que el mapa está parado
   let tagQuery = '';
   let showSearch = false;
   // Estado de las pestañas superiores (ya declarado arriba junto con dataset)
@@ -413,12 +1134,19 @@
   function baseCapColor(feat: any): string {
     const iso = isoOf(feat);
     const intensityAlpha = opacityForIso(iso);
-    const factor = clamp(capOpacityPct / 100, 0, 1);
+    let factor = clamp(capOpacityPct / 100, 0, 1);
+    
+    // Aplicar opacidad personalizada si el polígono tiene metadatos de jerarquía
+    const customOpacity = feat?.properties?._opacity;
+    if (typeof customOpacity === 'number') {
+      factor *= customOpacity;
+    }
+    
     return hexToRgba(capBaseColor, intensityAlpha * factor);
   }
 
   // Actualiza visibilidad de polígonos según altitud (para usar fuera de onMount)
-  function updatePolygonsVisibilityExt() {
+  async function updatePolygonsVisibilityExt() {
     try {
       const pov = globe?.pointOfView();
       if (!pov) return;
@@ -431,23 +1159,28 @@
         return;
       }
       if (pov.altitude < ALT_THRESHOLD) {
+        console.log('[Vis]', 'ALT<th', { alt: pov.altitude.toFixed(3), ALT_THRESHOLD, currentLocalIso, polygonsVisible });
+        // Activar tiles y alternar a polígonos locales del país centrado
         if (polygonsVisible) {
-          globe?.setPolygonsData([]);
-          polygonsVisible = false;
+          polygonsVisible = false; // deja de estar visible el dataset global
           setTilesEnabled(true);
-          // Al entrar en modo cercano, solicitar datos regionales
-          try { if (_fetchTimer) clearTimeout(_fetchTimer as any); _fetchTimer = window.setTimeout(() => { maybeFetchRegion(); }, 150) as any; } catch {}
         }
+        try {
+          console.log('[Vis] calling ensureLocalCountryPolygons');
+          await ensureLocalCountryPolygons(pov);
+        } catch {}
+        // Si estamos aún más cerca, intentar cargar subregión por ID_1 (después de tener localPolygons)
+        try {
+          console.log('[Vis] calling ensureSubregionPolygons');
+          await ensureSubregionPolygons(pov);
+        } catch {}
         // Mostrar/actualizar marcadores en cada cambio mientras estamos cerca
         try { updateMarkers(true); } catch {}
       } else {
-        if (!polygonsVisible) {
-          globe?.setPolygonsData(worldPolygons);
-          polygonsVisible = true;
-          setTilesEnabled(false);
-        }
-        // Ocultar marcadores al alejar
-        try { updateMarkers(false); } catch {}
+        // DISABLED: Auto-loading world polygons on zoom out - now controlled by NavigationManager
+        console.log('[Zoom] Auto-loading world polygons disabled - use NavigationManager instead');
+        // Reiniciar estado de subregión
+        currentSubregionId1 = null;
       }
     } catch {}
   }
@@ -520,38 +1253,68 @@
     }
   }
 
-  // Handler de clic/doble clic en país (desde GlobeCanvas)
-  function handlePolygonClick(e: CustomEvent<{ feat: any; event: MouseEvent }>) {
-    const feat = e.detail?.feat;
-    if (!feat) return;
-    const now = Date.now();
-    const iso = isoOf(feat);
-    const isDouble = lastClickIso === iso && (now - lastClickAt) < 350;
-    lastClickIso = iso;
-    lastClickAt = now;
-
-    if (!isDouble) {
-      try {
-        const c = centroidOf(feat);
-        globe?.pointOfView({ lat: c.lat, lng: c.lng, altitude: 0.9 }, 700);
-        selectedCountryName = nameOf(feat);
-        selectedCountryIso = isoOf(feat);
-        setSheetState('collapsed');
-      } catch {}
-      return;
-    }
-    try {
-      const c = centroidOf(feat);
-      if (polygonsVisible) {
-        globe?.setPolygonsData([]);
-        polygonsVisible = false;
-        setTilesEnabled(true);
-      }
-      globe?.pointOfView({ lat: c.lat, lng: c.lng, altitude: 0.22 }, 1000);
-    } catch (err) {
-      console.warn('No se pudo aplicar doble clic OSM/POV:', err);
-    }
+  // DISABLED: Zoom-based polygon loading removed - now handled by NavigationManager only
+  async function ensureLocalCountryPolygons(pov: { lat: number; lng: number; altitude: number } | undefined) {
+    // This function is now disabled - polygon loading only happens via clicks
+    console.log('[Country] Zoom-based polygon loading disabled - use click navigation instead');
+    return;
   }
+
+  function nearestCountryIso(lat: number, lng: number): string | null {
+    try {
+      if (!worldPolygons || worldPolygons.length === 0) return null;
+      
+      // First, try point-in-polygon detection
+      for (const feat of worldPolygons) {
+        const iso = isoOf(feat);
+        if (!iso) continue;
+        
+        if (pointInFeature(lat, lng, feat)) {
+          console.log('[Country] Point-in-polygon match:', iso, 'at', lat.toFixed(4), lng.toFixed(4));
+          return iso;
+        }
+      }
+      
+      // Fallback: nearest centroid (for edge cases or ocean points)
+      let bestIso: string | null = null;
+      let bestD = Infinity;
+      for (const feat of worldPolygons) {
+        const iso = isoOf(feat);
+        if (!iso) continue;
+        let c = countryCentroidCache.get(iso);
+        if (!c) { c = centroidOf(feat); countryCentroidCache.set(iso, c); }
+        const d = Math.abs(c.lat - lat) + Math.abs((((lng - c.lng + 540) % 360) - 180));
+        if (d < bestD) { bestD = d; bestIso = iso; }
+      }
+      
+      if (bestIso) {
+        console.log('[Country] Fallback centroid match:', bestIso, 'at', lat.toFixed(4), lng.toFixed(4));
+      }
+      
+      return bestIso;
+    } catch { return null; }
+  }
+
+  async function loadCountryTopoAsGeoFeatures(iso: string): Promise<any[]> {
+    const path = `/geojson/${iso}/${iso}.topojson`;
+    const resp = await fetch(path);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} al cargar ${path}`);
+    const topo = await resp.json();
+    // Carga dinámica de topojson-client para convertir a GeoJSON
+    const mod = await import(/* @vite-ignore */ 'topojson-client');
+    const objects = topo.objects || {};
+    const firstKey = Object.keys(objects)[0];
+    if (!firstKey) return [];
+    const fc = (mod as any).feature(topo, objects[firstKey]);
+    const feats: any[] = Array.isArray(fc?.features) ? fc.features : [];
+    for (const f of feats) {
+      if (!f.properties) f.properties = {};
+      if (!f.properties.ISO_A3) f.properties.ISO_A3 = iso;
+    }
+    return feats;
+  }
+
+  // Old handlePolygonClick function removed - now using new click-based navigation system
 
   function getDominantKey(iso: string): string { return getDominantKeyUtil(iso, answersData); }
 
@@ -664,16 +1427,14 @@
         }
         if (pov.altitude < ALT_THRESHOLD) {
           if (polygonsVisible) {
-            globe?.setPolygonsData([]);
             polygonsVisible = false;
             setTilesEnabled(true); // al acercar, mostrar OSM
           }
+          // Asegurar polígonos locales del país centrado
+          try { ensureLocalCountryPolygons(pov as any); } catch {}
         } else {
-          if (!polygonsVisible) {
-            globe?.setPolygonsData(worldPolygons);
-            polygonsVisible = true;
-            setTilesEnabled(false); // al alejar, volver a esfera de color sólido
-          }
+          // DISABLED: Auto-loading world polygons on zoom out - now controlled by NavigationManager
+          console.log('[Zoom] Auto-loading world polygons on zoom out disabled - use NavigationManager instead');
         }
         // Recalcular marcadores tras cualquier cambio de visibilidad o POV
       } catch {}
@@ -705,35 +1466,133 @@
 <GlobeCanvas
   bind:this={globe}
   {bgColor}
-  {sphereBaseColor}
-  {capBaseColor}
-  {strokeBaseColor}
-  {strokeOpacityPct}
-  {sphereOpacityPct}
-  {mode}
-  {activeTag}
-  onPolyCapColor={polyCapColor}
-  on:polygonClick={handlePolygonClick}
-  on:controlsChange={() => {
-    updatePolygonsVisibilityExt();
+  onPolyCapColor={(feat) => {
+    const iso = isoOf(feat);
+    const key = isoDominantKey[iso] ?? '';
+    return colorMap?.[key] ?? '#9ca3af';
   }}
+  on:movementStart={onMapMovementStart}
+  on:movementEnd={onMapMovementEnd}
   on:ready={() => {
     try {
-      if (worldPolygons?.length) {
-        globe?.setPolygonsData(worldPolygons);
-        polygonsVisible = true;
+      // DISABLED: Auto-loading world polygons on ready - now controlled by NavigationManager
+      // Only initialize NavigationManager to world view
+      if (navigationManager) {
+        navigationManager.navigateToWorld();
       }
+      
       setTilesEnabled(false);
       globe?.refreshPolyColors?.();
       updatePolygonsVisibilityExt();
+      
       // Inicializar marcadores según altitud actual
       const pov = globe?.pointOfView?.();
       if (pov && pov.altitude < ALT_THRESHOLD) {
+        // Zoom-based polygon loading DISABLED - only update markers
         updateMarkers(true);
       } else {
         updateMarkers(false);
       }
     } catch {}
+  }}
+  on:controlsChange={() => {
+    try {
+      const pov = globe?.pointOfView?.();
+      if (!pov) return;
+      
+      // Update visibility based on altitude
+      const shouldShow = pov.altitude < ALT_THRESHOLD;
+      if (shouldShow !== polygonsVisible) {
+        polygonsVisible = shouldShow;
+        updatePolygonsVisibilityExt();
+      }
+      
+      // Zoom-based polygon loading DISABLED - only update markers and labels
+      if (!isMapMoving) {
+        if (pov.altitude < ALT_THRESHOLD) {
+          updateMarkers(true);
+          // Generate and show labels based on current navigation level and zoom
+          updateLabelsForCurrentView(pov).catch(e => console.warn('Label update error:', e));
+        } else {
+          updateMarkers(false);
+          // Show country labels when zoomed out at world level
+          if (navigationManager?.getCurrentLevel() === 'world') {
+            generateWorldCountryLabels().catch(e => console.warn('World labels error:', e));
+          }
+        }
+      }
+    } catch {}
+  }}
+  on:polygonClick={async (e) => {
+    if (!navigationManager) return;
+    
+    try {
+      const feat = e.detail?.feat;
+      if (!feat) return;
+      
+      const iso = isoOf(feat);
+      const c = centroidOf(feat);
+      const currentLevel = navigationManager.getCurrentLevel();
+      
+      // Determine polygon type and handle navigation
+      if (currentLevel === 'world') {
+        // Click on country from world view
+        const isWorldPolygon = worldPolygons.some(p => isoOf(p) === iso);
+        if (isWorldPolygon) {
+          const countryName = nameOf(feat);
+          selectedCountryName = countryName;
+          selectedCountryIso = iso;
+          
+          // Zoom to country
+          globe?.pointOfView({ lat: c.lat, lng: c.lng, altitude: 0.3 }, 700);
+          
+          // Navigate using manager
+          await navigationManager.navigateToCountry(iso, countryName);
+        }
+      } else if (currentLevel === 'country') {
+        // Click on subdivision from country view
+        const subdivisionId = feat.properties?.ID_1 || feat.properties?.id_1 || feat.properties?.GID_1 || feat.properties?.gid_1;
+        const subdivisionName = feat.properties?.NAME_1 || feat.properties?.name_1 || subdivisionId;
+        
+        if (subdivisionId) {
+          // Zoom to subdivision
+          globe?.pointOfView({ lat: c.lat, lng: c.lng, altitude: 0.15 }, 700);
+          
+          // Navigate using manager
+          await navigationManager.navigateToSubdivision(iso, String(subdivisionId), String(subdivisionName));
+        }
+      }
+      // Note: subdivision level clicks could be extended for sub-subdivisions
+      
+    } catch (e) {
+      console.error('[Click] Error handling polygon click:', e);
+    }
+  }}
+  on:globeClick={async (e) => {
+    if (!navigationManager) return;
+    
+    try {
+      const currentLevel = navigationManager.getCurrentLevel();
+      if (currentLevel !== 'world') {
+        console.log('[Click] Empty space clicked → Navigating back to previous view');
+        
+        // Navigate back to previous level
+        await navigationManager.navigateBack();
+        
+        // Adjust zoom based on new level
+        const newLevel = navigationManager.getCurrentLevel();
+        if (newLevel === 'world') {
+          globe?.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1000);
+          selectedCountryName = null;
+          selectedCountryIso = null;
+        } else if (newLevel === 'country') {
+          // Stay at country zoom level
+          globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.3 }, 700);
+        }
+      }
+    } catch (e) {
+      console.error('[Click] Error handling globe click:', e);
+    }
   }}
 />
 <!-- Degradado superior usando el color de fondo actual -->
@@ -741,9 +1600,53 @@
   class="globe-top-fade"
   style={`background: linear-gradient(to bottom, ${bgColor} 0%, ${hexToRgba(bgColor, 1)} 25%, ${hexToRgba(bgColor, 0.3)} 70%, transparent 100%)`}
 ></div>
+
+<!-- Navigation breadcrumb -->
+{#if navigationManager && navigationManager.getCurrentLevel() !== 'world'}
+<div class="navigation-breadcrumb">
+  {#each navigationManager.getHistory() as item, index}
+    {#if index > 0}
+      <span class="breadcrumb-separator">→</span>
+    {/if}
+    
+    {#if item.level === 'world'}
+      <button on:click={() => navigationManager.navigateToWorld()} class="breadcrumb-item">
+        🌍 {item.name}
+      </button>
+    {:else if item.level === 'country'}
+      <button on:click={() => navigationManager.navigateToCountry(item.iso || '', item.name)} 
+              class="breadcrumb-item {navigationManager.getCurrentLevel() === 'country' ? 'active' : ''}">
+        🏴 {item.name}
+      </button>
+    {:else if item.level === 'subdivision'}
+      <span class="breadcrumb-item active">📍 {item.name}</span>
+    {/if}
+  {/each}
+  
+  <div class="breadcrumb-help">
+    <small>Click country → Only that country • Click subdivision → Only that subdivision • Click outside → Back</small>
+  </div>
+</div>
+{/if}
 <svelte:window
-  on:keydown={(e) => {
-    if (e.key === "Escape") showSettings = false;
+  on:keydown={async (e) => {
+    if (e.key === "Escape") {
+      if (navigationManager && navigationManager.getCurrentLevel() !== 'world') {
+        await navigationManager.navigateBack();
+        
+        // Adjust zoom based on new level
+        const newLevel = navigationManager.getCurrentLevel();
+        if (newLevel === 'world') {
+          globe?.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1000);
+          selectedCountryName = null;
+          selectedCountryIso = null;
+        } else if (newLevel === 'country') {
+          globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.3 }, 700);
+        }
+      } else {
+        showSettings = false;
+      }
+    }
   }}
   on:scroll={handleScroll}
   on:wheel={handleWheel}
