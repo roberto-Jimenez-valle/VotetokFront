@@ -2028,6 +2028,14 @@
     if (!navigationManager) return;
     
     try {
+      // Check if we're in city level (4th level)
+      if (selectedCityName) {
+        console.log('[Click] Empty space clicked → Removing city level');
+        selectedCityName = null;
+        // Don't move the map when removing city level
+        return;
+      }
+      
       const currentLevel = navigationManager.getCurrentLevel();
       if (currentLevel !== 'world') {
         console.log('[Click] Empty space clicked → Navigating back to previous view');
@@ -2035,7 +2043,7 @@
         // Navigate back to previous level
         await navigationManager.navigateBack();
         
-        // Adjust zoom based on new level
+        // Clear appropriate level data
         const newLevel = navigationManager.getCurrentLevel();
         if (newLevel === 'world') {
           // Vista mundial: mantener posición actual, solo cambiar zoom
@@ -2050,8 +2058,12 @@
           selectedCountryIso = null;
           selectedSubdivisionName = null;
         } else if (newLevel === 'country') {
-          // Stay at country zoom level
-          globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.3 }, 700);
+          // Stay at country zoom level, clear subdivision
+          selectedSubdivisionName = null;
+          globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.8 }, 700);
+        } else if (newLevel === 'subdivision') {
+          // Clear only city level (already handled above)
+          selectedCityName = null;
         }
       }
     } catch (e) {

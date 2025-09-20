@@ -10,7 +10,7 @@
   export let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let onPointerDown: (e: PointerEvent | TouchEvent) => void = () => {};
   export let onScroll: (e: Event) => void = () => {};
-  export let navigationManager: any = null;
+  export let navigationManager: any = null; // Used by parent component
   export let onNavigateToView: (level: 'world' | 'country' | 'subdivision' | 'city') => void = () => {};
 
   const dispatch = createEventDispatcher();
@@ -18,6 +18,25 @@
   // Debug: log when world chart segments change
   $: if (worldChartSegments) {
     console.log('[BottomSheet] World chart segments:', worldChartSegments);
+  }
+
+  // Auto-scroll to active button when navigation changes
+  let navContainer: HTMLElement;
+  
+  $: if (selectedCountryName || selectedSubdivisionName || selectedCityName) {
+    // Wait for DOM update then scroll to active button
+    setTimeout(() => {
+      if (navContainer) {
+        const activeButton = navContainer.querySelector('.nav-chip.active');
+        if (activeButton) {
+          activeButton.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'nearest', 
+            inline: 'center' 
+          });
+        }
+      }
+    }, 100);
   }
 </script>
 
@@ -38,7 +57,7 @@
   </div>
   
   <!-- Navegación minimalista -->
-  <div class="nav-minimal">
+  <div class="nav-minimal" bind:this={navContainer}>
     <button
       class="nav-chip {!selectedCountryName ? 'active' : ''}"
       on:click={() => onNavigateToView('world')}
