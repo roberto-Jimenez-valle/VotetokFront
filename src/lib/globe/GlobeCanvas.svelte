@@ -120,14 +120,18 @@
         world.htmlLat && world.htmlLat((d: any) => d.lat);
         world.htmlLng && world.htmlLng((d: any) => d.lng);
         world.htmlAltitude && world.htmlAltitude(() => 0.008); // Fixed altitude above polygons
-        world.htmlTransitionDuration && world.htmlTransitionDuration(0); // No transitions
+        world.htmlTransitionDuration && world.htmlTransitionDuration(200); // Smooth transitions for LOD
         
         world.htmlElement && world.htmlElement((d: any) => {
           const el = document.createElement('div');
           el.className = 'subdivision-label-fixed';
-          el.textContent = d.name;
-          el.style.color = '#ffffff';
-          el.style.fontSize = '11px';
+          el.textContent = d.name || d.text;
+          el.style.color = d.color || '#ffffff';
+          
+          // Use size from label data if available, otherwise default
+          const fontSize = d.size || 11;
+          el.style.fontSize = `${fontSize}px`;
+          
           el.style.fontWeight = 'bold';
           el.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
           el.style.pointerEvents = 'none';
@@ -136,10 +140,16 @@
           el.style.transform = 'translate(-50%, -50%)';
           el.style.fontFamily = 'Arial, sans-serif';
           el.style.userSelect = 'none';
+          
+          // Apply opacity if specified
+          if (d.opacity !== undefined) {
+            el.style.opacity = String(d.opacity);
+          }
+          
           return el;
         });
         
-        console.log('[TextLabels] Using HTML elements for fixed positioning');
+        console.log('[TextLabels] Using HTML elements for fixed positioning with LOD styling');
       } else {
         // Clear labels
         world.htmlElementsData([]);
@@ -243,6 +253,9 @@
         if ('dampingFactor' in controls) controls.dampingFactor = 0;
         if ('rotateSpeed' in controls) controls.rotateSpeed = 1.0;
         if ('zoomSpeed' in controls) controls.zoomSpeed = 1.0;
+        // Limitar zoom mínimo y máximo
+        if ('minDistance' in controls) controls.minDistance = 100; // Limitar zoom mínimo más restrictivo
+        if ('maxDistance' in controls) controls.maxDistance = 500; // Limitar zoom máximo para altitude 4.0
         if (typeof controls.update === 'function') controls.update();
         if (typeof controls.addEventListener === 'function') {
           controls.addEventListener('change', () => dispatch('controlsChange'));

@@ -147,26 +147,49 @@
   border-color: rgba(255, 255, 255, 0.42);
 }
 
-/* Botón localizar (arriba derecha, debajo del botón de 3 puntos) */
+/* Botón de ajustes (arriba derecha, encima del botón de localización) */
+.settings-btn {
+  position: fixed;
+  top: 176px;
+  right: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  z-index: 1003;
+}
+.settings-btn:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+/* Botón localizar (arriba derecha, debajo del botón de ajustes) */
 .locate-btn {
   position: fixed;
   top: 222px;
   right: 10px;
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #e5e7eb;
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(255, 255, 255, 0.1) 100%
-  );
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-  color: #e5e7eb;
+  font-size: 16px;
+  transition: all 0.2s ease;
   cursor: pointer;
   z-index: 1003;
 }
@@ -652,4 +675,57 @@
   color: #aaa;
   font-size: 11px;
   font-weight: 400;
+}
+
+/* Barra de escala estilo Google Maps (reemplaza legend-panel) */
+.altitude-indicator {
+  position: fixed;
+  left: 10px;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  z-index: 1000;
+  background: transparent;
+  padding: 5px 8px;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  user-select: none;
+}
+
+.scale-bar {
+  width: 60px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.9);
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.scale-bar::before,
+.scale-bar::after {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  top: -1.5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.scale-bar::before {
+  left: 0;
+}
+
+.scale-bar::after {
+  right: 0;
+}
+
+.altitude-value {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: 400;
+  margin: 0;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }

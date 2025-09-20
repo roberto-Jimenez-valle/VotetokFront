@@ -59,6 +59,40 @@
   const ALT_THRESHOLD = 0.6; // si la altitud es menor, ocultamos polígonos
   const VERY_CLOSE_ALT = 0.15; // por debajo de este valor, sin clustering: puntos exactos
 
+  // Umbrales de altitud para mostrar textos (Level of Detail)
+  const COUNTRY_LABELS_ALT = 1.0; // mostrar etiquetas de países cuando altitud < 2.5
+  const SUBDIVISION_LABELS_ALT = 0.4; // mostrar etiquetas de subdivisiones cuando altitud < 0.8
+  const DETAILED_LABELS_ALT = 0.21; // mostrar etiquetas detalladas cuando altitud < 0.3
+  
+  // Límites de zoom del globo
+  const MIN_ZOOM_ALTITUDE = 0.02; // límite mínimo de zoom (más cerca)
+  const MAX_ZOOM_ALTITUDE = 4.0; // límite máximo de zoom (más lejos)
+
+  // Debug function para mostrar información del sistema LOD
+  function debugLODSystem(pov: { lat: number; lng: number; altitude: number }) {
+    const currentLevel = navigationManager?.getCurrentLevel() || 'world';
+    console.log(`[LOD Debug] 
+      Altitude: ${pov.altitude.toFixed(3)}
+      Level: ${currentLevel}
+      Country Labels Threshold: ${COUNTRY_LABELS_ALT}
+      Subdivision Labels Threshold: ${SUBDIVISION_LABELS_ALT}
+      Detailed Labels Threshold: ${DETAILED_LABELS_ALT}
+      
+      Labels Status:
+      - Country Labels: ${pov.altitude < COUNTRY_LABELS_ALT ? 'VISIBLE' : 'HIDDEN'}
+      - Subdivision Labels: ${pov.altitude < SUBDIVISION_LABELS_ALT ? 'VISIBLE' : 'HIDDEN'}
+      - Detailed Labels: ${pov.altitude < DETAILED_LABELS_ALT ? 'VISIBLE' : 'HIDDEN'}
+    `);
+  }
+
+  // Función de prueba para testear diferentes altitudes
+  function testAltitude(altitude: number) {
+    if (globe) {
+      const pov = globe.pointOfView();
+      globe.pointOfView({ lat: pov.lat, lng: pov.lng, altitude }, 500);
+    }
+  }
+
   // Polígonos locales por país (zoom cercano)
   let localPolygons: any[] = [];
   let currentLocalIso: string | null = null;
@@ -120,7 +154,11 @@
     } catch {}
     // Solo establecer POV inicial la primera vez
     if (_initVersion === 0) {
-      try { globe?.pointOfView({ lat: 20, lng: 0, altitude: 3.5 }); } catch {}
+      try { 
+        // Inicializar en vista alejada de 200km (200000/675000 = 0.296)
+        const initialAltitude = 200000 / 675000; // 0.296 para 200km
+        globe?.pointOfView({ lat: 20, lng: 0, altitude: initialAltitude }); 
+      } catch {}
     }
     _initVersion++;
     // Ajustar visibilidad según POV actual (evitar reactivar polígonos si estamos cerca)
@@ -726,26 +764,33 @@
     return null;
   }
 
-  // Label generation functions for zoom-based display
+  // Label generation functions for zoom-based display with Level of Detail (LOD)
   async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }) {
     try {
       const currentLevel = navigationManager?.getCurrentLevel() || 'world';
       
-      if (currentLevel === 'world') {
-        // At world level with close zoom - show country labels
+      console.log(`[LOD] Altitude: ${pov.altitude.toFixed(3)}, Level: ${currentLevel}`);
+      
+      // Lógica simplificada: mostrar etiquetas según altitud y nivel
+      if (currentLevel === 'world' && pov.altitude < COUNTRY_LABELS_ALT) {
+        console.log('[LOD] Showing world country labels');
         await generateWorldCountryLabels();
-      } else if (currentLevel === 'country') {
-        // At country level with close zoom - show subdivision labels
+      } else if (currentLevel === 'country' && pov.altitude < SUBDIVISION_LABELS_ALT) {
+        console.log('[LOD] Showing subdivision labels');
         const state = navigationManager?.getState();
         if (state?.countryIso) {
           await generateCountrySubdivisionLabels(state.countryIso, pov);
         }
-      } else if (currentLevel === 'subdivision') {
-        // At subdivision level - show sub-subdivision labels if available
+      } else if (currentLevel === 'subdivision' && pov.altitude < DETAILED_LABELS_ALT) {
+        console.log('[LOD] Showing detailed subdivision labels');
         const state = navigationManager?.getState();
         if (state?.countryIso && state?.subdivisionId) {
           await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
         }
+      } else {
+        // Ocultar todas las etiquetas si no se cumplen las condiciones
+        console.log('[LOD] Hiding all labels - conditions not met');
+        updateSubdivisionLabels(false);
       }
     } catch (e) {
       console.warn('[Labels] Error updating labels for current view:', e);
@@ -780,6 +825,85 @@
       console.log('[Labels] Generated', labels.length, 'world country labels');
     } catch (e) {
       console.warn('[Labels] Error generating world country labels:', e);
+    }
+  }
+
+  // Generar solo el nombre del país actual cuando estamos en nivel país pero lejos
+  async function generateCountryNameLabel() {
+    try {
+      const state = navigationManager?.getState();
+      if (!state?.countryIso) return;
+      
+      // Obtener el centroide del país desde el cache
+      const centroid = countryCentroidCache.get(state.countryIso);
+      if (!centroid) return;
+      
+      // Obtener el nombre del país desde el historial de navegación
+      const countryName = navigationManager?.getHistory()?.find(h => h.level === 'country')?.name || state.countryIso;
+      
+      const labels = [{
+        id: `country-name-${state.countryIso}`,
+        name: countryName,
+        lat: centroid.lat,
+        lng: centroid.lng,
+        text: countryName,
+        size: 16,
+        color: '#ffffff',
+        opacity: 1.0
+      }];
+      
+      subdivisionLabels = labels;
+      updateSubdivisionLabels(true);
+      
+      console.log('[Labels] Generated country name label:', countryName);
+    } catch (e) {
+      console.warn('[Labels] Error generating country name label:', e);
+    }
+  }
+
+  // Generar solo el nombre de la subdivisión actual cuando estamos en nivel subdivisión pero no muy cerca
+  async function generateSubdivisionNameLabel() {
+    try {
+      const state = navigationManager?.getState();
+      if (!state?.countryIso || !state?.subdivisionId) return;
+      
+      // Obtener el centroide de la subdivisión desde el cache
+      const subdivisionKey = `${state.countryIso}/${state.subdivisionId}`;
+      const centroid = subregionCentroidCache.get(subdivisionKey);
+      if (!centroid) {
+        // Si no tenemos el centroide en cache, intentar calcularlo desde los polígonos
+        const subdivisionPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
+        if (subdivisionPolygons?.length) {
+          const calculatedCentroid = centroidOf(subdivisionPolygons[0]);
+          subregionCentroidCache.set(subdivisionKey, calculatedCentroid);
+        } else {
+          return;
+        }
+      }
+      
+      // Obtener el nombre de la subdivisión desde el historial de navegación
+      const subdivisionName = navigationManager?.getHistory()?.find(h => h.level === 'subdivision')?.name || state.subdivisionId;
+      
+      const finalCentroid = centroid || subregionCentroidCache.get(subdivisionKey);
+      if (!finalCentroid) return;
+      
+      const labels = [{
+        id: `subdivision-name-${state.subdivisionId}`,
+        name: subdivisionName,
+        lat: finalCentroid.lat,
+        lng: finalCentroid.lng,
+        text: subdivisionName,
+        size: 14,
+        color: '#ffffff',
+        opacity: 1.0
+      }];
+      
+      subdivisionLabels = labels;
+      updateSubdivisionLabels(true);
+      
+      console.log('[Labels] Generated subdivision name label:', subdivisionName);
+    } catch (e) {
+      console.warn('[Labels] Error generating subdivision name label:', e);
     }
   }
 
@@ -1063,6 +1187,9 @@
   let subdivisionLabels: SubdivisionLabel[] = [];
   let labelsInitialized = false;
   
+  // Variable para mostrar la altitud actual
+  let currentAltitude = 3.5;
+  
   // Debounce para cargar polígonos solo cuando el mapa esté parado
   let mapMovementTimeout: NodeJS.Timeout | null = null;
   let isMapMoving = false;
@@ -1152,7 +1279,7 @@
       const lng = pos.coords.longitude;
       // Detener cualquier rotación automática antes de mover la cámara
      
-      const targetAltitude = 0.001; // límite mínimo permitido
+      const targetAltitude = MIN_ZOOM_ALTITUDE; // límite mínimo permitido
       if (polygonsVisible && targetAltitude < ALT_THRESHOLD) {
         globe?.setPolygonsData([]);
         polygonsVisible = false;
@@ -1198,12 +1325,12 @@
     try {
       const pov = globe?.pointOfView();
       if (!pov) return;
-      if (pov.altitude > 4.05) {
-        globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: 4.0 }, 0);
+      if (pov.altitude > MAX_ZOOM_ALTITUDE) {
+        globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: MAX_ZOOM_ALTITUDE }, 0);
         return;
       }
-      if (pov.altitude < 0.001) {
-        globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: 0.001 }, 0);
+      if (pov.altitude < MIN_ZOOM_ALTITUDE) {
+        globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: MIN_ZOOM_ALTITUDE }, 0);
         return;
       }
       if (pov.altitude < ALT_THRESHOLD) {
@@ -1400,7 +1527,7 @@
   let countryChartSegments: ChartSeg[] = [];
   
   // Function to generate chart segments from data
-  function generateCountryChartSegments(data: any[]): ChartSeg[] {
+  function generateCountryChartSegments(data: Record<string, number>[]): ChartSeg[] {
     if (!data || data.length === 0) return [];
     
     // Aggregate data by key
@@ -1408,10 +1535,8 @@
     data.forEach(item => {
       if (item && typeof item === 'object') {
         Object.entries(item).forEach(([key, value]) => {
-          if (key !== 'iso' && key !== 'subdivision') {
-            const numValue = typeof value === 'number' ? value : Number(value) || 0;
-            aggregated[key] = (aggregated[key] || 0) + numValue;
-          }
+          const numValue = typeof value === 'number' ? value : Number(value) || 0;
+          aggregated[key] = (aggregated[key] || 0) + numValue;
         });
       }
     });
@@ -1511,13 +1636,13 @@
         const pov = globe?.pointOfView();
         if (!pov) return;
         // Limitar el zoom de alejamiento a una altitud máxima (con histéresis ligera)
-        if (pov.altitude > 4.05) {
-          globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: 4.0 }, 0);
+        if (pov.altitude > MAX_ZOOM_ALTITUDE) {
+          globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: MAX_ZOOM_ALTITUDE }, 0);
           return; // evitamos evaluar el resto en este tick
         }
         // Limitar el zoom de acercamiento a una altitud mínima
-        if (pov.altitude < 0.001) {
-          globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: 0.001 }, 0);
+        if (pov.altitude < MIN_ZOOM_ALTITUDE) {
+          globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: MIN_ZOOM_ALTITUDE }, 0);
           return;
         }
         if (pov.altitude < ALT_THRESHOLD) {
@@ -1595,6 +1720,19 @@
       const pov = globe?.pointOfView?.();
       if (!pov) return;
       
+      // APLICAR LÍMITES DE ZOOM ANTES QUE NADA
+      if (pov.altitude < MIN_ZOOM_ALTITUDE) {
+        globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: MIN_ZOOM_ALTITUDE }, 0);
+        return; // Salir para evitar procesar valores inválidos
+      }
+      if (pov.altitude > MAX_ZOOM_ALTITUDE) {
+        globe?.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: MAX_ZOOM_ALTITUDE }, 0);
+        return;
+      }
+      
+      // Actualizar altitud para mostrar en la UI
+      currentAltitude = pov.altitude;
+      
       // Update visibility based on altitude
       const shouldShow = pov.altitude < ALT_THRESHOLD;
       if (shouldShow !== polygonsVisible) {
@@ -1602,20 +1740,17 @@
         updatePolygonsVisibilityExt();
       }
       
-      // Zoom-based polygon loading DISABLED - only update markers and labels
+      // Zoom-based polygon loading DISABLED - only update markers and labels with LOD
       if (!isMapMoving) {
         if (pov.altitude < ALT_THRESHOLD) {
           updateMarkers(true);
-          // Generate and show labels based on current navigation level and zoom
-          updateLabelsForCurrentView(pov).catch(e => console.warn('Label update error:', e));
         } else {
           updateMarkers(false);
-          // Show country labels when zoomed out at world level
-          if (navigationManager?.getCurrentLevel() === 'world') {
-            generateWorldCountryLabels().catch(e => console.warn('World labels error:', e));
-          }
         }
       }
+      
+      // Siempre actualizar etiquetas con el nuevo sistema LOD (incluso durante movimiento)
+      updateLabelsForCurrentView(pov).catch(e => console.warn('Label update error:', e));
     } catch {}
   }}
   on:polygonClick={async (e) => {
@@ -1680,7 +1815,7 @@
         
         // Zoom to subdivision
         const centroid = centroidOf(feat);
-        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.1 }, 500);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.2 }, 500);
         
         // Navigate using manager
         await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
@@ -1703,7 +1838,9 @@
         // Adjust zoom based on new level
         const newLevel = navigationManager.getCurrentLevel();
         if (newLevel === 'world') {
-          globe?.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1000);
+          // Vista mundial a 200km de distancia
+          const worldViewAltitude = 200000 / 675000; // 0.296 para 200km
+          globe?.pointOfView({ lat: 20, lng: 0, altitude: worldViewAltitude }, 1000);
           selectedCountryName = null;
           selectedCountryIso = null;
         } else if (newLevel === 'country') {
@@ -1758,7 +1895,9 @@
         // Adjust zoom based on new level
         const newLevel = navigationManager.getCurrentLevel();
         if (newLevel === 'world') {
-          globe?.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1000);
+          // Vista mundial a 200km de distancia
+          const worldViewAltitude = 200000 / 675000; // 0.296 para 200km
+          globe?.pointOfView({ lat: 20, lng: 0, altitude: worldViewAltitude }, 1000);
           selectedCountryName = null;
           selectedCountryIso = null;
         } else if (newLevel === 'country') {
@@ -1825,23 +1964,45 @@
   </div>
 {/if}
 
-<LegendPanel
-  {mode}
-  {capBaseColor}
-  {sphereBaseColor}
-  {sphereOpacityPct}
-  on:toggleMode={() => { mode = mode === 'intensity' ? 'trend' : 'intensity'; }}
-  on:openSettings={async (e) => {
-    const r = e.detail?.rect;
-    showSettings = true;
-    await tick();
-    if (r && panelEl) {
-      const gap = 10;
-      const top = Math.max(10, Math.round(r.top - panelEl.offsetHeight - gap));
-      panelTop = top;
-    }
-  }}
-/>
+
+<!-- Barra de escala estilo Google Maps (abajo izquierda) -->
+<div class="altitude-indicator">
+  <div class="scale-bar">
+    <div class="altitude-value">
+      {(() => {
+        // Convertir altitud a kilómetros aproximados
+        // 4.0 altitud = 2700 km, por lo tanto multiplicador = 675000 (en metros)
+        const meters = Math.round(currentAltitude * 675000);
+        
+        if (meters < 1000) {
+          return `${meters} m`;
+        } else {
+          const km = meters / 1000;
+          if (km < 10) {
+            return `${km.toFixed(1)} km`;
+          } else {
+            return `${Math.round(km)} km`;
+          }
+        }
+      })()}
+    </div>
+  </div>
+</div>
+
+<!-- Botón de ajustes (abajo derecha, arriba del de localización) -->
+<button
+  class="settings-btn"
+  type="button"
+  aria-label="Abrir ajustes"
+  title="Ajustes de colores y visualización"
+  on:click={() => { showSettings = !showSettings; }}
+>
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+    <circle cx="12" cy="5" r="2"></circle>
+    <circle cx="12" cy="12" r="2"></circle>
+    <circle cx="12" cy="19" r="2"></circle>
+  </svg>
+</button>
 
 <!-- Botón para ir a mi ubicación (abajo derecha) -->
 <button
@@ -1852,24 +2013,12 @@
   on:click={locateMe}
   on:touchend|preventDefault={locateMe}
 >
-  <!-- Icono de localización (target) -->
-  <svg
-    viewBox="0 0 24 24"
-    width="20"
-    height="20"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="3" />
-    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-    <circle cx="12" cy="12" r="9" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+    <circle cx="12" cy="10" r="3"></circle>
   </svg>
-  <span class="sr-only">Ir a mi ubicación</span>
 </button>
+<span class="sr-only">Ir a mi ubicación</span>
 
 <BottomSheet
   state={SHEET_STATE}
