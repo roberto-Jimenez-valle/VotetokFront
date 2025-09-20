@@ -165,8 +165,98 @@
 
   onMount(async () => {
     const { default: Globe } = await import('globe.gl');
-    world = new Globe(rootEl!)
-      .backgroundColor(bgColor);
+    
+    // Detectar Safari
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    
+    // Verificar soporte WebGL antes de inicializar
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) {
+      console.error('[Globe] WebGL not supported');
+      if (rootEl) {
+        rootEl.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white; text-align: center; font-family: sans-serif;">
+            <div>
+              <h3>WebGL Not Supported</h3>
+              <p>Your browser doesn't support WebGL, which is required for the 3D globe.</p>
+              <p>Please update your browser or enable WebGL in your browser settings.</p>
+            </div>
+          </div>
+        `;
+      }
+      return;
+    }
+    console.log('[Globe] WebGL support confirmed');
+    
+    try {
+      console.log('[Globe] Initializing globe, Safari detected:', isSafari);
+      console.log('[Globe] Container element:', rootEl);
+      
+      // Para Safari, usar inicialización más simple
+      if (isSafari) {
+        console.log('[Globe] Using Safari compatibility mode');
+        // Esperar un frame antes de inicializar
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        world = new Globe(rootEl!);
+      } else {
+        world = new Globe(rootEl!);
+      }
+      
+      if (!world) {
+        throw new Error('Globe instance is null');
+      }
+      
+      console.log('[Globe] Globe instance created successfully');
+      world.backgroundColor(bgColor);
+      
+      // Verificar que el renderer se creó correctamente
+      const renderer = world.renderer();
+      console.log('[Globe] Renderer:', renderer);
+      
+      if (renderer && renderer.domElement) {
+        console.log('[Globe] Canvas element created:', renderer.domElement);
+        // Forzar un resize inicial en Safari
+        if (isSafari) {
+          setTimeout(() => {
+            const w = rootEl!.clientWidth || window.innerWidth;
+            const h = rootEl!.clientHeight || window.innerHeight;
+            world.width(w).height(h);
+            console.log('[Globe] Safari resize applied:', w, 'x', h);
+          }, 50);
+        }
+      }
+      
+    } catch (error) {
+      console.error('[Globe] Error initializing globe:', error);
+      const err = error as Error;
+      console.error('[Globe] Error details:', err.message, err.stack);
+      
+      // Fallback más agresivo para Safari
+      try {
+        console.log('[Globe] Attempting fallback initialization');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        world = new Globe(rootEl!);
+        world.backgroundColor(bgColor);
+        console.log('[Globe] Fallback successful');
+      } catch (fallbackError) {
+        console.error('[Globe] Fallback also failed:', fallbackError);
+        // Mostrar error visible al usuario
+        if (rootEl) {
+          rootEl.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white; text-align: center; font-family: sans-serif;">
+              <div>
+                <h3>Error loading 3D Globe</h3>
+                <p>Your browser may not support WebGL or there's a compatibility issue.</p>
+                <p>Try refreshing the page or using a different browser.</p>
+                <small>Error: ${(fallbackError as Error).message}</small>
+              </div>
+            </div>
+          `;
+        }
+        return;
+      }
+    }
 
     // Esfera: color + opacidad
     world.globeImageUrl(null);
@@ -271,10 +361,16 @@
     } catch {}
 
     // Notificar al padre que el canvas está listo
-    dispatch('ready');
-
-    // Activar tiles por defecto
-    try { setTilesEnabled(true); } catch {}
+    // En Safari, esperar un poco antes de notificar
+    if (isSafari) {
+      setTimeout(() => {
+        dispatch('ready');
+        try { setTilesEnabled(true); } catch {}
+      }, 100);
+    } else {
+      dispatch('ready');
+      try { setTilesEnabled(true); } catch {}
+    }
   });
 
   onDestroy(() => {

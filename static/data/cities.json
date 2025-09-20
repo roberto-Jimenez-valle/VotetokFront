@@ -1,0 +1,74 @@
+{
+  "Jaén": {
+    "Economía": 45,
+    "Educación": 32,
+    "Salud": 28,
+    "Medio Ambiente": 18,
+    "Transporte": 12,
+    "Agricultura": 35,
+    "Turismo": 22
+  },
+  "Sevilla": {
+    "Cultura": 52,
+    "Turismo": 38,
+    "Economía": 35,
+    "Educación": 25,
+    "Transporte": 15,
+    "Tecnología": 20,
+    "Salud": 30
+  },
+  "Granada": {
+    "Educación": 48,
+    "Cultura": 35,
+    "Turismo": 30,
+    "Salud": 22,
+    "Economía": 18,
+    "Patrimonio": 40,
+    "Investigación": 25
+  },
+  "Madrid": {
+    "Economía": 58,
+    "Transporte": 42,
+    "Cultura": 38,
+    "Educación": 35,
+    "Tecnología": 28,
+    "Finanzas": 45,
+    "Salud": 32
+  },
+  "Barcelona": {
+    "Tecnología": 55,
+    "Cultura": 48,
+    "Turismo": 45,
+    "Economía": 40,
+    "Educación": 32,
+    "Innovación": 50,
+    "Diseño": 38
+  },
+  "Valencia": {
+    "Agricultura": 42,
+    "Turismo": 35,
+    "Tecnología": 30,
+    "Cultura": 28,
+    "Economía": 25,
+    "Gastronomía": 40,
+    "Industria": 22
+  },
+  "Bilbao": {
+    "Industria": 45,
+    "Economía": 38,
+    "Cultura": 32,
+    "Tecnología": 28,
+    "Transporte": 25,
+    "Innovación": 35,
+    "Salud": 20
+  },
+  "Córdoba": {
+    "Patrimonio": 50,
+    "Turismo": 35,
+    "Agricultura": 30,
+    "Cultura": 28,
+    "Educación": 22,
+    "Economía": 18,
+    "Historia": 45
+  }
+}

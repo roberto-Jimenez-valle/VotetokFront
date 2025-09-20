@@ -3,11 +3,22 @@
   export let state: 'hidden' | 'peek' | 'collapsed' | 'expanded' = 'hidden';
   export let y = 0; // translateY px
   export let selectedCountryName: string | null = null;
+  export let selectedSubdivisionName: string | null = null;
+  export let selectedCityName: string | null = null;
   export let countryChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  export let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  export let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let onPointerDown: (e: PointerEvent | TouchEvent) => void = () => {};
   export let onScroll: (e: Event) => void = () => {};
+  export let navigationManager: any = null;
+  export let onNavigateToView: (level: 'world' | 'country' | 'subdivision' | 'city') => void = () => {};
 
   const dispatch = createEventDispatcher();
+  
+  // Debug: log when world chart segments change
+  $: if (worldChartSegments) {
+    console.log('[BottomSheet] World chart segments:', worldChartSegments);
+  }
 </script>
 
 <div
@@ -17,47 +28,86 @@
   aria-hidden={state === 'hidden'}
   style={`transform: translateY(${y}px);`}
 >
+  <!-- Header simplificado solo para arrastrar -->
   <div
-    class="sheet-header"
+    class="sheet-drag-area"
     on:pointerdown={onPointerDown}
     on:touchstart|preventDefault={onPointerDown}
   >
     <div class="sheet-grabber"></div>
-    <div class="sheet-title">{selectedCountryName ?? 'Selecciona un país'}</div>
-    <button
-      class="sheet-close"
-      type="button"
-      aria-label="Cerrar"
-      on:pointerdown|stopPropagation
-      on:touchstart|stopPropagation
-      on:touchend|stopPropagation={() => { dispatch('close'); }}
-      on:click|stopPropagation={() => { dispatch('close'); }}
-      on:keydown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          dispatch('close');
-        }
-      }}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <line x1="18" y1="6" x2="6" y2="18" />
-        <line x1="6" y1="6" x2="18" y2="18" />
-      </svg>
-    </button>
   </div>
+  
+  <!-- Navegación minimalista -->
+  <div class="nav-minimal">
+    <button
+      class="nav-chip {!selectedCountryName ? 'active' : ''}"
+      on:click={() => onNavigateToView('world')}
+    >
+      Global
+    </button>
+    
+    {#if selectedCountryName}
+      <div class="nav-divider">/</div>
+      <button
+        class="nav-chip {selectedCountryName && !selectedSubdivisionName ? 'active' : ''}"
+        on:click={() => onNavigateToView('country')}
+      >
+        {selectedCountryName}
+      </button>
+    {/if}
+    
+    {#if selectedSubdivisionName}
+      <div class="nav-divider">/</div>
+      <button
+        class="nav-chip {selectedSubdivisionName && !selectedCityName ? 'active' : ''}"
+        on:click={() => onNavigateToView('subdivision')}
+      >
+        {selectedSubdivisionName}
+      </button>
+    {/if}
+    
+    {#if selectedCityName}
+      <div class="nav-divider">/</div>
+      <button
+        class="nav-chip {selectedCityName ? 'active' : ''}"
+        on:click={() => onNavigateToView('city')}
+      >
+        {selectedCityName}
+      </button>
+    {/if}
+  </div>
+  
   <div class="sheet-content" on:scroll={onScroll}>
     {#if state === 'expanded'}
       <!-- Contenido de feed podría ir aquí como slot en el futuro -->
+    {:else if selectedCityName}
+      <!-- Mostrar gráfico de ciudad específica -->
+      {#if cityChartSegments.length}
+        <div
+          class="country-chart"
+          role="img"
+          aria-label={`Distribución por categorías en ${selectedCityName}`}
+          title={`Top categorías en ${selectedCityName}`}
+        >
+          {#each cityChartSegments as seg}
+            <div
+              class="seg"
+              style={`width:${seg.pct}%; background:${seg.color}`}
+              title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
+            ></div>
+          {/each}
+        </div>
+        <div class="country-chart-pcts">
+          {#each cityChartSegments as seg}
+            <div class="pct-item" title={`${seg.key}: ${seg.pct.toFixed(1)}%`}>
+              <span class="sw" style={`background:${seg.color}`}></span>
+              <span class="pct">{seg.pct.toFixed(1)}%</span>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div style="opacity:.75; font-size:13px;">Sin datos específicos para {selectedCityName}.</div>
+      {/if}
     {:else if selectedCountryName}
       {#if countryChartSegments.length}
         <div
@@ -86,7 +136,33 @@
         <div style="opacity:.75; font-size:13px;">Sin datos de categorías para este país.</div>
       {/if}
     {:else}
-      <div style="opacity:.75; font-size:13px;">Pulsa un país para ver detalles aquí.</div>
+      <!-- Mostrar información mundial cuando no hay país seleccionado -->
+      {#if worldChartSegments.length}
+        <div
+          class="country-chart"
+          role="img"
+          aria-label="Distribución global por categorías"
+          title="Top categorías a nivel mundial"
+        >
+          {#each worldChartSegments as seg}
+            <div
+              class="seg"
+              style={`width:${seg.pct}%; background:${seg.color}`}
+              title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
+            ></div>
+          {/each}
+        </div>
+        <div class="country-chart-pcts">
+          {#each worldChartSegments as seg}
+            <div class="pct-item" title={`${seg.key}: ${seg.pct.toFixed(1)}%`}>
+              <span class="sw" style={`background:${seg.color}`}></span>
+              <span class="pct">{seg.pct.toFixed(1)}%</span>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div style="opacity:.75; font-size:13px;">Vista global - Explora el mundo haciendo clic en los países.</div>
+      {/if}
     {/if}
   </div>
 </div>

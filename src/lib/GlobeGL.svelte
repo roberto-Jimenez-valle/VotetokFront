@@ -93,6 +93,141 @@
     }
   }
 
+  // Función para simular clic en una ciudad específica (para testing)
+  function selectCity(cityName: string) {
+    console.log(`[City] Selecting city: ${cityName}`);
+    selectedCityName = cityName;
+    
+    // Generar datos específicos para la ciudad
+    generateCityChartSegments(cityName);
+    
+    // Mostrar el BottomSheet si está oculto
+    if (SHEET_STATE === 'hidden') {
+      SHEET_STATE = 'peek';
+      sheetCtrl?.setState('peek');
+    }
+  }
+
+  // Datos de ciudades cargados desde JSON
+  let citiesData: Record<string, any> = {};
+
+  // Cargar datos de ciudades desde JSON
+  async function loadCitiesData() {
+    try {
+      const response = await fetch('/data/cities.json');
+      if (response.ok) {
+        citiesData = await response.json();
+        console.log('[Cities] Cities data loaded:', Object.keys(citiesData).length, 'cities');
+      } else {
+        console.warn('[Cities] Could not load cities.json, using fallback data');
+        // Fallback data si no existe el archivo
+        citiesData = {
+          'Jaén': { 'Economía': 45, 'Educación': 32, 'Salud': 28, 'Medio Ambiente': 18, 'Transporte': 12 },
+          'Sevilla': { 'Cultura': 52, 'Turismo': 38, 'Economía': 35, 'Educación': 25, 'Transporte': 15 },
+          'Granada': { 'Educación': 48, 'Cultura': 35, 'Turismo': 30, 'Salud': 22, 'Economía': 18 },
+          'Madrid': { 'Economía': 58, 'Transporte': 42, 'Cultura': 38, 'Educación': 35, 'Tecnología': 28 },
+          'Barcelona': { 'Tecnología': 55, 'Cultura': 48, 'Turismo': 45, 'Economía': 40, 'Educación': 32 }
+        };
+      }
+    } catch (error) {
+      console.error('[Cities] Error loading cities data:', error);
+      citiesData = {};
+    }
+  }
+
+  // Generar datos específicos para una ciudad desde el JSON cargado
+  function generateCityChartSegments(cityName: string) {
+    const cityData = citiesData[cityName];
+    if (cityData) {
+      cityChartSegments = generateCountryChartSegments([cityData]);
+      console.log(`[City] Generated chart for ${cityName} from JSON:`, cityChartSegments);
+    } else {
+      cityChartSegments = [];
+      console.log(`[City] No data available for ${cityName} in cities.json`);
+    }
+  }
+
+  // Obtener ciudades disponibles según la subdivisión actual
+  function getAvailableCities(): string[] {
+    if (!selectedSubdivisionName) return [];
+    
+    const subdivisionCities: Record<string, string[]> = {
+      'Andalucía': ['Jaén', 'Sevilla', 'Granada'],
+      'Andalusia': ['Jaén', 'Sevilla', 'Granada'],
+      'Madrid': ['Madrid'],
+      'Cataluña': ['Barcelona'],
+      'Catalunya': ['Barcelona'],
+      'Catalonia': ['Barcelona']
+    };
+
+    for (const [subdivision, cities] of Object.entries(subdivisionCities)) {
+      if (selectedSubdivisionName.includes(subdivision)) {
+        return cities;
+      }
+    }
+    
+    return [];
+  }
+
+  // Función para navegar directamente a una vista específica
+  async function navigateToView(targetLevel: 'world' | 'country' | 'subdivision' | 'city') {
+    if (!navigationManager) return;
+    
+    const currentLevel = navigationManager.getCurrentLevel();
+    console.log(`[Navigation] Navigating from ${currentLevel} to ${targetLevel}`);
+    
+    if (targetLevel === 'world') {
+      // Limpiar todos los niveles inferiores
+      selectedCountryName = null;
+      selectedCountryIso = null;
+      selectedSubdivisionName = null;
+      selectedCityName = null;
+      
+      // Navegar al mundo y hacer zoom hacia atrás
+      await navigationManager.navigateToWorld();
+      globe?.pointOfView({ lat: 0, lng: 0, altitude: 2.0 }, 1000);
+      
+    } else if (targetLevel === 'country' && selectedCountryIso) {
+      // Limpiar niveles inferiores
+      selectedSubdivisionName = null;
+      selectedCityName = null;
+      
+      // Navegar al país y hacer zoom apropiado
+      await navigationManager.navigateToCountry(selectedCountryIso, selectedCountryName || 'Unknown');
+      
+      // Encontrar el centroide del país para hacer zoom
+      const countryFeature = worldPolygons?.find(p => p.properties?.ISO_A3 === selectedCountryIso);
+      if (countryFeature) {
+        const centroid = centroidOf(countryFeature);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.8 }, 800);
+      }
+      
+    } else if (targetLevel === 'subdivision' && selectedCountryIso && selectedSubdivisionName) {
+      // Limpiar solo el nivel ciudad
+      selectedCityName = null;
+      
+      // Navegar a la subdivisión y hacer zoom apropiado
+      await navigationManager.navigateToCountry(selectedCountryIso, selectedCountryName || 'Unknown');
+      
+      // Buscar la subdivisión específica para hacer zoom
+      const subdivisionFeature = worldPolygons?.find(p => 
+        p.properties?.ISO_A3 === selectedCountryIso && 
+        (p.properties?.NAME_1 === selectedSubdivisionName || p.properties?.name_1 === selectedSubdivisionName)
+      );
+      if (subdivisionFeature) {
+        const centroid = centroidOf(subdivisionFeature);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.3 }, 600);
+      }
+      
+    } else if (targetLevel === 'city') {
+      // Para nivel ciudad, no mover el mapa, solo mostrar datos específicos
+      console.log(`[Navigation] Showing city data for ${selectedCityName}`);
+      // No hacer navegación del mapa, solo actualizar los datos del gráfico
+    }
+    
+    console.log(`[Navigation] Updated state: Country=${selectedCountryName}, Subdivision=${selectedSubdivisionName}, City=${selectedCityName}`);
+  }
+
   // Polígonos locales por país (zoom cercano)
   let localPolygons: any[] = [];
   let currentLocalIso: string | null = null;
@@ -155,8 +290,8 @@
     // Solo establecer POV inicial la primera vez
     if (_initVersion === 0) {
       try { 
-        // Inicializar en vista alejada de 200km (200000/675000 = 0.296)
-        const initialAltitude = 200000 / 675000; // 0.296 para 200km
+        // Inicializar en la vista más amplia posible (máximo zoom out)
+        const initialAltitude = MAX_ZOOM_ALTITUDE; // Vista más alejada: 2700km
         globe?.pointOfView({ lat: 20, lng: 0, altitude: initialAltitude }); 
       } catch {}
     }
@@ -1114,11 +1249,14 @@
     initFrom(geo, dataJson);
   }
 
+
   
   // Bottom sheet (tipo Google Maps)
   let selectedCountryName: string | null = null;
   let selectedCountryIso: string | null = null;
-  let SHEET_STATE: SheetState = 'hidden';
+  let selectedSubdivisionName: string | null = null;
+  let selectedCityName: string | null = null;
+  let SHEET_STATE: SheetState = 'peek'; // Mostrar información mundial por defecto
   const BOTTOM_BAR_PX = 0; // altura del menú inferior
   const EXPAND_SNAP_PX = 10; // umbral de arrastre hacia arriba para expandir totalmente (más sensible)
   const COLLAPSED_VISIBLE_RATIO = 0.27; // en estado colapsado, se ve el 30% superior de la sheet
@@ -1129,12 +1267,15 @@
   // Feed (encuestas) en modo expandido
   let feedCount = 10;
   let isLoadingMore = false;
-  $: if (SHEET_STATE === 'expanded') { feedCount = 10; }
+  let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  
   
   function onSheetScroll(e: Event) {
     if (SHEET_STATE !== 'expanded') return;
     const el = e.currentTarget as HTMLElement | null;
     if (!el || isLoadingMore) return;
+    
     const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 120;
     if (nearBottom) {
       isLoadingMore = true;
@@ -1574,17 +1715,26 @@
     if (!selectedCountryIso) return [];
     const rec = answersData?.[selectedCountryIso];
     if (!rec) return [];
-    const entries = Object.entries(rec).map(([k, v]) => [k, (typeof v === 'number' ? v : Number(v) || 0)] as [string, number]);
-    const total = entries.reduce((a, [, n]) => a + n, 0);
-    if (total <= 0) return [];
-    entries.sort((a, b) => b[1] - a[1]);
-    const TOP_N = 6;
-    const top = entries.slice(0, TOP_N);
-    const rest = entries.slice(TOP_N);
-    const restSum = rest.reduce((a, [, n]) => a + n, 0);
-    const segs: ChartSeg[] = top.map(([k, n]) => ({ key: k, value: n, pct: (n / total) * 100, color: colorMap?.[k] ?? '#9ca3af' }));
-    if (restSum > 0) segs.push({ key: 'Otros', value: restSum, pct: (restSum / total) * 100, color: 'rgba(148,163,184,0.45)' });
-    return segs;
+    return generateCountryChartSegments([rec]);
+  })();
+
+  // Reactive statement para generar gráfico mundial
+  $: worldChartSegments = (() => {
+    if (!answersData) {
+      console.log('[World Chart Reactive] No answersData available');
+      return [];
+    }
+    
+    console.log('[World Chart Reactive] Generating world chart from answersData');
+    
+    // Agregar todos los datos de todos los países
+    const allCountryData = Object.values(answersData);
+    console.log('[World Chart Reactive] Processing', allCountryData.length, 'countries');
+    
+    const worldSegments = generateCountryChartSegments(allCountryData);
+    console.log('[World Chart Reactive] Generated world segments:', worldSegments);
+    
+    return worldSegments;
   })();
 
   // Lista mixta para Tendencias: intercalar hashtags, cuentas y ubicaciones
@@ -1608,8 +1758,27 @@
       collapsedVisibleRatio: COLLAPSED_VISIBLE_RATIO,
       peekVisibleRatio: PEEK_VISIBLE_RATIO,
       expandSnapPx: EXPAND_SNAP_PX,
-      onChange: (state, y) => { SHEET_STATE = state; sheetY = y; }
+      onChange: (newState: any, newY: number) => {
+        SHEET_STATE = newState;
+        sheetY = newY;
+      }
     });
+    // Posicionar inicialmente en peek para mostrar info mundial
+    sheetCtrl.setState('peek');
+    
+    console.log('[Mount] BottomSheet initialized with world data');
+    
+    // Cargar datos de ciudades
+    await loadCitiesData();
+    
+    // Exponer funciones globalmente para testing
+    (window as any).selectCity = selectCity;
+    (window as any).testAltitude = testAltitude;
+    (window as any).getAvailableCities = getAvailableCities;
+    console.log('[Mount] Global functions available:');
+    console.log('  - selectCity("Jaén") - Select a specific city');
+    console.log('  - getAvailableCities() - Get cities for current subdivision');
+    console.log('  - testAltitude(0.5) - Test camera altitude');
     // Si no hay props, cargar desde stores (modo auto)
     if (!geo || !dataJson) {
       if (autoLoad) {
@@ -1621,11 +1790,13 @@
           console.error('No se pudo cargar datos del globo');
         } else {
           await initFrom(g, dj);
+          console.log('[Mount] Data loaded from stores');
         }
       }
     } else {
       // Si hay props, inicializar desde ellas inmediatamente
       await initFrom(geo, dataJson);
+      console.log('[Mount] Data from props');
     }
 
     // Listeners de interacción ya gestionados vía eventos del componente
@@ -1799,8 +1970,8 @@
         
         console.log('[Click] Subdivision clicked from country:', subdivisionId, subdivisionName);
         
-        // Update selected country info for bottom sheet
-        selectedCountryName = subdivisionName;
+        // Mantener el nombre del país (no cambiarlo por la subdivisión)
+        // selectedCountryName ya debería tener el nombre del país del nivel anterior
         selectedCountryIso = iso;
         
         // Update subdivision data for bottom sheet
@@ -1813,12 +1984,41 @@
           countryChartSegments = [];
         }
         
+        // Preparar contexto para ciudades según la subdivisión
+        console.log(`[City Context] Subdivision ${subdivisionName} selected. Cities available for selection.`);
+        if (subdivisionName.includes('Andalucía') || subdivisionName.includes('Andalusia')) {
+          console.log('[City Context] Andalucía selected. Try: selectCity("Jaén"), selectCity("Sevilla"), selectCity("Granada")');
+        }
+        
         // Zoom to subdivision
         const centroid = centroidOf(feat);
         globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.2 }, 500);
         
         // Navigate using manager
         await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
+        
+        // Update selected subdivision name for view buttons
+        selectedSubdivisionName = subdivisionName;
+        
+      } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
+        // Click on city/province from subdivision view (4th level)
+        const cityName = feat.properties.NAME_2 || feat.properties.name_2 || name;
+        const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1;
+        
+        console.log('[Click] City/Province clicked from subdivision:', cityName, 'in', subdivisionName);
+        
+        // Automatically activate 4th level
+        selectedCityName = cityName;
+        selectedSubdivisionName = subdivisionName;
+        
+        // Generate city-specific data
+        generateCityChartSegments(cityName);
+        
+        // Don't move the map for city level - just update the data
+        console.log(`[City] Activated 4th level for ${cityName}. No map movement.`);
+        
+        // Show success message
+        console.log(`[City] 4th level active! Navigation: Global / ${selectedCountryName} / ${selectedSubdivisionName} / ${selectedCityName}`);
       }
     } catch (e) {
       console.error('[Click] Error handling polygon click:', e);
@@ -1838,11 +2038,17 @@
         // Adjust zoom based on new level
         const newLevel = navigationManager.getCurrentLevel();
         if (newLevel === 'world') {
-          // Vista mundial a 200km de distancia
-          const worldViewAltitude = 200000 / 675000; // 0.296 para 200km
-          globe?.pointOfView({ lat: 20, lng: 0, altitude: worldViewAltitude }, 1000);
+          // Vista mundial: mantener posición actual, solo cambiar zoom
+          const currentPov = globe?.pointOfView();
+          const worldViewAltitude = MAX_ZOOM_ALTITUDE; // Vista más alejada sin rotar
+          globe?.pointOfView({ 
+            lat: currentPov?.lat || 20, 
+            lng: currentPov?.lng || 0, 
+            altitude: worldViewAltitude 
+          }, 1000);
           selectedCountryName = null;
           selectedCountryIso = null;
+          selectedSubdivisionName = null;
         } else if (newLevel === 'country') {
           // Stay at country zoom level
           globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.3 }, 700);
@@ -1895,11 +2101,17 @@
         // Adjust zoom based on new level
         const newLevel = navigationManager.getCurrentLevel();
         if (newLevel === 'world') {
-          // Vista mundial a 200km de distancia
-          const worldViewAltitude = 200000 / 675000; // 0.296 para 200km
-          globe?.pointOfView({ lat: 20, lng: 0, altitude: worldViewAltitude }, 1000);
+          // Vista mundial: mantener posición actual, solo cambiar zoom
+          const currentPov = globe?.pointOfView();
+          const worldViewAltitude = MAX_ZOOM_ALTITUDE; // Vista más alejada sin rotar
+          globe?.pointOfView({ 
+            lat: currentPov?.lat || 20, 
+            lng: currentPov?.lng || 0, 
+            altitude: worldViewAltitude 
+          }, 1000);
           selectedCountryName = null;
           selectedCountryIso = null;
+          selectedSubdivisionName = null;
         } else if (newLevel === 'country') {
           globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.3 }, 700);
         }
@@ -2004,6 +2216,7 @@
   </svg>
 </button>
 
+
 <!-- Botón para ir a mi ubicación (abajo derecha) -->
 <button
   class="locate-btn"
@@ -2024,8 +2237,16 @@
   state={SHEET_STATE}
   y={sheetY}
   {selectedCountryName}
+  {selectedSubdivisionName}
+  {selectedCityName}
   {countryChartSegments}
+  {worldChartSegments}
+  {cityChartSegments}
+  {navigationManager}
   onPointerDown={onSheetPointerDown}
   onScroll={onSheetScroll}
-  on:close={() => setSheetState('hidden')}
+  onNavigateToView={navigateToView}
+  on:close={() => {
+    SHEET_STATE = 'hidden';
+  }}
 />
