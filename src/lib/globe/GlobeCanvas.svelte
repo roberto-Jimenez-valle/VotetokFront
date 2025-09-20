@@ -12,7 +12,7 @@
   export let activeTag: string | null = null;
   export let onPolyCapColor: (feat: any) => string;
 
-  const POLY_ALT = 0.005;
+  const POLY_ALT = 0.017; // Elevación aumentada para mejor visibilidad del mapa coroplético
 
   let rootEl: HTMLDivElement | null = null;
   let world: any = null;
