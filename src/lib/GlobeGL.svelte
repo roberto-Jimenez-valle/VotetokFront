@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
+  
+  const dispatch = createEventDispatcher();
   import TopTabs from './TopTabs.svelte';
   import './GlobeGL.css';
   import { worldMap$, worldData$, loadGlobeData } from './stores/globeData';
   import { get as getStore } from 'svelte/store';
   import { clamp, hexToRgba } from './utils/colors';
   import { centroidOf, isoOf, pointInFeature } from './utils/geo';
-  import LegendPanel from './globe/LegendPanel.svelte';
   import SettingsPanel from './globe/SettingsPanel.svelte';
   import SearchBar from './globe/SearchBar.svelte';
   import TagBar from './globe/TagBar.svelte';
@@ -93,6 +94,130 @@
     }
   }
 
+  // Función para calcular el área aproximada de un polígono (en grados cuadrados)
+  function calculatePolygonArea(feature: any): number {
+    try {
+      if (!feature?.geometry?.coordinates) return 0;
+      
+      let totalArea = 0;
+      const coords = feature.geometry.coordinates;
+      
+      // Manejar MultiPolygon y Polygon
+      if (feature.geometry.type === 'MultiPolygon') {
+        for (const polygon of coords) {
+          totalArea += calculateRingArea(polygon[0]); // Solo el anillo exterior
+        }
+      } else if (feature.geometry.type === 'Polygon') {
+        totalArea = calculateRingArea(coords[0]); // Solo el anillo exterior
+      }
+      
+      return Math.abs(totalArea);
+    } catch (e) {
+      console.warn('[Area] Error calculating polygon area:', e);
+      return 0;
+    }
+  }
+  
+  // Función auxiliar para calcular el área de un anillo de coordenadas
+  function calculateRingArea(ring: number[][]): number {
+    if (!ring || ring.length < 3) return 0;
+    
+    let area = 0;
+    const n = ring.length;
+    
+    for (let i = 0; i < n - 1; i++) {
+      const [x1, y1] = ring[i];
+      const [x2, y2] = ring[i + 1];
+      area += (x1 * y2 - x2 * y1);
+    }
+    
+    return area / 2;
+  }
+  
+  // Función para calcular el zoom adaptativo basado en el tamaño del país
+  function calculateAdaptiveZoom(feature: any): number {
+    const area = calculatePolygonArea(feature);
+    
+    // Definir rangos de área y sus zooms correspondientes
+    // Áreas aproximadas en grados cuadrados para referencia:
+    // - Países muy grandes (Rusia, Canadá, China): > 1000
+    // - Países grandes (Brasil, Australia, India): 100-1000  
+    // - Países medianos (Francia, España, Alemania): 10-100
+    // - Países pequeños (Bélgica, Holanda, Suiza): 1-10
+    // - Países muy pequeños (Luxemburgo, Malta, Mónaco): < 1
+    
+    let targetAltitude: number;
+    
+    if (area > 1000) {
+      // Países muy grandes: zoom más alejado
+      targetAltitude = 1.2;
+      console.log(`[Adaptive Zoom] Very large country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else if (area > 500) {
+      // Países grandes: zoom medio-alejado
+      targetAltitude = 0.8;
+      console.log(`[Adaptive Zoom] Large country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else if (area > 100) {
+      // Países medianos-grandes: zoom medio
+      targetAltitude = 0.5;
+      console.log(`[Adaptive Zoom] Medium-large country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else if (area > 10) {
+      // Países medianos: zoom medio-cercano
+      targetAltitude = 0.3;
+      console.log(`[Adaptive Zoom] Medium country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else if (area > 1) {
+      // Países pequeños: zoom cercano
+      targetAltitude = 0.2;
+      console.log(`[Adaptive Zoom] Small country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else {
+      // Países muy pequeños: zoom muy cercano
+      targetAltitude = 0.15;
+      console.log(`[Adaptive Zoom] Very small country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    }
+    
+    // Asegurar que esté dentro de los límites permitidos
+    return Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
+  }
+
+  // Función para calcular el zoom adaptativo para subdivisiones (estados/comunidades)
+  function calculateAdaptiveZoomSubdivision(feature: any): number {
+    const area = calculatePolygonArea(feature);
+    
+    // Rangos específicos para subdivisiones (generalmente más pequeñas que países)
+    // Áreas aproximadas en grados cuadrados para subdivisiones:
+    // - Estados muy grandes (Alaska, Territorio del Noroeste): > 50
+    // - Estados grandes (Texas, California, Quebec): 10-50
+    // - Estados medianos (Francia regiones, España comunidades): 1-10
+    // - Estados pequeños (Delaware, Rhode Island, comunidades pequeñas): 0.1-1
+    // - Estados muy pequeños (Washington D.C., ciudades-estado): < 0.1
+    
+    let targetAltitude: number;
+    
+    if (area > 50) {
+      // Subdivisiones muy grandes: zoom medio-alejado
+      targetAltitude = 0.6;
+      console.log(`[Adaptive Zoom Subdivision] Very large subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else if (area > 10) {
+      // Subdivisiones grandes: zoom medio
+      targetAltitude = 0.4;
+      console.log(`[Adaptive Zoom Subdivision] Large subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else if (area > 1) {
+      // Subdivisiones medianas: zoom medio-cercano
+      targetAltitude = 0.25;
+      console.log(`[Adaptive Zoom Subdivision] Medium subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else if (area > 0.1) {
+      // Subdivisiones pequeñas: zoom cercano
+      targetAltitude = 0.15;
+      console.log(`[Adaptive Zoom Subdivision] Small subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    } else {
+      // Subdivisiones muy pequeñas: zoom muy cercano
+      targetAltitude = 0.08;
+      console.log(`[Adaptive Zoom Subdivision] Very small subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    }
+    
+    // Asegurar que esté dentro de los límites permitidos
+    return Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
+  }
+
   // Función para simular clic en una ciudad específica (para testing)
   function selectCity(cityName: string) {
     console.log(`[City] Selecting city: ${cityName}`);
@@ -169,55 +294,54 @@
     return [];
   }
 
-  // Función para navegar directamente a una vista específica
+  // Función para navegar directamente a una vista específica (sin mover la cámara)
   async function navigateToView(targetLevel: 'world' | 'country' | 'subdivision' | 'city') {
     if (!navigationManager) return;
     
     const currentLevel = navigationManager.getCurrentLevel();
-    console.log(`[Navigation] Navigating from ${currentLevel} to ${targetLevel}`);
+    console.log(`[Navigation] Navigating from ${currentLevel} to ${targetLevel} (polygons only, no camera movement)`);
     
     if (targetLevel === 'world') {
       // Limpiar todos los niveles inferiores
       selectedCountryName = null;
       selectedCountryIso = null;
       selectedSubdivisionName = null;
+      selectedSubdivisionId = null;
       selectedCityName = null;
+      selectedCityId = null;
       
-      // Navegar al mundo y hacer zoom hacia atrás
+      // Navegar al mundo (solo cambiar polígonos, sin mover cámara)
       await navigationManager.navigateToWorld();
-      globe?.pointOfView({ lat: 0, lng: 0, altitude: 2.0 }, 1000);
       
     } else if (targetLevel === 'country' && selectedCountryIso) {
       // Limpiar niveles inferiores
       selectedSubdivisionName = null;
+      selectedSubdivisionId = null;
       selectedCityName = null;
+      selectedCityId = null;
       
-      // Navegar al país y hacer zoom apropiado
+      // Navegar al país (solo cambiar polígonos, sin mover cámara)
       await navigationManager.navigateToCountry(selectedCountryIso, selectedCountryName || 'Unknown');
       
-      // Encontrar el centroide del país para hacer zoom
-      const countryFeature = worldPolygons?.find(p => p.properties?.ISO_A3 === selectedCountryIso);
-      if (countryFeature) {
-        const centroid = centroidOf(countryFeature);
-        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.8 }, 800);
-      }
+      // Refresh altitudes to reset polygon heights
+      setTimeout(() => {
+        globe?.refreshPolyAltitudes?.();
+      }, 100);
       
     } else if (targetLevel === 'subdivision' && selectedCountryIso && selectedSubdivisionName) {
       // Limpiar solo el nivel ciudad
       selectedCityName = null;
+      selectedCityId = null;
       
-      // Navegar a la subdivisión y hacer zoom apropiado
-      await navigationManager.navigateToCountry(selectedCountryIso, selectedCountryName || 'Unknown');
-      
-      // Buscar la subdivisión específica para hacer zoom
-      const subdivisionFeature = worldPolygons?.find(p => 
-        p.properties?.ISO_A3 === selectedCountryIso && 
-        (p.properties?.NAME_1 === selectedSubdivisionName || p.properties?.name_1 === selectedSubdivisionName)
-      );
-      if (subdivisionFeature) {
-        const centroid = centroidOf(subdivisionFeature);
-        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.3 }, 600);
+      // Navegar a la subdivisión (solo cambiar polígonos, sin mover cámara)
+      if (selectedSubdivisionId) {
+        await navigationManager.navigateToSubdivision(selectedCountryIso, selectedSubdivisionId, selectedSubdivisionName);
       }
+      
+      // Refresh altitudes to reset polygon heights
+      setTimeout(() => {
+        globe?.refreshPolyAltitudes?.();
+      }, 100);
       
     } else if (targetLevel === 'city') {
       // Para nivel ciudad, no mover el mapa, solo mostrar datos específicos
@@ -290,9 +414,18 @@
     // Solo establecer POV inicial la primera vez
     if (_initVersion === 0) {
       try { 
-        // Inicializar en la vista más amplia posible (máximo zoom out)
-        const initialAltitude = MAX_ZOOM_ALTITUDE; // Vista más alejada: 2700km
-        globe?.pointOfView({ lat: 20, lng: 0, altitude: initialAltitude }); 
+        // Inicializar con altitud máxima y dar dos vueltas rápidas
+        const initialAltitude = MAX_ZOOM_ALTITUDE;
+        // Posición inicial
+        globe?.pointOfView({ lat: 20, lng: 0, altitude: MAX_ZOOM_ALTITUDE }, 0);
+        
+        // Después de un pequeño delay, iniciar la rotación de dos vueltas
+        setTimeout(() => {
+          if (globe && _initVersion === 1) {
+            // Dos vueltas completas (720 grados) en 2 segundos
+            globe?.pointOfView({ lat: 20, lng: 720, altitude: MAX_ZOOM_ALTITUDE }, 2000);
+          }
+        }, 200);
       } catch {}
     }
     _initVersion++;
@@ -731,25 +864,48 @@
 
     private async renderCountryView(iso: string, countryPolygons: any[]) {
       try {
-        // Show ONLY the selected country with its subdivisions (NO world background)
-        const markedPolygons = countryPolygons.map(poly => ({
+        // Cargar subdivisiones del país
+        let subdivisionPolygons: any[] = [];
+        try {
+          subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(iso, iso);
+        } catch (e) {
+          console.warn('[CountryView] No subdivision file for', iso, e);
+        }
+
+        // Marcar padres (país) y marcar hijos (subdivisiones)
+        const parentMarked = countryPolygons.map(poly => ({
           ...poly,
-          properties: {
-            ...poly.properties,
-            _isParent: true,
-            _parentCountry: iso
-          }
+          properties: { ...poly.properties, _isParent: true, _parentCountry: iso, _opacity: 0.25, _elevation: 0.002 }
         }));
-        
-        // Set ONLY the country polygons (no world background)
-        this.globe?.setPolygonsData(markedPolygons);
+        const childMarked = subdivisionPolygons.map(poly => ({
+          ...poly,
+          properties: { ...poly.properties, _isChild: true, _parentCountry: iso, _opacity: 1.0, _elevation: 0.004 }
+        }));
+
+        // Asignar colores por subdivisión (primero por votos reales, si no, proporcional al chart)
+        subdivisionColorById = computeSubdivisionColorsFromVotes(iso, childMarked);
+        if (Object.keys(subdivisionColorById).length === 0 && countryChartSegments?.length) {
+          const byId = computeSubdivisionColorsProportional(childMarked, countryChartSegments);
+          subdivisionColorById = byId;
+        }
+        // Propagar _forcedColor a cada polígono hijo
+        for (const c of childMarked) {
+          const props = c?.properties || {};
+          const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || props.NAME_1 || props.name_1 || null;
+          const col = id1 ? subdivisionColorById[String(id1)] : null;
+          if (col) c.properties._forcedColor = col;
+        }
+
+        // Combinar y renderizar
+        const combined = [...parentMarked, ...childMarked];
+        this.globe?.setPolygonsData(combined);
         this.globe?.refreshPolyColors?.();
         this.globe?.refreshPolyAltitudes?.();
         this.globe?.refreshPolyLabels?.();
         
-        // Generate and show subdivision labels
-        const labels = generateSubdivisionLabels(markedPolygons);
-        console.log('[Navigation] Raw polygons for labels:', markedPolygons.length, 'polygons');
+        // Generate and show subdivision labels (usar polígonos hijos)
+        const labels = generateSubdivisionLabels(childMarked);
+        console.log('[Navigation] Raw polygons for labels (children):', childMarked.length, 'polygons');
         console.log('[Navigation] Generated labels:', labels);
         subdivisionLabels = labels;
         updateSubdivisionLabels(true);
@@ -1255,7 +1411,9 @@
   let selectedCountryName: string | null = null;
   let selectedCountryIso: string | null = null;
   let selectedSubdivisionName: string | null = null;
+  let selectedSubdivisionId: string | null = null; // ID de la subdivisión seleccionada
   let selectedCityName: string | null = null;
+  let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada para resaltado (nivel 4)
   let SHEET_STATE: SheetState = 'peek'; // Mostrar información mundial por defecto
   const BOTTOM_BAR_PX = 0; // altura del menú inferior
   const EXPAND_SNAP_PX = 10; // umbral de arrastre hacia arriba para expandir totalmente (más sensible)
@@ -1263,12 +1421,61 @@
   const PEEK_VISIBLE_RATIO = 0.10;      // tercer stop: 10% visible
   // Inicializa fuera de pantalla para evitar parpadeo visible al cargar
   let sheetY = 10000; // translateY actual en px (0 = expandido, >0 hacia abajo)
+  let sheetIsTransitioning = false; // Controla si debe usar transición CSS
   let sheetCtrl: BottomSheetController;
   // Feed (encuestas) en modo expandido
   let feedCount = 10;
   let isLoadingMore = false;
   let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  
+  // Opciones de votación basadas en los datos reales del mapa
+  $: voteOptions = legendItems.length > 0 ? legendItems.map(item => ({
+    key: item.key,
+    label: item.key,
+    color: item.color,
+    votes: item.count || 0
+  })) : [
+    // Opciones de prueba para testing del scroll - muchas más opciones
+    { key: 'option1', label: 'Opción A - Política', color: '#ff6b6b', votes: 125 },
+    { key: 'option2', label: 'Opción B - Economía', color: '#4ecdc4', votes: 89 },
+    { key: 'option3', label: 'Opción C - Educación', color: '#45b7d1', votes: 67 },
+    { key: 'option4', label: 'Opción D - Salud', color: '#96ceb4', votes: 43 },
+    { key: 'option5', label: 'Opción E - Tecnología', color: '#feca57', votes: 21 },
+    { key: 'option6', label: 'Opción F - Medio Ambiente', color: '#ff9ff3', votes: 18 },
+    { key: 'option7', label: 'Opción G - Deportes', color: '#54a0ff', votes: 15 },
+    { key: 'option8', label: 'Opción H - Cultura', color: '#5f27cd', votes: 12 },
+    { key: 'option9', label: 'Opción I - Transporte', color: '#00d2d3', votes: 9 },
+    { key: 'option10', label: 'Opción J - Vivienda', color: '#ff6348', votes: 6 },
+    { key: 'option11', label: 'Opción K - Seguridad', color: '#ff7675', votes: 5 },
+    { key: 'option12', label: 'Opción L - Turismo', color: '#74b9ff', votes: 4 },
+    { key: 'option13', label: 'Opción M - Agricultura', color: '#00b894', votes: 3 },
+    { key: 'option14', label: 'Opción N - Industria', color: '#fdcb6e', votes: 2 },
+    { key: 'option15', label: 'Opción O - Comercio', color: '#e17055', votes: 1 },
+    { key: 'option16', label: 'Opción P - Justicia', color: '#a29bfe', votes: 8 },
+    { key: 'option17', label: 'Opción Q - Defensa', color: '#fd79a8', votes: 7 },
+    { key: 'option18', label: 'Opción R - Ciencia', color: '#6c5ce7', votes: 11 },
+    { key: 'option19', label: 'Opción S - Arte', color: '#00cec9', votes: 14 },
+    { key: 'option20', label: 'Opción T - Religión', color: '#55a3ff', votes: 16 }
+  ];
+  
+  // Función para manejar votos
+  function handleVote(optionKey: string) {
+    console.log(`[Vote] Usuario votó por: ${optionKey}`);
+    
+    // Incrementar el contador de votos para la opción seleccionada
+    voteOptions = voteOptions.map(option => 
+      option.key === optionKey 
+        ? { ...option, votes: option.votes + 1 }
+        : option
+    );
+    
+    // Aquí podrías enviar el voto al servidor
+    // await sendVoteToServer(optionKey, selectedCountryName, selectedSubdivisionName, selectedCityName);
+    
+    // Mostrar feedback visual (opcional)
+    console.log(`[Vote] Voto registrado para ${optionKey}. Nuevos totales:`, voteOptions);
+  }
   
   
   function onSheetScroll(e: Event) {
@@ -1312,7 +1519,7 @@
   let panelTop = 52; // posición vertical del panel de ajustes
   let panelEl: HTMLDivElement | null = null;
   // Fondo del lienzo (color de background del globo)
-  let bgColor = '#111827';
+  let bgColor = '#000000';
   // Filtros/Trending
   let activeTag: string | null = null; // etiqueta seleccionada para resaltar
   // Votos regionales (para renderizar marcadores cuando estamos cerca)
@@ -1326,6 +1533,78 @@
   // Etiquetas de subdivisiones (para mostrar nombres permanentemente)
   type SubdivisionLabel = { id: string; name: string; lat: number; lng: number };
   let subdivisionLabels: SubdivisionLabel[] = [];
+  // Amigos por opción (para enriquecer tarjetas en BottomSheet). Claves deben coincidir con los keys de segmentos/opciones
+  let friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
+  // Visitas por opción (para chips y header)
+  let visitsByOption: Record<string, number> = {};
+  // Creadores y fechas por opción (para header profesional)
+  let creatorsByOption: Record<string, { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean }> = {};
+  let publishedAtByOption: Record<string, string | Date> = {};
+
+  // Asignación de color por subdivisión (ID_1/NAME_1), para vista país
+  let subdivisionColorById: Record<string, string> = {};
+
+  function pickDominantTag(counts: Record<string, number>): string | null {
+    let bestKey: string | null = null;
+    let bestVal = -1;
+    for (const [k, v] of Object.entries(counts)) {
+      if (v > bestVal) { bestVal = v; bestKey = k; }
+    }
+    return bestKey;
+  }
+
+  function computeSubdivisionColorsFromVotes(countryIso: string, polygons: any[]): Record<string, string> {
+    const byId: Record<string, string> = {};
+    const pts = regionVotes?.length ? regionVotes.filter(p => p.iso3 === countryIso) : [];
+    if (!pts.length) return byId;
+    for (const poly of polygons) {
+      const props = poly?.properties || {};
+      const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || props.NAME_1 || props.name_1 || null;
+      if (!id1) continue;
+      const counts: Record<string, number> = {};
+      for (const p of pts) {
+        if (!p.tag) continue;
+        if (pointInFeature(p.lat, p.lng, poly)) {
+          counts[p.tag] = (counts[p.tag] || 0) + 1;
+        }
+      }
+      const dom = pickDominantTag(counts);
+      if (dom && colorMap?.[dom]) byId[String(id1)] = colorMap[dom];
+    }
+    return byId;
+  }
+
+  function computeSubdivisionColorsProportional(polygons: any[], segs: Array<{ key: string; pct: number; color: string }>): Record<string, string> {
+    const byId: Record<string, string> = {};
+    if (!polygons?.length || !segs?.length) return byId;
+    const total = polygons.length;
+    const alloc: Array<{ key: string; color: string; count: number }> = segs.map(s => ({ key: s.key, color: s.color, count: Math.max(0, Math.round((s.pct / 100) * total)) }));
+    // Ajuste por redondeo para que sume total
+    let diff = total - alloc.reduce((a, b) => a + b.count, 0);
+    let i = 0;
+    while (diff !== 0 && alloc.length) {
+      const idx = (i++) % alloc.length;
+      alloc[idx].count += (diff > 0 ? 1 : -1);
+      diff += (diff > 0 ? -1 : 1);
+    }
+    // Asignar recorrido simple
+    let cursor = 0;
+    for (const a of alloc) {
+      for (let k = 0; k < a.count && cursor < polygons.length; k++, cursor++) {
+        const props = polygons[cursor]?.properties || {};
+        const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || props.NAME_1 || props.name_1 || null;
+        if (id1) byId[String(id1)] = a.color;
+      }
+    }
+    // Si quedaron sin asignar por alguna razón, rellenar con el color del primer segmento
+    const fallbackColor = segs[0]?.color || '#9ca3af';
+    for (const poly of polygons) {
+      const props = poly?.properties || {};
+      const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || props.NAME_1 || props.name_1 || null;
+      if (id1 && !byId[String(id1)]) byId[String(id1)] = fallbackColor;
+    }
+    return byId;
+  }
   let labelsInitialized = false;
   
   // Variable para mostrar la altitud actual
@@ -1337,11 +1616,8 @@
   const MAP_STOP_DELAY = 300; // ms para considerar que el mapa está parado
   let tagQuery = '';
   let showSearch = false;
-  // Estado de las pestañas superiores (ya declarado arriba junto con dataset)
-  // Alternar línea visible (hashtags vs cuentas) según dirección de scroll
-  let showAccountsLine = false; // false => hashtags, true => cuentas
-  // Modo del toggle minimal en tabs ("#" o "@")
-  let symbolMode: '#' | '@' = '#';
+  // Mostrar solo hashtags (sin toggle de cuentas)
+  let showAccountsLine = false; // siempre false, solo hashtags
   let lastScrollY = 0;
   function handleScroll() {
     const y = window.scrollY || 0;
@@ -1525,49 +1801,7 @@
     return { minLat, minLng, maxLat, maxLng };
   }
 
-  // Fetch de datos regionales (si el padre provee loadRegionData)
-  let _fetchTimer: number | null = null;
-  let _lastFetchHash = '';
-  async function maybeFetchRegion() {
-    if (!globe) return;
-    const pov = globe?.pointOfView?.();
-    if (!pov) return;
-    // Solo si estamos en zoom cercano (mostrar tiles)
-    if (pov.altitude >= ALT_THRESHOLD) return;
-    const bbox = povToBBox(pov as any);
-    const hash = `${Math.round(bbox.minLat)}:${Math.round(bbox.minLng)}:${Math.round(bbox.maxLat)}:${Math.round(bbox.maxLng)}:${Math.round(pov.altitude*100)/100}`;
-    if (_lastFetchHash === hash) return;
-    _lastFetchHash = hash;
-    try {
-      let regionData: any = null;
-      if (loadRegionData) {
-        regionData = await loadRegionData(bbox);
-      } else {
-        // Fallback por defecto al endpoint interno
-        const qs = new URLSearchParams({
-          minLat: String(bbox.minLat),
-          minLng: String(bbox.minLng),
-          maxLat: String(bbox.maxLat),
-          maxLng: String(bbox.maxLng)
-        });
-        const resp = await fetch(`/api/data/answers?${qs.toString()}`);
-        if (resp.ok) regionData = await resp.json();
-      }
-      if (regionData) {
-        // No recalculamos VM global; solo actualizamos puntos regionales
-        try {
-          const votesArr = Array.isArray(regionData?.votes) ? regionData.votes : [];
-          regionVotes = votesArr as VotePoint[];
-          // Forzar recálculo de clústeres cuando llegan nuevos datos
-          clusteredVotes = [];
-          lastClusterAlt = -1;
-          updateMarkers(true);
-        } catch {}
-      }
-    } catch (err) {
-      console.warn('Fallo al cargar datos regionales:', err);
-    }
-  }
+ 
 
   // DISABLED: Zoom-based polygon loading removed - now handled by NavigationManager only
   async function ensureLocalCountryPolygons(pov: { lat: number; lng: number; altitude: number } | undefined) {
@@ -1576,40 +1810,7 @@
     return;
   }
 
-  function nearestCountryIso(lat: number, lng: number): string | null {
-    try {
-      if (!worldPolygons || worldPolygons.length === 0) return null;
-      
-      // First, try point-in-polygon detection
-      for (const feat of worldPolygons) {
-        const iso = isoOf(feat);
-        if (!iso) continue;
-        
-        if (pointInFeature(lat, lng, feat)) {
-          console.log('[Country] Point-in-polygon match:', iso, 'at', lat.toFixed(4), lng.toFixed(4));
-          return iso;
-        }
-      }
-      
-      // Fallback: nearest centroid (for edge cases or ocean points)
-      let bestIso: string | null = null;
-      let bestD = Infinity;
-      for (const feat of worldPolygons) {
-        const iso = isoOf(feat);
-        if (!iso) continue;
-        let c = countryCentroidCache.get(iso);
-        if (!c) { c = centroidOf(feat); countryCentroidCache.set(iso, c); }
-        const d = Math.abs(c.lat - lat) + Math.abs((((lng - c.lng + 540) % 360) - 180));
-        if (d < bestD) { bestD = d; bestIso = iso; }
-      }
-      
-      if (bestIso) {
-        console.log('[Country] Fallback centroid match:', bestIso, 'at', lat.toFixed(4), lng.toFixed(4));
-      }
-      
-      return bestIso;
-    } catch { return null; }
-  }
+  
 
   async function loadCountryTopoAsGeoFeatures(iso: string): Promise<any[]> {
     const path = `/geojson/${iso}/${iso}.topojson`;
@@ -1758,19 +1959,110 @@
       collapsedVisibleRatio: COLLAPSED_VISIBLE_RATIO,
       peekVisibleRatio: PEEK_VISIBLE_RATIO,
       expandSnapPx: EXPAND_SNAP_PX,
-      onChange: (newState: any, newY: number) => {
+      onChange: (newState: any, newY: number, isTransitioning: boolean) => {
         SHEET_STATE = newState;
         sheetY = newY;
+        sheetIsTransitioning = isTransitioning;
+        // Emitir evento para que el padre pueda reaccionar al cambio de estado
+        dispatch('sheetstatechange', { state: newState });
       }
     });
     // Posicionar inicialmente en peek para mostrar info mundial
     sheetCtrl.setState('peek');
+    // Emitir el estado inicial después de un tick para que el listener esté conectado
+    setTimeout(() => {
+      dispatch('sheetstatechange', { state: 'peek' });
+    }, 0);
+    
+    // Listener para cambios de pantalla completa - recalcular BottomSheet
+    const handleFullscreenChange = () => {
+      console.log('[Fullscreen] Change detected, recalculating BottomSheet positions');
+      // Esperar un momento para que el navegador actualice las dimensiones
+      setTimeout(() => {
+        if (sheetCtrl) {
+          const currentState = sheetCtrl.state;
+          sheetCtrl.onWindowResize(); // Recalcula basado en nueva altura
+          console.log(`[Fullscreen] BottomSheet recalculated for state: ${currentState}`);
+        }
+      }, 100);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     
     console.log('[Mount] BottomSheet initialized with world data');
     
     // Cargar datos de ciudades
     await loadCitiesData();
     
+    // Función de testing para probar zoom adaptativo con diferentes países
+    (window as any).testAdaptiveZoom = (countryIso: string) => {
+      console.log(`[Test] Testing adaptive zoom for country: ${countryIso}`);
+      const countryFeature = worldPolygons?.find(p => p.properties?.ISO_A3 === countryIso);
+      if (countryFeature) {
+        const area = calculatePolygonArea(countryFeature);
+        const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
+        const centroid = centroidOf(countryFeature);
+        
+        console.log(`[Test] Country: ${countryIso}`);
+        console.log(`[Test] Area: ${area.toFixed(2)} degrees²`);
+        console.log(`[Test] Adaptive altitude: ${adaptiveAltitude}`);
+        console.log(`[Test] Centroid: ${centroid.lat.toFixed(4)}, ${centroid.lng.toFixed(4)}`);
+        
+        // Aplicar el zoom
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 1000);
+        
+        return { area, adaptiveAltitude, centroid };
+      } else {
+        console.warn(`[Test] Country ${countryIso} not found in worldPolygons`);
+        return null;
+      }
+    };
+
+    // Función de testing para probar zoom adaptativo con subdivisiones
+    (window as any).testAdaptiveZoomSubdivision = (countryIso: string, subdivisionName: string) => {
+      console.log(`[Test] Testing adaptive zoom for subdivision: ${subdivisionName} in ${countryIso}`);
+      
+      // Buscar en polígonos locales primero (si están cargados)
+      let subdivisionFeature = localPolygons?.find(p => 
+        p.properties?.ISO_A3 === countryIso && 
+        (p.properties?.NAME_1 === subdivisionName || 
+         p.properties?.name_1 === subdivisionName ||
+         p.properties?.NAME_2 === subdivisionName || 
+         p.properties?.name_2 === subdivisionName ||
+         p.properties?._subdivisionName === subdivisionName)
+      );
+      
+      // Si no está en locales, buscar en worldPolygons
+      if (!subdivisionFeature) {
+        subdivisionFeature = worldPolygons?.find(p => 
+          p.properties?.ISO_A3 === countryIso && 
+          (p.properties?.NAME_1 === subdivisionName || p.properties?.name_1 === subdivisionName)
+        );
+      }
+      
+      if (subdivisionFeature) {
+        const area = calculatePolygonArea(subdivisionFeature);
+        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subdivisionFeature);
+        const centroid = centroidOf(subdivisionFeature);
+        
+        console.log(`[Test] Subdivision: ${subdivisionName} (${countryIso})`);
+        console.log(`[Test] Area: ${area.toFixed(4)} degrees²`);
+        console.log(`[Test] Adaptive altitude: ${adaptiveAltitude}`);
+        console.log(`[Test] Centroid: ${centroid.lat.toFixed(4)}, ${centroid.lng.toFixed(4)}`);
+        
+        // Aplicar el zoom
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 1000);
+        
+        return { area, adaptiveAltitude, centroid };
+      } else {
+        console.warn(`[Test] Subdivision ${subdivisionName} in ${countryIso} not found`);
+        console.log(`[Test] Available subdivisions in localPolygons:`, localPolygons?.map(p => p.properties?.NAME_1 || p.properties?.name_1 || p.properties?._subdivisionName).filter(Boolean));
+        return null;
+      }
+    };
+
     // Exponer funciones globalmente para testing
     (window as any).selectCity = selectCity;
     (window as any).testAltitude = testAltitude;
@@ -1779,6 +2071,8 @@
     console.log('  - selectCity("Jaén") - Select a specific city');
     console.log('  - getAvailableCities() - Get cities for current subdivision');
     console.log('  - testAltitude(0.5) - Test camera altitude');
+    console.log('  - testAdaptiveZoom("ESP") - Test adaptive zoom for a country (ESP, USA, RUS, etc.)');
+    console.log('  - testAdaptiveZoomSubdivision("ESP", "Andalucía") - Test adaptive zoom for a subdivision');
     // Si no hay props, cargar desde stores (modo auto)
     if (!geo || !dataJson) {
       if (autoLoad) {
@@ -1857,8 +2151,23 @@
 <GlobeCanvas
   bind:this={globe}
   {bgColor}
+  {selectedSubdivisionId}
+  {selectedCityId}
   onPolyCapColor={(feat) => {
     const iso = isoOf(feat);
+    // Si hay país seleccionado, colorear ese país con el color del segmento líder del chart
+    if (selectedCountryIso) {
+      if (iso === selectedCountryIso) {
+        const topSeg = (countryChartSegments && countryChartSegments.length > 0) ? countryChartSegments[0] : null;
+        if (topSeg?.color) return topSeg.color;
+        // Fallback al color dominante por ISO si no hay segmentos
+        const k = isoDominantKey[iso] ?? '';
+        return colorMap?.[k] ?? '#9ca3af';
+      }
+      // Otros países atenuados para enfatizar el foco
+      return hexToRgba(capBaseColor, 0.15);
+    }
+    // Vista global: usar la clave dominante por país
     const key = isoDominantKey[iso] ?? '';
     return colorMap?.[key] ?? '#9ca3af';
   }}
@@ -1903,6 +2212,8 @@
       
       // Actualizar altitud para mostrar en la UI
       currentAltitude = pov.altitude;
+      // Emitir evento de cambio de altitud
+      dispatch('altitudechange', { altitude: currentAltitude });
       
       // Update visibility based on altitude
       const shouldShow = pov.altitude < ALT_THRESHOLD;
@@ -1956,9 +2267,10 @@
           countryChartSegments = [];
         }
         
-        // Zoom to country
+        // Zoom to country with adaptive zoom based on country size
         const centroid = centroidOf(feat);
-        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.3 }, 700);
+        const adaptiveAltitude = calculateAdaptiveZoom(feat);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 700);
         
         // Navigate using manager
         await navigationManager.navigateToCountry(iso, name);
@@ -1990,15 +2302,24 @@
           console.log('[City Context] Andalucía selected. Try: selectCity("Jaén"), selectCity("Sevilla"), selectCity("Granada")');
         }
         
-        // Zoom to subdivision
+        // Zoom to subdivision with adaptive zoom based on subdivision size
         const centroid = centroidOf(feat);
-        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: 0.2 }, 500);
+        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 500);
         
         // Navigate using manager
         await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
         
-        // Update selected subdivision name for view buttons
+        // Update selected subdivision name and ID for view buttons
         selectedSubdivisionName = subdivisionName;
+        selectedSubdivisionId = subdivisionId;
+        // Limpiar ciudad seleccionada al cambiar de subdivisión
+        selectedCityId = null;
+        
+        // Refresh altitudes to reset polygon heights
+        setTimeout(() => {
+          globe?.refreshPolyAltitudes?.();
+        }, 100);
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
         // Click on city/province from subdivision view (4th level)
@@ -2010,6 +2331,13 @@
         // Automatically activate 4th level
         selectedCityName = cityName;
         selectedSubdivisionName = subdivisionName;
+        selectedCityId = feat.properties.ID_2; // Guardar el ID para resaltado
+        
+        // Refresh strokes and altitudes to highlight and elevate the selected city polygon
+        setTimeout(() => {
+          globe?.refreshPolyStrokes?.();
+          globe?.refreshPolyAltitudes?.();
+        }, 100);
         
         // Generate city-specific data
         generateCityChartSegments(cityName);
@@ -2030,9 +2358,21 @@
     try {
       // Check if we're in city level (4th level)
       if (selectedCityName) {
-        console.log('[Click] Empty space clicked → Removing city level');
+        console.log('[Click] Empty space clicked in level 4 → Going back to country level (level 2)');
+        
+        // Limpiar nivel ciudad
         selectedCityName = null;
-        // Don't move the map when removing city level
+        selectedCityId = null;
+        
+        // Ir directamente al nivel país (nivel 2)
+        if (selectedCountryIso) {
+          await navigateToView('country');
+          
+          // Refresh altitudes to reset polygon heights
+          setTimeout(() => {
+            globe?.refreshPolyAltitudes?.();
+          }, 100);
+        }
         return;
       }
       
@@ -2057,13 +2397,16 @@
           selectedCountryName = null;
           selectedCountryIso = null;
           selectedSubdivisionName = null;
+          selectedCityId = null;
         } else if (newLevel === 'country') {
           // Stay at country zoom level, clear subdivision
           selectedSubdivisionName = null;
+          selectedCityId = null;
           globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.8 }, 700);
         } else if (newLevel === 'subdivision') {
           // Clear only city level (already handled above)
           selectedCityName = null;
+          selectedCityId = null;
         }
       }
     } catch (e) {
@@ -2086,7 +2429,12 @@
     {/if}
     
     {#if item.level === 'world'}
-      <button on:click={() => navigationManager.navigateToWorld()} class="breadcrumb-item">
+      <button on:click={() => {
+        navigationManager.navigateToWorld();
+        selectedCountryIso = null;
+        selectedCountryName = null;
+        selectedSubdivisionName = null;
+      }} class="breadcrumb-item">
         🌍 {item.name}
       </button>
     {:else if item.level === 'country'}
@@ -2141,12 +2489,7 @@
 <!-- Tabs compactos (Para ti -> menú) junto a la lupa -->
 <div class="tabs-float">
   <TopTabs
-    bind:symbolMode
     options={["Para ti", "Tendencias", "Live"]}
-    on:symbolChange={(e) => {
-      const m = e.detail as "#" | "@";
-      showAccountsLine = m === "@";
-    }}
   />
 </div>
 
@@ -2188,31 +2531,6 @@
   </div>
 {/if}
 
-
-<!-- Barra de escala estilo Google Maps (abajo izquierda) -->
-<div class="altitude-indicator">
-  <div class="scale-bar">
-    <div class="altitude-value">
-      {(() => {
-        // Convertir altitud a kilómetros aproximados
-        // 4.0 altitud = 2700 km, por lo tanto multiplicador = 675000 (en metros)
-        const meters = Math.round(currentAltitude * 675000);
-        
-        if (meters < 1000) {
-          return `${meters} m`;
-        } else {
-          const km = meters / 1000;
-          if (km < 10) {
-            return `${km.toFixed(1)} km`;
-          } else {
-            return `${Math.round(km)} km`;
-          }
-        }
-      })()}
-    </div>
-  </div>
-</div>
-
 <!-- Botón de ajustes (abajo derecha, arriba del de localización) -->
 <button
   class="settings-btn"
@@ -2248,17 +2566,28 @@
 <BottomSheet
   state={SHEET_STATE}
   y={sheetY}
+  isTransitioning={sheetIsTransitioning}
   {selectedCountryName}
   {selectedSubdivisionName}
   {selectedCityName}
   {countryChartSegments}
   {worldChartSegments}
   {cityChartSegments}
+  {voteOptions}
+  {friendsByOption}
+  {visitsByOption}
+  {creatorsByOption}
+  {publishedAtByOption}
   {navigationManager}
+  {currentAltitude}
   onPointerDown={onSheetPointerDown}
   onScroll={onSheetScroll}
   onNavigateToView={navigateToView}
+  onVote={handleVote}
   on:close={() => {
     SHEET_STATE = 'hidden';
+  }}
+  on:vote={(e) => {
+    console.log('[GlobeGL] Vote event received:', e.detail);
   }}
 />

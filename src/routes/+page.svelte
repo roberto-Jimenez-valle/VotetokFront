@@ -20,6 +20,23 @@
 
 	let expandedPoll: Poll | null = $state(null);
 	let navBottomHeight = $state(0);
+	let hideNav = $state(false);
+	let currentAltitude = $state(0);
+	let bottomSheetVisible = $state(false);
+	
+	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {
+		const state = event.detail.state;
+		console.log('[NavControl] BottomSheet state changed to:', state);
+		// Ocultar nav cuando está en peek, mostrar en otros estados
+		hideNav = state === 'peek';
+		// BottomSheet visible cuando NO está en estado "hidden"
+		bottomSheetVisible = state !== 'hidden';
+		console.log('[NavControl] hideNav set to:', hideNav, 'bottomSheetVisible:', bottomSheetVisible);
+	}
+	
+	function handleAltitudeChange(event: CustomEvent<{ altitude: number }>) {
+		currentAltitude = event.detail.altitude;
+	}
 
 </script>
 
@@ -61,7 +78,7 @@
 
 <div class="min-h-screen text-white font-sans">
 	<!-- Globo de fondo a pantalla completa -->
-	<GlobeGL />
+	<GlobeGL on:sheetstatechange={handleSheetStateChange} on:altitudechange={handleAltitudeChange} />
 
 	<!-- Contenido por encima del globo -->
 	<div class="relative">
@@ -78,7 +95,7 @@
 
 		<!-- Barra inferior sobre el globo -->
 		<div class="relative ">
-			<NavBottom />
+			<NavBottom bind:hidden={hideNav} />
 		</div>
 	</div>
 

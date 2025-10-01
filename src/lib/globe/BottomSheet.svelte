@@ -1,19 +1,95 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   export let state: 'hidden' | 'peek' | 'collapsed' | 'expanded' = 'hidden';
   export let y = 0; // translateY px
+  export let isTransitioning = false; // Si debe usar transición CSS
   export let selectedCountryName: string | null = null;
   export let selectedSubdivisionName: string | null = null;
   export let selectedCityName: string | null = null;
   export let countryChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  export let voteOptions: Array<{ key: string; label: string; color: string; votes: number }> = [];
+  // Amigos que han votado por opción (opcional)
+  export let friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
+  // Visitas por opción (opcional)
+  export let visitsByOption: Record<string, number> = {};
+  // Creador de la publicación por opción (opcional)
+  export let creatorsByOption: Record<string, { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean }> = {};
+  // Fecha de publicación por opción (opcional)
+  export let publishedAtByOption: Record<string, string | Date> = {};
+
+  // Handlers de acciones (opcionales)
+  export let onSaveOption: (optionKey: string) => void = () => {};
+  export let onShareOption: (optionKey: string) => void = () => {};
+  export let onMoreOption: (optionKey: string) => void = () => {};
   export let onPointerDown: (e: PointerEvent | TouchEvent) => void = () => {};
   export let onScroll: (e: Event) => void = () => {};
-  export let navigationManager: any = null; // Used by parent component
+  export const navigationManager: any = null; // Used by parent component
   export let onNavigateToView: (level: 'world' | 'country' | 'subdivision' | 'city') => void = () => {};
+  export let onVote: (optionKey: string) => void = () => {};
+  export let currentAltitude: number = 0; // Altitud actual del globo
 
   const dispatch = createEventDispatcher();
+  
+  // Estado de pantalla completa
+  let fullscreenActive = false;
+  
+  onMount(() => {
+    // Detectar cambios de pantalla completa
+    const handleFullscreenChange = () => {
+      fullscreenActive = !!document.fullscreenElement;
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+    };
+  });
+  
+  function onCardKeydown(e: KeyboardEvent, optionKey: string) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleVote(optionKey);
+    }
+  }
+  
+  // Segments activos según el contexto mostrado en el header (ciudad > país > mundo)
+  $: activeSegments = (
+    (selectedCityName && cityChartSegments?.length ? cityChartSegments : null) ||
+    (selectedCountryName && countryChartSegments?.length ? countryChartSegments : null) ||
+    (worldChartSegments?.length ? worldChartSegments : [])
+  );
+
+  // Opciones derivadas de los segments para que coincidan 1:1 con el gráfico superior
+  $: displayOptions = (activeSegments || []).map((s) => ({
+    key: s.key,
+    label: s.key,
+    color: s.color,
+    votes: s.pct // usamos el % como métrica para tamaño/orden
+  }));
+
+  // Determina el tamaño visual de cada tarjeta según su porcentaje de votos
+  function sizeForOption(option: any, index: number) {
+    const percentage = option.votes;
+    
+    // Treemap proporcional basado en porcentajes
+    if (percentage >= 50) return 'large';     // 50%+ = 2x2 (muy grande)
+    if (percentage >= 25) return 'medium';    // 25-49% = 2x1 (mediano alto)
+    if (percentage >= 15) return 'small-wide'; // 15-24% = 1x2 (pequeño ancho)
+    return 'small';                           // <15% = 1x1 (pequeño)
+  }
+  
+  // Función para manejar el voto
+  function handleVote(optionKey: string) {
+    onVote(optionKey);
+    dispatch('vote', { option: optionKey });
+  }
   
   // Debug: log when world chart segments change
   $: if (worldChartSegments) {
@@ -41,26 +117,109 @@
 </script>
 
 <div
-  class="bottom-sheet {state === 'expanded' ? 'solid' : 'glass'}"
+  class="bottom-sheet {state === 'expanded' ? 'solid' : 'glass'} {state === 'peek' ? 'peek-state' : ''} {isTransitioning ? 'transitioning' : ''}"
   role="dialog"
   aria-modal="true"
   aria-hidden={state === 'hidden'}
   style={`transform: translateY(${y}px);`}
+  onpointerdown={onPointerDown}
+  ontouchstart={onPointerDown}
 >
-  <!-- Header simplificado solo para arrastrar -->
-  <div
-    class="sheet-drag-area"
-    on:pointerdown={onPointerDown}
-    on:touchstart|preventDefault={onPointerDown}
-  >
-    <div class="sheet-grabber"></div>
+  <!-- Indicadores flotantes - visibles excepto cuando está expandido -->
+  {#if state !== 'expanded'}
+  <div class="floating-indicators">
+    <!-- Indicador de altitud -->
+    <div class="altitude-indicator-floating">
+      <div class="scale-bar">
+        <div class="altitude-value">
+          {(() => {
+            const meters = Math.round(currentAltitude * 675000);
+            if (meters < 1000) {
+              return `${meters} m`;
+            } else {
+              const km = meters / 1000;
+              if (km < 10) {
+                return `${km.toFixed(1)} km`;
+              } else {
+                return `${Math.round(km)} km`;
+              }
+            }
+          })()}
+        </div>
+      </div>
+    </div>
+
+    <!-- Botón de pantalla completa - cambia icono según estado -->
+    <button 
+      class="fullscreen-btn-floating" 
+      onclick={() => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      }}
+      title={fullscreenActive ? "Salir de pantalla completa" : "Pantalla completa"}
+      aria-label={fullscreenActive ? "Salir de pantalla completa" : "Activar pantalla completa"}
+    >
+      {#if fullscreenActive}
+        <!-- Icono de minimizar/salir de fullscreen -->
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+        </svg>
+      {:else}
+        <!-- Icono de expandir a fullscreen -->
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+      {/if}
+    </button>
+  </div>
+  {/if}
+
+  <!-- Header simplificado con indicador visual de arrastre -->
+  <div class="sheet-drag-area">
+    {#if selectedCityName && cityChartSegments.length}
+      <div class="drag-chart" role="img" aria-label={`Distribución en ${selectedCityName}`}>
+        {#each cityChartSegments as seg}
+          <div
+            class="drag-seg"
+            style={`width:${seg.pct}%; background:${seg.color}`}
+            title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
+          ></div>
+        {/each}
+      </div>
+    {:else if selectedCountryName && countryChartSegments.length}
+      <div class="drag-chart" role="img" aria-label={`Distribución en ${selectedCountryName}`}>
+        {#each countryChartSegments as seg}
+          <div
+            class="drag-seg"
+            style={`width:${seg.pct}%; background:${seg.color}`}
+            title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
+          ></div>
+        {/each}
+      </div>
+    {:else if worldChartSegments.length}
+      <div class="drag-chart" role="img" aria-label="Distribución global">
+        {#each worldChartSegments as seg}
+          <div
+            class="drag-seg"
+            style={`width:${seg.pct}%; background:${seg.color}`}
+            title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
+          ></div>
+        {/each}
+      </div>
+    {:else}
+      <!-- Fallback: grabber tradicional si no hay datos -->
+      <div class="sheet-grabber"></div>
+    {/if}
   </div>
   
   <!-- Navegación minimalista -->
   <div class="nav-minimal" bind:this={navContainer}>
     <button
       class="nav-chip {!selectedCountryName ? 'active' : ''}"
-      on:click={() => onNavigateToView('world')}
+      onclick={() => onNavigateToView('world')}
     >
       Global
     </button>
@@ -69,7 +228,7 @@
       <div class="nav-divider">/</div>
       <button
         class="nav-chip {selectedCountryName && !selectedSubdivisionName ? 'active' : ''}"
-        on:click={() => onNavigateToView('country')}
+        onclick={() => onNavigateToView('country')}
       >
         {selectedCountryName}
       </button>
@@ -79,7 +238,7 @@
       <div class="nav-divider">/</div>
       <button
         class="nav-chip {selectedSubdivisionName && !selectedCityName ? 'active' : ''}"
-        on:click={() => onNavigateToView('subdivision')}
+        onclick={() => onNavigateToView('subdivision')}
       >
         {selectedSubdivisionName}
       </button>
@@ -89,99 +248,113 @@
       <div class="nav-divider">/</div>
       <button
         class="nav-chip {selectedCityName ? 'active' : ''}"
-        on:click={() => onNavigateToView('city')}
+        onclick={() => onNavigateToView('city')}
       >
         {selectedCityName}
       </button>
     {/if}
   </div>
   
-  <div class="sheet-content" on:scroll={onScroll}>
-    {#if state === 'expanded'}
-      <!-- Contenido de feed podría ir aquí como slot en el futuro -->
-    {:else if selectedCityName}
-      <!-- Mostrar gráfico de ciudad específica -->
-      {#if cityChartSegments.length}
-        <div
-          class="country-chart"
-          role="img"
-          aria-label={`Distribución por categorías en ${selectedCityName}`}
-          title={`Top categorías en ${selectedCityName}`}
-        >
-          {#each cityChartSegments as seg}
-            <div
-              class="seg"
-              style={`width:${seg.pct}%; background:${seg.color}`}
-              title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
-            ></div>
-          {/each}
-        </div>
-        <div class="country-chart-pcts">
-          {#each cityChartSegments as seg}
-            <div class="pct-item" title={`${seg.key}: ${seg.pct.toFixed(1)}%`}>
-              <span class="sw" style={`background:${seg.color}`}></span>
-              <span class="pct">{seg.pct.toFixed(1)}%</span>
+  <!-- Opciones de votación como mosaico horizontal estilo Google Maps -->
+  {#if displayOptions.length > 0}
+    <div class="vote-cards-section">
+      <!-- Título del tema arriba de las tarjetas -->
+      <div class="topic-header">
+        {#if Math.random() > 0.7}
+          <!-- Encuesta específica -->
+          <h3>¿Cuál debería ser la prioridad del gobierno para 2024?</h3>
+          <span class="topic-type">Encuesta • {selectedCountryName || 'Global'}</span>
+        {:else if Math.random() > 0.5}
+          <!-- Hashtag trending -->
+          <h3 data-type="hashtag">#CambioClimático2024</h3>
+          <span class="topic-type">Hashtag trending • {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
+        {:else if selectedCountryName && selectedSubdivisionName}
+          <!-- Trending regional -->
+          <h3>Trending en {selectedSubdivisionName}</h3>
+          <span class="topic-type">Encuestas más votadas • {selectedCountryName}</span>
+        {:else if selectedCountryName}
+          <!-- Trending nacional -->
+          <h3>Trending en {selectedCountryName}</h3>
+          <span class="topic-type">Encuestas más votadas • Nacional</span>
+        {:else}
+          <!-- Trending global -->
+          <h3>Trending Global</h3>
+          <span class="topic-type">Encuestas más votadas • Mundial</span>
+        {/if}
+      </div>
+      
+      <div class="vote-cards-grid {displayOptions?.length === 2 ? 'compact-two' : ''} {displayOptions?.length === 1 ? 'compact-one' : ''} {displayOptions?.length >= 5 ? 'dense' : ''}">
+        {#each displayOptions.sort((a, b) => b.votes - a.votes) as option, index}
+          <div class="vote-card {sizeForOption(option, index)}" style="background-color: {option.color};" onclick={() => handleVote(option.key)}>
+            <!-- Header con avatar y título -->
+            <div class="card-header">
+              <h2 class="question-title">{option.label}</h2>
+              <img class="creator-avatar" src={`https://i.pravatar.cc/40?u=${encodeURIComponent(creatorsByOption?.[option.key]?.name || option.key)}`} alt="Avatar" loading="lazy" />
             </div>
-          {/each}
+
+            <!-- Contenido principal -->
+            <div class="card-content">
+              <div class="percentage-display">
+                <span class="percentage-large">{Math.round(option.votes)}</span>
+              </div>
+              
+              <!-- Avatares de amigos posicionados absolutamente -->
+              {#if friendsByOption?.[option.key]?.length || true}
+                <div class="friend-avatars-absolute">
+                  {#each (friendsByOption?.[option.key] || [
+                    { id: '1', name: 'Ana García', avatarUrl: `https://i.pravatar.cc/40?u=ana` },
+                    { id: '2', name: 'Carlos López', avatarUrl: `https://i.pravatar.cc/40?u=carlos` },
+                    { id: '3', name: 'María Silva', avatarUrl: `https://i.pravatar.cc/40?u=maria` }
+                  ]).slice(0, 3) as friend, i}
+                    <img 
+                      class="friend-avatar-floating" 
+                      src={friend.avatarUrl || `https://i.pravatar.cc/40?u=${encodeURIComponent(friend.name || friend.id)}`} 
+                      alt={friend.name}
+                      title={friend.name}
+                      loading="lazy"
+                      style="z-index: {10 - i};"
+                    />
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+      
+      <!-- Información total debajo de las tarjetas -->
+      <div class="vote-summary-info">
+        <div class="vote-stats">
+          <span class="total-votes">{displayOptions.reduce((sum, opt) => sum + Math.floor(opt.votes * 10), 0)} votos totales • {displayOptions.length} opciones</span>
+          <div class="visits-info">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span>{Math.floor(Math.random() * 2000) + 1000} visitas</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+  
+  {#if voteOptions.length === 0 || state !== 'expanded'}
+    <div class="sheet-content" onscroll={onScroll}>
+      {#if state === 'expanded'}
+        <!-- Contenido de feed podría ir aquí como slot en el futuro -->
+      {:else if selectedCityName}
+        <div style="opacity:.75; font-size:13px; text-align: center; padding: 20px;">
+          Datos de {selectedCityName} - Usa las barras de votación arriba
+        </div>
+      {:else if selectedCountryName}
+        <div style="opacity:.75; font-size:13px; text-align: center; padding: 20px;">
+          Datos de {selectedCountryName} - Usa las barras de votación arriba
         </div>
       {:else}
-        <div style="opacity:.75; font-size:13px;">Sin datos específicos para {selectedCityName}.</div>
+        <div style="opacity:.75; font-size:13px; text-align: center; padding: 20px;">
+          Vista global - Usa las barras de votación arriba o explora haciendo clic en los países
+        </div>
       {/if}
-    {:else if selectedCountryName}
-      {#if countryChartSegments.length}
-        <div
-          class="country-chart"
-          role="img"
-          aria-label={`Distribución por categorías en ${selectedCountryName}`}
-          title={`Top categorías en ${selectedCountryName}`}
-        >
-          {#each countryChartSegments as seg}
-            <div
-              class="seg"
-              style={`width:${seg.pct}%; background:${seg.color}`}
-              title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
-            ></div>
-          {/each}
-        </div>
-        <div class="country-chart-pcts">
-          {#each countryChartSegments as seg}
-            <div class="pct-item" title={`${seg.key}: ${seg.pct.toFixed(1)}%`}>
-              <span class="sw" style={`background:${seg.color}`}></span>
-              <span class="pct">{seg.pct.toFixed(1)}%</span>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <div style="opacity:.75; font-size:13px;">Sin datos de categorías para este país.</div>
-      {/if}
-    {:else}
-      <!-- Mostrar información mundial cuando no hay país seleccionado -->
-      {#if worldChartSegments.length}
-        <div
-          class="country-chart"
-          role="img"
-          aria-label="Distribución global por categorías"
-          title="Top categorías a nivel mundial"
-        >
-          {#each worldChartSegments as seg}
-            <div
-              class="seg"
-              style={`width:${seg.pct}%; background:${seg.color}`}
-              title={`${seg.key}: ${seg.pct.toFixed(1)}%`}
-            ></div>
-          {/each}
-        </div>
-        <div class="country-chart-pcts">
-          {#each worldChartSegments as seg}
-            <div class="pct-item" title={`${seg.key}: ${seg.pct.toFixed(1)}%`}>
-              <span class="sw" style={`background:${seg.color}`}></span>
-              <span class="pct">{seg.pct.toFixed(1)}%</span>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <div style="opacity:.75; font-size:13px;">Vista global - Explora el mundo haciendo clic en los países.</div>
-      {/if}
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>

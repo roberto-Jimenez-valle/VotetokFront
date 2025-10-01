@@ -54,72 +54,51 @@
   .tabs-trigger:hover { opacity: .9; }
   .caret { opacity: .8; }
   .menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    min-width: 180px;
-    border: 1px solid rgba(255,255,255,0.16);
-    background: rgba(0,0,0,0.78);
-    border-radius: 12px;
-    padding: 6px;
+    position: fixed;
+    top: 50px;
+    right: 10px;
+    min-width: 160px;
+    max-width: 200px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.98) 100%
+    );
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
+    border-radius: 14px;
+    padding: 8px;
     display: grid;
     gap: 4px;
-    z-index: 1201;
+    z-index: 999999;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    isolation: isolate;
   }
   .menu button {
     text-align: left;
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: 12px 16px;
+    border-radius: 10px;
     color: #e5e7eb;
     background: transparent;
     border: none;
     cursor: pointer;
-    font: 13px/1 system-ui, sans-serif;
+    font: 14px/1.2 system-ui, sans-serif;
+    transition: all 0.2s ease;
+    white-space: nowrap;
   }
   .menu button[aria-checked="true"] {
     font-weight: 600;
-    background: rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.15);
+    color: #ffffff;
   }
-  .menu button:hover { background: rgba(255,255,255,0.16); }
-  /* Toggle pill profesional */
-  .symbol-toggle {
-    position: relative;
-    display: inline-grid;
-    grid-template-columns: 1fr 1fr;
-    align-items: center;
-    gap: 0;
-    margin-left: 10px;
-    padding: 2px;
-    width: 66px;
-    height: 26px;
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 999px;
-    background: rgba(255,255,255,0.06);
-    color: #e5e7eb;
-    cursor: pointer;
-    user-select: none;
+  .menu button:hover { 
+    background: rgba(255,255,255,0.2);
+    transform: translateX(-2px);
   }
-  .symbol-toggle .knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    /* Mitad del ancho interior (padding 2px a cada lado) */
-    width: calc(50% - 2px);
-    height: calc(100% - 4px);
-    background: rgba(255,255,255,0.9);
-    border-radius: 999px;
-    transition: left 140ms ease, right 140ms ease;
+  .menu button:active {
+    transform: scale(0.98);
   }
-  .symbol-toggle[data-mode='@'] .knob { left: auto; right: 2px; }
-  .symbol-toggle .opt {
-    text-align: center;
-    z-index: 1;
-    font: 700 12px/1 system-ui, sans-serif;
-    opacity: .9;
-  }
-  .symbol-toggle[data-mode='#'] .opt.hash { color: #111827; }
-  .symbol-toggle[data-mode='@'] .opt.at { color: #111827; }
-
 </style>
 
 <div class="tabs-dd" bind:this={rootEl}>
@@ -129,29 +108,13 @@
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
   </button>
-  {#if active === 'Para ti' || active === 'Tendencias'}
-    <div
-      class="symbol-toggle"
-      role="button"
-      tabindex="0"
-      aria-label="Alternar entre hashtags y cuentas"
-      aria-pressed={symbolMode === '@'}
-      data-mode={symbolMode}
-      on:click={toggleSymbol}
-      on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSymbol(); } }}
-      title={symbolMode === '#' ? 'Mostrando hashtags (#). Click para ver cuentas (@)' : 'Mostrando cuentas (@). Click para ver hashtags (#)'}
-    >
-      <div class="knob" aria-hidden="true"></div>
-      <div class="opt hash">#</div>
-      <div class="opt at">@</div>
-    </div>
-  {/if}
-  {#if open}
-    <div role="menu" class="menu">
-      {#each options as opt}
-        <button role="menuitemradio" aria-checked={active === opt} on:click={() => select(opt)}>{opt}</button>
-      {/each}
-    </div>
-  {/if}
-  
 </div>
+
+<!-- Menú renderizado fuera del contenedor para evitar problemas de z-index -->
+{#if open}
+  <div role="menu" class="menu">
+    {#each options as opt}
+      <button role="menuitemradio" aria-checked={active === opt} on:click={() => select(opt)}>{opt}</button>
+    {/each}
+  </div>
+{/if}

@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { clamp, hexToRgba } from '$lib/utils/colors';
 
-  export let bgColor = '#111827';
+  export let bgColor = '#000000';
   export let sphereBaseColor = '#441220';
   export let capBaseColor = '#ff0000';
   export let strokeBaseColor = '#961A50';
@@ -11,8 +11,11 @@
   export let mode: 'intensity' | 'trend' = 'intensity';
   export let activeTag: string | null = null;
   export let onPolyCapColor: (feat: any) => string;
+  export let selectedSubdivisionId: string | null = null; // ID de la subdivisión seleccionada
+  export let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada (nivel 4)
 
   const POLY_ALT = 0.017; // Elevación aumentada para mejor visibilidad del mapa coroplético
+  const POLY_ALT_SELECTED = 0.022; // Elevación mayor para el polígono seleccionado
 
   let rootEl: HTMLDivElement | null = null;
   let world: any = null;
@@ -87,11 +90,31 @@
     } catch {}
   }
 
+  // Force re-apply stroke color (for highlighting)
+  export function refreshPolyStrokes() {
+    try {
+      if (!world) return;
+      world.polygonStrokeColor((feat: any) => {
+        // Nivel 4: ciudades/provincias (ID_2)
+        const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
+        if (selectedCityId && cityId === selectedCityId) {
+          return '#ffffff';
+        }
+        return hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1));
+      });
+    } catch {}
+  }
+
   // Force re-apply altitude mapping for polygons
   export function refreshPolyAltitudes() {
     try {
       if (!world) return;
       world.polygonAltitude((feat: any) => {
+        // Elevar el polígono seleccionado
+        const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
+        if (selectedCityId && cityId === selectedCityId) {
+          return POLY_ALT_SELECTED;
+        }
         const customElevation = feat?.properties?._elevation;
         return typeof customElevation === 'number' ? customElevation : POLY_ALT;
       });
@@ -268,12 +291,25 @@
     // Polígonos base
     world
       .polygonAltitude((feat: any) => {
+        // Elevar el polígono seleccionado
+        const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
+        if (selectedCityId && cityId === selectedCityId) {
+          return POLY_ALT_SELECTED; // Elevación mayor para el seleccionado
+        }
         // Usar elevación personalizada si está disponible, sino usar la elevación por defecto
         const customElevation = feat?.properties?._elevation;
         return typeof customElevation === 'number' ? customElevation : POLY_ALT;
       })
       .polygonSideColor(() => hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1) * 0.35))
-      .polygonStrokeColor(() => hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1)))
+      .polygonStrokeColor((feat: any) => {
+        // Resaltar el polígono seleccionado con un borde más brillante
+        // Nivel 4: ciudades/provincias (ID_2)
+        const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
+        if (selectedCityId && cityId === selectedCityId) {
+          return '#ffffff'; // Borde blanco brillante para el seleccionado
+        }
+        return hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1));
+      })
       .polygonLabel((feat: any) => {
         // Debug: mostrar etiquetas para cualquier polígono que tenga nombre
         if (feat?.properties?._subdivisionName) {
