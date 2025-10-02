@@ -29,6 +29,9 @@
   export let onNavigateToView: (level: 'world' | 'country' | 'subdivision' | 'city') => void = () => {};
   export let onVote: (optionKey: string) => void = () => {};
   export let currentAltitude: number = 0; // Altitud actual del globo
+  
+  // Dropdown toggle function
+  export let onToggleDropdown: () => void = () => {};
 
   const dispatch = createEventDispatcher();
   
@@ -217,40 +220,80 @@
   
   <!-- Navegación minimalista -->
   <div class="nav-minimal" bind:this={navContainer}>
-    <button
-      class="nav-chip {!selectedCountryName ? 'active' : ''}"
-      onclick={() => onNavigateToView('world')}
-    >
-      Global
-    </button>
+    {#if !selectedCountryName}
+      <!-- Global is last active - show dropdown -->
+      <button
+        class="nav-chip active dropdown-trigger"
+        onclick={onToggleDropdown}
+      >
+        Global
+        <span style="margin-left: 4px;">▼</span>
+      </button>
+    {:else}
+      <!-- Global is not last - no dropdown -->
+      <button
+        class="nav-chip"
+        onclick={() => onNavigateToView('world')}
+      >
+        Global
+      </button>
+    {/if}
     
     {#if selectedCountryName}
       <div class="nav-divider">/</div>
-      <button
-        class="nav-chip {selectedCountryName && !selectedSubdivisionName ? 'active' : ''}"
-        onclick={() => onNavigateToView('country')}
-      >
-        {selectedCountryName}
-      </button>
+      
+      {#if !selectedSubdivisionName}
+        <!-- Country is last active - show dropdown -->
+        <button
+          class="nav-chip active dropdown-trigger"
+          onclick={onToggleDropdown}
+        >
+          {selectedCountryName}
+          <span style="margin-left: 4px;">▼</span>
+        </button>
+      {:else}
+        <!-- Country is not last - no dropdown -->
+        <button
+          class="nav-chip"
+          onclick={() => onNavigateToView('country')}
+        >
+          {selectedCountryName}
+        </button>
+      {/if}
     {/if}
     
     {#if selectedSubdivisionName}
       <div class="nav-divider">/</div>
-      <button
-        class="nav-chip {selectedSubdivisionName && !selectedCityName ? 'active' : ''}"
-        onclick={() => onNavigateToView('subdivision')}
-      >
-        {selectedSubdivisionName}
-      </button>
+      
+      {#if !selectedCityName}
+        <!-- Subdivision is last active - show dropdown -->
+        <button
+          class="nav-chip active dropdown-trigger"
+          onclick={onToggleDropdown}
+        >
+          {selectedSubdivisionName}
+          <span style="margin-left: 4px;">▼</span>
+        </button>
+      {:else}
+        <!-- Subdivision is not last - no dropdown -->
+        <button
+          class="nav-chip"
+          onclick={() => onNavigateToView('subdivision')}
+        >
+          {selectedSubdivisionName}
+        </button>
+      {/if}
     {/if}
     
     {#if selectedCityName}
       <div class="nav-divider">/</div>
+      <!-- City is last active - show dropdown -->
       <button
-        class="nav-chip {selectedCityName ? 'active' : ''}"
-        onclick={() => onNavigateToView('city')}
+        class="nav-chip active dropdown-trigger"
+        onclick={onToggleDropdown}
       >
         {selectedCityName}
+        <span style="margin-left: 4px;">▼</span>
       </button>
     {/if}
   </div>

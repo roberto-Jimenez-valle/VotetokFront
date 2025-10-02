@@ -11,11 +11,49 @@
   export let mode: 'intensity' | 'trend' = 'intensity';
   export let activeTag: string | null = null;
   export let onPolyCapColor: (feat: any) => string;
-  export let selectedSubdivisionId: string | null = null; // ID de la subdivisión seleccionada
   export let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada (nivel 4)
 
   const POLY_ALT = 0.017; // Elevación aumentada para mejor visibilidad del mapa coroplético
-  const POLY_ALT_SELECTED = 0.022; // Elevación mayor para el polígono seleccionado
+  const POLY_ALT_SELECTED = 0.000170000000001; // Elevación MÁS BAJA para el polígono seleccionado - no debe bloquear clics
+  const POLY_ALT_UNSELECTED = 0.00017; // Elevación normal para polígonos NO seleccionados
+  
+  // Función para calcular elevación dinámica según altitud de cámara
+  function calculateDynamicElevation(baseElevation: number, cameraAltitude: number, isSelected: boolean = false): number {
+    // NIVEL 4: Si hay ciudad seleccionada, todos los polígonos al ras del globo
+    if (selectedCityId) {
+      if (isSelected) {
+        return 0.000170000000001; // Ligeramente más alto que los demás
+      }
+      return 0.00017; // Al ras del globo
+    }
+    
+    // Si es el polígono seleccionado (sin nivel 4 activo), mantener ligeramente más alto
+    if (isSelected) {
+      // En zoom extremo (< 0.06), usar elevación muy baja
+      if (cameraAltitude < 0.06) {
+        return 0.000170000000001; // Ligeramente más alto que los demás
+      }
+      return baseElevation;
+    }
+    
+    // Para polígonos NO seleccionados: ajustar según zoom
+    // En zoom MUY extremo (< 0.06), usar elevación base muy baja
+    if (cameraAltitude < 0.06) {
+      return 0.00017; // Elevación muy baja para zoom extremo
+    }
+    // En zoom muy cercano (0.06 - 0.15), reducir gradualmente
+    if (cameraAltitude < 0.15) {
+      const factor = (cameraAltitude - 0.06) / (0.15 - 0.06); // 0 a 1
+      return baseElevation * (0.01 + factor * 0.49); // 1% a 50%
+    }
+    // En zoom cercano (0.15 - 0.3), elevación moderada
+    if (cameraAltitude < 0.3) {
+      const factor = (cameraAltitude - 0.15) / (0.3 - 0.15);
+      return baseElevation * (0.5 + factor * 0.5); // 50% a 100%
+    }
+    // En zoom normal o lejano, elevación completa
+    return baseElevation;
+  }
 
   let rootEl: HTMLDivElement | null = null;
   let world: any = null;
@@ -109,14 +147,28 @@
   export function refreshPolyAltitudes() {
     try {
       if (!world) return;
+      const currentPov = world.pointOfView();
+      const cameraAlt = currentPov?.altitude || 1.0;
+      
       world.polygonAltitude((feat: any) => {
-        // Elevar el polígono seleccionado
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
-        if (selectedCityId && cityId === selectedCityId) {
-          return POLY_ALT_SELECTED;
+        const isSelected = selectedCityId && cityId === selectedCityId;
+        
+        if (isSelected) {
+          // Polígono seleccionado: ELEVAR significativamente
+          return calculateDynamicElevation(POLY_ALT_SELECTED, cameraAlt, true);
         }
+        
+        // Polígonos no seleccionados
+        if (selectedCityId) {
+          // Si hay un polígono seleccionado, bajar los demás
+          return calculateDynamicElevation(POLY_ALT_UNSELECTED, cameraAlt, false);
+        }
+        
+        // Sin selección: usar elevación normal
         const customElevation = feat?.properties?._elevation;
-        return typeof customElevation === 'number' ? customElevation : POLY_ALT;
+        const baseElevation = typeof customElevation === 'number' ? customElevation : POLY_ALT;
+        return calculateDynamicElevation(baseElevation, cameraAlt, false);
       });
     } catch {}
   }
@@ -142,7 +194,16 @@
         world.htmlElementsData(labels);
         world.htmlLat && world.htmlLat((d: any) => d.lat);
         world.htmlLng && world.htmlLng((d: any) => d.lng);
-        world.htmlAltitude && world.htmlAltitude(() => 0.008); // Fixed altitude above polygons
+        // Altitud dinámica: más baja cuando estás más cerca para mejor centrado
+        world.htmlAltitude && world.htmlAltitude(() => {
+          const pov = world.pointOfView();
+          const altitude = pov?.altitude || 1.0;
+          // Cuando más cerca (altitude baja), usar altitud de etiqueta más baja
+          if (altitude < 0.15) return 0.002; // Muy cerca
+          if (altitude < 0.3) return 0.004;  // Cerca
+          if (altitude < 0.6) return 0.006;  // Medio
+          return 0.008; // Lejos
+        });
         world.htmlTransitionDuration && world.htmlTransitionDuration(200); // Smooth transitions for LOD
         
         world.htmlElement && world.htmlElement((d: any) => {
@@ -157,7 +218,6 @@
           
           el.style.fontWeight = 'bold';
           el.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
-          el.style.pointerEvents = 'none';
           el.style.textAlign = 'center';
           el.style.whiteSpace = 'nowrap';
           el.style.transform = 'translate(-50%, -50%)';
@@ -168,6 +228,10 @@
           if (d.opacity !== undefined) {
             el.style.opacity = String(d.opacity);
           }
+          
+          // Las etiquetas NUNCA bloquean eventos - siempre pointer-events: none
+          // La selección se hace por sistema de proximidad en on:globeClick
+          el.style.pointerEvents = 'none';
           
           return el;
         });
@@ -288,17 +352,30 @@
     mat.transparent = true;
     mat.opacity = clamp(sphereOpacityPct / 100, 0, 1);
 
-    // Polígonos base
+    // Polígonos base con elevación dinámica
     world
       .polygonAltitude((feat: any) => {
-        // Elevar el polígono seleccionado
+        const currentPov = world.pointOfView();
+        const cameraAlt = currentPov?.altitude || 1.0;
+        
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
-        if (selectedCityId && cityId === selectedCityId) {
-          return POLY_ALT_SELECTED; // Elevación mayor para el seleccionado
+        const isSelected = selectedCityId && cityId === selectedCityId;
+        
+        if (isSelected) {
+          // Polígono seleccionado: ELEVAR significativamente
+          return calculateDynamicElevation(POLY_ALT_SELECTED, cameraAlt, true);
         }
-        // Usar elevación personalizada si está disponible, sino usar la elevación por defecto
+        
+        // Polígonos no seleccionados
+        if (selectedCityId) {
+          // Si hay un polígono seleccionado, bajar los demás
+          return calculateDynamicElevation(POLY_ALT_UNSELECTED, cameraAlt, false);
+        }
+        
+        // Sin selección: usar elevación normal
         const customElevation = feat?.properties?._elevation;
-        return typeof customElevation === 'number' ? customElevation : POLY_ALT;
+        const baseElevation = typeof customElevation === 'number' ? customElevation : POLY_ALT;
+        return calculateDynamicElevation(baseElevation, cameraAlt, false);
       })
       .polygonSideColor(() => hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1) * 0.35))
       .polygonStrokeColor((feat: any) => {
@@ -339,9 +416,46 @@
       world.labelsTransitionDuration && world.labelsTransitionDuration(0);
     } catch {}
 
+    // Mejorar precisión del raycaster para detección de clics
+    try {
+      const renderer = world.renderer && world.renderer();
+      
+      if (renderer) {
+        // Aumentar precisión del renderer para pantallas de alta resolución
+        renderer.setPixelRatio(window.devicePixelRatio);
+      }
+      
+      // Acceder al raycaster interno de three-globe
+      const scene = world.scene && world.scene();
+      const camera = world.camera && world.camera();
+      
+      // Configurar el raycaster con mayor precisión
+      if (scene && camera) {
+        // Intentar acceder al raycaster interno
+        const raycaster = (world as any)._raycaster;
+        if (raycaster) {
+          // Aumentar precisión para todos los tipos de objetos
+          raycaster.params.Mesh = { threshold: 0 };
+          raycaster.params.Line = { threshold: 0.05 };
+          raycaster.params.Points = { threshold: 0.05 };
+          // Configurar precisión de intersección
+          raycaster.near = 0;
+          raycaster.far = Infinity;
+        }
+      }
+    } catch (e) {
+      console.warn('[Globe] Could not configure raycaster precision:', e);
+    }
+
     // Eventos
     world.onPolygonHover(() => {});
     world.onPolygonClick((feat: any, event: MouseEvent) => {
+      dispatch('polygonClick', { feat, event });
+    });
+    
+    // Hacer que las etiquetas de polígonos sean clicables
+    world.onPolygonLabelClick && world.onPolygonLabelClick((feat: any, event: MouseEvent) => {
+      // Al hacer clic en una etiqueta, disparar el mismo evento que al hacer clic en el polígono
       dispatch('polygonClick', { feat, event });
     });
     

@@ -156,6 +156,20 @@
 		white-space: nowrap;
 	}
 	
+	/* Centrar avatares en desktop */
+	@media (min-width: 768px) {
+		.avatars-scroll-container {
+			display: flex;
+			justify-content: center;
+			overflow-x: auto;
+		}
+		
+		.avatars-inner-container {
+			width: auto;
+			min-width: auto;
+		}
+	}
+	
 	.avatar-lg {
 		width: 48px;
 		height: 48px;

@@ -1498,6 +1498,33 @@ header h1 {
   user-select: none;
 }
 
+/* Nav chip dropdown wrapper */
+.nav-chip-wrapper {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.nav-dropdown {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 280px;
+  max-width: 90vw;
+  max-height: 50vh;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+}
+
 .sheet-content {
   flex: 1;
   overflow-y: auto;
@@ -1581,7 +1608,7 @@ header h1 {
   position: fixed;
   top: 20px;
   left: 20px;
-  z-index: 1000;
+  z-index: 10005;
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(10px);
   border-radius: 12px;
@@ -1604,6 +1631,8 @@ header h1 {
   border-radius: 6px;
   transition: all 0.2s ease;
   text-decoration: none;
+  display: flex;
+  align-items: center;
 }
 
 .breadcrumb-item:hover {
@@ -1613,7 +1642,11 @@ header h1 {
 
 .breadcrumb-item.active {
   background: rgba(255, 255, 255, 0.2);
-  cursor: default;
+  cursor: pointer;
+}
+
+.breadcrumb-item.dropdown-trigger {
+  cursor: pointer;
 }
 
 .breadcrumb-separator {
@@ -1632,6 +1665,167 @@ header h1 {
   color: #aaa;
   font-size: 11px;
   font-weight: 400;
+}
+
+/* Breadcrumb dropdown */
+.breadcrumb-dropdown-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.breadcrumb-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 250px;
+  max-width: 400px;
+  max-height: 400px;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdown-loading {
+  padding: 16px;
+  text-align: center;
+  color: #aaa;
+  font-size: 13px;
+}
+
+.dropdown-search {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dropdown-search input {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.dropdown-search input:focus {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dropdown-search input::placeholder {
+  color: #888;
+}
+
+.dropdown-options {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 320px;
+  padding: 4px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.dropdown-options::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dropdown-options::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.dropdown-options::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.dropdown-options::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.dropdown-option {
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-option:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateX(4px);
+}
+
+.dropdown-no-results {
+  padding: 16px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Global dropdown overlay and container */
+.global-dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.global-dropdown {
+  min-width: 320px;
+  max-width: 90vw;
+  max-height: 70vh;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: dropdownFadeIn 0.2s ease-out;
+  touch-action: auto;
+  pointer-events: auto;
+  position: relative;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* Barra de escala estilo Google Maps (reemplaza legend-panel) */

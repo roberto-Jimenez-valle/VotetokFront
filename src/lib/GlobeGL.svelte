@@ -53,6 +53,16 @@
     iso?: string;
     id?: string;
   }> = [{ level: 'world', name: 'World' }];
+  
+  // Dropdown state for navigation breadcrumb
+  let showDropdown = false;
+  let dropdownOptions: Array<{ id: string; name: string; iso?: string }> = [];
+  let dropdownSearchQuery = '';
+  
+  // Filtered dropdown options based on search
+  $: filteredDropdownOptions = dropdownOptions.filter(option => 
+    option.name.toLowerCase().includes(dropdownSearchQuery.toLowerCase())
+  );
   // Visibilidad de polígonos (capa coroplética)
   let polygonsVisible = true;
   // Polígonos del dataset global (choropleth): se preservan siempre
@@ -61,12 +71,13 @@
   const VERY_CLOSE_ALT = 0.15; // por debajo de este valor, sin clustering: puntos exactos
 
   // Umbrales de altitud para mostrar textos (Level of Detail)
-  const COUNTRY_LABELS_ALT = 1.0; // mostrar etiquetas de países cuando altitud < 2.5
-  const SUBDIVISION_LABELS_ALT = 0.4; // mostrar etiquetas de subdivisiones cuando altitud < 0.8
-  const DETAILED_LABELS_ALT = 0.21; // mostrar etiquetas detalladas cuando altitud < 0.3
+  // Cuanto MENOR es la altitud, MÁS cerca estás y MÁS etiquetas debes ver
+  const COUNTRY_LABELS_ALT = 2.5; // mostrar etiquetas de países cuando altitud < 2.5
+  const SUBDIVISION_LABELS_ALT = 0.8; // mostrar etiquetas de subdivisiones cuando altitud < 0.8
+  const DETAILED_LABELS_ALT = 0.3; // mostrar etiquetas detalladas cuando altitud < 0.3
   
   // Límites de zoom del globo
-  const MIN_ZOOM_ALTITUDE = 0.02; // límite mínimo de zoom (más cerca)
+  const MIN_ZOOM_ALTITUDE = 0.005; // límite mínimo de zoom (más cerca) - ampliado para permitir más acercamiento
   const MAX_ZOOM_ALTITUDE = 4.0; // límite máximo de zoom (más lejos)
 
   // Debug function para mostrar información del sistema LOD
@@ -294,12 +305,12 @@
     return [];
   }
 
-  // Función para navegar directamente a una vista específica (sin mover la cámara)
+  // Función para navegar directamente a una vista específica
   async function navigateToView(targetLevel: 'world' | 'country' | 'subdivision' | 'city') {
     if (!navigationManager) return;
     
     const currentLevel = navigationManager.getCurrentLevel();
-    console.log(`[Navigation] Navigating from ${currentLevel} to ${targetLevel} (polygons only, no camera movement)`);
+    console.log(`[Navigation] Navigating from ${currentLevel} to ${targetLevel}`);
     
     if (targetLevel === 'world') {
       // Limpiar todos los niveles inferiores
@@ -310,8 +321,9 @@
       selectedCityName = null;
       selectedCityId = null;
       
-      // Navegar al mundo (solo cambiar polígonos, sin mover cámara)
+      // Navegar al mundo y hacer zoom hacia atrás
       await navigationManager.navigateToWorld();
+      globe?.pointOfView({ lat: 0, lng: 0, altitude: 2.0 }, 1000);
       
     } else if (targetLevel === 'country' && selectedCountryIso) {
       // Limpiar niveles inferiores
@@ -320,8 +332,16 @@
       selectedCityName = null;
       selectedCityId = null;
       
-      // Navegar al país (solo cambiar polígonos, sin mover cámara)
+      // Navegar al país y hacer zoom apropiado
       await navigationManager.navigateToCountry(selectedCountryIso, selectedCountryName || 'Unknown');
+      
+      // Encontrar el centroide del país para hacer zoom
+      const countryFeature = worldPolygons?.find(p => p.properties?.ISO_A3 === selectedCountryIso);
+      if (countryFeature) {
+        const centroid = centroidOf(countryFeature);
+        const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 800);
+      }
       
       // Refresh altitudes to reset polygon heights
       setTimeout(() => {
@@ -333,9 +353,20 @@
       selectedCityName = null;
       selectedCityId = null;
       
-      // Navegar a la subdivisión (solo cambiar polígonos, sin mover cámara)
+      // Navegar a la subdivisión y hacer zoom apropiado
       if (selectedSubdivisionId) {
         await navigationManager.navigateToSubdivision(selectedCountryIso, selectedSubdivisionId, selectedSubdivisionName);
+        
+        // Buscar la subdivisión específica para hacer zoom
+        const subdivisionFeature = worldPolygons?.find(p => 
+          p.properties?.ISO_A3 === selectedCountryIso && 
+          (p.properties?.ID_1 === selectedSubdivisionId || p.properties?._subdivisionId === selectedSubdivisionId)
+        );
+        if (subdivisionFeature) {
+          const centroid = centroidOf(subdivisionFeature);
+          const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subdivisionFeature);
+          globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 600);
+        }
       }
       
       // Refresh altitudes to reset polygon heights
@@ -573,65 +604,155 @@
   }
 
   // Generar etiquetas tanto para países (NAME_1) como subdivisiones (NAME_2)
-  function generateSubdivisionLabels(polygons: any[]): SubdivisionLabel[] {
+  function generateSubdivisionLabels(polygons: any[], currentAltitude?: number): SubdivisionLabel[] {
     const labels: SubdivisionLabel[] = [];
-    console.log('[Labels] Processing', polygons.length, 'polygons for labels');
+    console.log('[Labels] Processing', polygons.length, 'polygons for labels at altitude:', currentAltitude);
     
-    for (const poly of polygons) {
+    // Calcular áreas de polígonos para priorización
+    const polygonsWithArea = polygons.map(poly => ({
+      poly,
+      area: calculatePolygonArea(poly)
+    }));
+    
+    // Ordenar por área (más grandes primero)
+    polygonsWithArea.sort((a, b) => b.area - a.area);
+    
+    // Determinar cuántas etiquetas mostrar según la altitud
+    // LÓGICA CORREGIDA: Cuanto MÁS CERCA (menor altitud), MÁS etiquetas
+    let maxLabels = polygons.length;
+    let minAreaThreshold = 0; // Área mínima para mostrar etiqueta
+    
+    if (currentAltitude !== undefined) {
+      if (currentAltitude > 0.5) {
+        // Zoom muy alejado: solo las 10 más grandes
+        maxLabels = Math.min(10, polygons.length);
+        minAreaThreshold = 0.1; // Filtrar polígonos pequeños
+      } else if (currentAltitude > 0.3) {
+        // Zoom medio: 50% de las etiquetas
+        maxLabels = Math.ceil(polygons.length * 0.5);
+        minAreaThreshold = 0.05;
+      } else if (currentAltitude > 0.15) {
+        // Zoom cercano: 75% de las etiquetas
+        maxLabels = Math.ceil(polygons.length * 0.75);
+        minAreaThreshold = 0.02;
+      } else {
+        // Zoom MUY CERCANO (< 0.15): MOSTRAR TODAS LAS ETIQUETAS
+        maxLabels = polygons.length; // Todas las etiquetas
+        minAreaThreshold = 0; // Sin filtro de área mínima
+        console.log('[Labels] ✓ Very close zoom - showing ALL labels');
+      }
+    }
+    
+    console.log('[Labels] Showing', maxLabels, 'of', polygons.length, 'labels based on altitude', currentAltitude?.toFixed(3), ', minArea:', minAreaThreshold);
+    
+    // Sistema de detección de colisiones para evitar solapamiento
+    const usedPositions: Array<{lat: number, lng: number}> = [];
+    let minDistance = 0.2; // Distancia mínima en grados
+    if (currentAltitude !== undefined) {
+      if (currentAltitude < 0.08) {
+        minDistance = 0.1; // Zoom extremo: etiquetas más juntas para mostrar más
+      } else if (currentAltitude < 0.15) {
+        minDistance = 0.15; // Zoom muy cercano: etiquetas cercanas
+      } else if (currentAltitude < 0.3) {
+        minDistance = 0.3; // Zoom cercano: distancia moderada
+      }
+    }
+    
+    for (let i = 0; i < Math.min(maxLabels, polygonsWithArea.length); i++) {
+      const { poly, area } = polygonsWithArea[i];
+      
+      // Filtrar polígonos muy pequeños en zoom cercano
+      if (area < minAreaThreshold) {
+        continue;
+      }
+      
       let name = null;
       let labelType = '';
       
-      console.log('[Labels] Polygon properties:', poly?.properties);
-      
       // Prioridad: nivel 2 (NAME_2), luego subdivisiones (hijos), luego países (padres)
       if (poly?.properties?._isLevel2) {
-        // Para sub-subdivisiones (nivel 2), extraer NAME_2
         name = poly.properties.NAME_2 || poly.properties.name_2 || 
                poly.properties.NAME || poly.properties.name ||
                poly.properties.VARNAME_2 || poly.properties.varname_2 ||
                poly.properties.NL_NAME_2 || poly.properties.nl_name_2;
         labelType = 'level2';
-        console.log('[Labels] Found level 2 subdivision (NAME_2):', name);
       } else if (poly?.properties?._isChild && poly?.properties?._subdivisionName) {
         name = poly.properties._subdivisionName;
         labelType = 'subdivision';
-        console.log('[Labels] Found child subdivision:', name);
       } else if (poly?.properties?._isParent) {
-        // Para países, extraer NAME_1
         name = poly.properties.NAME_1 || poly.properties.name_1 || 
                poly.properties.NAME || poly.properties.name ||
                poly.properties.VARNAME_1 || poly.properties.varname_1 ||
                poly.properties.NL_NAME_1 || poly.properties.nl_name_1;
         labelType = 'country';
-        console.log('[Labels] Found parent country subdivision (NAME_1):', name);
       } else {
-        // Fallback: try to extract any name from properties (prefer NAME_1, then NAME_2)
         name = poly.properties?.NAME_1 || poly.properties?.name_1 || 
                poly.properties?.NAME_2 || poly.properties?.name_2 ||
                poly.properties?.NAME || poly.properties?.name ||
                poly.properties?.VARNAME_1 || poly.properties?.varname_1;
         labelType = 'fallback';
-        console.log('[Labels] Fallback name extraction:', name);
       }
       
       if (name) {
         try {
           const centroid = centroidOf(poly);
+          
+          // Verificar colisión con etiquetas existentes (en zoom cercano)
+          if (currentAltitude !== undefined && currentAltitude < 0.15 && minDistance > 0.2) {
+            let tooClose = false;
+            for (const pos of usedPositions) {
+              const dist = Math.sqrt(
+                Math.pow(centroid.lat - pos.lat, 2) + 
+                Math.pow(centroid.lng - pos.lng, 2)
+              );
+              if (dist < minDistance) {
+                tooClose = true;
+                break;
+              }
+            }
+            if (tooClose) {
+              continue; // Saltar esta etiqueta si está muy cerca de otra
+            }
+          }
+          
+          // Calcular tamaño de fuente basado en área y altitud
+          let fontSize = 11; // Tamaño base
+          const MIN_FONT_SIZE = 10; // Tamaño mínimo absoluto - no bajar más de esto
+          
+          if (currentAltitude !== undefined) {
+            if (currentAltitude > 0.4) {
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(14, 8 + Math.sqrt(area) * 0.5));
+            } else if (currentAltitude > 0.2) {
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(12, 8 + Math.sqrt(area) * 0.3));
+            } else if (currentAltitude < 0.06) {
+              // En zoom EXTREMO, mantener tamaño mínimo legible
+              fontSize = MIN_FONT_SIZE; // Tamaño fijo mínimo
+            } else if (currentAltitude < 0.1) {
+              // En zoom muy cercano, tamaño mínimo
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 8 + Math.sqrt(area) * 0.15));
+            } else {
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 7 + Math.sqrt(area) * 0.2));
+            }
+          }
+          
           const label: SubdivisionLabel = {
             id: `label_${labelType}_${poly.properties.ID_1 || poly.properties.id_1 || poly.properties.ISO_A3 || Math.random()}`,
             name: name,
             lat: centroid.lat,
-            lng: centroid.lng
+            lng: centroid.lng,
+            feature: poly, // Incluir el feature completo para que las etiquetas sean clicables
+            size: fontSize, // Tamaño dinámico basado en área y zoom
+            area: area // Guardar área para referencia
           };
           labels.push(label);
-          console.log('[Labels] Generated', labelType, 'label:', label.name, 'at precise centroid:', 
-                     `${centroid.lat.toFixed(4)}, ${centroid.lng.toFixed(4)}`);
+          usedPositions.push({ lat: centroid.lat, lng: centroid.lng });
         } catch (e) {
           console.warn('[Labels] Failed to generate label for polygon:', poly.properties);
         }
       }
     }
     
+    console.log('[Labels] Generated', labels.length, 'labels with anti-overlap filtering');
     return labels;
   }
 
@@ -904,7 +1025,8 @@
         this.globe?.refreshPolyLabels?.();
         
         // Generate and show subdivision labels (usar polígonos hijos)
-        const labels = generateSubdivisionLabels(childMarked);
+        const currentPov = this.globe?.pointOfView();
+        const labels = generateSubdivisionLabels(childMarked, currentPov?.altitude);
         console.log('[Navigation] Raw polygons for labels (children):', childMarked.length, 'polygons');
         console.log('[Navigation] Generated labels:', labels);
         subdivisionLabels = labels;
@@ -945,6 +1067,7 @@
         }
         
         // Show ONLY the selected subdivision (no country or world background)
+        // ELEVAR significativamente los polígonos de nivel 3
         const markedPolygons = validPolygons.map(poly => ({
           ...poly,
           properties: {
@@ -954,9 +1077,12 @@
             _parentSubdivision: subdivisionId,
             _subdivisionName: poly.properties?.NAME_2 || poly.properties?.name_2 || 
                              poly.properties?.NAME || poly.properties?.name ||
-                             poly.properties?.VARNAME_2 || poly.properties?.varname_2
+                             poly.properties?.VARNAME_2 || poly.properties?.varname_2,
+_elevation: 0.05 // Elevación MUY alta para nivel 3 (subdivisión) - 3x más que el default
           }
         }));
+        
+console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x default)');
         
         // Set ONLY the subdivision polygons (no background)
         this.globe?.setPolygonsData(markedPolygons);
@@ -965,7 +1091,8 @@
         this.globe?.refreshPolyLabels?.();
         
         // Generate and show sub-subdivision labels
-        const labels = generateSubdivisionLabels(markedPolygons);
+        const currentPov = this.globe?.pointOfView();
+        const labels = generateSubdivisionLabels(markedPolygons, currentPov?.altitude);
         subdivisionLabels = labels;
         updateSubdivisionLabels(true);
         
@@ -1029,12 +1156,291 @@
     getState(): NavigationState { return { ...this.state }; }
     getHistory(): typeof this.history { return [...this.history]; }
     getCurrentLevel(): NavigationLevel { return this.state.level; }
+    
+    // Get available options for next level
+    async getAvailableOptions(): Promise<Array<{ id: string; name: string; iso?: string }>> {
+      const options: Array<{ id: string; name: string; iso?: string }> = [];
+      
+      if (this.state.level === 'world') {
+        // Return all countries from worldPolygons
+        if (worldPolygons?.length) {
+          const countryMap = new Map<string, string>();
+          worldPolygons.forEach(poly => {
+            const iso = isoOf(poly);
+            const name = nameOf(poly);
+            if (iso && name && !countryMap.has(iso)) {
+              countryMap.set(iso, name);
+            }
+          });
+          countryMap.forEach((name, iso) => {
+            options.push({ id: iso, name, iso });
+          });
+        }
+      } else if (this.state.level === 'country' && this.state.countryIso) {
+        // Return all subdivisions for current country
+        try {
+          const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(this.state.countryIso, this.state.countryIso);
+          const subdivisionMap = new Map<string, string>();
+          subdivisionPolygons.forEach(poly => {
+            const props = poly?.properties || {};
+            const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+            const name1 = props.NAME_1 || props.name_1 || props.VARNAME_1 || props.varname_1;
+            if (id1 && name1 && !subdivisionMap.has(String(id1))) {
+              subdivisionMap.set(String(id1), String(name1));
+            }
+          });
+          subdivisionMap.forEach((name, id) => {
+            options.push({ id: `${this.state.countryIso}.${id}`, name });
+          });
+        } catch (e) {
+          console.warn('[Navigation] Could not load subdivisions for dropdown:', e);
+        }
+      } else if (this.state.level === 'subdivision' && this.state.countryIso && this.state.subdivisionId) {
+        // Return all sub-subdivisions for current subdivision
+        try {
+          const numericPart = this.state.subdivisionId.split('.').pop();
+          if (numericPart) {
+            const subdivisionFile = `${this.state.countryIso}.${numericPart}`;
+            const subSubPolygons = await loadSubregionTopoAsGeoFeatures(this.state.countryIso, subdivisionFile);
+            const subSubMap = new Map<string, string>();
+            subSubPolygons.forEach(poly => {
+              const props = poly?.properties || {};
+              const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
+              const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
+              if (id2 && name2 && !subSubMap.has(String(id2))) {
+                subSubMap.set(String(id2), String(name2));
+              }
+            });
+            subSubMap.forEach((name, id) => {
+              options.push({ id: `${this.state.countryIso}.${numericPart}.${id}`, name });
+            });
+          }
+        } catch (e) {
+          console.warn('[Navigation] Could not load sub-subdivisions for dropdown:', e);
+        }
+      }
+      
+      // Sort alphabetically by name
+      return options.sort((a, b) => a.name.localeCompare(b.name));
+    }
   }
 
   // Initialize navigation manager
   let navigationManager: NavigationManager;
   $: if (globe && !navigationManager) {
     navigationManager = new NavigationManager(globe);
+  }
+  
+  // Function to toggle dropdown and load options
+  async function toggleDropdown(event?: Event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    console.log('[Dropdown] Toggle called, current state:', showDropdown);
+    if (!navigationManager) {
+      console.log('[Dropdown] No navigation manager');
+      return;
+    }
+    
+    if (showDropdown) {
+      console.log('[Dropdown] Closing dropdown');
+      showDropdown = false;
+      dropdownOptions = [];
+      dropdownSearchQuery = '';
+    } else {
+      console.log('[Dropdown] Opening dropdown, loading options...');
+      showDropdown = true;
+      dropdownSearchQuery = '';
+      const options = await navigationManager.getAvailableOptions();
+      dropdownOptions = options;
+      console.log('[Dropdown] Loaded', dropdownOptions.length, 'options for current level:', dropdownOptions);
+      console.log('[Dropdown] showDropdown is now:', showDropdown);
+    }
+  }
+  
+  // Close dropdown when clicking outside
+  function handleClickOutside(event: MouseEvent) {
+    if (showDropdown) {
+      const target = event.target as HTMLElement;
+      const dropdown = target.closest('.breadcrumb-dropdown-wrapper');
+      if (!dropdown) {
+        showDropdown = false;
+        dropdownOptions = [];
+        dropdownSearchQuery = '';
+      }
+    }
+  }
+  
+  // Function to select an option from dropdown
+  async function selectDropdownOption(option: { id: string; name: string; iso?: string }) {
+    if (!navigationManager) return;
+    
+    const currentLevel = navigationManager.getCurrentLevel();
+    showDropdown = false;
+    dropdownOptions = [];
+    dropdownSearchQuery = '';
+    
+    console.log('[Dropdown] Selecting option:', option, 'at level:', currentLevel);
+    
+    // Show bottom sheet
+    setSheetState('collapsed');
+    
+    if (currentLevel === 'world') {
+      // Navigate to country
+      const countryFeature = worldPolygons?.find(p => isoOf(p) === option.id);
+      if (countryFeature) {
+        console.log('[Click] Country clicked from world:', option.id, option.name);
+        
+        // Set selected country info for bottom sheet
+        selectedCountryName = option.name;
+        selectedCountryIso = option.id;
+        
+        // Update country chart segments for bottom sheet
+        const countryRecord = answersData?.[option.id];
+        if (countryRecord) {
+          const countryData = [countryRecord];
+          countryChartSegments = generateCountryChartSegments(countryData);
+        } else {
+          countryChartSegments = [];
+        }
+        
+        // Zoom to country with adaptive zoom based on country size
+        const centroid = centroidOf(countryFeature);
+        const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
+        console.log('[Dropdown] Zooming to country:', option.name, 'at altitude:', adaptiveAltitude);
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 700);
+        
+        // Navigate using manager (esto carga y muestra los polígonos correctos)
+        console.log('[Dropdown] Calling navigationManager.navigateToCountry for:', option.id);
+        await navigationManager.navigateToCountry(option.id, option.name);
+        console.log('[Dropdown] Navigation complete for country:', option.name);
+        
+        // Force multiple refreshes to ensure polygons are visible
+        setTimeout(() => {
+          console.log('[Dropdown] Forcing polygon refresh - step 1');
+          globe?.refreshPolyColors?.();
+          globe?.refreshPolyAltitudes?.();
+        }, 100);
+        
+        setTimeout(() => {
+          console.log('[Dropdown] Forcing polygon refresh - step 2');
+          globe?.refreshPolyLabels?.();
+          globe?.refreshPolyStrokes?.();
+        }, 300);
+      }
+    } else if (currentLevel === 'country') {
+      // Navigate to subdivision
+      const state = navigationManager.getState();
+      if (state.countryIso) {
+        const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(state.countryIso, state.countryIso);
+        const subdivisionFeature = subdivisionPolygons.find(poly => {
+          const props = poly?.properties || {};
+          const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+          return option.id === `${state.countryIso}.${id1}`;
+        });
+        
+        if (subdivisionFeature) {
+          const centroid = centroidOf(subdivisionFeature);
+          const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subdivisionFeature);
+          
+          // Extract just the subdivision ID (the part after the country ISO)
+          // option.id is like "ESP.3", we need just "3"
+          const subdivisionId = subdivisionFeature.properties?.ID_1 || 
+                               subdivisionFeature.properties?.id_1 || 
+                               subdivisionFeature.properties?.GID_1 || 
+                               subdivisionFeature.properties?.gid_1;
+          
+          console.log('[Dropdown] Subdivision clicked from country:', option.id, '-> subdivisionId:', subdivisionId, option.name);
+          
+          // Update subdivision data for bottom sheet
+          const countryRecord = answersData?.[state.countryIso];
+          if (countryRecord) {
+            const subdivisionData = [countryRecord];
+            countryChartSegments = generateCountryChartSegments(subdivisionData);
+          } else {
+            countryChartSegments = [];
+          }
+          
+          // Zoom adaptativo basado en el tamaño de la subdivisión
+          const targetAlt = Math.min(adaptiveAltitude, 0.06); // Máximo 0.06 para activar elevaciones bajas
+          console.log('[Dropdown] Zooming to subdivision:', option.name, 'at altitude:', targetAlt);
+          globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: targetAlt }, 700);
+          
+          // Navigate using manager with the correct subdivisionId
+          console.log('[Dropdown] Calling navigationManager.navigateToSubdivision for:', state.countryIso, subdivisionId);
+          await navigationManager.navigateToSubdivision(state.countryIso, subdivisionId, option.name);
+          
+          // Update selected subdivision name and ID for view buttons
+          selectedSubdivisionName = option.name;
+          selectedSubdivisionId = option.id;
+          selectedCityId = null; // Clear city selection
+          
+          // ELEVAR los polígonos del nivel 3 significativamente
+          const subdivisionKey = `${state.countryIso}/${option.id}`;
+          const loadedPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
+          if (loadedPolygons?.length) {
+            console.log('[Elevation] Elevating level 3 polygons:', loadedPolygons.length);
+            loadedPolygons.forEach((poly: any) => {
+              if (poly.properties) {
+                poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3
+              }
+            });
+          }
+          
+          // Refresh altitudes to apply the new elevation
+          setTimeout(() => {
+            globe?.refreshPolyAltitudes?.();
+          }, 100);
+          
+          console.log('[Dropdown] Navigation complete for subdivision:', option.name);
+        }
+      }
+    } else if (currentLevel === 'subdivision') {
+      // Navigate to sub-subdivision (level 4)
+      const state = navigationManager.getState();
+      if (state.countryIso && state.subdivisionId) {
+        const numericPart = state.subdivisionId.split('.').pop();
+        if (numericPart) {
+          const subdivisionFile = `${state.countryIso}.${numericPart}`;
+          try {
+            const subSubPolygons = await loadSubregionTopoAsGeoFeatures(state.countryIso, subdivisionFile);
+            const subSubFeature = subSubPolygons.find(poly => {
+              const props = poly?.properties || {};
+              const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
+              return option.id === `${state.countryIso}.${numericPart}.${id2}`;
+            });
+            
+            if (subSubFeature) {
+              const centroid = centroidOf(subSubFeature);
+              const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subSubFeature);
+              
+              console.log('[Click] Level 4 - City/Province selected:', option.name);
+              
+              // Activar nivel 4
+              selectedCityName = option.name;
+              selectedSubdivisionName = state.subdivisionId ? (subSubFeature.properties?.NAME_1 || selectedSubdivisionName) : selectedSubdivisionName;
+              selectedCityId = subSubFeature.properties?.ID_2;
+              
+              // Navigate and zoom
+              globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 700);
+              
+              // Refresh visual (igual que en polygonClick)
+              setTimeout(() => {
+                globe?.refreshPolyStrokes?.();
+                globe?.refreshPolyAltitudes?.();
+              }, 100);
+              
+              // Generate city chart segments
+              generateCityChartSegments(option.name);
+              
+              console.log(`[City] Level 4 activated! Navigation: Global / ${selectedCountryName} / ${selectedSubdivisionName} / ${selectedCityName}`);
+            }
+          } catch (e) {
+            console.warn('[Dropdown] Could not load sub-subdivision:', e);
+          }
+        }
+      }
+    }
   }
 
   // Find first available subdivision for a country
@@ -1059,29 +1465,56 @@
   async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }) {
     try {
       const currentLevel = navigationManager?.getCurrentLevel() || 'world';
+      const alt = pov.altitude;
       
-      console.log(`[LOD] Altitude: ${pov.altitude.toFixed(3)}, Level: ${currentLevel}`);
+      console.log(`[LOD] Altitude: ${alt.toFixed(3)}, Level: ${currentLevel}`);
+      console.log(`[LOD] Thresholds - Country: ${COUNTRY_LABELS_ALT}, Subdivision: ${SUBDIVISION_LABELS_ALT}, Detailed: ${DETAILED_LABELS_ALT}`);
       
-      // Lógica simplificada: mostrar etiquetas según altitud y nivel
-      if (currentLevel === 'world' && pov.altitude < COUNTRY_LABELS_ALT) {
-        console.log('[LOD] Showing world country labels');
-        await generateWorldCountryLabels();
-      } else if (currentLevel === 'country' && pov.altitude < SUBDIVISION_LABELS_ALT) {
-        console.log('[LOD] Showing subdivision labels');
+      // LÓGICA CORREGIDA: Cuanto MÁS CERCA (menor altitud), MÁS etiquetas
+      // Las etiquetas NUNCA desaparecen, incluso en zoom extremo
+      // La altitud baja significa zoom alto (muy cerca)
+      
+      // Nivel mundial: mostrar países cuando te acercas
+      if (currentLevel === 'world') {
+        if (alt < COUNTRY_LABELS_ALT) {
+          console.log('[LOD] ✓ Showing world country labels (altitude < COUNTRY_LABELS_ALT)');
+          await generateWorldCountryLabels();
+        } else {
+          console.log('[LOD] ✗ Too far - hiding labels (altitude >= COUNTRY_LABELS_ALT)');
+          updateSubdivisionLabels(false);
+        }
+      }
+      // Nivel país: cuanto más cerca, más detalle
+      else if (currentLevel === 'country') {
         const state = navigationManager?.getState();
         if (state?.countryIso) {
-          await generateCountrySubdivisionLabels(state.countryIso, pov);
+          // Si estás MUY cerca, muestra subdivisiones
+          if (alt < SUBDIVISION_LABELS_ALT) {
+            console.log('[LOD] ✓ Showing subdivision labels (altitude < SUBDIVISION_LABELS_ALT)');
+            await generateCountrySubdivisionLabels(state.countryIso, pov);
+          } 
+          // Si estás lejos, solo muestra el nombre del país
+          else {
+            console.log('[LOD] ✓ Showing only country name (altitude >= SUBDIVISION_LABELS_ALT)');
+            await generateCountryNameLabel();
+          }
         }
-      } else if (currentLevel === 'subdivision' && pov.altitude < DETAILED_LABELS_ALT) {
-        console.log('[LOD] Showing detailed subdivision labels');
+      }
+      // Nivel subdivisión: cuanto más cerca, más detalle
+      else if (currentLevel === 'subdivision') {
         const state = navigationManager?.getState();
         if (state?.countryIso && state?.subdivisionId) {
-          await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
+          // Si estás MUY MUY cerca, muestra sub-subdivisiones detalladas
+          if (alt < DETAILED_LABELS_ALT) {
+            console.log('[LOD] ✓ Showing detailed sub-subdivision labels (altitude < DETAILED_LABELS_ALT)');
+            await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
+          } 
+          // Si estás a distancia media, solo muestra el nombre de la subdivisión
+          else {
+            console.log('[LOD] ✓ Showing only subdivision name (altitude >= DETAILED_LABELS_ALT)');
+            await generateSubdivisionNameLabel();
+          }
         }
-      } else {
-        // Ocultar todas las etiquetas si no se cumplen las condiciones
-        console.log('[LOD] Hiding all labels - conditions not met');
-        updateSubdivisionLabels(false);
       }
     } catch (e) {
       console.warn('[Labels] Error updating labels for current view:', e);
@@ -1106,7 +1539,8 @@
           text: name || iso,
           size: 12,
           color: '#ffffff',
-          opacity: 0.8
+          opacity: 0.8,
+          feature: feat // Incluir feature para hacer las etiquetas clicables
         };
       }).filter(label => label.text);
       
@@ -1217,7 +1651,8 @@
       
       if (countryPolygons?.length) {
         // Use the existing generateSubdivisionLabels function that works correctly
-        const labels = generateSubdivisionLabels(countryPolygons);
+        const currentPov = globe?.pointOfView();
+        const labels = generateSubdivisionLabels(countryPolygons, currentPov?.altitude);
         subdivisionLabels = labels;
         updateSubdivisionLabels(true);
         
@@ -1290,7 +1725,8 @@
               }
             }));
             
-            const labels = generateSubdivisionLabels(markedPolygons);
+            const currentPov = globe?.pointOfView();
+            const labels = generateSubdivisionLabels(markedPolygons, currentPov?.altitude);
             subdivisionLabels = labels;
             updateSubdivisionLabels(true);
             
@@ -1531,7 +1967,7 @@
   let lastClusterAlt = -1;
   
   // Etiquetas de subdivisiones (para mostrar nombres permanentemente)
-  type SubdivisionLabel = { id: string; name: string; lat: number; lng: number };
+  type SubdivisionLabel = { id: string; name: string; lat: number; lng: number; feature?: any; size?: number; area?: number; text?: string; color?: string; opacity?: number };
   let subdivisionLabels: SubdivisionLabel[] = [];
   // Amigos por opción (para enriquecer tarjetas en BottomSheet). Claves deben coincidir con los keys de segmentos/opciones
   let friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
@@ -2151,7 +2587,6 @@
 <GlobeCanvas
   bind:this={globe}
   {bgColor}
-  {selectedSubdivisionId}
   {selectedCityId}
   onPolyCapColor={(feat) => {
     const iso = isoOf(feat);
@@ -2231,6 +2666,10 @@
         }
       }
       
+      // ACTUALIZAR ELEVACIONES DE POLÍGONOS continuamente según altitud de cámara
+      // Esto hace que los polígonos se aplanen cuando haces zoom extremo
+      globe?.refreshPolyAltitudes?.();
+      
       // Siempre actualizar etiquetas con el nuevo sistema LOD (incluso durante movimiento)
       updateLabelsForCurrentView(pov).catch(e => console.warn('Label update error:', e));
     } catch {}
@@ -2240,6 +2679,9 @@
     try {
       const feat = e.detail?.feat;
       if (!feat) return;
+      
+      console.log('[PolygonClick Event] Received polygon click event');
+      console.log('[PolygonClick Event] Feature properties:', feat.properties);
       
       // Show bottom sheet with polygon data when clicking on polygons
       setSheetState('collapsed');
@@ -2302,10 +2744,12 @@
           console.log('[City Context] Andalucía selected. Try: selectCity("Jaén"), selectCity("Sevilla"), selectCity("Granada")');
         }
         
-        // Zoom to subdivision with adaptive zoom based on subdivision size
+        // Zoom adaptativo basado en el tamaño de la subdivisión
         const centroid = centroidOf(feat);
         const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
-        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 500);
+        // Asegurar que el zoom sea lo suficientemente cercano para activar elevaciones bajas
+        const targetAlt = Math.min(adaptiveAltitude, 0.06); // Máximo 0.06 para activar elevaciones bajas
+        globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: targetAlt }, 700);
         
         // Navigate using manager
         await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
@@ -2316,37 +2760,46 @@
         // Limpiar ciudad seleccionada al cambiar de subdivisión
         selectedCityId = null;
         
-        // Refresh altitudes to reset polygon heights
+        // ELEVAR los polígonos del nivel 3 significativamente
+        // Actualizar la elevación de los polígonos cargados
+        const subdivisionKey = `${iso}/${subdivisionId}`;
+        const loadedPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
+        if (loadedPolygons?.length) {
+          console.log('[Elevation] Elevating level 3 polygons:', loadedPolygons.length);
+          loadedPolygons.forEach((poly: any) => {
+            if (poly.properties) {
+poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3 - 3x más que el default
+            }
+          });
+        }
+        
+        // Refresh altitudes to apply the new elevation
         setTimeout(() => {
           globe?.refreshPolyAltitudes?.();
         }, 100);
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
-        // Click on city/province from subdivision view (4th level)
+        // NIVEL 4: Activar selección (viene de etiqueta o sistema de proximidad)
         const cityName = feat.properties.NAME_2 || feat.properties.name_2 || name;
         const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1;
         
-        console.log('[Click] City/Province clicked from subdivision:', cityName, 'in', subdivisionName);
+        console.log('[Click] Level 4 - City/Province selected:', cityName, 'in', subdivisionName);
         
-        // Automatically activate 4th level
+        // Activar nivel 4
         selectedCityName = cityName;
         selectedSubdivisionName = subdivisionName;
-        selectedCityId = feat.properties.ID_2; // Guardar el ID para resaltado
+        selectedCityId = feat.properties.ID_2;
         
-        // Refresh strokes and altitudes to highlight and elevate the selected city polygon
+        // Refresh visual
         setTimeout(() => {
           globe?.refreshPolyStrokes?.();
           globe?.refreshPolyAltitudes?.();
         }, 100);
         
-        // Generate city-specific data
+        // Generate city data
         generateCityChartSegments(cityName);
         
-        // Don't move the map for city level - just update the data
-        console.log(`[City] Activated 4th level for ${cityName}. No map movement.`);
-        
-        // Show success message
-        console.log(`[City] 4th level active! Navigation: Global / ${selectedCountryName} / ${selectedSubdivisionName} / ${selectedCityName}`);
+        console.log(`[City] Level 4 activated! Navigation: Global / ${selectedCountryName} / ${selectedSubdivisionName} / ${selectedCityName}`);
       }
     } catch (e) {
       console.error('[Click] Error handling polygon click:', e);
@@ -2356,6 +2809,8 @@
     if (!navigationManager) return;
     
     try {
+      const currentLevel = navigationManager.getCurrentLevel();
+      
       // Check if we're in city level (4th level)
       if (selectedCityName) {
         console.log('[Click] Empty space clicked in level 4 → Going back to country level (level 2)');
@@ -2375,8 +2830,6 @@
         }
         return;
       }
-      
-      const currentLevel = navigationManager.getCurrentLevel();
       if (currentLevel !== 'world') {
         console.log('[Click] Empty space clicked → Navigating back to previous view');
         
@@ -2420,8 +2873,8 @@
   style={`background: linear-gradient(to bottom, ${bgColor} 0%, ${hexToRgba(bgColor, 1)} 25%, ${hexToRgba(bgColor, 0.3)} 70%, transparent 100%)`}
 ></div>
 
-<!-- Navigation breadcrumb -->
-{#if navigationManager && navigationManager.getCurrentLevel() !== 'world'}
+<!-- Navigation breadcrumb - DISABLED, using BottomSheet nav-chips instead -->
+{#if false && navigationManager}
 <div class="navigation-breadcrumb">
   {#each navigationManager.getHistory() as item, index}
     {#if index > 0}
@@ -2429,32 +2882,173 @@
     {/if}
     
     {#if item.level === 'world'}
-      <button on:click={() => {
-        navigationManager.navigateToWorld();
-        selectedCountryIso = null;
-        selectedCountryName = null;
-        selectedSubdivisionName = null;
-      }} class="breadcrumb-item">
-        🌍 {item.name}
-      </button>
+      {@const isLastItem = index === navigationManager.getHistory().length - 1}
+      {#if isLastItem && navigationManager.getCurrentLevel() === 'world'}
+        <!-- World level with dropdown to select countries -->
+        <div class="breadcrumb-dropdown-wrapper">
+          <button on:click={toggleDropdown} 
+                  class="breadcrumb-item active dropdown-trigger">
+            🌍 {item.name}
+            <span style="margin-left: 6px; display: inline-block; transition: transform 0.2s; {showDropdown ? 'transform: rotate(180deg);' : ''}">
+              ▼
+            </span>
+          </button>
+          
+          {#if showDropdown}
+            <div class="breadcrumb-dropdown">
+              {#if dropdownOptions.length === 0}
+                <div class="dropdown-loading">Cargando...</div>
+              {:else}
+                <div class="dropdown-search">
+                  <input 
+                    type="text" 
+                    placeholder="Buscar país..." 
+                    bind:value={dropdownSearchQuery}
+                    on:click={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div class="dropdown-options">
+                  {#if filteredDropdownOptions.length === 0}
+                    <div class="dropdown-no-results">No se encontraron resultados</div>
+                  {:else}
+                    {#each filteredDropdownOptions as option}
+                      <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
+                        {option.name}
+                      </button>
+                    {/each}
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <!-- Not last item or not in world level -->
+        <button on:click={() => {
+          navigationManager.navigateToWorld();
+          selectedCountryIso = null;
+          selectedCountryName = null;
+          selectedSubdivisionName = null;
+          showDropdown = false;
+        }} class="breadcrumb-item">
+          🌍 {item.name}
+        </button>
+      {/if}
     {:else if item.level === 'country'}
-      <button on:click={() => navigationManager.navigateToCountry(item.iso || '', item.name)} 
-              class="breadcrumb-item {navigationManager.getCurrentLevel() === 'country' ? 'active' : ''}">
-        🏴 {item.name}
-      </button>
+      {@const isLastItem = index === navigationManager.getHistory().length - 1}
+      {#if isLastItem}
+        <!-- Last item: show as dropdown button -->
+        <div class="breadcrumb-dropdown-wrapper">
+          <button on:click={toggleDropdown} 
+                  class="breadcrumb-item active dropdown-trigger">
+            🏴 {item.name}
+            <span style="margin-left: 6px; display: inline-block; transition: transform 0.2s; {showDropdown ? 'transform: rotate(180deg);' : ''}">
+              ▼
+            </span>
+          </button>
+          
+          {#if showDropdown}
+            <div class="breadcrumb-dropdown">
+              {#if dropdownOptions.length === 0}
+                <div class="dropdown-loading">Cargando...</div>
+              {:else}
+                <div class="dropdown-search">
+                  <input 
+                    type="text" 
+                    placeholder="Buscar..." 
+                    bind:value={dropdownSearchQuery}
+                    on:click={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div class="dropdown-options">
+                  {#if filteredDropdownOptions.length === 0}
+                    <div class="dropdown-no-results">No se encontraron resultados</div>
+                  {:else}
+                    {#each filteredDropdownOptions as option}
+                      <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
+                        {option.name}
+                      </button>
+                    {/each}
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <!-- Not last item: regular clickable button -->
+        <button on:click={() => {
+          navigationManager.navigateToCountry(item.iso || '', item.name);
+          showDropdown = false;
+        }} 
+                class="breadcrumb-item">
+          🏴 {item.name}
+        </button>
+      {/if}
     {:else if item.level === 'subdivision'}
-      <span class="breadcrumb-item active">📍 {item.name}</span>
+      {@const isLastItem = index === navigationManager.getHistory().length - 1}
+      {#if isLastItem}
+        <!-- Last item: show as dropdown button -->
+        <div class="breadcrumb-dropdown-wrapper">
+          <button on:click={toggleDropdown} 
+                  class="breadcrumb-item active dropdown-trigger">
+            📍 {item.name}
+            <span style="margin-left: 6px; display: inline-block; transition: transform 0.2s; {showDropdown ? 'transform: rotate(180deg);' : ''}">
+              ▼
+            </span>
+          </button>
+          
+          {#if showDropdown}
+            <div class="breadcrumb-dropdown">
+              {#if dropdownOptions.length === 0}
+                <div class="dropdown-loading">Cargando...</div>
+              {:else}
+                <div class="dropdown-search">
+                  <input 
+                    type="text" 
+                    placeholder="Buscar..." 
+                    bind:value={dropdownSearchQuery}
+                    on:click={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div class="dropdown-options">
+                  {#if filteredDropdownOptions.length === 0}
+                    <div class="dropdown-no-results">No se encontraron resultados</div>
+                  {:else}
+                    {#each filteredDropdownOptions as option}
+                      <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
+                        {option.name}
+                      </button>
+                    {/each}
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <!-- Not last item: regular span -->
+        <span class="breadcrumb-item">📍 {item.name}</span>
+      {/if}
     {/if}
   {/each}
   
   <div class="breadcrumb-help">
-    <small>Click country → Only that country • Click subdivision → Only that subdivision • Click outside → Back</small>
+    <small>Click to navigate • Last item shows dropdown with available options</small>
   </div>
 </div>
 {/if}
 <svelte:window
   on:keydown={async (e) => {
     if (e.key === "Escape") {
+      // Close dropdown if open
+      if (showDropdown) {
+        showDropdown = false;
+        dropdownOptions = [];
+        dropdownSearchQuery = '';
+        return;
+      }
+      
       if (navigationManager && navigationManager.getCurrentLevel() !== 'world') {
         await navigationManager.navigateBack();
         
@@ -2480,6 +3074,7 @@
       }
     }
   }}
+  on:click={handleClickOutside}
   on:scroll={handleScroll}
   on:wheel={handleWheel}
   on:touchstart={onTouchStart}
@@ -2580,6 +3175,7 @@
   {publishedAtByOption}
   {navigationManager}
   {currentAltitude}
+  onToggleDropdown={toggleDropdown}
   onPointerDown={onSheetPointerDown}
   onScroll={onSheetScroll}
   onNavigateToView={navigateToView}
@@ -2591,3 +3187,56 @@
     console.log('[GlobeGL] Vote event received:', e.detail);
   }}
 />
+
+<!-- Dropdown flotante renderizado fuera del BottomSheet -->
+{#if showDropdown}
+  <div 
+    class="global-dropdown-overlay" 
+    on:click={() => {
+      showDropdown = false;
+      dropdownOptions = [];
+      dropdownSearchQuery = '';
+    }}
+    on:touchstart|capture={(e) => {
+      // Allow touch events on the dropdown itself
+      const target = e.target as HTMLElement;
+      if (target.closest('.global-dropdown')) {
+        e.stopPropagation();
+      }
+    }}
+  >
+    <div 
+      class="global-dropdown" 
+      on:click={(e) => e.stopPropagation()}
+      on:touchmove|stopPropagation
+      on:touchstart|stopPropagation
+    >
+      {#if dropdownOptions.length === 0}
+        <div class="dropdown-loading">Cargando opciones...</div>
+      {:else}
+        <div class="dropdown-search">
+          <input 
+            type="text" 
+            placeholder="Buscar..." 
+            bind:value={dropdownSearchQuery}
+            on:click={(e) => e.stopPropagation()}
+          />
+        </div>
+        <div 
+          class="dropdown-options"
+          on:touchmove|stopPropagation
+        >
+          {#if filteredDropdownOptions.length === 0}
+            <div class="dropdown-no-results">No se encontraron resultados</div>
+          {:else}
+            {#each filteredDropdownOptions as option}
+              <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
+                {option.name}
+              </button>
+            {/each}
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
