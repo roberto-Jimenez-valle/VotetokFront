@@ -45,7 +45,7 @@ export class BottomSheetController {
     const containerH = Math.max(0, (window.innerHeight || 0)); // Ahora usa altura completa
     if (state === 'hidden') {
       // En hidden, quedarse a la misma altura que el nav mostrando solo la barra de arrastre
-      this.y = containerH - this.bottomBarPx - 40; // 40px arriba del nav para mostrar la barra
+      this.y = containerH - this.bottomBarPx - 33; // 40px arriba del nav para mostrar la barra
     }
     else if (state === 'peek') {
       // En peek, el sheet se muestra un poco arriba del nav

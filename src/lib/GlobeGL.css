@@ -15,6 +15,8 @@
   padding: 0;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  overflow: hidden; /* Prevenir scroll del body */
+  overflow-anchor: none; /* Prevenir scroll automático por cambios en el DOM */
 }
 
 /* Prevenir scroll en el contenedor principal */
@@ -71,9 +73,17 @@
 
 /* Header con logo y avatares */
 header {
-  position: relative;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
   z-index: 1005 !important;
   pointer-events: auto;
+  overflow-anchor: none; /* Prevenir scroll automático */
+  transform: translateZ(0); /* Forzar aceleración de hardware */
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 header h1 {
@@ -321,11 +331,11 @@ header h1 {
 .top-search-btn:hover {
   opacity: 0.9;
 }
-/* Posicionar el dropdown de tabs al lado de la lupa */
+/* Posicionar el dropdown de tabs pegado a la derecha */
 .tabs-float {
   position: fixed;
   top: 8px;
-  right: 56px; /* a la izquierda del botón de la lupa */
+  right: 10px; /* pegado al borde derecho */
   z-index: 10000; /* por debajo del BottomSheet expandido */
   display: flex;
   align-items: center;
@@ -333,19 +343,20 @@ header h1 {
 }
 .search-icon {
   position: absolute;
-  left: 20px;
-  width: 16px;
-  height: 16px;
-  opacity: 0.85;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  opacity: 0.7;
   pointer-events: none;
+  color: #ffffff;
 }
 .floating-search {
   position: fixed;
   top: 8px;
-  right: 40px;
+  right: 10px; /* pegado al borde derecho, mismo que tabs-float */
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 8px 14px;
   width: 0;
   opacity: 0;
   overflow: hidden;
@@ -354,31 +365,37 @@ header h1 {
     width 180ms ease,
     opacity 180ms ease;
   z-index: 10010; /* por debajo del BottomSheet expandido */
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(255, 255, 255, 0.1) 100%
-  );
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  border-radius: 20px; /* mismo que nav-chip */
+  height: auto; /* altura automática como nav-chip */
+  border: 1px solid rgba(255, 255, 255, 0.2); /* mismo borde que nav-chip.active */
+  background: rgba(255, 255, 255, 0.15); /* mismo fondo que nav-chip.active */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* misma sombra que nav-chip.active */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 .floating-search.open {
   width: clamp(220px, 33vw, 480px);
   opacity: 1;
   pointer-events: auto;
 }
+.floating-search:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+}
 .tag-search {
   flex: 1;
   min-width: 160px;
   background: transparent; /* dejar ver el glass del contenedor */
   border: none;
-  color: #e5e7eb;
-  padding: 8px 12px 8px 36px;
-  border-radius: 999px;
+  color: #ffffff;
+  padding: 0 0 0 28px;
+  border-radius: 0;
   outline: none;
-  height: 36px;
+  height: auto;
+  font-size: 15px;
+  font-weight: 400;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 .tags-row {
   display: flex;

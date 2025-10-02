@@ -51,6 +51,13 @@
   } else if (showSearch !== previousShowSearch) {
     previousShowSearch = showSearch;
   }
+  
+  // Focus en el input cuando se abre la búsqueda, sin hacer scroll
+  $: if (showSearch && searchInput) {
+    setTimeout(() => {
+      searchInput?.focus({ preventScroll: true });
+    }, 50);
+  }
 
   const dispatch = createEventDispatcher();
   
@@ -332,7 +339,6 @@
           bind:value={tagQuery}
           bind:this={searchInput}
           onclick={(e) => e.stopPropagation()}
-          autofocus
         />
         {#if tagQuery}
           <button
@@ -340,7 +346,7 @@
             onclick={(e) => {
               e.preventDefault();
               tagQuery = '';
-              searchInput?.focus();
+              searchInput?.focus({ preventScroll: true });
             }}
             aria-label="Limpiar texto"
           >
