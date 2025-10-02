@@ -40,12 +40,16 @@
   
   // Referencia al input de búsqueda
   let searchInput: HTMLInputElement;
+  let previousShowSearch = false;
   
-  // Hacer scroll al final cuando se cierra la búsqueda
-  $: if (!showSearch && navContainer) {
+  // Scroll al final cuando se cierra la búsqueda
+  $: if (previousShowSearch && !showSearch && navContainer) {
     setTimeout(() => {
       navContainer.scrollLeft = navContainer.scrollWidth;
     }, 50);
+    previousShowSearch = showSearch;
+  } else if (showSearch !== previousShowSearch) {
+    previousShowSearch = showSearch;
   }
 
   const dispatch = createEventDispatcher();
@@ -233,100 +237,88 @@
     {/if}
   </div>
   
-  <!-- Navegación minimalista -->
-  <div class="nav-minimal" bind:this={navContainer}>
-    {#if !selectedCountryName}
-      <!-- Global is last active - show dropdown -->
-      <button
-        class="nav-chip active dropdown-trigger"
-        onclick={onToggleDropdown}
-      >
-        Global
-        <span style="margin-left: 4px;">▼</span>
-      </button>
-    {:else}
-      <!-- Global is not last - no dropdown -->
-      <button
-        class="nav-chip"
-        onclick={() => onNavigateToView('world')}
-      >
-        Global
-      </button>
-    {/if}
-    
-    {#if selectedCountryName}
-      <div class="nav-divider">/</div>
-      
-      {#if !selectedSubdivisionName}
-        <!-- Country is last active - show dropdown -->
+  <!-- Navegación minimalista con wrapper -->
+  <div class="nav-wrapper">
+    <div class="nav-minimal" bind:this={navContainer}>
+      {#if !selectedCountryName}
+        <!-- Global is last active - show dropdown -->
         <button
           class="nav-chip active dropdown-trigger"
           onclick={onToggleDropdown}
         >
-          {selectedCountryName}
+          Global
           <span style="margin-left: 4px;">▼</span>
         </button>
       {:else}
-        <!-- Country is not last - no dropdown -->
+        <!-- Global is not last - no dropdown -->
         <button
           class="nav-chip"
-          onclick={() => onNavigateToView('country')}
+          onclick={() => onNavigateToView('world')}
         >
-          {selectedCountryName}
+          Global
         </button>
       {/if}
-    {/if}
-    
-    {#if selectedSubdivisionName}
-      <div class="nav-divider">/</div>
       
-      {#if !selectedCityName}
-        <!-- Subdivision is last active - show dropdown -->
+      {#if selectedCountryName}
+        <div class="nav-divider">/</div>
+        
+        {#if !selectedSubdivisionName}
+          <!-- Country is last active - show dropdown -->
+          <button
+            class="nav-chip active dropdown-trigger"
+            onclick={onToggleDropdown}
+          >
+            {selectedCountryName}
+            <span style="margin-left: 4px;">▼</span>
+          </button>
+        {:else}
+          <!-- Country is not last - no dropdown -->
+          <button
+            class="nav-chip"
+            onclick={() => onNavigateToView('country')}
+          >
+            {selectedCountryName}
+          </button>
+        {/if}
+      {/if}
+      
+      {#if selectedSubdivisionName}
+        <div class="nav-divider">/</div>
+        
+        {#if !selectedCityName}
+          <!-- Subdivision is last active - show dropdown -->
+          <button
+            class="nav-chip active dropdown-trigger"
+            onclick={onToggleDropdown}
+          >
+            {selectedSubdivisionName}
+            <span style="margin-left: 4px;">▼</span>
+          </button>
+        {:else}
+          <!-- Subdivision is not last - no dropdown -->
+          <button
+            class="nav-chip"
+            onclick={() => onNavigateToView('subdivision')}
+          >
+            {selectedSubdivisionName}
+          </button>
+        {/if}
+      {/if}
+      
+      {#if selectedCityName}
+        <div class="nav-divider">/</div>
+        <!-- City is last active - show dropdown -->
         <button
           class="nav-chip active dropdown-trigger"
           onclick={onToggleDropdown}
         >
-          {selectedSubdivisionName}
+          {selectedCityName}
           <span style="margin-left: 4px;">▼</span>
         </button>
-      {:else}
-        <!-- Subdivision is not last - no dropdown -->
-        <button
-          class="nav-chip"
-          onclick={() => onNavigateToView('subdivision')}
-        >
-          {selectedSubdivisionName}
-        </button>
       {/if}
-    {/if}
+    </div>
     
-    {#if selectedCityName}
-      <div class="nav-divider">/</div>
-      <!-- City is last active - show dropdown -->
-      <button
-        class="nav-chip active dropdown-trigger"
-        onclick={onToggleDropdown}
-      >
-        {selectedCityName}
-        <span style="margin-left: 4px;">▼</span>
-      </button>
-    {/if}
-    
-    <!-- Search button at the end (only when search is closed) -->
-    {#if !showSearch}
-      <button
-        class="nav-search-btn"
-        onclick={onToggleSearch}
-        aria-label="Buscar"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-      </button>
-    {/if}
-    
-    <!-- Search input overlay (appears above navigation) -->
+    <!-- Search input overlay outside nav-minimal (appears above everything) -->
     {#if showSearch}
       <div class="nav-search-overlay">
         <svg class="nav-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -366,6 +358,20 @@
           </svg>
         </button>
       </div>
+    {/if}
+    
+    <!-- Search button outside nav-minimal (only when search is closed) -->
+    {#if !showSearch}
+      <button
+        class="nav-search-btn"
+        onclick={onToggleSearch}
+        aria-label="Buscar"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
     {/if}
   </div>
   

@@ -1423,24 +1423,41 @@ header h1 {
   scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
 }
 
+/* Wrapper para navegación y botón de búsqueda */
+.nav-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 /* Navegación minimalista */
 .nav-minimal {
   display: flex;
   align-items: center;
+  gap: 2px;
   justify-content: flex-start;
-  padding: 12px 16px;
+  padding: 6px 2px;
+  padding-right: 12px; /* Espacio para la lupa fija (36px botón + 16px margen) */
   position: relative;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
+  width: 85%;
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
   z-index: 1; /* Bajo z-index para no interferir con otros elementos */
   touch-action: pan-x; /* Solo scroll horizontal, permitir arrastre vertical del sheet */
   min-height: 48px; /* Asegurar altura mínima para el input absoluto */
   isolation: isolate; /* Crear nuevo contexto de apilamiento */
+}
+
+/* Ocultar solo los botones dentro de nav-minimal cuando el search está abierto */
+.nav-wrapper:has(.nav-search-overlay) .nav-minimal .nav-chip,
+.nav-wrapper:has(.nav-search-overlay) .nav-minimal .nav-divider {
+  display: none;
 }
 
 .nav-minimal::-webkit-scrollbar {
@@ -1489,12 +1506,15 @@ header h1 {
 
 /* Search button in navigation */
 .nav-search-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
-  margin-left: 12px;
   border: none;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
@@ -1502,6 +1522,7 @@ header h1 {
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
+  z-index: 10;
 }
 
 .nav-search-btn:hover {
