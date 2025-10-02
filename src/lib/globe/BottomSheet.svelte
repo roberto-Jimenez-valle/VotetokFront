@@ -32,6 +32,21 @@
   
   // Dropdown toggle function
   export let onToggleDropdown: () => void = () => {};
+  
+  // Search props
+  export let showSearch: boolean = false;
+  export let tagQuery: string = '';
+  export let onToggleSearch: () => void = () => {};
+  
+  // Referencia al input de búsqueda
+  let searchInput: HTMLInputElement;
+  
+  // Hacer scroll al final cuando se cierra la búsqueda
+  $: if (!showSearch && navContainer) {
+    setTimeout(() => {
+      navContainer.scrollLeft = navContainer.scrollWidth;
+    }, 50);
+  }
 
   const dispatch = createEventDispatcher();
   
@@ -295,6 +310,62 @@
         {selectedCityName}
         <span style="margin-left: 4px;">▼</span>
       </button>
+    {/if}
+    
+    <!-- Search button at the end (only when search is closed) -->
+    {#if !showSearch}
+      <button
+        class="nav-search-btn"
+        onclick={onToggleSearch}
+        aria-label="Buscar"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
+    {/if}
+    
+    <!-- Search input overlay (appears above navigation) -->
+    {#if showSearch}
+      <div class="nav-search-overlay">
+        <svg class="nav-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          type="search"
+          class="nav-search-input-full"
+          placeholder="Buscar hashtag/categoría..."
+          bind:value={tagQuery}
+          bind:this={searchInput}
+          onclick={(e) => e.stopPropagation()}
+          autofocus
+        />
+        {#if tagQuery}
+          <button
+            class="nav-search-clear-btn"
+            onclick={(e) => {
+              e.preventDefault();
+              tagQuery = '';
+              searchInput?.focus();
+            }}
+            aria-label="Limpiar texto"
+          >
+            Limpiar
+          </button>
+        {/if}
+        <button
+          class="nav-search-close-btn"
+          onclick={onToggleSearch}
+          aria-label="Cerrar búsqueda"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
     {/if}
   </div>
   

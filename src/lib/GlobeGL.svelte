@@ -149,41 +149,40 @@
   function calculateAdaptiveZoom(feature: any): number {
     const area = calculatePolygonArea(feature);
     
-    // Definir rangos de área y sus zooms correspondientes
-    // Áreas aproximadas en grados cuadrados para referencia:
-    // - Países muy grandes (Rusia, Canadá, China): > 1000
-    // - Países grandes (Brasil, Australia, India): 100-1000  
-    // - Países medianos (Francia, España, Alemania): 10-100
-    // - Países pequeños (Bélgica, Holanda, Suiza): 1-10
-    // - Países muy pequeños (Luxemburgo, Malta, Mónaco): < 1
-    
+    // Calcular altitud de forma más proporcional usando una fórmula logarítmica
+    // Esto da un zoom más suave y proporcional al tamaño
     let targetAltitude: number;
     
-    if (area > 1000) {
-      // Países muy grandes: zoom más alejado
-      targetAltitude = 1.2;
-      console.log(`[Adaptive Zoom] Very large country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    if (area > 2000) {
+      // Países extremadamente grandes (Rusia): muy alejado
+      targetAltitude = 2.2;
+    } else if (area > 1000) {
+      // Países muy grandes (Canadá, China, USA, Brasil): alejado
+      targetAltitude = 1.5 + (area - 1000) / 1000 * 0.7;
     } else if (area > 500) {
-      // Países grandes: zoom medio-alejado
-      targetAltitude = 0.8;
-      console.log(`[Adaptive Zoom] Large country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
-    } else if (area > 100) {
-      // Países medianos-grandes: zoom medio
-      targetAltitude = 0.5;
-      console.log(`[Adaptive Zoom] Medium-large country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+      // Países grandes (Australia, India): medio-alejado
+      targetAltitude = 1.1 + (area - 500) / 500 * 0.4;
+    } else if (area > 200) {
+      // Países medianos-grandes (Argentina, Kazajistán): medio
+      targetAltitude = 0.75 + (area - 200) / 300 * 0.35;
+    } else if (area > 50) {
+      // Países medianos (Francia, España, Alemania, Italia): medio-cercano
+      targetAltitude = 0.45 + (area - 50) / 150 * 0.30;
     } else if (area > 10) {
-      // Países medianos: zoom medio-cercano
-      targetAltitude = 0.3;
-      console.log(`[Adaptive Zoom] Medium country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+      // Países pequeños-medianos (Portugal, Grecia, Bélgica): cercano
+      targetAltitude = 0.28 + (area - 10) / 40 * 0.17;
     } else if (area > 1) {
-      // Países pequeños: zoom cercano
-      targetAltitude = 0.2;
-      console.log(`[Adaptive Zoom] Small country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+      // Países pequeños (Holanda, Suiza, Dinamarca): muy cercano
+      targetAltitude = 0.18 + (area - 1) / 9 * 0.10;
+    } else if (area > 0.1) {
+      // Países muy pequeños (Luxemburgo, Malta): extremadamente cercano
+      targetAltitude = 0.12 + (area - 0.1) / 0.9 * 0.06;
     } else {
-      // Países muy pequeños: zoom muy cercano
-      targetAltitude = 0.15;
-      console.log(`[Adaptive Zoom] Very small country (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+      // Micro-estados (Mónaco, Vaticano, San Marino): máximo acercamiento
+      targetAltitude = 0.08 + area / 0.1 * 0.04;
     }
+    
+    console.log(`[Adaptive Zoom] Country area: ${area.toFixed(2)}°² → altitude: ${targetAltitude.toFixed(3)}`);
     
     // Asegurar que esté dentro de los límites permitidos
     return Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
@@ -193,37 +192,36 @@
   function calculateAdaptiveZoomSubdivision(feature: any): number {
     const area = calculatePolygonArea(feature);
     
-    // Rangos específicos para subdivisiones (generalmente más pequeñas que países)
-    // Áreas aproximadas en grados cuadrados para subdivisiones:
-    // - Estados muy grandes (Alaska, Territorio del Noroeste): > 50
-    // - Estados grandes (Texas, California, Quebec): 10-50
-    // - Estados medianos (Francia regiones, España comunidades): 1-10
-    // - Estados pequeños (Delaware, Rhode Island, comunidades pequeñas): 0.1-1
-    // - Estados muy pequeños (Washington D.C., ciudades-estado): < 0.1
-    
+    // Calcular altitud proporcional para subdivisiones con interpolación suave
     let targetAltitude: number;
     
-    if (area > 50) {
-      // Subdivisiones muy grandes: zoom medio-alejado
-      targetAltitude = 0.6;
-      console.log(`[Adaptive Zoom Subdivision] Very large subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
-    } else if (area > 10) {
-      // Subdivisiones grandes: zoom medio
-      targetAltitude = 0.4;
-      console.log(`[Adaptive Zoom Subdivision] Large subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+    if (area > 100) {
+      // Subdivisiones extremadamente grandes (Alaska, Yakutia, Queensland): muy alejado
+      targetAltitude = 1.0 + (area - 100) / 200 * 0.5;
+    } else if (area > 50) {
+      // Subdivisiones muy grandes (Territorio del Noroeste, Nunavut): alejado
+      targetAltitude = 0.70 + (area - 50) / 50 * 0.30;
+    } else if (area > 20) {
+      // Subdivisiones grandes (Texas, California, Ontario): medio-alejado
+      targetAltitude = 0.48 + (area - 20) / 30 * 0.22;
+    } else if (area > 5) {
+      // Subdivisiones medianas-grandes (Castilla y León, Aragón, Bavaria): medio
+      targetAltitude = 0.30 + (area - 5) / 15 * 0.18;
     } else if (area > 1) {
-      // Subdivisiones medianas: zoom medio-cercano
-      targetAltitude = 0.25;
-      console.log(`[Adaptive Zoom Subdivision] Medium subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
-    } else if (area > 0.1) {
-      // Subdivisiones pequeñas: zoom cercano
-      targetAltitude = 0.15;
-      console.log(`[Adaptive Zoom Subdivision] Small subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+      // Subdivisiones medianas (Andalucía, Cataluña, regiones francesas): medio-cercano
+      targetAltitude = 0.19 + (area - 1) / 4 * 0.11;
+    } else if (area > 0.3) {
+      // Subdivisiones pequeñas (provincias españolas, departamentos pequeños): cercano
+      targetAltitude = 0.13 + (area - 0.3) / 0.7 * 0.06;
+    } else if (area > 0.05) {
+      // Subdivisiones muy pequeñas (Delaware, Rhode Island, islas pequeñas): muy cercano
+      targetAltitude = 0.08 + (area - 0.05) / 0.25 * 0.05;
     } else {
-      // Subdivisiones muy pequeñas: zoom muy cercano
-      targetAltitude = 0.08;
-      console.log(`[Adaptive Zoom Subdivision] Very small subdivision (area: ${area.toFixed(2)}°²) → altitude: ${targetAltitude}`);
+      // Subdivisiones minúsculas (Washington D.C., ciudades-estado, islas diminutas): máximo acercamiento
+      targetAltitude = 0.05 + area / 0.05 * 0.03;
     }
+    
+    console.log(`[Adaptive Zoom Subdivision] Area: ${area.toFixed(3)}°² → altitude: ${targetAltitude.toFixed(3)}`);
     
     // Asegurar que esté dentro de los límites permitidos
     return Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
@@ -1280,7 +1278,6 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
     dropdownOptions = [];
     dropdownSearchQuery = '';
     
-    console.log('[Dropdown] Selecting option:', option, 'at level:', currentLevel);
     
     // Show bottom sheet
     setSheetState('collapsed');
@@ -1289,7 +1286,6 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
       // Navigate to country
       const countryFeature = worldPolygons?.find(p => isoOf(p) === option.id);
       if (countryFeature) {
-        console.log('[Click] Country clicked from world:', option.id, option.name);
         
         // Set selected country info for bottom sheet
         selectedCountryName = option.name;
@@ -1307,23 +1303,18 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
         // Zoom to country with adaptive zoom based on country size
         const centroid = centroidOf(countryFeature);
         const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
-        console.log('[Dropdown] Zooming to country:', option.name, 'at altitude:', adaptiveAltitude);
         globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 700);
         
-        // Navigate using manager (esto carga y muestra los polígonos correctos)
-        console.log('[Dropdown] Calling navigationManager.navigateToCountry for:', option.id);
+        // Navigate using manager
         await navigationManager.navigateToCountry(option.id, option.name);
-        console.log('[Dropdown] Navigation complete for country:', option.name);
         
-        // Force multiple refreshes to ensure polygons are visible
+        // Force refreshes to ensure polygons are visible
         setTimeout(() => {
-          console.log('[Dropdown] Forcing polygon refresh - step 1');
           globe?.refreshPolyColors?.();
           globe?.refreshPolyAltitudes?.();
         }, 100);
         
         setTimeout(() => {
-          console.log('[Dropdown] Forcing polygon refresh - step 2');
           globe?.refreshPolyLabels?.();
           globe?.refreshPolyStrokes?.();
         }, 300);
@@ -1350,7 +1341,6 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
                                subdivisionFeature.properties?.GID_1 || 
                                subdivisionFeature.properties?.gid_1;
           
-          console.log('[Dropdown] Subdivision clicked from country:', option.id, '-> subdivisionId:', subdivisionId, option.name);
           
           // Update subdivision data for bottom sheet
           const countryRecord = answersData?.[state.countryIso];
@@ -1363,36 +1353,31 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
           
           // Zoom adaptativo basado en el tamaño de la subdivisión
           const targetAlt = Math.min(adaptiveAltitude, 0.06); // Máximo 0.06 para activar elevaciones bajas
-          console.log('[Dropdown] Zooming to subdivision:', option.name, 'at altitude:', targetAlt);
           globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: targetAlt }, 700);
           
-          // Navigate using manager with the correct subdivisionId
-          console.log('[Dropdown] Calling navigationManager.navigateToSubdivision for:', state.countryIso, subdivisionId);
+          // Navigate using manager
           await navigationManager.navigateToSubdivision(state.countryIso, subdivisionId, option.name);
           
-          // Update selected subdivision name and ID for view buttons
+          // Update selected subdivision name and ID
           selectedSubdivisionName = option.name;
           selectedSubdivisionId = option.id;
-          selectedCityId = null; // Clear city selection
+          selectedCityId = null;
           
-          // ELEVAR los polígonos del nivel 3 significativamente
+          // Elevate level 3 polygons
           const subdivisionKey = `${state.countryIso}/${option.id}`;
           const loadedPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
           if (loadedPolygons?.length) {
-            console.log('[Elevation] Elevating level 3 polygons:', loadedPolygons.length);
             loadedPolygons.forEach((poly: any) => {
               if (poly.properties) {
-                poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3
+                poly.properties._elevation = 0.05;
               }
             });
           }
           
-          // Refresh altitudes to apply the new elevation
+          // Refresh altitudes
           setTimeout(() => {
             globe?.refreshPolyAltitudes?.();
           }, 100);
-          
-          console.log('[Dropdown] Navigation complete for subdivision:', option.name);
         }
       }
     } else if (currentLevel === 'subdivision') {
@@ -1414,7 +1399,6 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
               const centroid = centroidOf(subSubFeature);
               const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subSubFeature);
               
-              console.log('[Click] Level 4 - City/Province selected:', option.name);
               
               // Activar nivel 4
               selectedCityName = option.name;
@@ -1433,7 +1417,6 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
               // Generate city chart segments
               generateCityChartSegments(option.name);
               
-              console.log(`[City] Level 4 activated! Navigation: Global / ${selectedCountryName} / ${selectedSubdivisionName} / ${selectedCityName}`);
             }
           } catch (e) {
             console.warn('[Dropdown] Could not load sub-subdivision:', e);
@@ -3088,7 +3071,7 @@ poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3 - 3x más
   />
 </div>
 
-<SearchBar bind:show={showSearch} bind:query={tagQuery} />
+<!-- SearchBar movido al BottomSheet -->
 
 <TagBar
   bind:activeTag
@@ -3176,6 +3159,9 @@ poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3 - 3x más
   {navigationManager}
   {currentAltitude}
   onToggleDropdown={toggleDropdown}
+  showSearch={showSearch}
+  tagQuery={tagQuery}
+  onToggleSearch={() => showSearch = !showSearch}
   onPointerDown={onSheetPointerDown}
   onScroll={onSheetScroll}
   onNavigateToView={navigateToView}

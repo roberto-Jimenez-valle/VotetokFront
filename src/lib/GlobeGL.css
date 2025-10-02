@@ -316,21 +316,7 @@ header h1 {
   z-index: 1002;
 }
 .top-search-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: #e5e7eb;
-  cursor: pointer;
-  position: fixed;
-  top: 8px;
-  right: 10px;
-  z-index: 10000;
-  pointer-events: auto;
+  display: none; /* Ocultar el botón de búsqueda de arriba */
 }
 .top-search-btn:hover {
   opacity: 0.9;
@@ -535,6 +521,7 @@ header h1 {
   left: 0;
   right: 0;
   bottom: 0; /* Cambio: ahora va hasta el fondo para integrarse con el nav */
+  max-height: 100vh; /* Prevenir que se expanda más allá del viewport */
   height: 100vh; /* Altura completa */
   transform: translateY(100vh);
   transition: transform 0ms linear;
@@ -1450,8 +1437,10 @@ header h1 {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
-  z-index: 30070; /* Por encima del nav inferior (30060) */
+  z-index: 1; /* Bajo z-index para no interferir con otros elementos */
   touch-action: pan-x; /* Solo scroll horizontal, permitir arrastre vertical del sheet */
+  min-height: 48px; /* Asegurar altura mínima para el input absoluto */
+  isolation: isolate; /* Crear nuevo contexto de apilamiento */
 }
 
 .nav-minimal::-webkit-scrollbar {
@@ -1498,6 +1487,155 @@ header h1 {
   user-select: none;
 }
 
+/* Search button in navigation */
+.nav-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: 12px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.nav-search-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 1);
+}
+
+.nav-search-btn:active {
+  transform: scale(0.95);
+}
+
+/* Search overlay - appears above navigation */
+.nav-search-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 16px;
+  z-index: 2;
+  animation: slideInRight 0.2s ease-out;
+}
+
+/* Ocultar botones de navegación cuando el search está abierto */
+.nav-minimal:has(.nav-search-overlay) .nav-chip,
+.nav-minimal:has(.nav-search-overlay) .nav-divider,
+.nav-minimal:has(.nav-search-overlay) .nav-search-btn {
+  display: none;
+}
+
+.nav-search-overlay .nav-search-icon {
+  position: absolute;
+  left: 28px;
+  color: rgb(255, 255, 255) !important;
+  flex-shrink: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.nav-search-icon {
+  color: rgba(255, 255, 255,0.8) !important;
+  flex-shrink: 0;
+}
+
+.nav-search-input-full {
+  flex: 1;
+  border: none;
+  background: rgba(0, 0, 0);
+  color: #ffffff;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  outline: none;
+  min-width: 100%;
+  padding: 10px 120px 10px 40px;
+  border-radius: 20px;
+  position: relative;
+}
+
+.nav-search-input-full::placeholder {
+  color: rgb(255, 255, 255);
+}
+
+/* Ocultar la X nativa del navegador en inputs type="search" */
+.nav-search-input-full::-webkit-search-cancel-button {
+  display: none;
+  -webkit-appearance: none;
+}
+
+.nav-search-input-full::-webkit-search-decoration {
+  display: none;
+  -webkit-appearance: none;
+}
+
+.nav-search-clear-btn {
+  position: absolute;
+  right: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.nav-search-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 1);
+}
+
+.nav-search-close-btn {
+  position: absolute;
+  right: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.nav-search-close-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 1);
+}
+
 /* Nav chip dropdown wrapper */
 .nav-chip-wrapper {
   position: relative;
@@ -1518,7 +1656,6 @@ header h1 {
   -webkit-backdrop-filter: blur(20px);
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
   overflow: hidden;
   z-index: 99999;
   display: flex;
