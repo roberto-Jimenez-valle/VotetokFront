@@ -1959,6 +1959,146 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
   // Creadores y fechas por opción (para header profesional)
   let creatorsByOption: Record<string, { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean }> = {};
   let publishedAtByOption: Record<string, string | Date> = {};
+  
+  // Interfaz para encuestas adicionales (scroll infinito)
+  interface Poll {
+    id: string;
+    question: string;
+    type: 'poll' | 'hashtag' | 'trending';
+    region: string;
+    options: Array<{ key: string; label: string; color: string; votes: number }>;
+    totalVotes: number;
+    totalViews: number;
+    creator?: { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean };
+    publishedAt?: string | Date;
+    friendsByOption?: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>>;
+  }
+  
+  // Array de encuestas adicionales para scroll infinito
+  let additionalPolls: Poll[] = [];
+  let isLoadingMorePolls = false;
+  
+  // Función para generar encuestas de ejemplo
+  function generateMockPolls(region: string, count: number = 5): Poll[] {
+    const polls: Poll[] = [];
+    const questions = [
+      '¿Debería el gobierno priorizar la inversión en infraestructura de transporte público sostenible, incluyendo metro, autobuses eléctricos y carriles bici, o enfocarse en la construcción de nuevas autopistas y carreteras para reducir el tráfico urbano?',
+      '¿Cuál crees que es la mejor estrategia para combatir el cambio climático en nuestra región: aumentar los impuestos a las emisiones de carbono, subsidiar masivamente las energías renovables, o implementar restricciones estrictas a las industrias contaminantes?',
+      '¿Qué política educativa consideras más efectiva para mejorar la calidad de la enseñanza: aumentar significativamente los salarios de los profesores, reducir el número de alumnos por aula, invertir en tecnología educativa, o reformar completamente el currículo académico?',
+      '¿En qué área debería el gobierno invertir más recursos públicos durante los próximos cinco años?',
+      '¿Qué medida consideras más urgente para mejorar la calidad de vida en las ciudades?',
+      '¿Cuál es tu opinión sobre la implementación de una renta básica universal financiada con impuestos progresivos?',
+      '¿Qué tipo de vivienda pública debería priorizar el gobierno para resolver la crisis habitacional?',
+      '¿Cómo debería abordarse la transición energética en el sector industrial?',
+      '¿Qué política de salud pública consideras más importante implementar?',
+      '¿Cuál es la mejor forma de fomentar la innovación tecnológica en pequeñas y medianas empresas?',
+      '¿Qué medidas deberían tomarse para proteger el medio ambiente local?',
+      '¿Cómo mejorar la seguridad ciudadana sin comprometer las libertades civiles?'
+    ];
+    
+    const hashtags = [
+      'CambioClimáticoYa',
+      'EducaciónParaTodos',
+      'SaludPúblicaUniversal',
+      'TransporteSostenible',
+      'EnergíaLimpiaAhora',
+      'ViviendaDignaYAccesible',
+      'TecnologíaParaTodos',
+      'CulturaYPatrimonio',
+      'MedioAmbienteSano',
+      'InnovaciónSocial',
+      'DerechosHumanosFundamentales',
+      'EconomíaCircular'
+    ];
+    
+    const types: Array<'poll' | 'hashtag' | 'trending'> = ['poll', 'hashtag', 'trending'];
+    
+    // Garantizar encuestas con 20, 10, 7, 100 y 330 opciones, más variedad adicional
+    const requiredOptionCounts = [20, 10, 7, 100, 330];
+    const optionCounts = Array.from(new Set([
+      ...requiredOptionCounts,
+      1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 15, 18, 25, 30, 40, 60, 90, 120, 150, 200
+    ]));
+    
+    for (let i = 0; i < count; i++) {
+      const type = types[Math.floor(Math.random() * types.length)];
+      const question = type === 'hashtag' 
+        ? hashtags[Math.floor(Math.random() * hashtags.length)]
+        : questions[Math.floor(Math.random() * questions.length)];
+      
+      // Generar opciones basadas en las claves disponibles
+      const availableKeys = Object.keys(colorMap);
+      
+      // Seleccionar número de opciones - asegurar que las primeras encuestas tengan 1 y 2 opciones
+      let numOptions;
+      if (i === 0 && count > 0) {
+        numOptions = 1; // Primera encuesta con 1 opción
+      } else if (i === 1 && count > 1) {
+        numOptions = 2; // Segunda encuesta con 2 opciones
+      } else {
+        numOptions = optionCounts[i % optionCounts.length];
+      }
+      
+      // Generar opciones duplicando y variando las claves disponibles
+      const options = [];
+      for (let j = 0; j < numOptions; j++) {
+        const keyIndex = j % availableKeys.length;
+        const key = availableKeys[keyIndex];
+        const suffix = Math.floor(j / availableKeys.length);
+        
+        options.push({
+          key: suffix > 0 ? `${key}-${suffix}` : key,
+          label: suffix > 0 ? `${key} ${suffix + 1}` : key,
+          color: colorMap[key] || '#888888',
+          votes: Math.random() * 100
+        });
+      }
+      
+      const totalVotes = Math.floor(Math.random() * 50000) + 5000;
+      const totalViews = Math.floor(totalVotes * (1.5 + Math.random() * 2));
+      
+      polls.push({
+        id: `poll-${Date.now()}-${i}`,
+        question,
+        type,
+        region,
+        options,
+        totalVotes,
+        totalViews,
+        creator: {
+          id: `user-${i}`,
+          name: ['Ana García Rodríguez', 'Carlos López Martínez', 'María Silva González', 'Juan Pérez Fernández', 'Laura Martínez Sánchez'][i % 5],
+          verified: Math.random() > 0.3
+        }
+      });
+    }
+    
+    return polls;
+  }
+  
+  // Función para cargar más encuestas
+  function loadMorePolls() {
+    if (isLoadingMorePolls) return;
+    
+    isLoadingMorePolls = true;
+    
+    // Simular carga asíncrona
+    setTimeout(() => {
+      const region = selectedSubdivisionName || selectedCountryName || 'Global';
+      const newPolls = generateMockPolls(region, 3);
+      additionalPolls = [...additionalPolls, ...newPolls];
+      isLoadingMorePolls = false;
+    }, 500);
+  }
+  
+  // Generar encuestas iniciales cuando cambia la región
+  $: {
+    const region = selectedSubdivisionName || selectedCountryName || 'Global';
+    // Solo regenerar si la región cambió realmente
+    if (additionalPolls.length === 0 || (additionalPolls[0] && additionalPolls[0].region !== region)) {
+      additionalPolls = generateMockPolls(region, 5);
+    }
+  }
 
   // Asignación de color por subdivisión (ID_1/NAME_1), para vista país
   let subdivisionColorById: Record<string, string> = {};
@@ -2552,9 +2692,28 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
     window.addEventListener('resize', onWindowResizeForSheet);
     // Inicializar la bottom sheet oculta
     setSheetState('hidden');
+    
+    // Listen for search selection events from BottomSheet
+    searchSelectHandler = async (event: Event) => {
+      console.log('[GlobeGL] searchSelect event received:', event);
+      const customEvent = event as CustomEvent;
+      const option = customEvent.detail;
+      console.log('[GlobeGL] Option detail:', option);
+      if (option && option.id && option.name) {
+        console.log('[GlobeGL] Calling selectDropdownOption with:', option);
+        await selectDropdownOption(option);
+      } else {
+        console.warn('[GlobeGL] Invalid option received:', option);
+      }
+    };
+    console.log('[GlobeGL] Adding searchSelect event listener');
+    window.addEventListener('searchSelect', searchSelectHandler);
   });
 
   function resize() { /* GlobeCanvas maneja su propio tamaño vía CSS */ }
+
+  // Store handler reference for cleanup
+  let searchSelectHandler: ((event: Event) => Promise<void>) | null = null;
 
   onDestroy(() => {
     try {
@@ -2563,6 +2722,10 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
       try { globe && globe.htmlElementsData && globe.htmlElementsData([]); } catch {}
     } catch {}
     try { sheetCtrl?.destroy(); } catch {}
+    // Remove search select listener
+    if (searchSelectHandler) {
+      window.removeEventListener('searchSelect', searchSelectHandler);
+    }
   });
 
 </script>
@@ -3109,38 +3272,6 @@ poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3 - 3x más
   </div>
 {/if}
 
-<!-- Botón de ajustes (abajo derecha, arriba del de localización) -->
-<button
-  class="settings-btn"
-  type="button"
-  aria-label="Abrir ajustes"
-  title="Ajustes de colores y visualización"
-  on:click={() => { showSettings = !showSettings; }}
->
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-    <circle cx="12" cy="5" r="2"></circle>
-    <circle cx="12" cy="12" r="2"></circle>
-    <circle cx="12" cy="19" r="2"></circle>
-  </svg>
-</button>
-
-
-<!-- Botón para ir a mi ubicación (abajo derecha) -->
-<button
-  class="locate-btn"
-  type="button"
-  aria-label="Ir a mi ubicación"
-  title="Ir a mi ubicación"
-  on:click={locateMe}
-  on:touchend|preventDefault={locateMe}
->
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-    <circle cx="12" cy="10" r="3"></circle>
-  </svg>
-</button>
-<span class="sr-only">Ir a mi ubicación</span>
-
 <BottomSheet
   state={SHEET_STATE}
   y={sheetY}
@@ -3158,14 +3289,22 @@ poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3 - 3x más
   {publishedAtByOption}
   {navigationManager}
   {currentAltitude}
+  {additionalPolls}
   onToggleDropdown={toggleDropdown}
-  showSearch={showSearch}
-  tagQuery={tagQuery}
+  bind:showSearch
+  bind:tagQuery
   onToggleSearch={() => showSearch = !showSearch}
   onPointerDown={onSheetPointerDown}
   onScroll={onSheetScroll}
   onNavigateToView={navigateToView}
   onVote={handleVote}
+  onLoadMorePolls={loadMorePolls}
+  onLocateMe={locateMe}
+  onToggleSettings={() => { showSettings = !showSettings; }}
+  on:requestExpand={() => {
+    SHEET_STATE = 'expanded';
+    try { sheetCtrl?.setState('expanded'); } catch {}
+  }}
   on:close={() => {
     SHEET_STATE = 'hidden';
   }}

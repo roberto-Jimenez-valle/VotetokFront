@@ -26,6 +26,8 @@ export class BottomSheetController {
   private gestureDirectionLocked = false;
   private isVerticalGesture = false;
   private hasMoved = false; // Para distinguir click de arrastre
+  private scrollContainerAtStart: Element | null = null; // Guardar el scroll container
+  private wasAtTopAtStart = false; // Si estaba en top al iniciar
 
   state: SheetState = 'hidden';
   y = 10000; // offscreen initial
@@ -61,10 +63,37 @@ export class BottomSheetController {
   }
 
   pointerDown(e: PointerEvent | TouchEvent) {
+    console.log('[BottomSheet] pointerDown called');
     // Ignore if target is inside an interactive element
     try {
       const t = (e as any).target as Element | null;
+      console.log('[BottomSheet] target element:', (t as any)?.className, 'tagName:', (t as any)?.tagName);
       if (t && (t as any).closest) {
+        // PRIORIDAD MÁXIMA: .main-scroll-container - verificar PRIMERO antes que todo
+        const mainScrollContainer = (t as any).closest('.main-scroll-container');
+        console.log('[BottomSheet] mainScrollContainer found:', !!mainScrollContainer);
+        if (mainScrollContainer) {
+          const scrollTop = mainScrollContainer.scrollTop || 0;
+          const isAtTop = scrollTop <= 0;
+          
+          // Guardar referencia al scroll container y estado
+          this.scrollContainerAtStart = mainScrollContainer;
+          this.wasAtTopAtStart = isAtTop;
+          
+          // Si está en el top, permitir que continúe para detectar dirección del arrastre
+          // Si arrastra hacia abajo, cerrará el sheet; si arrastra hacia arriba, hará scroll
+          if (isAtTop) {
+            console.log('[BottomSheet] 📍 At scroll top (scrollTop=' + scrollTop + ') - will detect drag direction');
+            // NO retornar, permitir que continúe y la detección de dirección decida
+          } else {
+            // Si NO está en el top, permitir scroll nativo
+            console.log('[BottomSheet] ✅ SCROLL ALLOWED - inside main-scroll-container (scrollTop=' + scrollTop + ', not at top)');
+            this.scrollContainerAtStart = null;
+            this.wasAtTopAtStart = false;
+            return;
+          }
+        }
+        
         // Caso especial: .nav-minimal y .nav-chip permiten arrastre
         // La detección de dirección decidirá si es click o arrastre
         const navMinimal = (t as any).closest('.nav-minimal');
@@ -77,13 +106,9 @@ export class BottomSheetController {
         // Lista de selectores de elementos interactivos que NO deben iniciar arrastre
         const interactiveSelectors = [
           '.sheet-close',
-          'button:not(.vote-card button):not(.nav-chip)', // Botones excepto vote-card y nav-chip
-          'a',
           'input',
           'textarea',
-          'select',
-          '[role="button"]:not(.nav-chip)',
-          '[tabindex]:not(.nav-chip)'
+          'select'
         ];
         
         for (const selector of interactiveSelectors) {
@@ -92,9 +117,6 @@ export class BottomSheetController {
             return;
           }
         }
-        
-        // IMPORTANTE: Las vote-card ahora SÍ permiten arrastre
-        // La detección de dirección decidirá si es click o arrastre
         
         // Caso especial: permitir arrastre desde .sheet-content solo si tiene scroll
         // y el usuario no está intentando hacer scroll
@@ -113,10 +135,10 @@ export class BottomSheetController {
           }
         }
         
-        // Caso especial: .vote-cards-grid y .vote-cards-section
+        // Caso especial: .vote-cards-grid y .vote-cards-section (solo la principal, no las de polls)
         // Permitir arrastre, pero la detección de dirección decidirá si procesar
         const voteCardsArea = (t as any).closest('.vote-cards-grid, .vote-cards-section');
-        if (voteCardsArea) {
+        if (voteCardsArea && !voteCardInPolls) {
           console.log('[BottomSheet] Starting drag from vote cards area - direction detection will decide');
           // No retornar aquí, permitir que continúe y la detección de dirección decida
         }
@@ -139,10 +161,11 @@ export class BottomSheetController {
     this.isVerticalGesture = false;
     this.hasMoved = false;
     
+    // IMPORTANTE: usar passive: false para poder preventDefault si es necesario
     window.addEventListener('pointermove', this._onMove as any, { passive: false } as any);
-    window.addEventListener('pointerup', this._onUp as any, { passive: true } as any);
+    window.addEventListener('pointerup', this._onUp as any, { passive: false } as any);
     window.addEventListener('touchmove', this._onMove as any, { passive: false } as any);
-    window.addEventListener('touchend', this._onUp as any, { passive: true } as any);
+    window.addEventListener('touchend', this._onUp as any, { passive: false } as any);
   }
 
   private _onMove = (e: PointerEvent | TouchEvent) => {
@@ -163,6 +186,38 @@ export class BottomSheetController {
         // Si el movimiento vertical es mayor que el horizontal, es un gesto vertical
         // Usar un ratio más estricto para móvil: dy debe ser al menos 1.2x mayor que dx
         this.isVerticalGesture = dy > dx * 1.2;
+        
+        // Detectar si es arrastre hacia arriba o hacia abajo
+        const deltaY = y - this.dragStartY;
+        const isDraggingDown = deltaY > 0;
+        const isDraggingUp = deltaY < 0;
+        
+        // Si estamos en scroll container en el top y arrastramos hacia arriba, cancelar arrastre del sheet
+        console.log('[BottomSheet] Check scroll behavior:', {
+          hasScrollContainer: !!this.scrollContainerAtStart,
+          wasAtTop: this.wasAtTopAtStart,
+          isDraggingUp,
+          isDraggingDown,
+          isVertical: this.isVerticalGesture,
+          deltaY
+        });
+        
+        if (this.scrollContainerAtStart && this.wasAtTopAtStart) {
+          if (isDraggingUp && this.isVerticalGesture) {
+            // En el top arrastrando hacia arriba = scroll, NO arrastre del sheet
+            console.log('[BottomSheet] 🔼 At top, dragging UP - allowing scroll, canceling sheet drag');
+            this.isDragging = false;
+            this.gestureDirectionLocked = false;
+            this.isVerticalGesture = false;
+            this.hasMoved = false;
+            this.scrollContainerAtStart = null;
+            this.wasAtTopAtStart = false;
+            return;
+          } else if (isDraggingDown && this.isVerticalGesture) {
+            // En el top arrastrando hacia abajo = cerrar sheet
+            console.log('[BottomSheet] 🔽 At top, dragging DOWN - closing sheet');
+          }
+        }
         
         console.log('[BottomSheet] Gesture direction locked:', 
           this.isVerticalGesture ? 'VERTICAL' : 'HORIZONTAL',
@@ -246,6 +301,8 @@ export class BottomSheetController {
     this.gestureDirectionLocked = false;
     this.isVerticalGesture = false;
     this.hasMoved = false;
+    this.scrollContainerAtStart = null;
+    this.wasAtTopAtStart = false;
 
     // Todos los setState después del arrastre deben usar transición suave
     if (this.y >= containerH * 0.95) {

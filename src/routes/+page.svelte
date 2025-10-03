@@ -82,7 +82,7 @@
 
 	<!-- Contenido por encima del globo -->
 	<div class="relative">
-		<Header users={topUsers} />
+		<Header  />
 		<div class="w-full flex flex-col">
 			
 		</div>
