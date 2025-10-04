@@ -1978,6 +1978,36 @@ header h1 {
   margin-left: auto;
 }
 
+/* Botón de globo con efecto especial */
+.action-globe {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.action-globe:hover {
+  color: #60a5fa !important;
+  transform: scale(1.1);
+}
+
+.action-globe svg {
+  transition: all 0.3s ease;
+}
+
+.action-globe:hover svg {
+  stroke: #60a5fa;
+  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.6));
+  animation: globe-spin 2s linear infinite;
+}
+
+@keyframes globe-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .stat-badge {
   display: flex;
   align-items: center;

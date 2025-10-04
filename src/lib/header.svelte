@@ -9,8 +9,23 @@
     users: User[];
   };
 
+  type PollOption = {
+    key: string;
+    color: string;
+    avatar?: string;
+  };
+
+  // Props from parent
+  let { pollTitle = '', pollOptions = [], isWorldView = true } = $props<{
+    pollTitle?: string;
+    pollOptions?: PollOption[];
+    isWorldView?: boolean;
+  }>();
+  
+
   let users = $state<User[]>([]);
   let selectedUser = $state<User | null>(null);
+  let selectedOption = $state<PollOption | null>(null);
 
   onMount(async () => {
     try {
@@ -45,6 +60,14 @@
     selectedUser = null;
   }
 
+  function handleOptionClick(option: PollOption) {
+    selectedOption = option;
+  }
+
+  function closeOptionModal() {
+    selectedOption = null;
+  }
+
 </script>
 
 {#if !expandedPoll}
@@ -59,34 +82,68 @@
 			class:opacity-0={hidden}
 			class:opacity-100={!hidden}
 		>
-			<div class="flex items-center h-10 sm:h-12 w-full">
-				<h1 class="text-2xl sm:text-4xl font-extrabold tracking-tight">VoteTok</h1>
+			<div class="flex items-center h-8 sm:h-10 w-full">
+				<h1 class="text-xl sm:text-3xl font-extrabold tracking-tight">VoteTok</h1>
 			</div>
 		</div>
 
-		<!-- Avatares de usuarios destacados - fuera del contenedor con overflow -->
-		{#if users.length > 0 && !hidden}
-		<div class="avatars-scroll-wrapper">
-			<div class="avatars-scroll-container">
-				<div class="avatars-inner-container">
-					{#each users as user, i}
-						<button 
-							class="avatar-lg clickable" 
-							style="z-index: {users.length - i};"
-							onclick={() => handleAvatarClick(user)}
-							title={user.name}
-						>
-							<img 
-								src={user.avatar} 
-								alt={user.name}
-								loading="lazy"
-								style="width: 100%; height: 100%; object-fit: cover; border-radius: 999px;"
-							/>
-						</button>
-					{/each}
-				</div>
-			</div>
+		<!-- Poll title when not in world view -->
+		{#if !isWorldView && pollTitle && !hidden}
+		<div class="poll-title-container">
+			<h2 class="poll-title">{pollTitle}</h2>
 		</div>
+		{/if}
+
+
+		<!-- Poll options when not in world view, or user avatars when in world view -->
+		{#if !hidden}
+			{#if !isWorldView && pollOptions.length > 0}
+				<!-- Poll Options -->
+				<div class="avatars-scroll-wrapper">
+					<div class="avatars-scroll-container">
+						<div class="avatars-inner-container">
+							{#each pollOptions as option, i}
+								<button 
+									class="avatar-lg clickable poll-option" 
+									style="z-index: {pollOptions.length - i}; border-color: {option.color};"
+									onclick={() => handleOptionClick(option)}
+									title={option.key}
+								>
+									<img 
+										src={option.avatar || `https://i.pravatar.cc/48?u=${encodeURIComponent(option.key)}`} 
+										alt={option.key}
+										loading="lazy"
+										style="width: 100%; height: 100%; object-fit: cover; border-radius: 999px;"
+									/>
+								</button>
+							{/each}
+						</div>
+					</div>
+				</div>
+			{:else if isWorldView && users.length > 0}
+				<!-- User Avatars (Stories) -->
+				<div class="avatars-scroll-wrapper">
+					<div class="avatars-scroll-container">
+						<div class="avatars-inner-container">
+							{#each users as user, i}
+								<button 
+									class="avatar-lg clickable" 
+									style="z-index: {users.length - i};"
+									onclick={() => handleAvatarClick(user)}
+									title={user.name}
+								>
+									<img 
+										src={user.avatar} 
+										alt={user.name}
+										loading="lazy"
+										style="width: 100%; height: 100%; object-fit: cover; border-radius: 999px;"
+									/>
+								</button>
+							{/each}
+						</div>
+					</div>
+				</div>
+			{/if}
 		{/if}
 	</div>
 </header>
@@ -101,14 +158,56 @@
 	tabindex="0"
 	onkeydown={(e) => e.key === 'Escape' && closeModal()}
 >
-	<div class="avatar-modal-content" onclick={(e) => e.stopPropagation()}>
+	<div 
+		class="avatar-modal-content" 
+		onclick={(e) => e.stopPropagation()}
+		onkeydown={(e) => e.stopPropagation()}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="user-modal-title"
+		tabindex="-1"
+	>
 		<button class="avatar-modal-close" onclick={closeModal}>×</button>
 		<img 
 			src={selectedUser.avatar} 
 			alt={selectedUser.name}
 			class="avatar-modal-image"
 		/>
-		<h3 class="avatar-modal-name">{selectedUser.name}</h3>
+		<h3 id="user-modal-title" class="avatar-modal-name">{selectedUser.name}</h3>
+	</div>
+</div>
+{/if}
+
+<!-- Modal de opción de encuesta -->
+{#if selectedOption}
+<div 
+	class="avatar-modal-overlay" 
+	onclick={closeOptionModal}
+	role="button"
+	tabindex="0"
+	onkeydown={(e) => e.key === 'Escape' && closeOptionModal()}
+>
+	<div 
+		class="avatar-modal-content option-modal" 
+		onclick={(e) => e.stopPropagation()}
+		onkeydown={(e) => e.stopPropagation()}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="option-modal-title"
+		tabindex="-1"
+	>
+		<button class="avatar-modal-close" onclick={closeOptionModal}>×</button>
+		<div 
+			class="option-modal-circle"
+			style="border-color: {selectedOption.color}; box-shadow: 0 0 30px {selectedOption.color}40;"
+		>
+			<img 
+				src={selectedOption.avatar || `https://i.pravatar.cc/150?u=${encodeURIComponent(selectedOption.key)}`} 
+				alt={selectedOption.key}
+				class="avatar-modal-image"
+			/>
+		</div>
+		<h3 id="option-modal-title" class="avatar-modal-name">{selectedOption.key}</h3>
 	</div>
 </div>
 {/if}
@@ -116,8 +215,8 @@
 <style>
 	.avatars-scroll-wrapper {
 		width: 100%;
-		margin-top: 16px; /* Más margen top */
-		padding-bottom: 8px;
+		margin-top: 8px; /* Reducido para ocupar menos espacio */
+		padding-bottom: 6px;
 		position: relative;
 		/* CRÍTICO para móvil: permitir scroll horizontal */
 		touch-action: pan-x;
@@ -193,6 +292,63 @@
 	
 	.avatar-lg.clickable:active {
 		transform: scale(1.05);
+	}
+	
+	/* Poll option specific styles */
+	.avatar-lg.poll-option {
+		border-width: 3px;
+		transition: transform 0.2s ease, box-shadow 0.2s ease, border-width 0.2s ease;
+	}
+	
+	.avatar-lg.poll-option:hover {
+		border-width: 4px;
+	}
+	
+	/* Poll title styles */
+	.poll-title-container {
+		width: 100%;
+		padding: 0 12px;
+		margin-top: 4px;
+		max-height: 32px;
+		overflow: hidden;
+	}
+	
+	.poll-title {
+		font-size: 14px;
+		font-weight: 600;
+		color: white;
+		text-align: center;
+		text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		animation: fadeInTitle 0.3s ease;
+		/* Truncate long text */
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		line-height: 1.4;
+	}
+	
+	@keyframes fadeInTitle {
+		from {
+			opacity: 0;
+			transform: translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+	
+	/* Option modal specific styles */
+	.option-modal-circle {
+		width: 220px;
+		height: 220px;
+		border-radius: 50%;
+		border: 5px solid;
+		padding: 10px;
+		margin: 0 auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 	
 	.avatar-modal-overlay {

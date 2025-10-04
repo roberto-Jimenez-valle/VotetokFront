@@ -125,12 +125,6 @@
   
   // Navegar a vista de gráfico (página -1)
   function goToChartView(pollId: string) {
-    // Resetear estado de brush al entrar
-    isBrushing = false;
-    chartBrushStart = null;
-    chartBrushCurrent = null;
-    chartHoverData = null;
-    
     transitionDirectionByPoll[pollId] = 'prev';
     currentPageByPoll[pollId] = -1;
     activeAccordionByPoll[pollId] = null;
@@ -138,12 +132,6 @@
   
   // Volver desde vista de gráfico
   function exitChartView(pollId: string) {
-    // Resetear estado de brush al salir
-    isBrushing = false;
-    chartBrushStart = null;
-    chartBrushCurrent = null;
-    chartHoverData = null;
-    
     transitionDirectionByPoll[pollId] = 'next';
     currentPageByPoll[pollId] = 0;
     activeAccordionByPoll[pollId] = 0;
@@ -183,11 +171,7 @@
 
   // Helper para manejar inicio de brush (touch/mouse)
   function handleChartBrushStart(event: MouseEvent | TouchEvent, chartElement: SVGElement) {
-    // Detener propagación para evitar que active el drag del grid
-    event.stopPropagation();
-    if (event.cancelable) {
-      event.preventDefault();
-    }
+    event.preventDefault();
     const rect = chartElement.getBoundingClientRect();
     const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
     const x = clientX - rect.left;
@@ -197,12 +181,6 @@
       isBrushing = true;
       chartBrushStart = relativeX * 300;
       chartBrushCurrent = relativeX * 300;
-      
-      // Agregar listeners globales para capturar touchend fuera del SVG
-      if ('touches' in event) {
-        document.addEventListener('touchend', handleChartBrushEnd, { once: true });
-        document.addEventListener('touchcancel', handleChartBrushEnd, { once: true });
-      }
       
       // Actualizar datos del hover
       const dataIndex = Math.round(relativeX * (historicalData.length - 1));
@@ -222,8 +200,7 @@
   function handleChartBrushMove(event: MouseEvent | TouchEvent, chartElement: SVGElement) {
     if (!isBrushing) return;
     
-    // No intentar preventDefault en eventos táctiles (son pasivos por defecto)
-    // El brush funciona correctamente sin prevenir el scroll
+    event.preventDefault();
     const rect = chartElement.getBoundingClientRect();
     const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
     const x = clientX - rect.left;
@@ -252,10 +229,6 @@
     chartBrushStart = null;
     chartBrushCurrent = null;
     chartHoverData = null;
-    
-    // Remover listeners globales si existen
-    document.removeEventListener('touchend', handleChartBrushEnd);
-    document.removeEventListener('touchcancel', handleChartBrushEnd);
   }
 
   // Helper para formatear fecha según rango
@@ -339,12 +312,6 @@
   }
   
   function nextPageForPoll(pollId: string) {
-    // Resetear brush al cambiar de página
-    isBrushing = false;
-    chartBrushStart = null;
-    chartBrushCurrent = null;
-    chartHoverData = null;
-    
     transitionDirectionByPoll[pollId] = 'next';
     currentPageByPoll[pollId] = (currentPageByPoll[pollId] || 0) + 1;
     activeAccordionByPoll[pollId] = null;
@@ -354,12 +321,6 @@
   function prevPageForPoll(pollId: string) {
     const current = currentPageByPoll[pollId] || 0;
     if (current > 0) {
-      // Resetear brush al cambiar de página
-      isBrushing = false;
-      chartBrushStart = null;
-      chartBrushCurrent = null;
-      chartHoverData = null;
-      
       transitionDirectionByPoll[pollId] = 'prev';
       currentPageByPoll[pollId] = current - 1;
       // Abrir la última opción de la página anterior
@@ -414,7 +375,6 @@
   // Variables para detectar gestos de arrastre horizontal
   let touchStartX = 0;
   let touchStartY = 0;
-  let touchStartTime = 0;
   let isDragging = false;
   let currentDragGrid: HTMLElement | null = null;
   let currentDragPollId: string | null = null;
@@ -426,20 +386,6 @@
       return; // Ignorar eventos de mouse en ordenador
     }
     
-    // Verificar si el touch empezó en un elemento del gráfico (SVG)
-    const target = e.target as HTMLElement;
-    if (target.closest('.vote-chart-container') || target.closest('svg.vote-chart')) {
-      return; // Si tocaste el gráfico, NO permitir drag - solo brush
-    }
-    
-    // Si estamos en vista de gráfico (página -1), NO permitir drag del grid
-    if (pollId) {
-      const currentPage = currentPageByPoll[pollId] || 0;
-      if (currentPage === -1) {
-        return; // En gráfico, solo brush - NO drag de navegación
-      }
-    }
-    
     // No permitir arrastre en grids con muchas opciones (dense) - usan scroll nativo
     const grid = e.currentTarget as HTMLElement;
     if (grid && grid.classList.contains('dense')) {
@@ -449,7 +395,6 @@
     const touch = 'touches' in e ? e.touches[0] : e;
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
-    touchStartTime = Date.now();
     isDragging = false;
     // Usar el currentTarget del evento
     currentDragGrid = grid;
@@ -471,7 +416,7 @@
       isDragging = true;
       
       // No prevenir el scroll en grids con clase 'dense' (muchas opciones)
-      if (!currentDragGrid.classList.contains('dense') && e.cancelable) {
+      if (!currentDragGrid.classList.contains('dense')) {
         e.preventDefault();
       }
       
@@ -524,22 +469,14 @@
           if (currentDragPollId) {
             const currentPage = currentPageByPoll[currentDragPollId] || 0;
             if (currentPage === -1) {
-              // En vista gráfico, NO permitir cambio si está haciendo brush
-              if (isBrushing) {
-                return; // Ignorar cambio de página durante brush
-              }
-              // Requiere swipe largo Y rápido para salir
-              const swipeDuration = Date.now() - touchStartTime;
-              const swipeVelocity = Math.abs(deltaX) / swipeDuration; // px/ms
-              if (Math.abs(deltaX) > 120 && swipeVelocity > 1.0) {
+              // En vista gráfico, requiere swipe más largo para salir (evitar conflicto con brush)
+              if (Math.abs(deltaX) > 150) {
                 exitChartView(currentDragPollId);
                 touchStartX = touch.clientX;
               }
             } else if (currentPage === 0) {
-              // Primera página, ir a vista gráfico (swipe largo y rápido)
-              const swipeDuration = Date.now() - touchStartTime;
-              const swipeVelocity = Math.abs(deltaX) / swipeDuration; // px/ms
-              if (Math.abs(deltaX) > 100 && swipeVelocity > 1.0) {
+              // Primera página, ir a vista gráfico (requiere swipe largo)
+              if (Math.abs(deltaX) > 100) {
                 goToChartView(currentDragPollId);
                 touchStartX = touch.clientX;
               }
@@ -669,16 +606,16 @@
   // Amigos que han votado por opción (opcional)
   export let friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
   // Visitas por opción (opcional)
-  export let visitsByOption: Record<string, number> = {};
+  export const visitsByOption: Record<string, number> = {};
   // Creador de la publicación por opción (opcional)
   export let creatorsByOption: Record<string, { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean }> = {};
   // Fecha de publicación por opción (opcional)
-  export let publishedAtByOption: Record<string, string | Date> = {};
+  export const publishedAtByOption: Record<string, string | Date> = {};
 
   // Handlers de acciones (opcionales)
-  export let onSaveOption: (optionKey: string) => void = () => {};
-  export let onShareOption: (optionKey: string) => void = () => {};
-  export let onMoreOption: (optionKey: string) => void = () => {};
+  export const onSaveOption: (optionKey: string) => void = () => {};
+  export const onShareOption: (optionKey: string) => void = () => {};
+  export const onMoreOption: (optionKey: string) => void = () => {};
   export let onPointerDown: (e: PointerEvent | TouchEvent) => void = () => {};
   export let onScroll: (e: Event) => void = () => {};
   export const navigationManager: any = null; // Used by parent component
@@ -839,7 +776,34 @@
     window.dispatchEvent(event);
   }
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    openPollInGlobe: { poll: Poll | null; options: Array<{ key: string; label: string; color: string; votes: number }> };
+    vote: { option: string; pollId?: string };
+    requestExpand: void;
+  }>();
+  
+  // Función para abrir la encuesta principal en el globo
+  function openMainPollInGlobe() {
+    console.log('[BottomSheet] Opening main poll in globe with options:', displayOptions);
+    dispatch('openPollInGlobe', { 
+      poll: null, // null indica encuesta principal
+      options: displayOptions.map(opt => ({
+        key: opt.key,
+        label: opt.label,
+        color: opt.color,
+        votes: opt.pct // Usar el porcentaje como votos
+      }))
+    });
+  }
+  
+  // Función para abrir una encuesta adicional en el globo
+  function openAdditionalPollInGlobe(poll: Poll) {
+    console.log('[BottomSheet] Opening additional poll in globe:', poll.id, poll.options);
+    dispatch('openPollInGlobe', { 
+      poll: poll,
+      options: poll.options
+    });
+  }
   
   // Estado de pantalla completa
   let fullscreenActive = false;
@@ -1458,16 +1422,21 @@
               {#if paginatedMainOptions.items.length === 1}
                 <!-- Gráfico para encuestas de una sola opción -->
                 <div class="vote-chart-container">
+                  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                   <svg 
                     class="vote-chart" 
                     viewBox="0 0 300 150" 
                     preserveAspectRatio="none"
-                    onmousedown="{(e) => handleChartBrushStart(e, e.currentTarget)}"
-                    onmousemove="{(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}"
-                    onmouseup="{handleChartBrushEnd}"
-                    onmouseleave="{() => { handleChartBrushEnd(); handleChartMouseLeave(); }}"
-                    ontouchstart="{(e) => handleChartBrushStart(e, e.currentTarget)}"
-                    ontouchmove="{(e) => handleChartBrushMove(e, e.currentTarget)}"
+                    role="application"
+                    aria-label="Gráfico interactivo de tendencia de votos. Use el mouse o toque para seleccionar un rango de fechas."
+                    tabindex="0"
+                    onmousedown={(e) => handleChartBrushStart(e, e.currentTarget)}
+                    onmousemove={(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}
+                    onmouseup={handleChartBrushEnd}
+                    onmouseleave={() => { handleChartBrushEnd(); handleChartMouseLeave(); }}
+                    ontouchstart={(e) => handleChartBrushStart(e, e.currentTarget)}
+                    ontouchmove={(e) => handleChartBrushMove(e, e.currentTarget)}
                     ontouchend="{handleChartBrushEnd}"
                     ontouchcancel="{handleChartBrushEnd}"
                   >
@@ -1557,8 +1526,9 @@
                     {#each timeRanges as range}
                       <div
                         class="time-range-btn"
-                        class:active="{selectedTimeRange === range.id}"
-                        onclick="{(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}"
+                        class:active={selectedTimeRange === range.id}
+                        onclick={(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}
+                        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); selectedTimeRange = range.id; }}}
                         role="button"
                         tabindex="0"
                       >
@@ -1676,11 +1646,17 @@
             </svg>
             <span>{formatNumber(Math.floor(Math.random() * 20) + 2)}</span>
           </button>
-          <button class="action-badge" type="button" title="Información">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <button 
+            class="action-badge action-globe" 
+            type="button" 
+            title="Ver en el globo"
+            aria-label="Ver en el globo"
+            onclick={() => openMainPollInGlobe()}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="16" x2="12" y2="12"/>
-              <line x1="12" y1="8" x2="12.01" y2="8"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
             </svg>
           </button>
         </div>
@@ -1807,18 +1783,23 @@
                   <!-- Contenido principal: gráfico combinado -->
                   <div class="card-content">
                     <div class="vote-chart-container">
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
                       <svg 
                         class="vote-chart" 
                         viewBox="0 0 300 150" 
                         preserveAspectRatio="none"
-                        onmousedown="{(e) => handleChartBrushStart(e, e.currentTarget)}"
-                        onmousemove="{(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}"
-                        onmouseup="{handleChartBrushEnd}"
-                        onmouseleave="{() => { handleChartBrushEnd(); handleChartMouseLeave(); }}"
-                        ontouchstart="{(e) => handleChartBrushStart(e, e.currentTarget)}"
-                        ontouchmove="{(e) => handleChartBrushMove(e, e.currentTarget)}"
-                        ontouchend="{handleChartBrushEnd}"
-                        ontouchcancel="{handleChartBrushEnd}"
+                        role="application"
+                        aria-label="Gráfico de tendencia de votos interactivo"
+                        tabindex="0"
+                        onmousedown={(e) => handleChartBrushStart(e, e.currentTarget)}
+                        onmousemove={(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}
+                        onmouseup={handleChartBrushEnd}
+                        onmouseleave={() => { handleChartBrushEnd(); handleChartMouseLeave(); }}
+                        ontouchstart={(e) => handleChartBrushStart(e, e.currentTarget)}
+                        ontouchmove={(e) => handleChartBrushMove(e, e.currentTarget)}
+                        ontouchend={handleChartBrushEnd}
+                        ontouchcancel={handleChartBrushEnd}
                       >
                         <!-- Renderizar línea para cada opción -->
                         {#each sortedPollOptions as opt}
@@ -1874,12 +1855,12 @@
                       {#if chartHoverData}
                         {@const allVotes = sortedPollOptions.map(opt => {
                           const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct);
-                          const dataIndex = Math.round((chartHoverData.x / 300) * (optData.length - 1));
+                          const dataIndex = Math.round((chartHoverData!.x / 300) * (optData.length - 1));
                           return optData[dataIndex]?.votes || 0;
                         }).reduce((sum, votes) => sum + votes, 0)}
                         <div class="chart-tooltip">
                           <div class="tooltip-header">
-                            <div class="tooltip-date">{formatChartDate(chartHoverData.date, selectedTimeRange)}</div>
+                            <div class="tooltip-date">{formatChartDate(chartHoverData!.date, selectedTimeRange)}</div>
                             <div class="tooltip-total">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
                                 <path d="M9 11l3 3L22 4"></path>
@@ -1890,7 +1871,7 @@
                           </div>
                           {#each sortedPollOptions as opt}
                             {@const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct)}
-                            {@const dataIndex = Math.round((chartHoverData.x / 300) * (optData.length - 1))}
+                            {@const dataIndex = Math.round((chartHoverData!.x / 300) * (optData.length - 1))}
                             {@const dataPoint = optData[dataIndex]}
                             {#if dataPoint}
                               <div class="tooltip-row">
@@ -1909,8 +1890,9 @@
                         {#each timeRanges as range}
                           <div
                             class="time-range-btn"
-                            class:active="{selectedTimeRange === range.id}"
-                            onclick="{(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}"
+                            class:active={selectedTimeRange === range.id}
+                            onclick={(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}
+                            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); selectedTimeRange = range.id; }}}
                             role="button"
                             tabindex="0"
                           >
@@ -1954,18 +1936,23 @@
                   {#if paginatedPoll.items.length === 1}
                     <!-- Gráfico para encuestas de una sola opción -->
                     <div class="vote-chart-container">
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
                       <svg 
                         class="vote-chart" 
                         viewBox="0 0 300 150" 
                         preserveAspectRatio="none"
-                        onmousedown="{(e) => handleChartBrushStart(e, e.currentTarget)}"
-                        onmousemove="{(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}"
-                        onmouseup="{handleChartBrushEnd}"
-                        onmouseleave="{() => { handleChartBrushEnd(); handleChartMouseLeave(); }}"
-                        ontouchstart="{(e) => handleChartBrushStart(e, e.currentTarget)}"
-                        ontouchmove="{(e) => handleChartBrushMove(e, e.currentTarget)}"
-                        ontouchend="{handleChartBrushEnd}"
-                        ontouchcancel="{handleChartBrushEnd}"
+                        role="application"
+                        aria-label="Gráfico de tendencia de votos interactivo"
+                        tabindex="0"
+                        onmousedown={(e) => handleChartBrushStart(e, e.currentTarget)}
+                        onmousemove={(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}
+                        onmouseup={handleChartBrushEnd}
+                        onmouseleave={() => { handleChartBrushEnd(); handleChartMouseLeave(); }}
+                        ontouchstart={(e) => handleChartBrushStart(e, e.currentTarget)}
+                        ontouchmove={(e) => handleChartBrushMove(e, e.currentTarget)}
+                        ontouchend={handleChartBrushEnd}
+                        ontouchcancel={handleChartBrushEnd}
                       >
                         <defs>
                           <linearGradient id="chartGradient-{poll.id}" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -2053,8 +2040,9 @@
                         {#each timeRanges as range}
                           <div
                             class="time-range-btn"
-                            class:active="{selectedTimeRange === range.id}"
-                            onclick="{(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}"
+                            class:active={selectedTimeRange === range.id}
+                            onclick={(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}
+                            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); selectedTimeRange = range.id; }}}
                             role="button"
                             tabindex="0"
                           >
@@ -2130,16 +2118,16 @@
               <div class="vote-stats">
                 <button 
                   class="stat-badge" 
-                  class:active="{(currentPageByPoll[poll.id] || 0) === -1}"
+                  class:active={(currentPageByPoll[poll.id] || 0) === -1}
                   type="button" 
-                  title="{(currentPageByPoll[poll.id] || 0) === -1 ? 'Vista opciones' : 'Vista gráfico'}"
-                  onclick="{() => { 
+                  title={(currentPageByPoll[poll.id] || 0) === -1 ? 'Vista opciones' : 'Vista gráfico'}
+                  onclick={() => { 
                     if ((currentPageByPoll[poll.id] || 0) === -1) {
                       exitChartView(poll.id);
                     } else {
                       goToChartView(poll.id);
                     }
-                  }}"
+                  }}
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     {#if (currentPageByPoll[poll.id] || 0) === -1}
@@ -2196,11 +2184,17 @@
                   </svg>
                   <span>{formatNumber(Math.floor(Math.random() * 20) + 2)}</span>
                 </button>
-                <button class="action-badge" type="button" title="Información">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <button 
+                  class="action-badge action-globe" 
+                  type="button" 
+                  title="Ver en el globo"
+                  aria-label="Ver en el globo"
+                  onclick={() => openAdditionalPollInGlobe(poll)}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="16" x2="12" y2="12"/>
-                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                   </svg>
                 </button>
               </div>

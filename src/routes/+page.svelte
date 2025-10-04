@@ -24,6 +24,12 @@
 	let currentAltitude = $state(0);
 	let bottomSheetVisible = $state(false);
 	
+	// Poll data for header
+	type PollOption = { key: string; color: string; avatar?: string };
+	let pollTitle = $state('');
+	let pollOptions = $state<PollOption[]>([]);
+	let isWorldView = $state(true);
+	
 	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {
 		const state = event.detail.state;
 		console.log('[NavControl] BottomSheet state changed to:', state);
@@ -36,6 +42,12 @@
 	
 	function handleAltitudeChange(event: CustomEvent<{ altitude: number }>) {
 		currentAltitude = event.detail.altitude;
+	}
+	
+	function handlePollData(event: CustomEvent<{ title: string; options: PollOption[]; isWorldView: boolean }>) {
+		pollTitle = event.detail.title;
+		pollOptions = event.detail.options;
+		isWorldView = event.detail.isWorldView;
 	}
 
 </script>
@@ -78,11 +90,19 @@
 
 <div class="min-h-screen text-white font-sans">
 	<!-- Globo de fondo a pantalla completa -->
-	<GlobeGL on:sheetstatechange={handleSheetStateChange} on:altitudechange={handleAltitudeChange} />
+	<GlobeGL 
+		on:sheetstatechange={handleSheetStateChange} 
+		on:altitudechange={handleAltitudeChange}
+		on:polldata={handlePollData}
+	/>
 
 	<!-- Contenido por encima del globo -->
 	<div class="relative">
-		<Header  />
+		<Header 
+			{pollTitle}
+			{pollOptions}
+			{isWorldView}
+		/>
 		<div class="w-full flex flex-col">
 			
 		</div>

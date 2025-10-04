@@ -616,7 +616,7 @@
     polygonsWithArea.sort((a, b) => b.area - a.area);
     
     // Determinar cuántas etiquetas mostrar según la altitud
-    // LÓGICA CORREGIDA: Cuanto MÁS CERCA (menor altitud), MÁS etiquetas
+    // NUEVO SISTEMA: Limitar etiquetas en zoom extremo para evitar saturación
     let maxLabels = polygons.length;
     let minAreaThreshold = 0; // Área mínima para mostrar etiqueta
     
@@ -633,11 +633,16 @@
         // Zoom cercano: 75% de las etiquetas
         maxLabels = Math.ceil(polygons.length * 0.75);
         minAreaThreshold = 0.02;
+      } else if (currentAltitude > 0.08) {
+        // Zoom muy cercano: 60% de las etiquetas para evitar saturación
+        maxLabels = Math.ceil(polygons.length * 0.6);
+        minAreaThreshold = 0.01;
+        console.log('[Labels] ✓ Very close zoom - limiting to 60% of labels');
       } else {
-        // Zoom MUY CERCANO (< 0.15): MOSTRAR TODAS LAS ETIQUETAS
-        maxLabels = polygons.length; // Todas las etiquetas
-        minAreaThreshold = 0; // Sin filtro de área mínima
-        console.log('[Labels] ✓ Very close zoom - showing ALL labels');
+        // Zoom EXTREMO: Solo 40% de las etiquetas más grandes
+        maxLabels = Math.ceil(polygons.length * 0.4);
+        minAreaThreshold = 0.005;
+        console.log('[Labels] ✓ Extreme zoom - limiting to 40% of labels to avoid saturation');
       }
     }
     
@@ -647,8 +652,10 @@
     const usedPositions: Array<{lat: number, lng: number}> = [];
     let minDistance = 0.2; // Distancia mínima en grados
     if (currentAltitude !== undefined) {
-      if (currentAltitude < 0.08) {
-        minDistance = 0.1; // Zoom extremo: etiquetas más juntas para mostrar más
+      if (currentAltitude < 0.05) {
+        minDistance = 0.25; // Zoom ULTRA extremo: más espacio entre etiquetas
+      } else if (currentAltitude < 0.08) {
+        minDistance = 0.2; // Zoom extremo: espacio moderado
       } else if (currentAltitude < 0.15) {
         minDistance = 0.15; // Zoom muy cercano: etiquetas cercanas
       } else if (currentAltitude < 0.3) {
@@ -695,8 +702,8 @@
         try {
           const centroid = centroidOf(poly);
           
-          // Verificar colisión con etiquetas existentes (en zoom cercano)
-          if (currentAltitude !== undefined && currentAltitude < 0.15 && minDistance > 0.2) {
+          // Verificar colisión con etiquetas existentes (SIEMPRE activo)
+          if (currentAltitude !== undefined && minDistance > 0) {
             let tooClose = false;
             for (const pos of usedPositions) {
               const dist = Math.sqrt(
@@ -714,22 +721,27 @@
           }
           
           // Calcular tamaño de fuente basado en área y altitud
+          // NUEVO SISTEMA: Cuanto más cerca, MÁS PEQUEÑO el texto para no saturar
           let fontSize = 11; // Tamaño base
-          const MIN_FONT_SIZE = 10; // Tamaño mínimo absoluto - no bajar más de esto
+          const MIN_FONT_SIZE = 7; // Tamaño mínimo reducido para zoom extremo
+          const MAX_FONT_SIZE = 13; // Tamaño máximo reducido
           
           if (currentAltitude !== undefined) {
-            if (currentAltitude > 0.4) {
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(14, 8 + Math.sqrt(area) * 0.5));
-            } else if (currentAltitude > 0.2) {
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(12, 8 + Math.sqrt(area) * 0.3));
-            } else if (currentAltitude < 0.06) {
-              // En zoom EXTREMO, mantener tamaño mínimo legible
-              fontSize = MIN_FONT_SIZE; // Tamaño fijo mínimo
-            } else if (currentAltitude < 0.1) {
-              // En zoom muy cercano, tamaño mínimo
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 8 + Math.sqrt(area) * 0.15));
+            if (currentAltitude > 0.5) {
+              // Zoom alejado: textos más grandes
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, 9 + Math.sqrt(area) * 0.4));
+            } else if (currentAltitude > 0.3) {
+              // Zoom medio: textos medianos
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 8 + Math.sqrt(area) * 0.25));
+            } else if (currentAltitude > 0.15) {
+              // Zoom cercano: textos más pequeños
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(10, 7 + Math.sqrt(area) * 0.15));
+            } else if (currentAltitude > 0.08) {
+              // Zoom muy cercano: textos pequeños
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(9, 6 + Math.sqrt(area) * 0.1));
             } else {
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 7 + Math.sqrt(area) * 0.2));
+              // Zoom EXTREMO: textos MUY pequeños para no saturar
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(8, 5 + Math.sqrt(area) * 0.08));
             }
           }
           
@@ -866,6 +878,17 @@
           subdivisionId: null,
           path: [iso]
         };
+        
+        // Sync with reactive navigationState
+        navigationState = { ...this.state };
+        
+        // Update selection variables
+        selectedCountryName = countryName;
+        selectedCountryIso = iso;
+        selectedSubdivisionName = null;
+        selectedSubdivisionId = null;
+        selectedCityName = null;
+        selectedCityId = null;
 
         // Update history
         this.history = [
@@ -908,6 +931,15 @@
           subdivisionId,
           path: [countryIso, subdivisionId]
         };
+        
+        // Sync with reactive navigationState
+        navigationState = { ...this.state };
+        
+        // Update selection variables
+        selectedSubdivisionName = subdivisionName;
+        selectedSubdivisionId = subdivisionId;
+        selectedCityName = null;
+        selectedCityId = null;
 
         // Update history
         this.history = [
@@ -933,6 +965,17 @@
         subdivisionId: null,
         path: []
       };
+      
+      // Sync with reactive navigationState
+      navigationState = { ...this.state };
+      
+      // Clear selection variables
+      selectedCountryName = null;
+      selectedCountryIso = null;
+      selectedSubdivisionName = null;
+      selectedSubdivisionId = null;
+      selectedCityName = null;
+      selectedCityId = null;
 
       this.history = [{ level: 'world', name: 'World' }];
 
@@ -1896,6 +1939,66 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
     console.log(`[Vote] Voto registrado para ${optionKey}. Nuevos totales:`, voteOptions);
   }
   
+  // Función para abrir una encuesta en el globo con sus opciones visualizadas
+  function handleOpenPollInGlobe(event: CustomEvent<{ poll: any; options: Array<{ key: string; label: string; color: string; votes: number }> }>) {
+    const { poll, options } = event.detail;
+    
+    console.log('[GlobeGL] Opening poll in globe:', poll?.id || 'main', 'with options:', options);
+    
+    // Generar marcadores geográficos para cada opción de la encuesta
+    // Distribuir las opciones proporcionalmente según sus votos por el mundo
+    const pollMarkers: VotePoint[] = [];
+    let markerId = 0;
+    
+    options.forEach((option, optionIndex) => {
+      const numMarkers = Math.max(5, Math.ceil((option.votes / 100) * 50)); // Escalar votos a cantidad de marcadores
+      
+      // Distribuir marcadores por el globo de forma semi-aleatoria pero equilibrada
+      for (let i = 0; i < numMarkers; i++) {
+        // Crear distribución geográfica balanceada
+        const lat = (Math.random() - 0.5) * 160; // -80 a 80 grados
+        const lng = ((optionIndex / options.length) * 360) + (Math.random() - 0.5) * 90 - 180; // Distribuir por longitud según opción
+        
+        pollMarkers.push({
+          id: `poll_marker_${poll?.id || 'main'}_${option.key}_${markerId++}`,
+          iso3: 'POLL', // Marcador especial de encuesta
+          lat,
+          lng,
+          tag: option.key
+        });
+      }
+    });
+    
+    // Actualizar los marcadores regionales con los datos de la encuesta
+    regionVotes = pollMarkers;
+    
+    // Hacer zoom out para mostrar vista global de la encuesta
+    if (globe) {
+      globe.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1000);
+    }
+    
+    // Minimizar el bottom sheet para ver mejor el globo
+    if (SHEET_STATE === 'expanded') {
+      SHEET_STATE = 'collapsed';
+      setSheetState('collapsed');
+    }
+    
+    console.log('[GlobeGL] Poll visualization created with', pollMarkers.length, 'markers');
+    
+    // Emit poll data to update header with poll-specific information
+    const pollOptions = options.map(option => ({
+      key: option.label || option.key,
+      color: option.color,
+      avatar: `https://i.pravatar.cc/48?u=${encodeURIComponent(option.key)}`
+    }));
+    
+    dispatch('polldata', {
+      title: poll?.question || poll?.title || 'Encuesta',
+      options: pollOptions,
+      isWorldView: false // Show as non-world view to display poll info
+    });
+  }
+  
   
   function onSheetScroll(e: Event) {
     if (SHEET_STATE !== 'expanded') return;
@@ -2511,6 +2614,40 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
   // GlobeCanvas actualiza materiales y colores de forma reactiva a través de sus props
   // Si cambia la etiqueta activa, GlobeCanvas actualiza via onPolyCapColor
 
+  // Emit poll data when navigation changes or data updates
+  $: {
+    const currentLevel = navigationState.level;
+    let pollTitle = '';
+    let pollOptions: Array<{ key: string; color: string; avatar?: string }> = [];
+    let isWorldView = currentLevel === 'world';
+    
+    if (currentLevel === 'world') {
+      pollTitle = 'Global Trends';
+    } else if (currentLevel === 'country' && selectedCountryName) {
+      pollTitle = selectedCountryName;
+    } else if (currentLevel === 'subdivision' && selectedSubdivisionName) {
+      pollTitle = selectedSubdivisionName;
+    }
+    
+    // Map legend items to poll options with avatars
+    if (legendItems.length > 0) {
+      pollOptions = legendItems.map(item => ({
+        key: item.key,
+        color: item.color,
+        avatar: `https://i.pravatar.cc/48?u=${encodeURIComponent(item.key)}`
+      }));
+    }
+    
+    // Only dispatch if we have valid data (either world view or specific region selected)
+    if (isWorldView || pollTitle) {
+      dispatch('polldata', { 
+        title: pollTitle, 
+        options: pollOptions, 
+        isWorldView 
+      });
+    }
+  }
+
   onMount(async () => {
     // Inicializar controlador de bottom sheet
     sheetCtrl = new BottomSheetController({
@@ -2842,10 +2979,6 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
         // Click on country from world view
         console.log('[Click] Country clicked from world:', iso, name);
         
-        // Set selected country info for bottom sheet
-        selectedCountryName = name;
-        selectedCountryIso = iso;
-        
         // Update country chart segments for bottom sheet
         const countryRecord = answersData?.[iso];
         if (countryRecord) {
@@ -2860,7 +2993,7 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
         const adaptiveAltitude = calculateAdaptiveZoom(feat);
         globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 700);
         
-        // Navigate using manager
+        // Navigate using manager (this will update selectedCountryName and selectedCountryIso)
         await navigationManager.navigateToCountry(iso, name);
         
       } else if (currentLevel === 'country' && feat.properties?.ID_1) {
@@ -2897,14 +3030,8 @@ console.log('[Navigation] Level 3 polygons elevated with _elevation: 0.05 (3x de
         const targetAlt = Math.min(adaptiveAltitude, 0.06); // Máximo 0.06 para activar elevaciones bajas
         globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: targetAlt }, 700);
         
-        // Navigate using manager
+        // Navigate using manager (this will update selectedSubdivisionName, selectedSubdivisionId, etc.)
         await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
-        
-        // Update selected subdivision name and ID for view buttons
-        selectedSubdivisionName = subdivisionName;
-        selectedSubdivisionId = subdivisionId;
-        // Limpiar ciudad seleccionada al cambiar de subdivisión
-        selectedCityId = null;
         
         // ELEVAR los polígonos del nivel 3 significativamente
         // Actualizar la elevación de los polígonos cargados
@@ -3311,6 +3438,7 @@ poly.properties._elevation = 0.05; // Elevación MUY alta para nivel 3 - 3x más
   on:vote={(e) => {
     console.log('[GlobeGL] Vote event received:', e.detail);
   }}
+  on:openPollInGlobe={handleOpenPollInGlobe}
 />
 
 <!-- Dropdown flotante renderizado fuera del BottomSheet -->
