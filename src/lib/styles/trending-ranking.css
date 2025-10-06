@@ -1,0 +1,257 @@
+/* ========================================
+   TRENDING RANKING - Estilo Spotify
+   ======================================== */
+
+.trending-ranking-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 0;
+  background: transparent;
+  margin-bottom: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Transiciones de página - Contenedor completo */
+.trending-transition-next {
+  animation: slideNext 0.3s ease-out;
+}
+
+.trending-transition-prev {
+  animation: slidePrev 0.3s ease-out;
+}
+
+@keyframes slideNext {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slidePrev {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.trending-rank-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: none;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  text-align: left;
+  min-height: 64px;
+  user-select: none;
+}
+
+/* Sin hover - No seleccionable */
+
+/* Sin estilos especiales para top 3 - todo uniforme como Spotify */
+.trending-rank-item.rank-1,
+.trending-rank-item.rank-2,
+.trending-rank-item.rank-3 {
+  background: transparent;
+  border: none;
+}
+
+/* Sin hover en top 3 */
+
+/* Avatar del creador - Estilo Spotify */
+.rank-avatar {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.rank-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rank-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Posición del ranking - Estilo Spotify (número + flecha) */
+.rank-position {
+  flex-shrink: 0;
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.rank-number {
+  font-size: 16px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Flechas de cambio de posición */
+.rank-change {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.rank-up {
+  color: #1db954;
+}
+
+.rank-down {
+  color: #e22134;
+}
+
+.rank-same {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 8px;
+}
+
+/* Contenido - Estilo Spotify */
+.rank-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rank-title {
+  font-size: 16px;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 1.5;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Sin subrayado al hover */
+
+.rank-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  flex-wrap: wrap;
+}
+
+.rank-author {
+  display: flex;
+  align-items: center;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.rank-separator {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.rank-votes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Botón de menú de 3 puntos - Siempre visible */
+.rank-menu-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  opacity: 1;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.rank-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.rank-menu-btn:active {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(0.95);
+}
+
+/* Responsive - Estilo Spotify */
+@media (max-width: 640px) {
+  .trending-ranking-container {
+    padding: 4px 0;
+  }
+
+  .trending-rank-item {
+    padding: 6px 12px;
+    gap: 12px;
+    min-height: 56px;
+  }
+
+  .rank-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .rank-position {
+    width: 20px;
+  }
+
+  .rank-number {
+    font-size: 14px;
+  }
+
+  .rank-title {
+    font-size: 14px;
+  }
+
+  .rank-meta {
+    font-size: 12px;
+  }
+}
+
+/* Sin animación de entrada individual - Solo transiciones de página */

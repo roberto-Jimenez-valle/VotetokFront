@@ -14,8 +14,7 @@
 				isFullscreen = true;
 				showFullscreenBtn = false;
 			}).catch((err) => {
-				console.log('Fullscreen error:', err);
-			});
+							});
 		} else {
 			document.exitFullscreen().then(() => {
 				isFullscreen = false;

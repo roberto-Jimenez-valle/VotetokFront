@@ -177,8 +177,7 @@
   export function refreshPolyLabels() {
     try {
       if (!world) return;
-      console.log('[RefreshLabels] Disabling polygon hover labels');
-      world.polygonLabel(() => ''); // Disable hover labels completely
+            world.polygonLabel(() => ''); // Disable hover labels completely
     } catch {}
   }
 
@@ -186,8 +185,7 @@
   export function setTextLabels(labels: any[]) {
     try {
       if (!world) return;
-      console.log('[TextLabels] Setting', labels.length, 'permanent text labels as HTML elements');
-      
+            
       // Use HTML elements for fixed geographic positioning
       if (labels.length > 0) {
         // Configure HTML elements for labels
@@ -236,8 +234,7 @@
           return el;
         });
         
-        console.log('[TextLabels] Using HTML elements for fixed positioning with LOD styling');
-      } else {
+              } else {
         // Clear labels
         world.htmlElementsData([]);
       }
@@ -274,16 +271,12 @@
       }
       return;
     }
-    console.log('[Globe] WebGL support confirmed');
-    
+        
     try {
-      console.log('[Globe] Initializing globe, Safari detected:', isSafari);
-      console.log('[Globe] Container element:', rootEl);
-      
+                  
       // Para Safari, usar inicialización más simple
       if (isSafari) {
-        console.log('[Globe] Using Safari compatibility mode');
-        // Esperar un frame antes de inicializar
+                // Esperar un frame antes de inicializar
         await new Promise(resolve => requestAnimationFrame(resolve));
         world = new Globe(rootEl!);
       } else {
@@ -294,23 +287,19 @@
         throw new Error('Globe instance is null');
       }
       
-      console.log('[Globe] Globe instance created successfully');
-      world.backgroundColor(bgColor);
+            world.backgroundColor(bgColor);
       
       // Verificar que el renderer se creó correctamente
       const renderer = world.renderer();
-      console.log('[Globe] Renderer:', renderer);
-      
+            
       if (renderer && renderer.domElement) {
-        console.log('[Globe] Canvas element created:', renderer.domElement);
-        // Forzar un resize inicial en Safari
+                // Forzar un resize inicial en Safari
         if (isSafari) {
           setTimeout(() => {
             const w = rootEl!.clientWidth || window.innerWidth;
             const h = rootEl!.clientHeight || window.innerHeight;
             world.width(w).height(h);
-            console.log('[Globe] Safari resize applied:', w, 'x', h);
-          }, 50);
+                      }, 50);
         }
       }
       
@@ -321,12 +310,10 @@
       
       // Fallback más agresivo para Safari
       try {
-        console.log('[Globe] Attempting fallback initialization');
-        await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 100));
         world = new Globe(rootEl!);
         world.backgroundColor(bgColor);
-        console.log('[Globe] Fallback successful');
-      } catch (fallbackError) {
+              } catch (fallbackError) {
         console.error('[Globe] Fallback also failed:', fallbackError);
         // Mostrar error visible al usuario
         if (rootEl) {
@@ -390,8 +377,7 @@
       .polygonLabel((feat: any) => {
         // Debug: mostrar etiquetas para cualquier polígono que tenga nombre
         if (feat?.properties?._subdivisionName) {
-          console.log('[Label] Showing label:', feat.properties._subdivisionName, 'isChild:', feat.properties._isChild);
-          return feat.properties._subdivisionName;
+                    return feat.properties._subdivisionName;
         }
         // Fallback: mostrar ISO para países
         if (feat?.properties?.ISO_A3) {

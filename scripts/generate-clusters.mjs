@@ -39,8 +39,7 @@ function main() {
     const clustered = cluster(entries, deg);
     const out = path.join(OUTDIR, `clusters-${deg}.json`);
     saveJson(out, clustered);
-    console.log(`Wrote ${out} (${clustered.length} items)`);
-  }
+      }
 }
 
 main();

@@ -21,10 +21,36 @@ export interface ComputeResult {
 import { isoOf } from '$lib/utils/geo';
 import { getDominantKey as getDominantKeyUtil } from '$lib/utils/globeHelpers';
 
+/**
+ * Extrae el identificador de un feature (puede ser ISO_A3, ID_1, ID_2, etc.)
+ */
+function getFeatureId(f: any): string {
+  const p = f?.properties ?? {};
+  
+  // Nivel 1 (países): ISO_A3
+  if (p.ISO_A3) {
+    return p.ISO_A3.toString().toUpperCase();
+  }
+  
+  // Nivel 2 (subdivisiones): ID_1, GID_1, etc.
+  if (p.ID_1 || p.id_1 || p.GID_1 || p.gid_1) {
+    return String(p.ID_1 || p.id_1 || p.GID_1 || p.gid_1);
+  }
+  
+  // Nivel 3 (sub-subdivisiones): ID_2, GID_2, etc.
+  if (p.ID_2 || p.id_2 || p.GID_2 || p.gid_2) {
+    return String(p.ID_2 || p.id_2 || p.GID_2 || p.gid_2);
+  }
+  
+  // Fallback: intentar con nombre
+  return String(p.NAME || p.name || p.NAME_1 || p.name_1 || '');
+}
+
 export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): ComputeResult {
   const answersData = dataJson?.ANSWERS ?? {};
   const colorMap = dataJson?.colors ?? {};
 
+      
   const features: any[] = Array.isArray(geo?.features) ? geo.features : [];
   // Filtra Antártida si aparece como ISO3 ATA o nombre
   const data = features.filter((f) => {
@@ -34,16 +60,30 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
     return iso3 !== 'ATA' && name !== 'ANTARCTICA';
   });
 
-  // Claves dominantes por ISO y conteo para leyenda
+  
+  // Claves dominantes por ID y conteo para leyenda
   const isoDominantKey: Record<string, string> = {};
   const counts: Record<string, number> = {};
+  
   for (const f of data) {
-    const iso = isoOf(f);
-    const key = getDominantKeyUtil(iso, answersData);
-    isoDominantKey[iso] = key;
+    // Usar getFeatureId en lugar de isoOf para soportar todos los niveles
+    const featureId = getFeatureId(f);
+    
+    if (!featureId) {
+      console.warn('[computeGlobeViewModel] ⚠️ Feature without ID:', f.properties);
+      continue;
+    }
+    
+    const key = getDominantKeyUtil(featureId, answersData);
+    isoDominantKey[featureId] = key;
     counts[key] = (counts[key] ?? 0) + 1;
+    
+    // Log los primeros 5 para debug con más detalle
+    if (Object.keys(isoDominantKey).length <= 5) {
+                            }
   }
-  const legendItems = Object.keys(colorMap || {})
+  
+    const legendItems = Object.keys(colorMap || {})
     .filter((k) => k in counts)
     .map((k) => ({ key: k, color: colorMap[k], count: counts[k] }))
     .sort((a, b) => b.count - a.count);
@@ -64,21 +104,22 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
     .sort((a, b) => b.count - a.count)
     .slice(0, 20);
 
-  // Intensidad por país
+  // Intensidad por región (funciona en todos los niveles)
   const isoIntensity: Record<string, number> = {};
   const vals: number[] = [];
   for (const f of data) {
-    const iso = isoOf(f);
-    const rec = answersData?.[iso];
+    const featureId = getFeatureId(f);
+    const rec = answersData?.[featureId];
     if (rec) {
       const sum = Object.values(rec).reduce((acc, v) => acc + (typeof v === 'number' ? v : Number(v) || 0), 0);
-      isoIntensity[iso] = sum;
+      isoIntensity[featureId] = sum;
       vals.push(sum);
     }
   }
   const intensityMin = vals.length ? Math.min(...vals) : 0;
   const intensityMax = vals.length ? Math.max(...vals) : 1;
-
+  
+    
   return {
     polygons: data,
     isoDominantKey,

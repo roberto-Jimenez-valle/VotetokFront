@@ -5,6 +5,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "start": "powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "build:clusters": "node scripts/generate-clusters.mjs",
     "dev": "vite dev",
     "build": "vite build",
@@ -13,7 +14,17 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write .",
-    "lint": "prettier --check ."
+    "lint": "prettier --check .",
+    "setup": "node scripts/setup-complete.mjs",
+    "db:migrate": "npx prisma migrate dev",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "db:studio": "powershell -ExecutionPolicy Bypass -File scripts/start-prisma-studio.ps1",
+    "db:reset": "npx prisma migrate reset",
+    "db:generate": "npx prisma generate",
+    "cleanup": "node scripts/auto-cleanup.mjs"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^6.0.0",
@@ -30,13 +41,16 @@
     "prettier": "^3.4.2",
     "prettier-plugin-svelte": "^3.4.0",
     "prettier-plugin-tailwindcss": "^0.6.11",
+    "prisma": "^6.16.3",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.20.6",
     "typescript": "5.7.3",
     "vite": "^6.2.6"
   },
   "dependencies": {
+    "@prisma/client": "^6.16.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",

@@ -11,8 +11,7 @@
 
 	// Debug: monitorear cambios en hidden
 	$effect(() => {
-		console.log('[NavBottom] hidden prop changed to:', hidden);
-	});
+			});
 
 	function irANuevaEncuesta() {
 		goto('/poll/new');

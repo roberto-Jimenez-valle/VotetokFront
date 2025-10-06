@@ -1,22 +1,12 @@
 <script lang="ts">
 	import Header from '$lib/header.svelte';
+	import PollOptionsBar from '$lib/PollOptionsBar.svelte';
 	// Usamos un componente dedicado GlobeGL basado en Globe.gl
 	import GlobeGL from '$lib/GlobeGL.svelte';
 	import NavBottom from '$lib/nav-bottom.svelte';
 	import type { Poll } from '$lib/types';
 
-	const topUsers = [
-		{ name: 'Emma', avatar: 'https://randomuser.me/api/portraits/women/10.jpg' },
-		{ name: 'Marisol', avatar: 'https://randomuser.me/api/portraits/women/11.jpg' },
-		{ name: 'John', avatar: 'https://randomuser.me/api/portraits/men/12.jpg' },
-		{ name: 'Megan', avatar: 'https://randomuser.me/api/portraits/women/12.jpg' },
-		{ name: 'Adam', avatar: 'https://randomuser.me/api/portraits/men/13.jpg' },
-		{ name: 'Lucas', avatar: 'https://randomuser.me/api/portraits/men/14.jpg' },
-		{ name: 'Sophia', avatar: 'https://randomuser.me/api/portraits/women/14.jpg' },
-		{ name: 'David', avatar: 'https://randomuser.me/api/portraits/men/15.jpg' },
-		{ name: 'Chloe', avatar: 'https://randomuser.me/api/portraits/women/15.jpg' },
-		{ name: 'Alex', avatar: 'https://randomuser.me/api/portraits/men/16.jpg' }
-	];
+	// topUsers eliminado - usar API
 
 	let expandedPoll: Poll | null = $state(null);
 	let navBottomHeight = $state(0);
@@ -24,30 +14,56 @@
 	let currentAltitude = $state(0);
 	let bottomSheetVisible = $state(false);
 	
-	// Poll data for header
-	type PollOption = { key: string; color: string; avatar?: string };
-	let pollTitle = $state('');
-	let pollOptions = $state<PollOption[]>([]);
-	let isWorldView = $state(true);
+	// Poll seleccionada para mostrar en la barra de opciones
+	type SelectedPoll = {
+		id: number;
+		title: string;
+		options: Array<{
+			key: string;
+			label: string;
+			color: string;
+			votes: number;
+			avatarUrl?: string;
+		}>;
+	} | null;
+	
+	let selectedPoll = $state<SelectedPoll>(null);
 	
 	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {
 		const state = event.detail.state;
-		console.log('[NavControl] BottomSheet state changed to:', state);
-		// Ocultar nav cuando está en peek, mostrar en otros estados
+				// Ocultar nav cuando está en peek, mostrar en otros estados
 		hideNav = state === 'peek';
 		// BottomSheet visible cuando NO está en estado "hidden"
 		bottomSheetVisible = state !== 'hidden';
-		console.log('[NavControl] hideNav set to:', hideNav, 'bottomSheetVisible:', bottomSheetVisible);
-	}
+			}
 	
 	function handleAltitudeChange(event: CustomEvent<{ altitude: number }>) {
 		currentAltitude = event.detail.altitude;
 	}
 	
-	function handlePollData(event: CustomEvent<{ title: string; options: PollOption[]; isWorldView: boolean }>) {
-		pollTitle = event.detail.title;
-		pollOptions = event.detail.options;
-		isWorldView = event.detail.isWorldView;
+	function handlePollSelected(event: CustomEvent<{ poll: any; options: any[] }>) {
+		const { poll, options } = event.detail;
+				
+		if (poll === null) {
+			// Vista global - ocultar barra
+						selectedPoll = null;
+		} else {
+			// Encuesta seleccionada - mostrar barra
+			const pollTitle = poll.title || poll.question || 'Encuesta';
+						
+			selectedPoll = {
+				id: typeof poll.id === 'string' ? parseInt(poll.id) : poll.id,
+				title: pollTitle,
+				options: options.map((opt: any) => ({
+					key: opt.key || opt.optionKey,
+					label: opt.label || opt.optionLabel || opt.key,
+					color: opt.color,
+					votes: opt.votes || opt.voteCount || 0,
+					avatarUrl: opt.avatarUrl
+				}))
+			};
+			
+					}
 	}
 
 </script>
@@ -93,16 +109,12 @@
 	<GlobeGL 
 		on:sheetstatechange={handleSheetStateChange} 
 		on:altitudechange={handleAltitudeChange}
-		on:polldata={handlePollData}
+		on:pollselected={handlePollSelected}
 	/>
 
 	<!-- Contenido por encima del globo -->
 	<div class="relative">
-		<Header 
-			{pollTitle}
-			{pollOptions}
-			{isWorldView}
-		/>
+		<Header />
 		<div class="w-full flex flex-col">
 			
 		</div>

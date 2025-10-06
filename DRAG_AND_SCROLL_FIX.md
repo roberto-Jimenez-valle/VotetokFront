@@ -329,8 +329,7 @@ if (mainScrollContainer) {
   
   if (isAtTop) {
     // Permitir detección de dirección
-    console.log('At scroll top - will detect drag direction');
-  } else {
+      } else {
     // Permitir scroll nativo
     return;
   }
@@ -347,8 +346,7 @@ if (isAtTop && isDraggingUp && this.isVerticalGesture) {
   return;
 } else if (isAtTop && isDraggingDown && this.isVerticalGesture) {
   // Cerrar sheet
-  console.log('At top, dragging DOWN - closing sheet');
-}
+  }
 ```
 
 ### UX Mejorada
