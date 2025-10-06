@@ -1886,7 +1886,7 @@
         
         // Force refreshes to ensure polygons are visible
         (async () => {
-          await delay(100);
+          await new Promise(resolve => requestAnimationFrame(resolve));
           globe?.refreshPolyColors?.();
           globe?.refreshPolyAltitudes?.();
         })();
@@ -2449,8 +2449,8 @@
     }
     
     // Hacer zoom out
-    scheduleZoom(0, 0, 2.0, 800);
-    await delay(900);
+    scheduleZoom(0, 0, 2.0, 500);
+    await delay(600);
     
     // Cargar datos de trending mundial
     await loadTrendingData();
@@ -3735,7 +3735,7 @@
         
         // PASO 5: Forzar refresh de colores DESPUÉS del zoom
         (async () => {
-          await delay(200);
+          await new Promise(resolve => requestAnimationFrame(resolve));
           await updateGlobeColors('Click en país');
         })();
         
@@ -3768,10 +3768,10 @@
         await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
         
         // PASO 3: Hacer zoom
-        scheduleZoom(centroid.lat, centroid.lng, targetAlt, 700, 150);
+        scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 100);
         
         // PASO 4: Refresh colores
-        await delay(200);
+        await new Promise(resolve => requestAnimationFrame(resolve));
         await updateGlobeColors('Click en subdivisión');
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
@@ -3848,9 +3848,9 @@
           // Los datos YA están cargados (answersData, colorMap, isoDominantKey)
           // Solo necesitamos refrescar los colores INMEDIATAMENTE
           
-          // Refresh INMEDIATO (no esperar 500ms)
+          // Refresh INMEDIATO
           (async () => {
-            await delay(100);
+            await new Promise(resolve => requestAnimationFrame(resolve));
             await updateGlobeColors('Volver a vista mundial');
           })();
           
