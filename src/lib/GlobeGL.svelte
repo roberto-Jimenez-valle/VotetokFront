@@ -2704,6 +2704,9 @@
     SHEET_STATE = 'collapsed';
     setSheetState('collapsed');
     
+    // CRÍTICO: Iniciar zoom inmediatamente para que se ejecute en paralelo con la carga de datos
+    scheduleZoom(20, 0, 2.5, 1000, 100);
+    
     console.log('[HandleOpenPoll] 🔵 Llamada recibida:', {
       pollId: poll?.id || 'null',
       currentActivePoll: activePoll?.id || 'none',
@@ -2817,14 +2820,8 @@
     
     regionVotes = pollMarkers;
     
-    // Hacer zoom out para mostrar vista global ANTES de actualizar colores
-    scheduleZoom(20, 0, 2.5, 1000, 100);
-    
-    // Esperar a que el zoom termine antes de actualizar colores
-    await delay(1100);
-    
-    // IMPORTANTE: Forzar actualización de colores de polígonos DESPUÉS del zoom
-    await updateGlobeColors('Encuesta abierta - después del zoom');
+    // El zoom ya se inició al principio, ahora solo actualizamos colores
+    await updateGlobeColors();
     
     // Emit poll data to update header with poll-specific information
     const pollOptions = options.map(option => ({
@@ -4107,8 +4104,8 @@
   on:touchmove={onTouchMove}
 />
 
-<!-- Tabs compactos (Para ti -> menú) junto a la lupa -->
-<div class="tabs-float">
+<!-- Tabs compactos (Para ti → menú) junto a la lupa -->
+<div class="tabs-float" class:blocked-during-animation={isZooming}>
   <TopTabs
     options={["Para ti", "Tendencias", "Live"]}
   />
@@ -4116,25 +4113,27 @@
 
 <!-- SearchBar movido al BottomSheet -->
 
-<TagBar
-  bind:activeTag
-  {showAccountsLine}
-  {paraTiTags}
-  {paraTiAccounts}
-  {trendingTagsOnly}
-  {trendingAccountsOnly}
-  {colorMap}
-  {alphaForTag}
-  {isSeen}
-  {seenKeyForTag}
-  {seenKeyForAccount}
-  {markSeen}
-/>
+<div class:blocked-during-animation={isZooming}>
+  <TagBar
+    bind:activeTag
+    {showAccountsLine}
+    {paraTiTags}
+    {paraTiAccounts}
+    {trendingTagsOnly}
+    {trendingAccountsOnly}
+    {colorMap}
+    {alphaForTag}
+    {isSeen}
+    {seenKeyForTag}
+    {seenKeyForAccount}
+    {markSeen}
+  />
+</div>
 
 <!-- Panel de ajustes (se abre desde la barra de la leyenda) -->
 {#if showSettings}
   <div class="settings-overlay" role="presentation" on:click={() => (showSettings = false)}></div>
-  <div class="settings-panel" role="dialog" aria-label="Ajustes de colores" bind:this={panelEl} style={`top:${panelTop}px; left:10px;`}>
+  <div class="settings-panel {isZooming ? 'blocked-during-animation' : ''}" role="dialog" aria-label="Ajustes de colores" bind:this={panelEl} style={`top:${panelTop}px; left:10px;`}>
     <SettingsPanel
       bind:panelTop
       bind:mode
@@ -4261,3 +4260,13 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* Bloquear elementos durante animaciones de cámara */
+  .blocked-during-animation {
+    pointer-events: none !important;
+    user-select: none !important;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+</style>
