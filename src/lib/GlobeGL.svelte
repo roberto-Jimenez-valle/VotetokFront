@@ -4156,6 +4156,7 @@
   state={SHEET_STATE}
   y={sheetY}
   isTransitioning={sheetIsTransitioning}
+  isCameraAnimating={isZooming}
   {selectedCountryName}
   {selectedSubdivisionName}
   {selectedCityName}

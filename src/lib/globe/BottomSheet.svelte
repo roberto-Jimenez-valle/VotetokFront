@@ -705,6 +705,7 @@
   export let state: 'hidden' | 'peek' | 'collapsed' | 'expanded' = 'hidden';
   export let y = 0; // translateY px
   export let isTransitioning = false; // Si debe usar transición CSS
+  export let isCameraAnimating = false; // Si hay una animación de cámara en curso
   export let selectedCountryName: string | null = null;
   export let selectedSubdivisionName: string | null = null;
   export let selectedCityName: string | null = null;
@@ -1314,7 +1315,7 @@
 </script>
 
 <div
-  class="bottom-sheet {state === 'expanded' ? 'solid' : 'glass'} {state === 'peek' ? 'peek-state' : ''} {isTransitioning ? 'transitioning' : ''}"
+  class="bottom-sheet {state === 'expanded' ? 'solid' : 'glass'} {state === 'peek' ? 'peek-state' : ''} {isTransitioning ? 'transitioning' : ''} {isCameraAnimating ? 'camera-animating' : ''}"
   role="dialog"
   aria-modal="true"
   aria-hidden={state === 'hidden'}
@@ -2915,6 +2916,14 @@
 </div>
 
 <style>
+  /* Bloquear todas las interacciones durante animaciones de cámara */
+  .bottom-sheet.camera-animating {
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+  }
+  
   /* Modal de opciones de encuesta */
   .poll-options-overlay {
     position: fixed;
