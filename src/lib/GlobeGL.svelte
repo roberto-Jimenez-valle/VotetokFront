@@ -539,6 +539,8 @@
   // Generar etiquetas tanto para países (NAME_1) como subdivisiones (NAME_2)
   function generateSubdivisionLabels(polygons: any[], currentAltitude?: number): SubdivisionLabel[] {
     const labels: SubdivisionLabel[] = [];
+    const currentLevel = navigationManager?.getCurrentLevel() || 'world';
+    const debug = currentLevel === 'subdivision'; // Debug solo en nivel subdivisión
         
     // Calcular áreas de polígonos para priorización
     const polygonsWithArea = polygons.map(poly => ({
@@ -580,11 +582,15 @@
     const usedPositions: Array<{lat: number, lng: number}> = [];
     let minDistance = 0; // Sin filtro interno, se aplica después con removeOverlappingLabels
     
+    let skippedByArea = 0;
+    let skippedByName = 0;
+    
     for (let i = 0; i < Math.min(maxLabels, polygonsWithArea.length); i++) {
       const { poly, area } = polygonsWithArea[i];
       
       // Filtrar polígonos muy pequeños en zoom cercano
       if (area < minAreaThreshold) {
+        skippedByArea++;
         continue;
       }
       
@@ -615,6 +621,16 @@
         labelType = 'fallback';
       }
       
+      if (!name) {
+        skippedByName++;
+        if (debug) {
+          console.log('[Labels] Polígono sin nombre:', {
+            area: area.toFixed(3),
+            props: Object.keys(poly?.properties || {})
+          });
+        }
+      }
+      
       if (name) {
         try {
           const centroid = centroidOf(poly);
@@ -638,27 +654,21 @@
           }
           
           // Calcular tamaño de fuente basado en área y altitud
-          // NUEVO SISTEMA: Cuanto más cerca, MÁS PEQUEÑO el texto para no saturar
           let fontSize = 11; // Tamaño base
-          const MIN_FONT_SIZE = 7; // Tamaño mínimo reducido para zoom extremo
-          const MAX_FONT_SIZE = 13; // Tamaño máximo reducido
+          const MIN_FONT_SIZE = 9; // Tamaño mínimo más grande para legibilidad
+          const MAX_FONT_SIZE = 14; // Tamaño máximo
           
           if (currentAltitude !== undefined) {
             if (currentAltitude > 0.5) {
               // Zoom alejado: textos más grandes
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, 9 + Math.sqrt(area) * 0.4));
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, 10 + Math.sqrt(area) * 0.3));
             } else if (currentAltitude > 0.3) {
               // Zoom medio: textos medianos
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 8 + Math.sqrt(area) * 0.25));
-            } else if (currentAltitude > 0.15) {
-              // Zoom cercano: textos más pequeños
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(10, 7 + Math.sqrt(area) * 0.15));
-            } else if (currentAltitude > 0.08) {
-              // Zoom muy cercano: textos pequeños
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(9, 6 + Math.sqrt(area) * 0.1));
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(12, 9 + Math.sqrt(area) * 0.2));
             } else {
-              // Zoom EXTREMO: textos MUY pequeños para no saturar
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(8, 5 + Math.sqrt(area) * 0.08));
+              // Zoom cercano/subdivisión: tamaño más uniforme y visible
+              // En nivel subdivisión, usar tamaño base sin mucha variación
+              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 9 + Math.sqrt(area) * 0.1));
             }
           }
           
@@ -677,6 +687,17 @@
           console.warn('[Labels] Failed to generate label for polygon:', poly.properties);
         }
       }
+    }
+    
+    if (debug) {
+      console.log(`[Labels] Resumen generación:`, {
+        total: polygons.length,
+        procesados: Math.min(maxLabels, polygonsWithArea.length),
+        saltados_area: skippedByArea,
+        saltados_sin_nombre: skippedByName,
+        generados: labels.length,
+        altitude: currentAltitude?.toFixed(3)
+      });
     }
     
         return labels;
@@ -746,6 +767,25 @@
     if (!globe) return;
     try {
       if (visible && subdivisionLabels?.length) {
+        const currentLevel = navigationManager?.getCurrentLevel() || 'world';
+        if (currentLevel === 'subdivision') {
+          console.log(`[UpdateLabels] Enviando ${subdivisionLabels.length} etiquetas al globo`);
+          
+          // Buscar Santa Cruz específicamente
+          const santaCruz = subdivisionLabels.find(l => 
+            (l.name || l.text || '').toLowerCase().includes('santa cruz')
+          );
+          if (santaCruz) {
+            console.log(`[UpdateLabels] Santa Cruz ENCONTRADA:`, {
+              name: santaCruz.name || santaCruz.text,
+              lat: santaCruz.lat,
+              lng: santaCruz.lng,
+              size: santaCruz.size
+            });
+          } else {
+            console.warn(`[UpdateLabels] Santa Cruz NO encontrada en las ${subdivisionLabels.length} etiquetas`);
+          }
+        }
                 globe.setTextLabels?.(subdivisionLabels);
       } else {
                 globe.setTextLabels?.([]);
@@ -1820,7 +1860,13 @@
   }
   
   // Function to select an option from dropdown
-  async function selectDropdownOption(option: { id: string; name: string; iso?: string }) {
+  async function selectDropdownOption(option: { id: string; name: string; type?: string }) {
+    // BLOQUEAR durante animaciones de zoom
+    if (isZooming) {
+      console.log('[Dropdown] Selección bloqueada durante animación de zoom');
+      return;
+    }
+    
     if (!navigationManager) return;
     
     const currentLevel = navigationManager.getCurrentLevel();
@@ -2089,18 +2135,24 @@
     } else {
       // Nivel subdivisión: SIEMPRE mostrar todas las etiquetas
       // Ya estamos en el nivel más detallado, el usuario quiere verlas todas
-      minDistance = 0.05;
+      minDistance = 0.01; // Casi sin filtro - solo evitar superposición real
     }
     
     const filtered: any[] = [];
+    const rejected: any[] = [];
     
     for (const label of labels) {
       let overlaps = false;
+      let closestDistance = Infinity;
       
       for (const existing of filtered) {
         const dx = label.lng - existing.lng;
         const dy = label.lat - existing.lat;
         const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < closestDistance) {
+          closestDistance = distance;
+        }
         
         if (distance < minDistance) {
           overlaps = true;
@@ -2110,6 +2162,24 @@
       
       if (!overlaps) {
         filtered.push(label);
+      } else {
+        rejected.push({ ...label, closestDistance });
+      }
+    }
+    
+    // Debug: mostrar etiquetas rechazadas en nivel subdivisión
+    if (currentLevel === 'subdivision') {
+      console.log(`[LOD] Filtrado de superposiciones:`, {
+        entrada: labels.length,
+        salida: filtered.length,
+        rechazadas: rejected.length,
+        minDistance: minDistance,
+        altitude: altitude.toFixed(3)
+      });
+      
+      if (rejected.length > 0 && rejected.length <= 10) {
+        console.log(`[LOD] Etiquetas rechazadas:`, 
+          rejected.map(r => `${r.name || r.text} (dist: ${r.closestDistance.toFixed(3)})`));
       }
     }
     
@@ -3750,6 +3820,12 @@
     } catch {}
   }}
   on:polygonClick={async (e) => {
+    // BLOQUEAR clics durante animaciones de zoom
+    if (isZooming) {
+      console.log('[Click] Clic bloqueado durante animación de zoom');
+      return;
+    }
+    
     if (!navigationManager) return;
     try {
       const feat = e.detail?.feat;
@@ -3857,6 +3933,12 @@
     }
   }}
   on:globeClick={async (e) => {
+    // BLOQUEAR clics durante animaciones de zoom
+    if (isZooming) {
+      console.log('[Click] Clic en globo bloqueado durante animación de zoom');
+      return;
+    }
+    
     if (!navigationManager) return;
     
     try {
@@ -4013,6 +4095,8 @@
       {:else}
         <!-- Not last item or not in world level -->
         <button on:click={() => {
+          if (isZooming) return; // Bloquear durante zoom
+          
           // Limpiar etiquetas PRIMERO
           subdivisionLabels = [];
           updateSubdivisionLabels(false);
@@ -4070,6 +4154,8 @@
       {:else}
         <!-- Not last item: regular clickable button -->
         <button on:click={() => {
+          if (isZooming) return; // Bloquear durante zoom
+          
           // Limpiar etiquetas PRIMERO (volviendo de subdivisión a país)
           subdivisionLabels = [];
           updateSubdivisionLabels(false);
