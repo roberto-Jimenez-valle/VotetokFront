@@ -550,7 +550,7 @@
     polygonsWithArea.sort((a, b) => b.area - a.area);
     
     // Determinar cuántas etiquetas mostrar según la altitud
-    // NUEVO SISTEMA: Limitar etiquetas en zoom extremo para evitar saturación
+    // SISTEMA LOD: Cuanto MÁS CERCA (menor altitud), MÁS etiquetas
     let maxLabels = polygons.length;
     let minAreaThreshold = 0; // Área mínima para mostrar etiqueta
     
@@ -558,7 +558,7 @@
       if (currentAltitude > 0.5) {
         // Zoom muy alejado: solo las 10 más grandes
         maxLabels = Math.min(10, polygons.length);
-        minAreaThreshold = 0.1; // Filtrar polígonos pequeños
+        minAreaThreshold = 0.1;
       } else if (currentAltitude > 0.3) {
         // Zoom medio: 50% de las etiquetas
         maxLabels = Math.ceil(polygons.length * 0.5);
@@ -567,32 +567,18 @@
         // Zoom cercano: 75% de las etiquetas
         maxLabels = Math.ceil(polygons.length * 0.75);
         minAreaThreshold = 0.02;
-      } else if (currentAltitude > 0.08) {
-        // Zoom muy cercano: 60% de las etiquetas para evitar saturación
-        maxLabels = Math.ceil(polygons.length * 0.6);
-        minAreaThreshold = 0.01;
-              } else {
-        // Zoom EXTREMO: Solo 40% de las etiquetas más grandes
-        maxLabels = Math.ceil(polygons.length * 0.4);
-        minAreaThreshold = 0.005;
-              }
+      } else {
+        // Zoom EXTREMO (< 0.15): TODAS las etiquetas
+        maxLabels = polygons.length;
+        minAreaThreshold = 0; // Sin filtro de área
+      }
     }
     
         
     // Sistema de detección de colisiones para evitar solapamiento
+    // DESACTIVADO: Ahora usamos removeOverlappingLabels después, que es más inteligente
     const usedPositions: Array<{lat: number, lng: number}> = [];
-    let minDistance = 0.2; // Distancia mínima en grados
-    if (currentAltitude !== undefined) {
-      if (currentAltitude < 0.05) {
-        minDistance = 0.25; // Zoom ULTRA extremo: más espacio entre etiquetas
-      } else if (currentAltitude < 0.08) {
-        minDistance = 0.2; // Zoom extremo: espacio moderado
-      } else if (currentAltitude < 0.15) {
-        minDistance = 0.15; // Zoom muy cercano: etiquetas cercanas
-      } else if (currentAltitude < 0.3) {
-        minDistance = 0.3; // Zoom cercano: distancia moderada
-      }
-    }
+    let minDistance = 0; // Sin filtro interno, se aplica después con removeOverlappingLabels
     
     for (let i = 0; i < Math.min(maxLabels, polygonsWithArea.length); i++) {
       const { poly, area } = polygonsWithArea[i];
@@ -1512,8 +1498,8 @@
         // Esto asegura que si hay encuesta activa, los países se coloreen correctamente
         await Promise.all([
           new Promise<void>((resolve) => { this.globe?.refreshPolyColors?.(); resolve(); }),
-          new Promise<void>((resolve) => { this.globe?.refreshPolyAltitudes?.(); resolve(); }),
-          new Promise<void>((resolve) => { this.globe?.refreshPolyLabels?.(); resolve(); })
+          new Promise<void>((resolve) => { this.globe?.refreshPolyAltitudes?.(); resolve(); })
+          // Labels se actualizan después del zoom automáticamente
         ]);
         
         // Clear subdivision labels
@@ -1592,12 +1578,7 @@
         // IMPORTANTE: Hacer refresh INMEDIATO para aplicar colores de BD
                 this.globe?.refreshPolyColors?.();
         this.globe?.refreshPolyAltitudes?.();
-                
-        // Generate and show subdivision labels (usar polígonos hijos)
-        const currentPov = this.globe?.pointOfView();
-        const labels = generateSubdivisionLabels(childMarked, currentPov?.altitude);
-                        subdivisionLabels = labels;
-        updateSubdivisionLabels(true);
+        // Labels se generarán automáticamente después del zoom
         
                 
               } catch (error) {
@@ -1665,18 +1646,11 @@
           new Promise<void>((resolve) => {
             this.globe?.refreshPolyAltitudes?.();
             resolve();
-          }),
-          new Promise<void>((resolve) => {
-            this.globe?.refreshPolyLabels?.();
-            resolve();
           })
+          // Labels se actualizan después del zoom automáticamente
         ]);
         
-        // Generate and show sub-subdivision labels
-        const currentPov = this.globe?.pointOfView();
-        const labels = generateSubdivisionLabels(markedPolygons, currentPov?.altitude);
-        subdivisionLabels = labels;
-        updateSubdivisionLabels(true);
+        // Labels se generarán automáticamente después del zoom
         
                 
               } catch (error) {
@@ -1884,17 +1858,13 @@
         const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
         scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 700, 100);
         
-        // Force refreshes to ensure polygons are visible
+        // Force refreshes to ensure polygons are visible (NO labels - se actualizan después del zoom)
         (async () => {
           await new Promise(resolve => requestAnimationFrame(resolve));
           globe?.refreshPolyColors?.();
           globe?.refreshPolyAltitudes?.();
-        })();
-        
-        setTimeout(() => {
-          globe?.refreshPolyLabels?.();
           globe?.refreshPolyStrokes?.();
-        }, 300);
+        })();
       }
     } else if (currentLevel === 'country') {
       // Navigate to subdivision
@@ -2022,50 +1992,63 @@
   }
 
   // Label generation functions for zoom-based display with Level of Detail (LOD)
+  let lastLabelUpdate = 0;
+  const LABEL_UPDATE_THROTTLE = 300; // Actualizar etiquetas solo cada 300ms
+  let pendingLabelUpdate: any = null;
+  
+  // Watcher reactivo: cuando termina el zoom, actualizar etiquetas
+  $: if (!isZooming && pendingLabelUpdate) {
+    const pov = pendingLabelUpdate;
+    pendingLabelUpdate = null;
+    // Usar requestAnimationFrame para sincronizar con el navegador
+    requestAnimationFrame(() => {
+      updateLabelsForCurrentView(pov);
+    });
+  }
+  
   async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }) {
+    // NO actualizar etiquetas durante animaciones de zoom
+    if (isZooming) {
+      // Guardar para actualizar cuando termine el zoom
+      pendingLabelUpdate = pov;
+      return;
+    }
+    
+    // Throttle: solo actualizar si han pasado al menos 300ms desde la última actualización
+    const now = performance.now();
+    if (now - lastLabelUpdate < LABEL_UPDATE_THROTTLE) {
+      return;
+    }
+    lastLabelUpdate = now;
+    
     try {
       const currentLevel = navigationManager?.getCurrentLevel() || 'world';
       const alt = pov.altitude;
       
-                  
-      // LÓGICA CORREGIDA: Cuanto MÁS CERCA (menor altitud), MÁS etiquetas
-      // Las etiquetas NUNCA desaparecen, incluso en zoom extremo
-      // La altitud baja significa zoom alto (muy cerca)
+      // LOD DINÁMICO: Mostrar etiquetas según nivel y altitud
+      // Cuanto más cerca (menor altitud), más etiquetas
       
-      // Nivel mundial: mostrar países cuando te acercas
       if (currentLevel === 'world') {
+        // Nivel mundial: mostrar países solo cuando estás cerca
         if (alt < COUNTRY_LABELS_ALT) {
-                    await generateWorldCountryLabels();
+          await generateWorldCountryLabels(alt);
         } else {
-                    updateSubdivisionLabels(false);
+          // Muy lejos: sin etiquetas
+          updateSubdivisionLabels(false);
         }
       }
-      // Nivel país: cuanto más cerca, más detalle
       else if (currentLevel === 'country') {
         const state = navigationManager?.getState();
         if (state?.countryIso) {
-          // Si estás MUY cerca, muestra subdivisiones
-          if (alt < SUBDIVISION_LABELS_ALT) {
-                        await generateCountrySubdivisionLabels(state.countryIso, pov);
-          } 
-          // Si estás lejos, solo muestra el nombre del país
-          else {
-                        await generateCountryNameLabel();
-          }
+          // Nivel país: mostrar subdivisiones con filtrado según zoom
+          await generateCountrySubdivisionLabels(state.countryIso, pov);
         }
       }
-      // Nivel subdivisión: cuanto más cerca, más detalle
       else if (currentLevel === 'subdivision') {
         const state = navigationManager?.getState();
         if (state?.countryIso && state?.subdivisionId) {
-          // Si estás MUY MUY cerca, muestra sub-subdivisiones detalladas
-          if (alt < DETAILED_LABELS_ALT) {
-                        await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
-          } 
-          // Si estás a distancia media, solo muestra el nombre de la subdivisión
-          else {
-                        await generateSubdivisionNameLabel();
-          }
+          // Nivel subdivisión: mostrar sub-subdivisiones con filtrado según zoom
+          await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
         }
       }
     } catch (e) {
@@ -2073,12 +2056,74 @@
     }
   }
 
-  async function generateWorldCountryLabels() {
+  // Función para evitar superposición de etiquetas con LOD dinámico
+  function removeOverlappingLabels(labels: any[], altitude: number) {
+    // Calcular distancia mínima según altitud y nivel de navegación
+    // IMPORTANTE: El filtrado debe ser proporcional al nivel, no absoluto
+    
+    const currentLevel = navigationManager?.getCurrentLevel() || 'world';
+    let minDistance: number;
+    
+    // ESTRATEGIA: En cada nivel, usar un porcentaje del área visible
+    // Así es relativo al tamaño del polígono
+    
+    if (currentLevel === 'world') {
+      // Nivel mundial: filtrado progresivo según altitud
+      if (altitude > 1.5) {
+        minDistance = 10 + (altitude - 1.5) * 10; // Muy lejos: pocos países
+      } else if (altitude > 0.8) {
+        minDistance = 3 + (altitude - 0.8) * 10; // Medio: más países
+      } else {
+        minDistance = 1 + (altitude - 0.0) * 2.5; // Cerca: muchos países
+      }
+    } else if (currentLevel === 'country') {
+      // Nivel país: mostrar subdivisiones proporcionalmente
+      // El zoom adaptativo pone altitudes entre 0.15-0.8 según tamaño del país
+      if (altitude > 0.4) {
+        minDistance = 2 + (altitude - 0.4) * 5; // Alejado: pocas subdivisiones
+      } else if (altitude > 0.2) {
+        minDistance = 0.3 + (altitude - 0.2) * 8.5; // Medio: más subdivisiones  
+      } else {
+        minDistance = 0.05; // Cerca: todas las subdivisiones
+      }
+    } else {
+      // Nivel subdivisión: SIEMPRE mostrar todas las etiquetas
+      // Ya estamos en el nivel más detallado, el usuario quiere verlas todas
+      minDistance = 0.05;
+    }
+    
+    const filtered: any[] = [];
+    
+    for (const label of labels) {
+      let overlaps = false;
+      
+      for (const existing of filtered) {
+        const dx = label.lng - existing.lng;
+        const dy = label.lat - existing.lat;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < minDistance) {
+          overlaps = true;
+          break;
+        }
+      }
+      
+      if (!overlaps) {
+        filtered.push(label);
+      }
+    }
+    
+    return filtered;
+  }
+  
+  async function generateWorldCountryLabels(altitude: number) {
     try {
       if (!worldPolygons?.length) return;
       
+      // NO usar cache - necesitamos recalcular según altitud para LOD dinámico
+      
       // Generate labels for world countries
-      const labels = worldPolygons.map((feat, index) => {
+      const allLabels = worldPolygons.map((feat, index) => {
         const centroid = centroidOf(feat);
         const name = nameOf(feat);
         const iso = isoOf(feat);
@@ -2092,9 +2137,12 @@
           size: 12,
           color: '#ffffff',
           opacity: 0.8,
-          feature: feat // Incluir feature para hacer las etiquetas clicables
+          feature: feat
         };
       }).filter(label => label.text);
+      
+      // Filtrar etiquetas superpuestas según altitud (LOD dinámico)
+      const labels = removeOverlappingLabels(allLabels, altitude);
       
       subdivisionLabels = labels;
       updateSubdivisionLabels(true);
@@ -2198,13 +2246,12 @@
       }
       
       if (countryPolygons?.length) {
-        // Use the existing generateSubdivisionLabels function that works correctly
-        const currentPov = globe?.pointOfView();
-        const labels = generateSubdivisionLabels(countryPolygons, currentPov?.altitude);
-        subdivisionLabels = labels;
+        const allLabels = generateSubdivisionLabels(countryPolygons, pov?.altitude);
+        // Filtrar según altitud para LOD dinámico
+        const filteredLabels = removeOverlappingLabels(allLabels, pov.altitude);
+        subdivisionLabels = filteredLabels;
         updateSubdivisionLabels(true);
-        
-              } else {
+      } else {
         console.warn('[Labels] No subdivision polygons found for', iso);
       }
     } catch (e) {
@@ -2255,12 +2302,12 @@
               }
             }));
             
-            const currentPov = globe?.pointOfView();
-            const labels = generateSubdivisionLabels(markedPolygons, currentPov?.altitude);
-            subdivisionLabels = labels;
+            const allLabels = generateSubdivisionLabels(markedPolygons, pov?.altitude);
+            // Filtrar según altitud para LOD dinámico
+            const filteredLabels = removeOverlappingLabels(allLabels, pov.altitude);
+            subdivisionLabels = filteredLabels;
             updateSubdivisionLabels(true);
-            
-                        return;
+            return;
           }
         } else {
                   }
@@ -2600,8 +2647,11 @@
       zoomTimeout = null;
     }
     
+    // CRÍTICO: Marcar como zooming INMEDIATAMENTE para bloquear etiquetas
+    isZooming = true;
+    
     // Si ya hay un zoom en progreso, esperar a que termine
-    if (isZooming && delay === 0) {
+    if (delay === 0 && pendingZoom) {
       delay = 100;
     }
     
@@ -2610,13 +2660,20 @@
         
     zoomTimeout = setTimeout(() => {
       if (pendingZoom && globe) {
-        isZooming = true;
                 globe.pointOfView(pendingZoom, pendingZoom.duration);
         
         // Marcar como completado después de la duración de la animación
         setTimeout(() => {
           isZooming = false;
           pendingZoom = null;
+          
+          // IMPORTANTE: Forzar actualización de etiquetas cuando termine el zoom
+          const pov = globe?.pointOfView();
+          if (pov) {
+            requestAnimationFrame(() => {
+              updateLabelsForCurrentView(pov);
+            });
+          }
                   }, pendingZoom.duration + 50);
       }
       zoomTimeout = null;
@@ -3824,15 +3881,17 @@
         return;
       }
       if (currentLevel !== 'world') {
-                
-        // Navigate back to previous level
-        await navigationManager.navigateBack();
         
-        // Clear appropriate level data
-        const newLevel = navigationManager.getCurrentLevel();
+        // PASO 1: OCULTAR ETIQUETAS INMEDIATAMENTE antes de cualquier animación
+        subdivisionLabels = [];
+        updateSubdivisionLabels(false);
+        
+        // PASO 2: Iniciar zoom para bloquear nuevas etiquetas
+        const currentPov = globe?.pointOfView();
+        const newLevel = currentLevel === 'subdivision' ? 'country' : 'world';
+        
         if (newLevel === 'world') {
-          // Vista mundial: mantener posición actual, solo cambiar zoom
-          const currentPov = globe?.pointOfView();
+          // Vista mundial: iniciar zoom PRIMERO
           const worldViewAltitude = MAX_ZOOM_ALTITUDE;
           scheduleZoom(
             currentPov?.lat || 20, 
@@ -3840,6 +3899,12 @@
             worldViewAltitude,
             1000
           );
+        }
+        
+        // PASO 3: Navigate back to previous level
+        await navigationManager.navigateBack();
+        
+        if (newLevel === 'world') {
           selectedCountryName = null;
           selectedCountryIso = null;
           selectedSubdivisionName = null;
@@ -3855,18 +3920,20 @@
           })();
           
         } else if (newLevel === 'country') {
-          // Volver a vista de país: recargar colores de subdivisiones
+          // Volver a vista de país desde subdivisión
           selectedSubdivisionName = null;
           selectedCityId = null;
           
-          // Recargar colores de subdivisiones
+          // Iniciar zoom ANTES de recargar datos (ya se limpió etiquetas arriba)
+          const currentPov = globe?.pointOfView();
+          scheduleZoom(currentPov?.lat || 0, currentPov?.lng || 0, 0.8, 700);
+          
+          // Recargar colores de subdivisiones DESPUÉS
           if (selectedCountryIso && activePoll?.id) {
-            const countryIso = selectedCountryIso; // Guardar en variable local para TypeScript
+            const countryIso = selectedCountryIso;
                         setTimeout(async () => {
-              // Llamar a la función que carga colores de subdivisiones
               const subdivisionColorById = await computeSubdivisionColorsFromDatabase(countryIso, localPolygons || []);
               
-              // Aplicar colores a los polígonos
               for (const poly of (localPolygons || [])) {
                 const id1 = poly.properties?.ID_1;
                 if (id1 && subdivisionColorById[String(id1)]) {
@@ -3877,8 +3944,6 @@
               await updateGlobeColors('Volver a vista de país');
             }, 200);
           }
-          const currentPov = globe?.pointOfView();
-          scheduleZoom(currentPov?.lat || 0, currentPov?.lng || 0, 0.8, 700);
         } else if (newLevel === 'subdivision') {
           // Clear only city level (already handled above)
           selectedCityName = null;
@@ -3948,6 +4013,10 @@
       {:else}
         <!-- Not last item or not in world level -->
         <button on:click={() => {
+          // Limpiar etiquetas PRIMERO
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          
           navigationManager.navigateToWorld();
           selectedCountryIso = null;
           selectedCountryName = null;
@@ -4001,6 +4070,10 @@
       {:else}
         <!-- Not last item: regular clickable button -->
         <button on:click={() => {
+          // Limpiar etiquetas PRIMERO (volviendo de subdivisión a país)
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          
           navigationManager.navigateToCountry(item.iso || '', item.name);
           showDropdown = false;
         }} 
