@@ -898,20 +898,19 @@
   
   // Función para abrir la encuesta principal en el globo
   function openMainPollInGlobe() {
-        dispatch('openPollInGlobe', { 
+    dispatch('openPollInGlobe', { 
       poll: null, // null indica encuesta principal
       options: displayOptions.map(opt => ({
         key: opt.key,
-        label: opt.label,
+        label: opt.label || opt.key,
         color: opt.color,
-        votes: opt.pct // Usar el porcentaje como votos
+        votes: Number(opt.pct) || 0 // Usar el porcentaje como votos
       }))
     });
   }
   
   // Función para abrir una encuesta adicional en el globo
   function openAdditionalPollInGlobe(poll: Poll) {
-                
     // Agregar la encuesta al inicio de additionalPolls si no existe ya
     if (!additionalPolls.find(p => p.id === poll.id)) {
       additionalPolls = [poll, ...additionalPolls];
