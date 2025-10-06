@@ -27,7 +27,6 @@ export async function loadHistoricalData(
       votes: item.voteCount,
     }));
   } catch (error) {
-    console.error('Error loading historical data:', error);
     return [];
   }
 }
@@ -45,7 +44,6 @@ export async function loadPollStats(pollId: number) {
     const { data } = await response.json();
     return data;
   } catch (error) {
-    console.error('Error loading poll stats:', error);
     return null;
   }
 }
@@ -76,7 +74,6 @@ export async function loadGeoVotes(params: {
     const { data } = await response.json();
     return data;
   } catch (error) {
-    console.error('Error loading geo votes:', error);
     return [];
   }
 }

@@ -108,7 +108,6 @@ async function showDatabaseData() {
                             });
 
       } catch (error) {
-    console.error('Error al consultar la base de datos:', error);
   } finally {
     await prisma.$disconnect();
   }

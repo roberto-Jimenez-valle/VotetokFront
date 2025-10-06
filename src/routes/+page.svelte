@@ -68,41 +68,6 @@
 
 </script>
 
-<style global >
-  .pwa-banner {
-    position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    z-index: 30000;
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    color: #e5e7eb;
-    border: 1px solid rgba(255,255,255,0.28);
-    background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.75) 100%);
-    border-radius: 12px;
-    backdrop-filter: blur(8px) saturate(120%);
-  }
-  .pwa-text { font: 13px/1.3 system-ui, sans-serif; opacity: .95; }
-  .pwa-btn {
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.28);
-    background: rgba(255,255,255,0.08);
-    color: #fff;
-    cursor: pointer;
-  }
-  .pwa-btn:hover { border-color: rgba(255,255,255,0.42); }
-  .pwa-dismiss {
-    width: 32px; height: 32px; border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.28);
-    background: rgba(255,255,255,0.08);
-    color: #fff; cursor: pointer;
-  }
-</style>
 
 <div class="min-h-screen text-white font-sans">
 	<!-- Globo de fondo a pantalla completa -->

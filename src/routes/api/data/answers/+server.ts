@@ -30,18 +30,15 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
     const bbox = { minLat, minLng, maxLat, maxLng };
 
     // Load base world map and data
-    const [mapRes, dataRes, votesRes] = await Promise.all([
+    const [mapRes, dataRes] = await Promise.all([
       fetch('/maps/world.topojson.json'),
-      fetch('/data/WORLD.json'),
-      fetch('/data/votes-example.json')
+      fetch('/data/WORLD.json')
     ]);
     if (!mapRes.ok) return json({ error: 'Map not found' }, { status: 404 });
     if (!dataRes.ok) return json({ error: 'Data not found' }, { status: 404 });
-    if (!votesRes.ok) return json({ error: 'Votes not found' }, { status: 404 });
 
     const world = await mapRes.json();
     const dataJson = await dataRes.json();
-    const votesJson = await votesRes.json();
 
     const features: any[] = Array.isArray(world?.features) ? world.features : [];
 
@@ -57,29 +54,16 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
       } catch {}
     }
 
-    // Filter votes by bbox
-    const allVotes: Array<{ id: string; iso3: string; lat: number; lng: number; tag?: string }> = Array.isArray(votesJson?.votes) ? votesJson.votes : [];
-    const votes = allVotes.filter(v => pointInBbox(Number(v.lat), Number(v.lng), bbox));
-
-    // Filter ANSWERS by ISO set; keep colors intact, then merge votes counts
+    // Filter ANSWERS by ISO set
     const ANSWERS: Record<string, Record<string, number>> = {};
     const baseAnswers: Record<string, Record<string, number>> = dataJson?.ANSWERS ?? {};
     for (const [iso, rec] of Object.entries(baseAnswers)) {
       if (inside.has(iso)) ANSWERS[iso] = { ...rec };
     }
-    for (const v of votes) {
-      const iso = (v.iso3 || '').toUpperCase();
-      if (!iso) continue;
-      if (!inside.has(iso)) continue; // solo sumamos a iso dentro del bbox
-      const tag = (v.tag ?? '').toString();
-      if (!tag) continue; // ignorar sin etiqueta
-      if (!ANSWERS[iso]) ANSWERS[iso] = {};
-      ANSWERS[iso][tag] = (ANSWERS[iso][tag] ?? 0) + 1;
-    }
 
     const colors = dataJson?.colors ?? {};
 
-    return json({ ANSWERS, colors, votes });
+    return json({ ANSWERS, colors, votes: [] });
   } catch (err) {
     console.error('answers bbox endpoint error:', err);
     return json({ error: 'Internal error' }, { status: 500 });

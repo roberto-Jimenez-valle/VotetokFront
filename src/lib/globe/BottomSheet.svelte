@@ -1,20 +1,14 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import '$lib/styles/trending-ranking.css';
+  import type { Poll } from './types';
+
+  // Helper para reemplazar setTimeout con Promesas
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const nextTick = () => new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
   
-  // Interfaz para encuestas adicionales
-  interface Poll {
-    id: string;
-    question: string;
-    type: 'poll' | 'hashtag' | 'trending';
-    region: string;
-    options: Array<{ key: string; label: string; color: string; votes: number; avatarUrl?: string }>;
-    totalVotes: number;
-    totalViews: number;
-    creator?: { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean };
-    publishedAt?: string | Date;
-    friendsByOption?: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>>;
-  }
+  // Avatar por defecto como data URI para evitar 404
+  const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
   
   // Estado de acordeón full-width (sin scroll): índice activo por grid
   let activeAccordionMainIndex: number | null = null;
@@ -69,7 +63,6 @@
         votes: item.voteCount,
       }));
     } catch (error) {
-      console.error('Error loading historical data:', error);
       return [];
     }
   }
@@ -122,46 +115,32 @@
   // Guardar referencia a las encuestas trending completas
   let trendingPollsData: any[] = [];
 
-  // Cargar encuesta principal (trending topic) desde la API
+  // DESHABILITADO: GlobeGL ahora maneja completamente el trending
+  // Esta función causaba conflictos al sobrescribir voteOptions que viene como prop
   async function loadMainPoll() {
-    try {
-      // Usar región actual (país, subdivisión o ciudad)
-      const currentRegion = selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global';
-      
-      const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(currentRegion)}&limit=12&hours=168`);
-      if (!response.ok) throw new Error('Failed to load trending polls');
-      const { data } = await response.json();
-      
-      if (data && data.length > 0) {
-                
-        // Guardar datos completos de las encuestas
-        trendingPollsData = data;
-        
-        // Transformar las encuestas trending en opciones de la encuesta principal
-        voteOptions = data.map((poll: any, index: number) => {
-                    
-          // Usar el color de la primera opción de la encuesta, o un color por defecto
-          const pollColor = poll.options?.[0]?.color || ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5];
-                    
-          return {
-            key: poll.id.toString(),
-            label: poll.title,
-            color: pollColor,
-            votes: poll.trendingScore || poll.totalVotes,
-            pollData: poll, // Guardar datos completos para abrir después
-          };
-        });
-        
-                
-        // Emitir evento para actualizar el globo con las encuestas trending
-        dispatch('openPollInGlobe', { 
-          poll: null, // null = vista global con encuestas trending
-          options: voteOptions 
-        });
-      }
-    } catch (error) {
-      console.error('Error loading main poll:', error);
-    }
+    console.log('[BottomSheet] loadMainPoll DESHABILITADO - GlobeGL maneja trending');
+    return;
+    
+    // CÓDIGO ORIGINAL COMENTADO - NO USAR
+    // try {
+    //   const currentRegion = selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global';
+    //   const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(currentRegion)}&limit=12&hours=168`);
+    //   if (!response.ok) throw new Error('Failed to load trending polls');
+    //   const { data } = await response.json();
+    //   
+    //   if (data && data.length > 0) {
+    //     trendingPollsData = data;
+    //     voteOptions = data.map((poll: any, index: number) => ({
+    //       key: poll.id.toString(),
+    //       label: poll.title,
+    //       color: poll.options?.[0]?.color || ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5],
+    //       votes: poll.trendingScore || poll.totalVotes,
+    //       pollData: poll,
+    //     }));
+    //   }
+    // } catch (error) {
+    //   console.error('Error loading main poll:', error);
+    // }
   }
 
   // Cargar polls adicionales desde la API
@@ -408,75 +387,69 @@
     return `M ${points.join(' L ')}`;
   }
 
-  function setActiveMain(i: number) {
+  async function setActiveMain(i: number) {
     activeAccordionMainIndex = i;
     // Scroll a la card activa en grids con clase dense
-    setTimeout(() => {
-      if (mainGridRef && mainGridRef.classList.contains('dense')) {
-        scrollToActiveCard(mainGridRef, i);
-      }
-    }, 50);
+    await nextTick();
+    if (mainGridRef && mainGridRef.classList.contains('dense')) {
+      scrollToActiveCard(mainGridRef, i);
+    }
   }
   
-  function nextPageMain() {
+  async function nextPageMain() {
     transitionDirectionMain = 'next';
     currentPageMain += 1;
     activeAccordionMainIndex = null;
-    setTimeout(() => { transitionDirectionMain = null; }, 400);
+    await delay(400);
+    transitionDirectionMain = null;
   }
   
-  function prevPageMain() {
+  async function prevPageMain() {
     if (currentPageMain > 0) {
       transitionDirectionMain = 'prev';
       currentPageMain -= 1;
       // Abrir la última opción de la página anterior
-      setTimeout(() => {
-        const newPageOptions = getPaginatedOptions(sortedDisplayOptions, currentPageMain);
-        activeAccordionMainIndex = newPageOptions.items.length - 1;
-      }, 50);
-      setTimeout(() => { transitionDirectionMain = null; }, 400);
+      await delay(50);
+      const newPageOptions = getPaginatedOptions(sortedDisplayOptions, currentPageMain);
+      activeAccordionMainIndex = newPageOptions.items.length - 1;
+      await delay(350);
+      transitionDirectionMain = null;
     }
   }
-  function setActiveForPoll(pollId: string, i: number) {
+  async function setActiveForPoll(pollId: string, i: number) {
     activeAccordionByPoll[pollId] = i;
     // Scroll a la card activa en grids con clase dense
-    setTimeout(() => {
-      const gridRef = pollGridRefs[pollId];
-      if (gridRef && gridRef.classList.contains('dense')) {
-        scrollToActiveCard(gridRef, i);
-      }
-    }, 50);
+    await nextTick();
+    const gridRef = pollGridRefs[pollId];
+    if (gridRef && gridRef.classList.contains('dense')) {
+      scrollToActiveCard(gridRef, i);
+    }
   }
   
-  function nextPageForPoll(pollId: string) {
+  async function nextPageForPoll(pollId: string) {
     const current = currentPageByPoll[pollId] || 0;
-    addDebugLog(`➡️ nextPage: poll=${pollId}, current=${current}`);
     transitionDirectionByPoll[pollId] = 'next';
     currentPageByPoll = { ...currentPageByPoll, [pollId]: current + 1 };
     activeAccordionByPoll[pollId] = null;
-    addDebugLog(`✅ Nueva página: ${current + 1}`);
-    setTimeout(() => { transitionDirectionByPoll[pollId] = null; }, 400);
+    await delay(400);
+    transitionDirectionByPoll[pollId] = null;
   }
   
-  function prevPageForPoll(pollId: string) {
+  async function prevPageForPoll(pollId: string) {
     const current = currentPageByPoll[pollId] || 0;
-    addDebugLog(`⬅️ prevPage: poll=${pollId}, current=${current}`);
     if (current > 0) {
       transitionDirectionByPoll[pollId] = 'prev';
       currentPageByPoll = { ...currentPageByPoll, [pollId]: current - 1 };
-      addDebugLog(`✅ Nueva página: ${current - 1}`);
       // Abrir la última opción de la página anterior
-      setTimeout(() => {
-        const poll = additionalPolls.find(p => p.id === pollId);
-        if (poll) {
-          const sortedOptions = getNormalizedOptions(poll).sort((a, b) => b.pct - a.pct);
-          const newPageOptions = getPaginatedOptions(sortedOptions, currentPageByPoll[pollId] || 0);
-          activeAccordionByPoll[pollId] = newPageOptions.items.length - 1;
-        }
-      }, 50);
-      setTimeout(() => { transitionDirectionByPoll[pollId] = null; }, 400);
-    } else {
-      addDebugLog(`⚠️ Ya en primera página`);
+      await delay(50);
+      const poll = additionalPolls.find(p => p.id === pollId);
+      if (poll) {
+        const sortedOptions = getNormalizedOptions(poll).sort((a, b) => b.pct - a.pct);
+        const newPageOptions = getPaginatedOptions(sortedOptions, currentPageByPoll[pollId] || 0);
+        activeAccordionByPoll[pollId] = newPageOptions.items.length - 1;
+      }
+      await delay(350);
+      transitionDirectionByPoll[pollId] = null;
     }
   }
   
@@ -497,7 +470,6 @@
     
     const items = options.slice(start, end);
     
-    addDebugLog(`📄 getPaginated: total=${options.length}, page=${page}, start=${start}, end=${end}, items=${items.length}`);
     
     return {
       items,
@@ -600,7 +572,6 @@
         totalCards,
         activeAccordionByPoll: currentDragPollId ? activeAccordionByPoll[currentDragPollId] : 'N/A'
       };
-            addDebugLog(`🔄 Drag: pollId=${currentDragPollId}, idx=${currentIndex}, ΔX=${Math.round(deltaX)}, cards=${totalCards}`);
       
       // Si no hay ninguna activa (null o undefined), activar la primera o última según dirección
       if ((currentIndex === null || currentIndex === undefined) && totalCards > 0) {
@@ -738,9 +709,12 @@
   export let selectedSubdivisionName: string | null = null;
   export let selectedCityName: string | null = null;
   export let countryChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  export let subdivisionChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let voteOptions: Array<{ key: string; label: string; color: string; votes: number; pollData?: any }> = [];
+  export let legendItems: Array<{ key: string; color: string; count: number }> = [];
+  export let activePoll: any = null;
   // Estadísticas de la encuesta principal
   export let mainPollViews: number = 0;
   export let mainPollSaves: number = 0;
@@ -750,11 +724,11 @@
   // Usuario por defecto: María González (id: 4) que sigue a 5 usuarios
   export let currentUserId: number = 4;
   // Amigos que han votado por opción (opcional)
-  export let friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
+  export const friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
   // Visitas por opción (opcional)
   export const visitsByOption: Record<string, number> = {};
   // Creador de la publicación por opción (opcional)
-  export let creatorsByOption: Record<string, { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean }> = {};
+  export const creatorsByOption: Record<string, { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean }> = {};
   // Fecha de publicación por opción (opcional)
   export const publishedAtByOption: Record<string, string | Date> = {};
 
@@ -773,7 +747,7 @@
   
   // Array de encuestas adicionales para scroll infinito
   export let additionalPolls: Poll[] = [];
-  export let onLoadMorePolls: () => void = () => {};
+  export const onLoadMorePolls: () => void = () => {};
   
   // Dropdown toggle function
   export let onToggleDropdown: () => void = () => {};
@@ -818,9 +792,10 @@
   
   // Scroll al final cuando se cierra la búsqueda
   $: if (previousShowSearch && !showSearch && navContainer) {
-    setTimeout(() => {
+    (async () => {
+      await nextTick();
       navContainer.scrollLeft = navContainer.scrollWidth;
-    }, 50);
+    })();
     previousShowSearch = showSearch;
   } else if (showSearch !== previousShowSearch) {
     previousShowSearch = showSearch;
@@ -828,9 +803,10 @@
   
   // Focus en el input cuando se abre la búsqueda, sin hacer scroll
   $: if (showSearch && searchInput) {
-    setTimeout(() => {
+    (async () => {
+      await nextTick();
       searchInput?.focus({ preventScroll: true });
-    }, 50);
+    })();
   }
   
   // Search for countries and subdivisions when query changes
@@ -853,10 +829,10 @@
       clearTimeout(searchDebounceTimer);
     }
     
-    // Debounce search
+    // Debounce search usando Promise
     searchDebounceTimer = setTimeout(async () => {
       isSearching = true;
-      const results: Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision' }> = [];
+      const results = [] as Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision' }>;
       const lowerQuery = query.toLowerCase().trim();
       
       try {
@@ -966,39 +942,8 @@
   let optionsSwipeThreshold = 30; // Umbral para considerar un swipe deliberado
   
   // Debug logs para móvil
-  let debugLogs: string[] = [];
-  let showDebugModal = false;
-  function addDebugLog(message: string) {
-    debugLogs = [...debugLogs.slice(-20), `${new Date().toLocaleTimeString()}: ${message}`];
-      }
+ 
   
-  async function copyDebugLogs() {
-    const text = debugLogs.join('\n');
-    try {
-      // Intentar con clipboard API moderno
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        addDebugLog('✅ Logs copiados al portapapeles');
-      } else {
-        // Fallback: crear textarea temporal
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const success = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        if (success) {
-          addDebugLog('✅ Logs copiados al portapapeles');
-        } else {
-          addDebugLog('❌ Error al copiar');
-        }
-      }
-    } catch (err) {
-      addDebugLog('❌ Error: ' + (err as Error).message);
-    }
-  }
   
   // Modal de opciones de encuesta
   let showPollOptionsModal = false;
@@ -1178,15 +1123,6 @@
   // Dirección de transición para trending
   let trendingTransitionDirection: 'next' | 'prev' | null = null;
   
-  // Debug: Verificar qué se está mostrando
-  $: if (trendingPolls.length > 0) {
-    console.log('🎯 Trending polls a mostrar:', trendingPolls.map((p: any) => ({
-      label: p.label,
-      key: p.key,
-      hasPollData: !!p.pollData,
-      hasUser: !!p.pollData?.user
-    })));
-  }
 
   $: {
     const signature = displayOptions.length > 1 ? displayOptions.map(option => option.key).join('|') : '';
@@ -1362,7 +1298,8 @@
   
   $: if (selectedCountryName || selectedSubdivisionName || selectedCityName) {
     // Wait for DOM update then scroll to active button
-    setTimeout(() => {
+    (async () => {
+      await nextTick();
       if (navContainer) {
         const activeButton = navContainer.querySelector('.nav-chip.active');
         if (activeButton) {
@@ -1373,7 +1310,7 @@
           });
         }
       }
-    }, 100);
+    })();
   }
 </script>
 
@@ -1391,19 +1328,63 @@
     onpointerdown={onPointerDown}
     ontouchstart={onPointerDown}
   >
-    <!-- Barra de opciones de encuesta (cuando hay una seleccionada) - REEMPLAZA drag-chart -->
-    {#if additionalPolls.length > 0 && additionalPolls[0]}
-      {@const selectedPoll = additionalPolls[0]}
-      {@const totalVotes = selectedPoll.options.reduce((sum, opt) => sum + opt.votes, 0)}
-      {@const optionsWithPct = selectedPoll.options.map(opt => ({
-        ...opt,
-        pct: totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0
+    <!-- Barra de opciones de encuesta (cuando hay una activa) -->
+    {#if voteOptions.length > 0}
+      <!-- Para la BARRA: usar legendItems (solo opciones con votos en el nivel actual) -->
+      {@const totalCount = legendItems.reduce((sum, item) => sum + item.count, 0)}
+      {@const barSegments = legendItems.map(item => ({
+        key: item.key,
+        label: item.key,
+        color: item.color,
+        votes: item.count,
+        pct: totalCount > 0 ? (item.count / totalCount) * 100 : 0
       }))}
       
+      <!-- Para las OPCIONES EXPANDIDAS: mostrar TODAS las opciones de la encuesta -->
+      {@const legendMap = Object.fromEntries(legendItems.map(item => [item.key, item.count]))}
+      {@const optionsWithPct = voteOptions.map(opt => {
+        const count = legendMap[opt.key] || 0;
+        const pct = totalCount > 0 ? (count / totalCount) * 100 : 0;
+        
+        // Debug: Log para ver si coinciden las claves
+        if (count === 0 && legendItems.length > 0) {
+          console.log('[BottomSheet] ⚠️ No match:', {
+            optKey: opt.key,
+            legendKeys: Object.keys(legendMap),
+            legendMap
+          });
+        }
+        
+        return {
+          key: opt.key,
+          label: opt.label || opt.key,
+          color: opt.color,
+          votes: count,
+          pct: pct,
+          displayText: count > 0 ? `${count} ${count === 1 ? 'región' : 'regiones'}` : '0 regiones',
+          pollData: (opt as any).pollData,
+          avatarUrl: (opt as any).avatarUrl
+        };
+      })}
+      {@const pollTitle = activePoll?.question || activePoll?.title || 'Trending de encuestas'}
+      
       <div class="poll-options-bar-container">
-        <!-- Título de la encuesta -->
+        <!-- Título de la encuesta o trending -->
         <div class="poll-bar-title">
-          <h3>{selectedPoll.question}</h3>
+          <h3>{pollTitle}</h3>
+          {#if activePoll}
+            <button 
+              class="poll-close-btn" 
+              onclick={(e) => {
+                e.stopPropagation();
+                dispatch('openPollInGlobe', { poll: null, options: [] });
+              }}
+              aria-label="Cerrar encuesta y volver a trending"
+              title="Cerrar encuesta"
+            >
+              ✕
+            </button>
+          {/if}
         </div>
         
         <!-- Barra horizontal de colores (clickeable para expandir) -->
@@ -1417,11 +1398,11 @@
           aria-label="Ver opciones de la encuesta"
         >
           <div class="poll-bar-segments">
-            {#each optionsWithPct as option}
+            {#each barSegments as segment}
               <div 
                 class="poll-bar-segment" 
-                style="width: {option.pct}%; background-color: {option.color};"
-                title="{option.label}: {option.pct.toFixed(1)}%"
+                style="width: {segment.pct}%; background-color: {segment.color};"
+                title="{segment.label}: {segment.pct.toFixed(1)}%"
               ></div>
             {/each}
           </div>
@@ -1484,7 +1465,17 @@
             }}
           >
             {#each optionsWithPct.sort((a, b) => b.pct - a.pct) as option}
-              <div class="poll-bar-option-item">
+              <button 
+                class="poll-bar-option-item" 
+                class:is-trending-poll={!activePoll && option.pollData}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  // Si es modo trending y tiene pollData, abrir esa encuesta
+                  if (!activePoll && option.pollData) {
+                    openTrendingPoll(option.pollData);
+                  }
+                }}
+              >
                 <div class="poll-bar-option-info">
                   {#if option.avatarUrl}
                     <img src={option.avatarUrl} alt={option.label} class="poll-bar-option-avatar" />
@@ -1494,6 +1485,9 @@
                     </div>
                   {/if}
                   <span class="poll-bar-option-label">{option.label}</span>
+                  {#if !activePoll && option.pollData}
+                    <span class="poll-bar-option-hint">👁️ Ver</span>
+                  {/if}
                 </div>
                 <div class="poll-bar-option-stats">
                   <div class="poll-bar-option-progress-bg">
@@ -1504,7 +1498,7 @@
                   </div>
                   <span class="poll-bar-option-pct">{option.pct.toFixed(1)}%</span>
                 </div>
-              </div>
+              </button>
             {/each}
           </div>
         {/if}
@@ -1750,7 +1744,7 @@
               </div>
             </div>
             <div class="header-avatar header-avatar-real">
-              <img src="/default-avatar.png" alt="Avatar" />
+              <img src={DEFAULT_AVATAR} alt="Avatar" />
             </div>
           </div>
         {:else if 0.5 /* removed random */ > 0.5}
@@ -1765,7 +1759,7 @@
               </div>
             </div>
             <div class="header-avatar header-avatar-real">
-              <img src="/default-avatar.png" alt="Avatar" />
+              <img src={DEFAULT_AVATAR} alt="Avatar" />
             </div>
           </div>
         {:else if selectedCountryName && selectedSubdivisionName}
@@ -1808,7 +1802,6 @@
              const touch = e.touches[0];
              touchStartX = touch.clientX;
              touchStartY = touch.clientY;
-             addDebugLog(`📱 Touch start: X=${Math.round(touchStartX)}, Y=${Math.round(touchStartY)}`);
            }}
            ontouchmove={(e) => {
              if (touchStartX === 0) return;
@@ -1816,41 +1809,38 @@
              const deltaX = touch.clientX - touchStartX;
              const deltaY = touch.clientY - touchStartY;
              
-             addDebugLog(`👆 Move: ΔX=${Math.round(deltaX)}, ΔY=${Math.round(deltaY)}`);
              
              // Solo si el movimiento horizontal es mayor que el vertical
              if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
                e.preventDefault(); // Prevenir scroll
-               addDebugLog(`📱 Swipe ${deltaX > 0 ? '→ derecha' : '← izquierda'} (${Math.round(deltaX)}px)`);
                
                if (deltaX > 0 && currentPageMain > 0) {
                  trendingTransitionDirection = 'prev';
-                 setTimeout(() => {
+                 (async () => {
+                   await delay(10);
                    currentPageMain--;
-                   addDebugLog(`✅ ← Página ${currentPageMain}`);
-                   setTimeout(() => { trendingTransitionDirection = null; }, 300);
-                 }, 10);
+                   await delay(300);
+                   trendingTransitionDirection = null;
+                 })();
                } else if (deltaX < 0 && shouldPaginateMain && currentPageMain < paginatedMainOptions.totalPages - 1) {
                  trendingTransitionDirection = 'next';
-                 setTimeout(() => {
+                 (async () => {
+                   await delay(10);
                    currentPageMain++;
-                   addDebugLog(`✅ → Página ${currentPageMain}`);
-                   setTimeout(() => { trendingTransitionDirection = null; }, 300);
-                 }, 10);
+                   await delay(300);
+                   trendingTransitionDirection = null;
+                 })();
                } else {
-                 addDebugLog(`⚠️ No se puede cambiar (página ${currentPageMain}/${paginatedMainOptions.totalPages - 1})`);
                }
                touchStartX = 0;
                touchStartY = 0;
              }
            }}
            ontouchend={() => { 
-             addDebugLog('🖐️ Touch end');
              touchStartX = 0; 
              touchStartY = 0;
            }}
            ontouchcancel={() => { 
-             addDebugLog('❌ Touch cancel');
              touchStartX = 0; 
              touchStartY = 0;
            }}>
@@ -1951,17 +1941,17 @@
           {#each Array(paginatedMainOptions.totalPages) as _, pageIndex}
             <button 
               class="pagination-dot {pageIndex === currentPageMain ? 'active' : ''}"
-              onclick={() => { 
+              onclick={async () => { 
                 const oldPage = currentPageMain;
                 transitionDirectionMain = pageIndex < oldPage ? 'prev' : 'next';
                 currentPageMain = pageIndex;
-                setTimeout(() => {
-                  const newPageOptions = getPaginatedOptions(sortedDisplayOptions, pageIndex);
-                  activeAccordionMainIndex = pageIndex < oldPage 
-                    ? newPageOptions.items.length - 1 
-                    : 0;
-                }, 50);
-                setTimeout(() => { transitionDirectionMain = null; }, 400);
+                await delay(50);
+                const newPageOptions = getPaginatedOptions(sortedDisplayOptions, pageIndex);
+                activeAccordionMainIndex = pageIndex < oldPage 
+                  ? newPageOptions.items.length - 1 
+                  : 0;
+                await delay(350);
+                transitionDirectionMain = null;
               }}
               type="button"
               aria-label="Bloque {pageIndex + 1}"
@@ -2120,8 +2110,14 @@
                           if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
                         }
                       }}
+                      onkeydown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id])) {
+                          e.preventDefault();
+                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
+                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
+                        }
+                      }}
                       role={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 'button' : undefined}
-                      tabindex={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 0 : undefined}
                     >
                       #{poll.question}
                       {#if pollTitleExpanded[poll.id]}
@@ -2151,8 +2147,14 @@
                           if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
                         }
                       }}
+                      onkeydown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id])) {
+                          e.preventDefault();
+                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
+                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
+                        }
+                      }}
                       role={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 'button' : undefined}
-                      tabindex={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 0 : undefined}
                     >
                       Trending en {poll.region}
                       {#if pollTitleExpanded[poll.id]}
@@ -2182,8 +2184,14 @@
                           if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
                         }
                       }}
+                      onkeydown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id])) {
+                          e.preventDefault();
+                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
+                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
+                        }
+                      }}
                       role={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 'button' : undefined}
-                      tabindex={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 0 : undefined}
                     >
                       {poll.question}
                       {#if pollTitleExpanded[poll.id]}
@@ -2205,7 +2213,7 @@
                     {poll.creator.name.charAt(0)}
                   </div>
                 {:else}
-                  <img src="/default-avatar.png" alt="Avatar" />
+                  <img src={DEFAULT_AVATAR} alt="Avatar" />
                 {/if}
               </div>
             </div>
@@ -2221,10 +2229,6 @@
               : { items: sortedPollOptions, totalPages: 1, hasNext: false, hasPrev: false }}
             {@const isChartView = currentPage === -1}
             {@const isSingleOptionPoll = sortedPollOptions.length === 1}
-            {#if sortedPollOptions.length > 4}
-              {console.log('Poll:', poll.question, '| Total opciones:', sortedPollOptions.length, '| Página actual:', currentPage, '| Items en página:', paginatedPoll.items.length)}
-              {addDebugLog(`📊 Poll ${poll.id}: total=${sortedPollOptions.length}, página=${currentPage}, mostrando=${paginatedPoll.items.length} items`)}
-            {/if}
             <div class="vote-cards-grid accordion fullwidth {activeAccordionByPoll[poll.id] != null ? 'open' : ''} {isSingleOptionPoll || isChartView ? 'compact-one' : ''}"
                style="--items: {isChartView ? 1 : paginatedPoll.items.length}"
                role="group" aria-label={'Opciones de ' + poll.region}
@@ -2242,7 +2246,7 @@
                   <!-- Header con avatar y título -->
                   <div class="card-header">
                     <h2 class="question-title">Gráfico Combinado</h2>
-                    <img class="creator-avatar" src="/default-avatar.png" alt="Avatar" loading="lazy" />
+                    <img class="creator-avatar" src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
                   </div>
 
                   <!-- Contenido principal: gráfico combinado -->
@@ -2320,12 +2324,12 @@
                       {#if chartHoverData}
                         {@const allVotes = sortedPollOptions.map(opt => {
                           const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct);
-                          const dataIndex = Math.round((chartHoverData!.x / 300) * (optData.length - 1));
+                          const dataIndex = Math.round(((chartHoverData?.x ?? 0) / 300) * (optData.length - 1));
                           return optData[dataIndex]?.votes || 0;
                         }).reduce((sum, votes) => sum + votes, 0)}
                         <div class="chart-tooltip">
                           <div class="tooltip-header">
-                            <div class="tooltip-date">{formatChartDate(chartHoverData!.date, selectedTimeRange)}</div>
+                            <div class="tooltip-date">{formatChartDate(chartHoverData?.date ?? new Date(), selectedTimeRange)}</div>
                             <div class="tooltip-total">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
                                 <path d="M9 11l3 3L22 4"></path>
@@ -2336,7 +2340,7 @@
                           </div>
                           {#each sortedPollOptions as opt}
                             {@const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct)}
-                            {@const dataIndex = Math.round((chartHoverData!.x / 300) * (optData.length - 1))}
+                            {@const dataIndex = Math.round(((chartHoverData?.x ?? 0) / 300) * (optData.length - 1))}
                             {@const dataPoint = optData[dataIndex]}
                             {#if dataPoint}
                               <div class="tooltip-row">
@@ -2369,8 +2373,7 @@
                   </div>
                 </button>
               {:else}
-              {console.log('Renderizando opciones de página:', paginatedPoll.items.map((o: any) => o.label))}
-              {addDebugLog(`🎴 Renderizando ${paginatedPoll.items.length} cards: ${paginatedPoll.items.map((o: any) => o.label.substring(0, 20)).join(', ')}`)}
+             
               {#each paginatedPoll.items as option, index (option.key)}
               <button 
                 class="vote-card {activeAccordionByPoll[poll.id] === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionByPoll[poll.id] !== index) ? 'collapsed' : ''}" 
@@ -2396,7 +2399,7 @@
                 {#if !isSingleOptionPoll}
                 <div class="card-header">
                   <h2 class="question-title">{option.label}</h2>
-                  <img class="creator-avatar" src={option.avatarUrl || '/default-avatar.png'} alt={option.label} loading="lazy" />
+                  <img class="creator-avatar" src={option.avatarUrl || DEFAULT_AVATAR} alt={option.label} loading="lazy" />
                 </div>
                 {/if}
 
@@ -2540,7 +2543,7 @@
                       {#each poll.friendsByOption[option.key].slice(0, 3) as friend, i}
                         <img 
                           class="friend-avatar-floating" 
-                          src={friend.avatarUrl || '/default-avatar.png'}
+                          src={friend.avatarUrl || DEFAULT_AVATAR}
                           alt={friend.name}
                           loading="lazy"
                           style="z-index: {10 - i};"
@@ -2817,42 +2820,20 @@
     </button>
   {/if}
   
-  <!-- Botón flotante de debug (solo en móvil) -->
-  <button
-    class="debug-btn"
-    onclick={() => showDebugModal = !showDebugModal}
-    type="button"
-    aria-label="Toggle debug"
-  >
-    🐛
-  </button>
-  
-  <!-- Modal de debug -->
-  {#if showDebugModal}
-    <div class="debug-modal">
-      <div class="debug-header">
-        <h4>Debug Logs ({debugLogs.length})</h4>
-        <button onclick={copyDebugLogs} type="button">📋 Copy</button>
-        <button onclick={() => { debugLogs = []; }} type="button">Clear</button>
-        <button onclick={() => showDebugModal = false} type="button">✕</button>
-      </div>
-      <div class="debug-logs">
-        {#each debugLogs as log}
-          <div class="debug-log-item">{log}</div>
-        {/each}
-        {#if debugLogs.length === 0}
-          <div class="debug-log-item">No logs yet...</div>
-        {/if}
-      </div>
-    </div>
-  {/if}
-  
   <!-- Modal de opciones de encuesta -->
   {#if showPollOptionsModal && selectedPollForOptions}
-    <div class="poll-options-overlay" onclick={closePollOptionsModal}>
+    <div class="poll-options-overlay" 
+         onclick={closePollOptionsModal}
+         onkeydown={(e) => { if (e.key === 'Escape') closePollOptionsModal(); }}
+         role="button"
+         tabindex="0"
+         aria-label="Close modal">
       <div class="poll-options-modal" 
            style="transform: translateY({modalCurrentY}px)"
            onclick={(e) => e.stopPropagation()}
+           onkeydown={(e) => e.stopPropagation()}
+           role="dialog"
+           tabindex="-1"
            ontouchstart={handleModalTouchStart}
            ontouchmove={handleModalTouchMove}
            ontouchend={handleModalTouchEnd}>
@@ -2935,73 +2916,6 @@
 </div>
 
 <style>
-  .debug-btn {
-    position: fixed;
-    bottom: 80px;
-    right: 16px;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.8);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    font-size: 24px;
-    cursor: pointer;
-    z-index: 9999;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-  
-  .debug-modal {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    max-height: 50vh;
-    background: rgba(0, 0, 0, 0.95);
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .debug-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .debug-header h4 {
-    flex: 1;
-    margin: 0;
-    color: white;
-    font-size: 14px;
-  }
-  
-  .debug-header button {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: white;
-    padding: 4px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-  }
-  
-  .debug-logs {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px 16px;
-  }
-  
-  .debug-log-item {
-    color: #10b981;
-    font-family: monospace;
-    font-size: 11px;
-    padding: 4px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  }
-  
   /* Modal de opciones de encuesta */
   .poll-options-overlay {
     position: fixed;
@@ -3133,6 +3047,11 @@
     margin-bottom: 8px;
     padding: 0 12px;
     width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
   }
   
   .poll-bar-title h3 {
@@ -3148,7 +3067,28 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
-    width: 100%;
+    flex: 1;
+  }
+  
+  .poll-close-btn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: white;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+  
+  .poll-close-btn:hover {
+    background: rgba(255,255,255,0.2);
+    transform: scale(1.1);
   }
   
   .poll-bar-chart {
@@ -3229,11 +3169,22 @@
     border-radius: 10px;
     transition: background 0.2s ease, transform 0.2s ease;
     width: 100%;
+    border: none;
+    text-align: left;
+    cursor: default;
+  }
+  
+  .poll-bar-option-item.is-trending-poll {
+    cursor: pointer;
+  }
+  
+  .poll-bar-option-item.is-trending-poll:hover {
+    background: rgba(255,255,255,0.15);
+    transform: translateX(2px);
   }
   
   .poll-bar-option-item:hover {
     background: rgba(255,255,255,0.12);
-    transform: translateX(2px);
   }
   
   .poll-bar-option-info {
@@ -3241,6 +3192,13 @@
     align-items: center;
     gap: 10px;
     width: 100%;
+  }
+  
+  .poll-bar-option-hint {
+    margin-left: auto;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    font-weight: 500;
   }
   
   .poll-bar-option-avatar,

@@ -183,15 +183,7 @@ export class BottomSheetController {
         const isDraggingDown = deltaY > 0;
         const isDraggingUp = deltaY < 0;
         
-        // Si estamos en scroll container en el top y arrastramos hacia arriba, cancelar arrastre del sheet
-        console.log('[BottomSheet] Check scroll behavior:', {
-          hasScrollContainer: !!this.scrollContainerAtStart,
-          wasAtTop: this.wasAtTopAtStart,
-          isDraggingUp,
-          isDraggingDown,
-          isVertical: this.isVerticalGesture,
-          deltaY
-        });
+       
         
         if (this.scrollContainerAtStart && this.wasAtTopAtStart) {
           if (isDraggingUp && this.isVerticalGesture) {
@@ -208,10 +200,6 @@ export class BottomSheetController {
                       }
         }
         
-        console.log('[BottomSheet] Gesture direction locked:', 
-          this.isVerticalGesture ? 'VERTICAL' : 'HORIZONTAL',
-          `(dx: ${dx.toFixed(1)}, dy: ${dy.toFixed(1)}, ratio: ${(dy/dx).toFixed(2)})`
-        );
       }
     }
     

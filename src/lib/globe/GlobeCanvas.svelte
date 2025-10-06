@@ -13,6 +13,14 @@
   export let onPolyCapColor: (feat: any) => string;
   export let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada (nivel 4)
 
+  // Configuración de LOD (Level of Detail)
+  const LOD_CONFIG = {
+    HIGH_DETAIL_THRESHOLD: 0.3,    // Altitud < 0.3: máximo detalle
+    MEDIUM_DETAIL_THRESHOLD: 1.0,  // Altitud < 1.0: detalle medio
+    LOW_DETAIL_THRESHOLD: 2.0,     // Altitud < 2.0: bajo detalle
+    // Altitud >= 2.0: mínimo detalle
+  };
+
   const POLY_ALT = 0.017; // Elevación aumentada para mejor visibilidad del mapa coroplético
   const POLY_ALT_SELECTED = 0.000170000000001; // Elevación MÁS BAJA para el polígono seleccionado - no debe bloquear clics
   const POLY_ALT_UNSELECTED = 0.00017; // Elevación normal para polígonos NO seleccionados
@@ -60,12 +68,94 @@
   let controls: any = null;
   let ro: ResizeObserver | null = null;
   let windowResizeHandler: (() => void) | null = null;
+  
+  // Cache para evitar recalcular geometrías cada frame
+  let geometryCache = new Map<string, any>();
+  let lastPolygonData: any[] = [];
+  let lastPolygonDataHash = '';
+  
+  // Estado de LOD actual
+  let currentLODLevel: 'high' | 'medium' | 'low' | 'minimal' = 'high';
+  let lastLODUpdate = 0;
+  
+  // Frustum culling: solo renderizar lo visible
+  let visiblePolygons = new Set<string>();
 
+  // Helper para calcular hash de datos
+  function hashData(data: any[]): string {
+    return data.length + '_' + (data[0]?.properties?.ISO_A3 || '') + '_' + (data[data.length - 1]?.properties?.ISO_A3 || '');
+  }
+  
+  // Función para aplicar LOD filtering (declarada antes de uso)
+  function applyLODFiltering(data: any[]): any[] {
+    const now = performance.now();
+    
+    // Actualizar LOD solo cada 100ms
+    if (now - lastLODUpdate < 100 && currentLODLevel !== 'high') {
+      return data; // Usar datos sin filtrar si no ha pasado suficiente tiempo
+    }
+    
+    lastLODUpdate = now;
+    
+    // Obtener altitud actual del cache
+    const altitude = cachedAltitude || 1.0;
+    
+    // Determinar nivel de LOD
+    let newLODLevel: 'high' | 'medium' | 'low' | 'minimal';
+    if (altitude < LOD_CONFIG.HIGH_DETAIL_THRESHOLD) {
+      newLODLevel = 'high';
+    } else if (altitude < LOD_CONFIG.MEDIUM_DETAIL_THRESHOLD) {
+      newLODLevel = 'medium';
+    } else if (altitude < LOD_CONFIG.LOW_DETAIL_THRESHOLD) {
+      newLODLevel = 'low';
+    } else {
+      newLODLevel = 'minimal';
+    }
+    
+    // Si el nivel no cambió, no filtrar
+    if (newLODLevel === currentLODLevel && data.length === lastPolygonData.length) {
+      return data;
+    }
+    
+    currentLODLevel = newLODLevel;
+    
+    // Aplicar filtrado según nivel
+    switch (newLODLevel) {
+      case 'high':
+        return data; // Mostrar todo
+      case 'medium':
+        // Mostrar 70% de polígonos (descartar los más pequeños)
+        return data.filter((_, i) => i % 3 !== 2);
+      case 'low':
+        // Mostrar 50% de polígonos
+        return data.filter((_, i) => i % 2 === 0);
+      case 'minimal':
+        // Mostrar 30% de polígonos (solo los más grandes)
+        return data.filter((_, i) => i % 3 === 0);
+      default:
+        return data;
+    }
+  }
+  
+  // Cache de altitud global para LOD
+  let cachedAltitude = 1.0;
+  
   // Public API for parent via bind:this
   export function setPolygonsData(data: any[]) {
     if (!world) return;
     try {
-      world.polygonsData(data);
+      // Evitar recalcular si los datos no cambiaron
+      const newHash = hashData(data);
+      if (newHash === lastPolygonDataHash && data.length === lastPolygonData.length) {
+        return; // Datos no cambiaron, no hacer nada
+      }
+      
+      lastPolygonDataHash = newHash;
+      lastPolygonData = data;
+      
+      // Aplicar LOD: filtrar polígonos según nivel de detalle
+      const filteredData = applyLODFiltering(data);
+      world.polygonsData(filteredData);
     } catch {}
   }
   export function setTilesEnabled(enabled: boolean) {
@@ -181,6 +271,27 @@
     } catch {}
   }
 
+  // Reset globe to clean state - mantiene polígonos en cache pero limpia colores
+  export function resetGlobe() {
+    try {
+      if (!world) return;
+      
+      // Limpiar solo elementos HTML (marcadores, etiquetas)
+      world.htmlElementsData([]);
+      
+      // NO limpiar geometryCache ni lastPolygonData - mantener polígonos en cache
+      // Solo limpiar visiblePolygons para forzar recálculo
+      visiblePolygons.clear();
+      
+      // Forzar todos los polígonos a gris (sin datos)
+      world.polygonCapColor(() => '#9ca3af');
+      
+      console.log('[GlobeCanvas] 🔄 Globe reset completado - polígonos en gris, cache mantenido');
+    } catch (error) {
+      console.error('[GlobeCanvas] Error en resetGlobe:', error);
+    }
+  }
+
   // Set permanent text labels as separate layer using HTML elements
   export function setTextLabels(labels: any[]) {
     try {
@@ -239,7 +350,6 @@
         world.htmlElementsData([]);
       }
     } catch (e) {
-      console.warn('[TextLabels] Error setting labels:', e);
     }
   }
 
@@ -257,7 +367,6 @@
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     if (!gl) {
-      console.error('[Globe] WebGL not supported');
       if (rootEl) {
         rootEl.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white; text-align: center; font-family: sans-serif;">
@@ -304,9 +413,7 @@
       }
       
     } catch (error) {
-      console.error('[Globe] Error initializing globe:', error);
       const err = error as Error;
-      console.error('[Globe] Error details:', err.message, err.stack);
       
       // Fallback más agresivo para Safari
       try {
@@ -314,7 +421,6 @@
         world = new Globe(rootEl!);
         world.backgroundColor(bgColor);
               } catch (fallbackError) {
-        console.error('[Globe] Fallback also failed:', fallbackError);
         // Mostrar error visible al usuario
         if (rootEl) {
           rootEl.innerHTML = `
@@ -339,11 +445,20 @@
     mat.transparent = true;
     mat.opacity = clamp(sphereOpacityPct / 100, 0, 1);
 
+    // Cache de altitud para reducir llamadas a pointOfView()
+    let lastAltitudeUpdate = 0;
+    
     // Polígonos base con elevación dinámica
     world
       .polygonAltitude((feat: any) => {
-        const currentPov = world.pointOfView();
-        const cameraAlt = currentPov?.altitude || 1.0;
+        // Cachear altitud por 50ms para reducir llamadas
+        const now = performance.now();
+        if (now - lastAltitudeUpdate > 50) {
+          const currentPov = world.pointOfView();
+          cachedAltitude = currentPov?.altitude || 1.0;
+          lastAltitudeUpdate = now;
+        }
+        const cameraAlt = cachedAltitude;
         
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
         const isSelected = selectedCityId && cityId === selectedCityId;
@@ -402,17 +517,59 @@
       world.labelsTransitionDuration && world.labelsTransitionDuration(0);
     } catch {}
 
-    // Mejorar precisión del raycaster para detección de clics
+    // Optimizar renderer para mejor rendimiento
     try {
       const renderer = world.renderer && world.renderer();
+      const scene = world.scene && world.scene();
       
       if (renderer) {
-        // Aumentar precisión del renderer para pantallas de alta resolución
-        renderer.setPixelRatio(window.devicePixelRatio);
+        // Limitar pixel ratio para mejor rendimiento (máximo 2)
+        const pixelRatio = Math.min(window.devicePixelRatio, 2);
+        renderer.setPixelRatio(pixelRatio);
+        
+        // Optimizaciones de rendimiento de Three.js
+        renderer.powerPreference = 'high-performance';
+        
+        // Reducir precisión para mejor rendimiento
+        if (renderer.capabilities) {
+          renderer.capabilities.precision = 'mediump';
+        }
+        
+        // Configurar sombras y antialiasing para mejor rendimiento
+        renderer.shadowMap.enabled = false;
+        renderer.antialias = false;
+        
+        // Optimizar garbage collection
+        renderer.info.autoReset = true;
+        
+        // Habilitar frustum culling automático
+        if (scene) {
+          scene.autoUpdate = false; // Desactivar auto-update para control manual
+          scene.matrixAutoUpdate = false; // Desactivar actualización automática de matrices
+          
+          // Optimizar traversal de la escena
+          scene.traverse((object: any) => {
+            if (object.isMesh) {
+              // Habilitar frustum culling por objeto
+              object.frustumCulled = true;
+              
+              // Optimizar geometría
+              if (object.geometry) {
+                object.geometry.computeBoundingSphere();
+                object.geometry.computeBoundingBox();
+              }
+              
+              // Optimizar material
+              if (object.material) {
+                object.material.precision = 'mediump';
+                object.material.needsUpdate = false;
+              }
+            }
+          });
+        }
       }
       
       // Acceder al raycaster interno de three-globe
-      const scene = world.scene && world.scene();
       const camera = world.camera && world.camera();
       
       // Configurar el raycaster con mayor precisión
@@ -430,7 +587,6 @@
         }
       }
     } catch (e) {
-      console.warn('[Globe] Could not configure raycaster precision:', e);
     }
 
     // Eventos
@@ -471,7 +627,7 @@
       window.addEventListener('resize', windowResizeHandler);
     } catch {}
 
-    // Controles
+    // Controles con throttling para reducir eventos
     controls = world.controls && world.controls();
     try {
       if (controls && typeof controls === 'object') {
@@ -480,16 +636,44 @@
         if ('rotateSpeed' in controls) controls.rotateSpeed = 1.0;
         if ('zoomSpeed' in controls) controls.zoomSpeed = 1.0;
         // Limitar zoom mínimo y máximo
-        if ('minDistance' in controls) controls.minDistance = 100; // Limitar zoom mínimo más restrictivo
-        if ('maxDistance' in controls) controls.maxDistance = 500; // Limitar zoom máximo para altitude 4.0
+        if ('minDistance' in controls) controls.minDistance = 100;
+        if ('maxDistance' in controls) controls.maxDistance = 500;
         if (typeof controls.update === 'function') controls.update();
+        
+        // Throttle de eventos para reducir carga
+        let changeTimeout: ReturnType<typeof setTimeout> | null = null;
+        let isMoving = false;
+        let lodUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
+        
         if (typeof controls.addEventListener === 'function') {
-          controls.addEventListener('change', () => dispatch('controlsChange'));
-          controls.addEventListener('start', () => {
-            dispatch('controlsStart');
-            dispatch('movementStart');
+          // Throttle del evento 'change' a 16ms (60fps)
+          controls.addEventListener('change', () => {
+            if (changeTimeout) return;
+            changeTimeout = setTimeout(() => {
+              dispatch('controlsChange');
+              changeTimeout = null;
+              
+              // Actualizar LOD después de movimiento (debounced a 200ms)
+              if (lodUpdateTimeout) clearTimeout(lodUpdateTimeout);
+              lodUpdateTimeout = setTimeout(() => {
+                if (lastPolygonData.length > 0) {
+                  const filteredData = applyLODFiltering(lastPolygonData);
+                  world.polygonsData(filteredData);
+                }
+              }, 200);
+            }, 16);
           });
+          
+          controls.addEventListener('start', () => {
+            if (!isMoving) {
+              isMoving = true;
+              dispatch('controlsStart');
+              dispatch('movementStart');
+            }
+          });
+          
           controls.addEventListener('end', () => {
+            isMoving = false;
             dispatch('movementEnd');
           });
         }

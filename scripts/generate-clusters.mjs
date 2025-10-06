@@ -30,7 +30,6 @@ function saveJson(file, data) {
 
 function main() {
   if (!fs.existsSync(INPUT)) {
-    console.error('Input not found:', INPUT);
     process.exit(1);
   }
   const entries = loadJson(INPUT);

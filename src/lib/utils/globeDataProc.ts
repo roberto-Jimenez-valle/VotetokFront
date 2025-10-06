@@ -23,13 +23,14 @@ import { getDominantKey as getDominantKeyUtil } from '$lib/utils/globeHelpers';
 
 /**
  * Extrae el identificador de un feature (puede ser ISO_A3, ID_1, ID_2, etc.)
+ * IMPORTANTE: Buscar del más específico al más general
  */
 function getFeatureId(f: any): string {
   const p = f?.properties ?? {};
   
-  // Nivel 1 (países): ISO_A3
-  if (p.ISO_A3) {
-    return p.ISO_A3.toString().toUpperCase();
+  // Nivel 3 (sub-subdivisiones): ID_2, GID_2, etc. - MÁS ESPECÍFICO
+  if (p.ID_2 || p.id_2 || p.GID_2 || p.gid_2) {
+    return String(p.ID_2 || p.id_2 || p.GID_2 || p.gid_2);
   }
   
   // Nivel 2 (subdivisiones): ID_1, GID_1, etc.
@@ -37,13 +38,13 @@ function getFeatureId(f: any): string {
     return String(p.ID_1 || p.id_1 || p.GID_1 || p.gid_1);
   }
   
-  // Nivel 3 (sub-subdivisiones): ID_2, GID_2, etc.
-  if (p.ID_2 || p.id_2 || p.GID_2 || p.gid_2) {
-    return String(p.ID_2 || p.id_2 || p.GID_2 || p.gid_2);
+  // Nivel 1 (países): ISO_A3 - MENOS ESPECÍFICO
+  if (p.ISO_A3) {
+    return p.ISO_A3.toString().toUpperCase();
   }
   
-  // Fallback: intentar con nombre
-  return String(p.NAME || p.name || p.NAME_1 || p.name_1 || '');
+  // Sin ID válido
+  return '';
 }
 
 export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): ComputeResult {
@@ -70,17 +71,12 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
     const featureId = getFeatureId(f);
     
     if (!featureId) {
-      console.warn('[computeGlobeViewModel] ⚠️ Feature without ID:', f.properties);
       continue;
     }
     
     const key = getDominantKeyUtil(featureId, answersData);
     isoDominantKey[featureId] = key;
     counts[key] = (counts[key] ?? 0) + 1;
-    
-    // Log los primeros 5 para debug con más detalle
-    if (Object.keys(isoDominantKey).length <= 5) {
-                            }
   }
   
     const legendItems = Object.keys(colorMap || {})

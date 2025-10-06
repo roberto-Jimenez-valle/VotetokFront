@@ -19,3 +19,16 @@ export interface GlobeAPI {
   globeMaterial: () => GlobeMaterial;
   htmlElementsData?: (data: any[]) => void;
 }
+
+export interface Poll {
+  id: string;
+  question: string;
+  type: 'poll' | 'hashtag' | 'trending';
+  region: string;
+  options: Array<{ key: string; label: string; color: string; votes: number; avatarUrl?: string }>;
+  totalVotes: number;
+  totalViews: number;
+  creator?: { id: string; name: string; handle?: string; avatarUrl?: string; verified?: boolean };
+  publishedAt?: string | Date;
+  friendsByOption?: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>>;
+}
