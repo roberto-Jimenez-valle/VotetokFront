@@ -2,66 +2,27 @@
   import { onMount, onDestroy } from 'svelte';
   import { clamp, hexToRgba } from '$lib/utils/colors';
 
-  export let bgColor = '#000000';
-  export let sphereBaseColor = '#441220';
-  export let capBaseColor = '#ff0000';
-  export let strokeBaseColor = '#961A50';
-  export let strokeOpacityPct = 75;
+  export let bgColor = '#0a0a0a';        // Fondo: Casi negro
+  export let sphereBaseColor = '#0a0a0a'; // Esfera: Negro #0a0a0a
+  export let capBaseColor = '#ccc';    // Polígonos: Negro #0a0a0a
+  export let strokeBaseColor = '#1d1d1d'; // Bordes: Gris para que se vean
+  export let strokeOpacityPct = 60;       // Opacidad moderada para visibilidad
   export let sphereOpacityPct = 100;
+  export let atmosphereColor = '#1a1a1a'; // Color de atmósfera muy sutil
+  export let atmosphereAltitude = 0.12;   // Altura de la atmósfera reducida
+  export let isDarkTheme = true;          // Para controlar la textura del globo
+  
+  // Textura del globo (centralizada)
+  const globeTextureUrl = null;
   export let mode: 'intensity' | 'trend' = 'intensity';
   export let activeTag: string | null = null;
   export let onPolyCapColor: (feat: any) => string;
   export let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada (nivel 4)
 
-  // Configuración de LOD (Level of Detail)
-  const LOD_CONFIG = {
-    HIGH_DETAIL_THRESHOLD: 0.3,    // Altitud < 0.3: máximo detalle
-    MEDIUM_DETAIL_THRESHOLD: 1.0,  // Altitud < 1.0: detalle medio
-    LOW_DETAIL_THRESHOLD: 2.0,     // Altitud < 2.0: bajo detalle
-    // Altitud >= 2.0: mínimo detalle
-  };
-
-  const POLY_ALT = 0.017; // Elevación aumentada para mejor visibilidad del mapa coroplético
-  const POLY_ALT_SELECTED = 0.000170000000001; // Elevación MÁS BAJA para el polígono seleccionado - no debe bloquear clics
-  const POLY_ALT_UNSELECTED = 0.00017; // Elevación normal para polígonos NO seleccionados
-  
-  // Función para calcular elevación dinámica según altitud de cámara
-  function calculateDynamicElevation(baseElevation: number, cameraAltitude: number, isSelected: boolean = false): number {
-    // NIVEL 4: Si hay ciudad seleccionada, todos los polígonos al ras del globo
-    if (selectedCityId) {
-      if (isSelected) {
-        return 0.000170000000001; // Ligeramente más alto que los demás
-      }
-      return 0.00017; // Al ras del globo
-    }
-    
-    // Si es el polígono seleccionado (sin nivel 4 activo), mantener ligeramente más alto
-    if (isSelected) {
-      // En zoom extremo (< 0.06), usar elevación muy baja
-      if (cameraAltitude < 0.06) {
-        return 0.000170000000001; // Ligeramente más alto que los demás
-      }
-      return baseElevation;
-    }
-    
-    // Para polígonos NO seleccionados: ajustar según zoom
-    // En zoom MUY extremo (< 0.06), usar elevación base muy baja
-    if (cameraAltitude < 0.06) {
-      return 0.00017; // Elevación muy baja para zoom extremo
-    }
-    // En zoom muy cercano (0.06 - 0.15), reducir gradualmente
-    if (cameraAltitude < 0.15) {
-      const factor = (cameraAltitude - 0.06) / (0.15 - 0.06); // 0 a 1
-      return baseElevation * (0.01 + factor * 0.49); // 1% a 50%
-    }
-    // En zoom cercano (0.15 - 0.3), elevación moderada
-    if (cameraAltitude < 0.3) {
-      const factor = (cameraAltitude - 0.15) / (0.3 - 0.15);
-      return baseElevation * (0.5 + factor * 0.5); // 50% a 100%
-    }
-    // En zoom normal o lejano, elevación completa
-    return baseElevation;
-  }
+  // ALTITUDES FIJAS para mejor rendimiento (sin cálculos dinámicos)
+  const POLY_ALT = 0.015; // Elevación fija para todos los polígonos
+  const POLY_ALT_SELECTED = 0.016; // Elevación ligeramente mayor para seleccionados
+  const POLY_ALT_CITY_MODE = 0.001; // Elevación muy baja en nivel ciudad (nivel 4)
 
   let rootEl: HTMLDivElement | null = null;
   let world: any = null;
@@ -73,72 +34,34 @@
   let geometryCache = new Map<string, any>();
   let lastPolygonData: any[] = [];
   let lastPolygonDataHash = '';
-  
-  // Estado de LOD actual
-  let currentLODLevel: 'high' | 'medium' | 'low' | 'minimal' = 'high';
-  let lastLODUpdate = 0;
-  
-  // Frustum culling: solo renderizar lo visible
-  let visiblePolygons = new Set<string>();
 
   // Helper para calcular hash de datos
   function hashData(data: any[]): string {
     return data.length + '_' + (data[0]?.properties?.ISO_A3 || '') + '_' + (data[data.length - 1]?.properties?.ISO_A3 || '');
   }
   
-  // Función para aplicar LOD filtering (declarada antes de uso)
+  // Función para aplicar LOD filtering - DESACTIVADA para carga uniforme
   function applyLODFiltering(data: any[]): any[] {
-    const now = performance.now();
-    
-    // Actualizar LOD solo cada 100ms
-    if (now - lastLODUpdate < 100 && currentLODLevel !== 'high') {
-      return data; // Usar datos sin filtrar si no ha pasado suficiente tiempo
-    }
-    
-    lastLODUpdate = now;
-    
-    // Obtener altitud actual del cache
-    const altitude = cachedAltitude || 1.0;
-    
-    // Determinar nivel de LOD
-    let newLODLevel: 'high' | 'medium' | 'low' | 'minimal';
-    if (altitude < LOD_CONFIG.HIGH_DETAIL_THRESHOLD) {
-      newLODLevel = 'high';
-    } else if (altitude < LOD_CONFIG.MEDIUM_DETAIL_THRESHOLD) {
-      newLODLevel = 'medium';
-    } else if (altitude < LOD_CONFIG.LOW_DETAIL_THRESHOLD) {
-      newLODLevel = 'low';
-    } else {
-      newLODLevel = 'minimal';
-    }
-    
-    // Si el nivel no cambió, no filtrar
-    if (newLODLevel === currentLODLevel && data.length === lastPolygonData.length) {
-      return data;
-    }
-    
-    currentLODLevel = newLODLevel;
-    
-    // Aplicar filtrado según nivel
-    switch (newLODLevel) {
-      case 'high':
-        return data; // Mostrar todo
-      case 'medium':
-        // Mostrar 70% de polígonos (descartar los más pequeños)
-        return data.filter((_, i) => i % 3 !== 2);
-      case 'low':
-        // Mostrar 50% de polígonos
-        return data.filter((_, i) => i % 2 === 0);
-      case 'minimal':
-        // Mostrar 30% de polígonos (solo los más grandes)
-        return data.filter((_, i) => i % 3 === 0);
-      default:
-        return data;
-    }
+    // Devolver siempre todos los datos sin filtrar
+    // Esto evita la carga en fases pero puede afectar rendimiento con muchos polígonos
+    return data;
   }
   
-  // Cache de altitud global para LOD
-  let cachedAltitude = 1.0;
+  // Función simple de hash para generar variación aleatoria pero consistente
+  function getPolygonHash(feat: any): number {
+    const id = feat?.properties?.ISO_A3 || 
+               feat?.properties?.ID_1 || 
+               feat?.properties?.ID_2 || 
+               feat?.properties?.NAME || 
+               '';
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = ((hash << 5) - hash) + id.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Devolver valor entre 0 y 1
+    return Math.abs(hash % 100) / 100;
+  }
   
   // Public API for parent via bind:this
   export function setPolygonsData(data: any[]) {
@@ -160,7 +83,7 @@
   }
   export function setTilesEnabled(enabled: boolean) {
     world.globeTileEngineUrl(null);
-        world.globeImageUrl(`//cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg`);
+        world.globeImageUrl(globeTextureUrl);
         world.globeMaterial().color.set(sphereBaseColor);
   }
   export function pointOfView(arg?: any, duration?: number) {
@@ -223,12 +146,11 @@
     try {
       if (!world) return;
       world.polygonStrokeColor((feat: any) => {
-        // Nivel 4: ciudades/provincias (ID_2)
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
         if (selectedCityId && cityId === selectedCityId) {
           return '#ffffff';
         }
-        return hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1));
+        return 'rgba(5,5,5,0.5)'; // Seminegro con opacidad 50%
       });
     } catch {}
   }
@@ -237,28 +159,22 @@
   export function refreshPolyAltitudes() {
     try {
       if (!world) return;
-      const currentPov = world.pointOfView();
-      const cameraAlt = currentPov?.altitude || 1.0;
       
       world.polygonAltitude((feat: any) => {
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
         const isSelected = selectedCityId && cityId === selectedCityId;
         
-        if (isSelected) {
-          // Polígono seleccionado: ELEVAR significativamente
-          return calculateDynamicElevation(POLY_ALT_SELECTED, cameraAlt, true);
-        }
-        
-        // Polígonos no seleccionados
+        // NIVEL 4: Si hay ciudad seleccionada, elevación muy baja
         if (selectedCityId) {
-          // Si hay un polígono seleccionado, bajar los demás
-          return calculateDynamicElevation(POLY_ALT_UNSELECTED, cameraAlt, false);
+          return isSelected ? POLY_ALT_SELECTED : POLY_ALT_CITY_MODE;
         }
         
-        // Sin selección: usar elevación normal
-        const customElevation = feat?.properties?._elevation;
-        const baseElevation = typeof customElevation === 'number' ? customElevation : POLY_ALT;
-        return calculateDynamicElevation(baseElevation, cameraAlt, false);
+        // Variación aleatoria muy sutil: ±0.0025
+        const randomVariation = (getPolygonHash(feat) - 0.5) * 0.005;
+        const altitude = POLY_ALT + randomVariation;
+        
+        // Sin selección: elevación con variación random
+        return isSelected ? POLY_ALT_SELECTED : altitude;
       });
     } catch {}
   }
@@ -280,8 +196,6 @@
       world.htmlElementsData([]);
       
       // NO limpiar geometryCache ni lastPolygonData - mantener polígonos en cache
-      // Solo limpiar visiblePolygons para forzar recálculo
-      visiblePolygons.clear();
       
       // Forzar todos los polígonos a gris (sin datos)
       world.polygonCapColor(() => '#9ca3af');
@@ -438,56 +352,54 @@
       }
     }
 
-    // Esfera: color + opacidad
-    world.globeImageUrl(null);
+    // Esfera: aplicar textura configurada
+    world.globeImageUrl(globeTextureUrl);
+    
     const mat = world.globeMaterial();
+    // Mantener un tinte oscuro sobre la textura
     mat.color.set(sphereBaseColor);
     mat.transparent = true;
     mat.opacity = clamp(sphereOpacityPct / 100, 0, 1);
-
-    // Cache de altitud para reducir llamadas a pointOfView()
+    
+    // Activar atmósfera con configuración sutil
+    if (world.showAtmosphere) {
+      world.showAtmosphere(true);
+    }
+    if (world.atmosphereColor) {
+      world.atmosphereColor(atmosphereColor);
+    }
+    if (world.atmosphereAltitude) {
+      world.atmosphereAltitude(atmosphereAltitude);
+    }
+    
     let lastAltitudeUpdate = 0;
     
-    // Polígonos base con elevación dinámica
+    // Polígonos con elevación con variación aleatoria muy sutil
     world
       .polygonAltitude((feat: any) => {
-        // Cachear altitud por 50ms para reducir llamadas
-        const now = performance.now();
-        if (now - lastAltitudeUpdate > 50) {
-          const currentPov = world.pointOfView();
-          cachedAltitude = currentPov?.altitude || 1.0;
-          lastAltitudeUpdate = now;
-        }
-        const cameraAlt = cachedAltitude;
-        
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
         const isSelected = selectedCityId && cityId === selectedCityId;
         
-        if (isSelected) {
-          // Polígono seleccionado: ELEVAR significativamente
-          return calculateDynamicElevation(POLY_ALT_SELECTED, cameraAlt, true);
-        }
-        
-        // Polígonos no seleccionados
+        // NIVEL 4: Si hay ciudad seleccionada, elevación muy baja
         if (selectedCityId) {
-          // Si hay un polígono seleccionado, bajar los demás
-          return calculateDynamicElevation(POLY_ALT_UNSELECTED, cameraAlt, false);
+          return isSelected ? POLY_ALT_SELECTED : POLY_ALT_CITY_MODE;
         }
         
-        // Sin selección: usar elevación normal
-        const customElevation = feat?.properties?._elevation;
-        const baseElevation = typeof customElevation === 'number' ? customElevation : POLY_ALT;
-        return calculateDynamicElevation(baseElevation, cameraAlt, false);
+        // Variación aleatoria muy sutil: ±0.0025 (entre 0.0125 y 0.0175)
+        const randomVariation = (getPolygonHash(feat) - 0.5) * 0.005;
+        const altitude = POLY_ALT + randomVariation;
+        
+        // Sin selección: elevación con variación random
+        return isSelected ? POLY_ALT_SELECTED : altitude;
       })
-      .polygonSideColor(() => hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1) * 0.35))
+      .polygonSideColor(() => 'rgba(5,5,5,0.3)') // Seminegro para lados
       .polygonStrokeColor((feat: any) => {
-        // Resaltar el polígono seleccionado con un borde más brillante
-        // Nivel 4: ciudades/provincias (ID_2)
+        // Solo mostrar borde para el polígono seleccionado
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
         if (selectedCityId && cityId === selectedCityId) {
-          return '#ffffff'; // Borde blanco brillante para el seleccionado
+          return '#ffffff';
         }
-        return hexToRgba(strokeBaseColor, clamp(strokeOpacityPct / 100, 0, 1));
+        return 'rgba(5,5,5,0.5)'; // Seminegro con opacidad 50%
       })
       .polygonLabel((feat: any) => {
         // Debug: mostrar etiquetas para cualquier polígono que tenga nombre
@@ -586,6 +498,9 @@
           raycaster.far = Infinity;
         }
       }
+      
+      // Usar iluminación por defecto de globe.gl (óptima para rendimiento)
+      
     } catch (e) {
     }
 
@@ -643,7 +558,6 @@
         // Throttle de eventos para reducir carga
         let changeTimeout: ReturnType<typeof setTimeout> | null = null;
         let isMoving = false;
-        let lodUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
         
         if (typeof controls.addEventListener === 'function') {
           // Throttle del evento 'change' a 16ms (60fps)
@@ -652,15 +566,6 @@
             changeTimeout = setTimeout(() => {
               dispatch('controlsChange');
               changeTimeout = null;
-              
-              // Actualizar LOD después de movimiento (debounced a 200ms)
-              if (lodUpdateTimeout) clearTimeout(lodUpdateTimeout);
-              lodUpdateTimeout = setTimeout(() => {
-                if (lastPolygonData.length > 0) {
-                  const filteredData = applyLODFiltering(lastPolygonData);
-                  world.polygonsData(filteredData);
-                }
-              }, 200);
             }, 16);
           });
           
@@ -711,10 +616,19 @@
       const mat = world.globeMaterial();
       mat.color.set(sphereBaseColor);
       mat.opacity = clamp(sphereOpacityPct / 100, 0, 1);
-      // Bordes
-      const sAlpha = clamp(strokeOpacityPct / 100, 0, 1);
-      world.polygonStrokeColor(() => hexToRgba(strokeBaseColor, sAlpha));
-      world.polygonSideColor(() => hexToRgba(strokeBaseColor, sAlpha * 0.35));
+      // Atmósfera
+      if (world.showAtmosphere) {
+        world.showAtmosphere(true);
+      }
+      if (world.atmosphereColor) {
+        world.atmosphereColor(atmosphereColor);
+      }
+      if (world.atmosphereAltitude) {
+        world.atmosphereAltitude(atmosphereAltitude);
+      }
+      // Bordes seminegros
+      world.polygonStrokeColor(() => 'rgba(5,5,5,0.5)');
+      world.polygonSideColor(() => 'rgba(5,5,5,0.3)');
       // Caps
       world.polygonCapColor((feat: any) => (onPolyCapColor ? onPolyCapColor(feat) : hexToRgba(capBaseColor, 0.8)));
     } catch {}
@@ -724,6 +638,16 @@
   $: if (world && (mode !== undefined || activeTag !== undefined)) {
     try {
       world.polygonCapColor((feat: any) => (onPolyCapColor ? onPolyCapColor(feat) : hexToRgba(capBaseColor, 0.8)));
+    } catch {}
+  }
+  
+  // Actualizar color del globo cuando cambie el tema
+  $: if (world && isDarkTheme !== undefined) {
+    try {
+      // Aplicar textura configurada
+      world.globeImageUrl(globeTextureUrl);
+      const mat = world.globeMaterial();
+      mat.color.set(sphereBaseColor);
     } catch {}
   }
 </script>

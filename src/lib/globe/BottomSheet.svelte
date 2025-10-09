@@ -115,32 +115,58 @@
   // Guardar referencia a las encuestas trending completas
   let trendingPollsData: any[] = [];
 
-  // DESHABILITADO: GlobeGL ahora maneja completamente el trending
-  // Esta función causaba conflictos al sobrescribir voteOptions que viene como prop
+  // Cargar trending polls para mostrar cuando NO hay encuesta activa
   async function loadMainPoll() {
-    console.log('[BottomSheet] loadMainPoll DESHABILITADO - GlobeGL maneja trending');
-    return;
+    // Si hay encuesta activa, no cargar trending (GlobeGL lo maneja)
+    if (activePoll && activePoll.id) {
+      console.log('[BottomSheet] Encuesta activa detectada - No cargar trending');
+      trendingPollsData = [];
+      return;
+    }
     
-    // CÓDIGO ORIGINAL COMENTADO - NO USAR
-    // try {
-    //   const currentRegion = selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global';
-    //   const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(currentRegion)}&limit=12&hours=168`);
-    //   if (!response.ok) throw new Error('Failed to load trending polls');
-    //   const { data } = await response.json();
-    //   
-    //   if (data && data.length > 0) {
-    //     trendingPollsData = data;
-    //     voteOptions = data.map((poll: any, index: number) => ({
-    //       key: poll.id.toString(),
-    //       label: poll.title,
-    //       color: poll.options?.[0]?.color || ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5],
-    //       votes: poll.trendingScore || poll.totalVotes,
-    //       pollData: poll,
-    //     }));
-    //   }
-    // } catch (error) {
-    //   console.error('Error loading main poll:', error);
-    // }
+    try {
+      const currentRegion = selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global';
+      console.log('[BottomSheet] Cargando trending para región:', currentRegion);
+      
+      // Limitar a 12 encuestas trending (3 páginas de 4)
+      const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(currentRegion)}&limit=12&hours=168`);
+      if (!response.ok) throw new Error('Failed to load trending polls');
+      const { data } = await response.json();
+      
+      console.log('[BottomSheet] 🔍 Raw data recibida de API:', data?.length || 0, 'items');
+      console.log('[BottomSheet] 🔍 IDs raw:', data?.map((p: any) => p.id).join(', ') || 'ninguno');
+      
+      if (data && Array.isArray(data) && data.length > 0) {
+        // Contar duplicados ANTES de filtrar
+        const allIds = data.map((p: any) => p.id);
+        const uniqueIdSet = new Set(allIds);
+        const duplicatesCount = allIds.length - uniqueIdSet.size;
+        
+        if (duplicatesCount > 0) {
+          console.warn('[BottomSheet] ⚠️ La API devolvió', duplicatesCount, 'duplicados');
+          // Mostrar cuáles IDs están duplicados
+          const duplicatedIds = allIds.filter((id, index) => allIds.indexOf(id) !== index);
+          console.warn('[BottomSheet] ⚠️ IDs duplicados:', [...new Set(duplicatedIds)].join(', '));
+        }
+        
+        // Filtrar duplicados por ID y ordenar por trendingScore
+        const uniquePolls = data
+          .filter((poll: any, index: number, self: any[]) => 
+            index === self.findIndex((p: any) => p.id === poll.id)
+          )
+          .sort((a: any, b: any) => (b.trendingScore || b.totalVotes || 0) - (a.trendingScore || a.totalVotes || 0));
+        
+        trendingPollsData = uniquePolls;
+        console.log('[BottomSheet] ✅ Trending cargado:', uniquePolls.length, 'encuestas únicas (de', data.length, 'totales)');
+        console.log('[BottomSheet] 📊 IDs finales:', uniquePolls.map((p: any) => p.id).join(', '));
+      } else {
+        trendingPollsData = [];
+        console.log('[BottomSheet] ⚠️ No se encontraron trending polls para', currentRegion);
+      }
+    } catch (error) {
+      console.error('[BottomSheet] Error loading trending polls:', error);
+      trendingPollsData = [];
+    }
   }
 
   // Cargar polls adicionales desde la API
@@ -980,8 +1006,8 @@
     modalCurrentY = 0;
   }
   
-  // Recargar trending cuando cambie la región
-  $: if (selectedCountryName || selectedSubdivisionName || selectedCityName) {
+  // Recargar trending cuando cambie la región O cuando activePoll cambie
+  $: if (selectedCountryName !== undefined || selectedSubdivisionName !== undefined || selectedCityName !== undefined || activePoll !== undefined) {
     loadMainPoll();
   }
 
@@ -1103,22 +1129,84 @@
   // Opciones ordenadas y paginadas para la encuesta principal
   // TRENDING: Mostrar máximo 4 encuestas por página
   const TRENDING_PER_PAGE = 4;
-  // IMPORTANTE: Usar SOLO voteOptions (encuestas trending), NO displayOptions
-  // Trending: usar trendingPollsData directamente en lugar de voteOptions
-  $: trendingPolls = trendingPollsData.length > 0 
-    ? trendingPollsData.map((poll: any, index: number) => ({
-        key: poll.id.toString(),
-        label: poll.title,
-        color: poll.options?.[0]?.color || ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5],
-        votes: poll.trendingScore || poll.totalVotes,
+  // IMPORTANTE: Usar SOLO trendingPollsData (encuestas reales de BD)
+  // NO repetir encuestas - mostrar solo las que hay disponibles
+  $: trendingPolls = (() => {
+    if (trendingPollsData.length === 0) return [];
+    
+    // Obtener ubicación actual para filtrar
+    const currentLocation = selectedSubdivisionName || selectedCountryName || selectedCityName || null;
+    
+    const mapped = trendingPollsData.map((poll: any, index: number) => {
+      // Encontrar la opción más votada EN LA UBICACIÓN ACTUAL
+      let topOptionColor = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5];
+      let topOptionLabel = '';
+      let topVotes = 0;
+      
+      if (poll.options && poll.options.length > 0) {
+        // Si hay ubicación, filtrar votos por ubicación
+        let filteredOptions = poll.options;
+        
+        if (currentLocation && poll.votesByLocation) {
+          // Filtrar opciones por la ubicación actual
+          filteredOptions = poll.options.map((opt: any) => {
+            const locationVotes = poll.votesByLocation?.[currentLocation]?.[opt.optionLabel || opt.label] || 0;
+            return {
+              ...opt,
+              votesInLocation: locationVotes
+            };
+          }).filter((opt: any) => opt.votesInLocation > 0);
+          
+          // Ordenar por votos en la ubicación
+          filteredOptions.sort((a: any, b: any) => b.votesInLocation - a.votesInLocation);
+        } else {
+          // Sin ubicación específica, usar votos totales
+          filteredOptions = [...poll.options].sort((a: any, b: any) => 
+            (b.votes || b._count?.votes || 0) - (a.votes || a._count?.votes || 0)
+          );
+        }
+        
+        if (filteredOptions.length > 0) {
+          topOptionColor = filteredOptions[0]?.color || topOptionColor;
+          topOptionLabel = filteredOptions[0]?.optionLabel || filteredOptions[0]?.label || '';
+          topVotes = filteredOptions[0]?.votesInLocation || filteredOptions[0]?.votes || filteredOptions[0]?._count?.votes || 0;
+        }
+        
+        // Log para debug
+        console.log(`[Trending] Poll "${poll.title}" en "${currentLocation || 'Global'}":`, {
+          topOption: topOptionLabel,
+          topVotes: topVotes,
+          color: topOptionColor,
+          hasLocationData: !!poll.votesByLocation
+        });
+      }
+      
+      return {
+        key: `poll-${poll.id}`,
+        label: poll.title || poll.question || `Encuesta ${poll.id}`,
+        color: topOptionColor,
+        votes: poll.trendingScore || poll.totalVotes || 0,
         pollData: poll,
-      }))
-    : [];
+      };
+    });
+    
+    // Verificar duplicados en el mapeo
+    const keys = mapped.map(m => m.key);
+    const uniqueKeys = new Set(keys);
+    if (keys.length !== uniqueKeys.size) {
+      console.error('[BottomSheet] ❌ DUPLICADOS DETECTADOS en trendingPolls:', keys);
+    } else {
+      console.log('[BottomSheet] ✅ Sin duplicados en trendingPolls. Keys:', keys.join(', '));
+    }
+    
+    return mapped;
+  })();
   $: sortedDisplayOptions = trendingPolls; // Alias para compatibilidad con código existente
+  // Solo paginar si hay MÁS de 4 encuestas (no repetir si hay menos)
   $: shouldPaginateMain = trendingPolls.length > TRENDING_PER_PAGE;
   $: paginatedMainOptions = shouldPaginateMain 
     ? getPaginatedOptions(trendingPolls, currentPageMain, TRENDING_PER_PAGE)
-    : { items: trendingPolls.slice(0, TRENDING_PER_PAGE), totalPages: 1, hasNext: false, hasPrev: false };
+    : { items: trendingPolls, totalPages: 1, hasNext: false, hasPrev: false };
   
   // Dirección de transición para trending
   let trendingTransitionDirection: 'next' | 'prev' | null = null;
@@ -1477,12 +1565,42 @@
                 }}
               >
                 <div class="poll-bar-option-info">
-                  {#if option.avatarUrl}
-                    <img src={option.avatarUrl} alt={option.label} class="poll-bar-option-avatar" />
+                  <!-- Avatar con borde de color que coincide con trending -->
+                  {#if !activePoll && option.pollData}
+                    <!-- Modo trending: mostrar avatar del creador de la encuesta con el color de la opción más votada -->
+                    {#if option.pollData.user?.avatarUrl}
+                      <img 
+                        src={option.pollData.user.avatarUrl} 
+                        alt={option.pollData.user.displayName || option.label} 
+                        class="poll-bar-option-avatar" 
+                        style="border: 3px solid {option.color};"
+                      />
+                    {:else if option.pollData.creator?.avatarUrl}
+                      <img 
+                        src={option.pollData.creator.avatarUrl} 
+                        alt={option.pollData.creator.name || option.label} 
+                        class="poll-bar-option-avatar" 
+                        style="border: 3px solid {option.color};"
+                      />
+                    {:else}
+                      <div class="poll-bar-option-avatar-placeholder" style="background-color: {option.color}; border: 3px solid {option.color};">
+                        {option.label.charAt(0)}
+                      </div>
+                    {/if}
                   {:else}
-                    <div class="poll-bar-option-avatar-placeholder" style="background-color: {option.color};">
-                      {option.label.charAt(0)}
-                    </div>
+                    <!-- Modo encuesta específica: mostrar avatar de la opción -->
+                    {#if option.avatarUrl}
+                      <img 
+                        src={option.avatarUrl} 
+                        alt={option.label} 
+                        class="poll-bar-option-avatar" 
+                        style="border: 3px solid {option.color};"
+                      />
+                    {:else}
+                      <div class="poll-bar-option-avatar-placeholder" style="background-color: {option.color}; border: 3px solid {option.color};">
+                        {option.label.charAt(0)}
+                      </div>
+                    {/if}
                   {/if}
                   <span class="poll-bar-option-label">{option.label}</span>
                   {#if !activePoll && option.pollData}
@@ -1718,7 +1836,7 @@
   </div>
   
   <!-- Opciones de votación como mosaico horizontal estilo Google Maps -->
-  {#if displayOptions.length > 0 && state === 'expanded'}
+  {#if state === 'expanded'}
     <!-- Contenedor scrolleable que incluye TODO cuando está expandido -->
     <div 
       class="main-scroll-container vote-cards-grid" 
@@ -1727,75 +1845,181 @@
       ontouchstart={onPointerDown}
       bind:this={scrollContainer}
     >
-      <div class="vote-cards-section">
-      <!-- Título del tema arriba de las tarjetas -->
-      <div 
-        class="topic-header"
-      >
-        {#if 0.5 /* removed random */ > 0.7}
-          
-          <!-- Encuesta específica -->
-          <div class="header-with-avatar">
-            <div class="header-content">
-              <h3>¿Cuál debería ser la prioridad del gobierno para 2024?</h3>
-              <div class="topic-meta">
-                <span class="topic-type">Encuesta • {selectedCountryName || 'Global'}</span>
-                <span class="topic-time">• {getRelativeTime(Math.floor(0.5 /* removed random */ * 1440))}</span>
-              </div>
-            </div>
-            <div class="header-avatar header-avatar-real">
-              <img src={DEFAULT_AVATAR} alt="Avatar" />
-            </div>
-          </div>
-        {:else if 0.5 /* removed random */ > 0.5}
-          
-          <!-- Hashtag trending -->
-          <div class="header-with-avatar">
-            <div class="header-content">
-              <h3 data-type="hashtag">#CambioClimático2024</h3>
-              <div class="topic-meta">
-                <span class="topic-type">Hashtag trending • {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
-                <span class="topic-time">• {getRelativeTime(Math.floor(0.5 /* removed random */ * 720))}</span>
-              </div>
-            </div>
-            <div class="header-avatar header-avatar-real">
-              <img src={DEFAULT_AVATAR} alt="Avatar" />
-            </div>
-          </div>
-        {:else if selectedCountryName && selectedSubdivisionName}
-          
-          <!-- Trending regional -->
-          <div class="header-content">
-            <h3>Trending en {selectedSubdivisionName}</h3>
-            <div class="topic-meta">
-              <span class="topic-type">Encuestas más votadas • {selectedCountryName}</span>
-              <span class="topic-time">• {getRelativeTime(Math.floor(0.5 /* removed random */ * 360))}</span>
-            </div>
-          </div>
-        {:else if selectedCountryName}
-          
-          <!-- Trending nacional -->
-          <div class="header-content">
-            <h3>Trending en {selectedCountryName}</h3>
-            <div class="topic-meta">
-              <span class="topic-type">Encuestas más votadas • Nacional</span>
-              <span class="topic-time">• {getRelativeTime(Math.floor(0.5 /* removed random */ * 180))}</span>
-            </div>
-          </div>
-        {:else}
-          
-          <!-- Trending global -->
-          <div class="header-content">
-            <h3>Trending Global</h3>
-            <div class="topic-meta">
-              <span class="topic-type">Encuestas más votadas • Mundial</span>
-              <span class="topic-time">• {getRelativeTime(Math.floor(0.5 /* removed random */ * 120))}</span>
-            </div>
-          </div>
-        {/if}
-      </div>
       
-      <!-- TRENDING RANKING: Diseño profesional tipo leaderboard -->
+      <!-- PRIORIDAD 1: Si hay encuesta activa (activePoll), mostrarla PRIMERO -->
+      {#if activePoll && activePoll.id && voteOptions.length > 0}
+        {@const activeSegments = voteOptions}
+        {@const sortedActiveOptions = activeSegments.sort((a, b) => b.votes - a.votes)}
+        {@const shouldPaginateActive = sortedActiveOptions.length > OPTIONS_PER_PAGE}
+        {@const paginatedActiveOptions = shouldPaginateActive 
+          ? getPaginatedOptions(sortedActiveOptions, currentPageMain, OPTIONS_PER_PAGE)
+          : { items: sortedActiveOptions, totalPages: 1, hasNext: false, hasPrev: false }}
+        
+        <div class="vote-cards-section active-poll-section">
+          <!-- Título de la encuesta activa -->
+          <div class="topic-header">
+            <div class="header-with-avatar">
+              <div class="header-content">
+                <h3>{activePoll.question || activePoll.title || 'Encuesta'}</h3>
+                <div class="topic-meta">
+                  <span class="topic-type">Encuesta • {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
+                  {#if activePoll.createdAt}
+                    <span class="topic-time">• {getRelativeTime(Math.floor((Date.now() - new Date(activePoll.createdAt).getTime()) / 60000))}</span>
+                  {/if}
+                </div>
+              </div>
+              {#if activePoll.user?.avatarUrl}
+                <div class="header-avatar header-avatar-real">
+                  <img src={activePoll.user.avatarUrl} alt={activePoll.user.displayName} />
+                </div>
+              {:else}
+                <div class="header-avatar header-avatar-real">
+                  <img src={DEFAULT_AVATAR} alt="Avatar" />
+                </div>
+              {/if}
+            </div>
+          </div>
+          
+          <!-- Grid de opciones de la encuesta activa -->
+          <div class="vote-cards-grid accordion fullwidth {activeAccordionMainIndex != null ? 'open' : ''}"
+               style="--items: {paginatedActiveOptions.items.length}"
+               role="group" aria-label="Opciones de encuesta activa"
+               bind:this={mainGridRef}
+               onpointerdown={(e) => handleDragStart(e)}
+               ontouchstart={(e) => handleDragStart(e)}>
+            {#each paginatedActiveOptions.items as option, index (option.key)}
+              <button 
+                class="vote-card {activeAccordionMainIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionMainIndex !== index) ? 'collapsed' : ''}" 
+                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, option.votes))}%; --fill-pct-val: {Math.max(0, Math.min(100, option.votes))}; --flex: {Math.max(0.5, option.votes / 10)};" 
+                onclick={() => {
+                  if (activeAccordionMainIndex !== index) { setActiveMain(index); return; }
+                  handleVote(option.key);
+                }}
+                onfocus={() => setActiveMain(index)}
+                onkeydown={(e) => onCardKeydown(e, option.key)}
+                type="button"
+              >
+                <div class="card-header">
+                  <h2 class="question-title">{option.label}</h2>
+                  <img class="creator-avatar" src={DEFAULT_AVATAR} alt={option.label} loading="lazy" />
+                </div>
+                <div class="card-content">
+                  <div class="percentage-display">
+                    <span
+                      class="percentage-large"
+                      style="font-size: {(activeAccordionMainIndex === index && state === 'expanded'
+                        ? fontSizeForPct(option.votes)
+                        : Math.min(fontSizeForPct(option.votes), 21))}px"
+                    >
+                      {Math.round(option.votes)}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            {/each}
+          </div>
+          
+          {#if shouldPaginateActive}
+            <div class="pagination-dots">
+              {#each Array(paginatedActiveOptions.totalPages) as _, pageIndex}
+                <button 
+                  class="pagination-dot {pageIndex === currentPageMain ? 'active' : ''}"
+                  onclick={async () => { 
+                    transitionDirectionMain = pageIndex < currentPageMain ? 'prev' : 'next';
+                    currentPageMain = pageIndex;
+                    await delay(50);
+                    activeAccordionMainIndex = 0;
+                    await delay(350);
+                    transitionDirectionMain = null;
+                  }}
+                  type="button"
+                  aria-label="Bloque {pageIndex + 1}"
+                ></button>
+              {/each}
+            </div>
+          {/if}
+          
+          <!-- Información de la encuesta activa -->
+          <div class="vote-summary-info">
+            <div class="vote-stats">
+              <div class="stat-badge">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                  <rect x="3" y="3" width="7" height="7"/>
+                  <rect x="14" y="3" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/>
+                  <rect x="14" y="14" width="7" height="7"/>
+                </svg>
+                <span>{formatNumber(voteOptions.length)}</span>
+              </div>
+              <div class="stat-badge">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span>{formatNumber(activePoll.totalViews || 0)}</span>
+              </div>
+            </div>
+            <div class="vote-actions">
+              <button class="action-badge" type="button" title="Guardar">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span>{formatNumber(mainPollSaves)}</span>
+              </button>
+              <button class="action-badge action-share" type="button" title="Compartir">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <circle cx="18" cy="5" r="3"/>
+                  <circle cx="6" cy="12" r="3"/>
+                  <circle cx="18" cy="19" r="3"/>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                </svg>
+                <span>{formatNumber(mainPollShares)}</span>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Separador después de encuesta activa -->
+          <div class="more-polls-divider">
+            <div class="divider-line"></div>
+            <span class="divider-text">Trending en {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
+            <div class="divider-line"></div>
+          </div>
+        </div>
+      {/if}
+      
+      <!-- PRIORIDAD 2: Mostrar TRENDING (solo si NO hay encuesta activa O después de mostrarla) -->
+      {#if trendingPolls.length > 0}
+        <div class="vote-cards-section">
+          <!-- Título de trending (solo si NO hay encuesta activa) -->
+          {#if !activePoll || !activePoll.id}
+            <div class="topic-header">
+              {#if selectedCountryName && selectedSubdivisionName}
+                <div class="header-content">
+                  <h3>Trending en {selectedSubdivisionName}</h3>
+                  <div class="topic-meta">
+                    <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • {selectedCountryName}</span>
+                  </div>
+                </div>
+              {:else if selectedCountryName}
+                <div class="header-content">
+                  <h3>Trending en {selectedCountryName}</h3>
+                  <div class="topic-meta">
+                    <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Nacional</span>
+                  </div>
+                </div>
+              {:else}
+                <div class="header-content">
+                  <h3>Trending Global</h3>
+                  <div class="topic-meta">
+                    <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Mundial</span>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+          
+          <!-- TRENDING RANKING: Diseño profesional tipo leaderboard -->
       <div class="trending-ranking-container {trendingTransitionDirection ? 'trending-transition trending-transition-' + trendingTransitionDirection : ''}"
            bind:this={trendingGridRef}
            ontouchstart={(e) => {
@@ -1844,9 +2068,9 @@
              touchStartX = 0; 
              touchStartY = 0;
            }}>
-        {#each paginatedMainOptions.items as option, index}
+        {#each paginatedMainOptions.items as option, index (option.key)}
           {@const pollData = option.pollData}
-          {@const rankNumber = (currentPageMain * 4) + index + 1}
+          {@const rankNumber = (currentPageMain * TRENDING_PER_PAGE) + index + 1}
           {@const rankChange = index === 0 ? 2 : index === 1 ? -1 : index === 2 ? 0 : 1}
           <div 
             class="trending-rank-item rank-{rankNumber}"
@@ -1867,12 +2091,12 @@
             role="button"
             tabindex="0"
           >
-            <!-- Avatar del creador con color de la encuesta -->
+            <!-- Avatar del creador con borde de color -->
             <div class="rank-avatar" style="--poll-color: {option.color}">
               {#if pollData?.user?.avatarUrl}
-                <img src={pollData.user.avatarUrl} alt={pollData.user.displayName} style="border: 3px solid {option.color}" />
+                <img src={pollData.user.avatarUrl} alt={pollData.user.displayName} style="border: 3px solid {option.color};" />
               {:else}
-                <div class="rank-avatar-placeholder" style="background: {option.color}">
+                <div class="rank-avatar-placeholder" style="background: {option.color}; border: 3px solid {option.color};">
                   {rankNumber}
                 </div>
               {/if}
@@ -1960,7 +2184,7 @@
         </div>
       {/if}
       
-      <!-- Información total debajo de las tarjetas -->
+      <!-- Información total debajo de trending -->
       <div 
         class="vote-summary-info"
       >
@@ -1972,7 +2196,7 @@
               <rect x="3" y="14" width="7" height="7"/>
               <rect x="14" y="14" width="7" height="7"/>
             </svg>
-            <span>{formatNumber(displayOptions.length)}</span>
+            <span>{formatNumber(trendingPolls.length)}</span>
           </div>
           <div class="stat-badge">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -1982,50 +2206,10 @@
             <span>{formatNumber(mainPollViews)}</span>
           </div>
         </div>
-        <div class="vote-actions">
-          <button class="action-badge" type="button" title="Guardar">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span>{formatNumber(mainPollSaves)}</span>
-          </button>
-          <button class="action-badge" type="button" title="Republicar">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M17 1l4 4-4 4"/>
-              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-              <path d="M7 23l-4-4 4-4"/>
-              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-            </svg>
-            <span>{formatNumber(mainPollReposts)}</span>
-          </button>
-          <button class="action-badge action-share" type="button" title="Compartir">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <circle cx="18" cy="5" r="3"/>
-              <circle cx="6" cy="12" r="3"/>
-              <circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-            <span>{formatNumber(mainPollShares)}</span>
-          </button>
-          <button 
-            class="action-badge action-globe" 
-            type="button" 
-            title="Ver en el globo"
-            aria-label="Ver en el globo"
-            onclick={() => openMainPollInGlobe()}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-          </button>
-        </div>
       </div>
       
-      <!-- Separador y título de otras encuestas -->
-      {#if additionalPolls.length > 0 || state === 'expanded'}
+      <!-- Separador después de trending -->
+      {#if additionalPolls.length > 0}
         <div 
           class="more-polls-divider"
         >
@@ -2034,7 +2218,20 @@
           <div class="divider-line"></div>
         </div>
       {/if}
-      </div> <!-- Cierre de vote-cards-section -->
+      </div> <!-- Cierre de vote-cards-section trending -->
+      {:else if !activePoll || !activePoll.id}
+        <!-- Mensaje cuando NO hay trending disponible (solo si no hay encuesta activa) -->
+        <div class="vote-cards-section">
+          <div class="no-trending-message">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+            <h3>No hay encuestas trending</h3>
+            <p>Aún no hay encuestas populares en {selectedSubdivisionName || selectedCountryName || 'esta región'}</p>
+          </div>
+        </div>
+      {/if} <!-- Cierre de condicional trendingPolls -->
       
       <!-- Encuestas adicionales dentro del mismo contenedor scrolleable -->
       {#each additionalPolls as poll, pollIndex (poll.id)}
@@ -2207,13 +2404,13 @@
               </div>
               <div class="header-avatar header-avatar-real">
                 {#if poll.creator?.avatarUrl}
-                  <img src={poll.creator.avatarUrl} alt={poll.creator.name} />
+                  <img src={poll.creator.avatarUrl} alt={poll.creator.name} style="border: 3px solid rgba(156, 163, 175, 0.5);" />
                 {:else if poll.creator?.name}
-                  <div class="avatar-placeholder" style="background: linear-gradient(135deg, hsl({pollIndex * 45}, 70%, 60%), hsl({pollIndex * 45 + 40}, 70%, 50%))">
+                  <div class="avatar-placeholder" style="background: linear-gradient(135deg, hsl({pollIndex * 45}, 70%, 60%), hsl({pollIndex * 45 + 40}, 70%, 50%)); border: 3px solid rgba(156, 163, 175, 0.5);">
                     {poll.creator.name.charAt(0)}
                   </div>
                 {:else}
-                  <img src={DEFAULT_AVATAR} alt="Avatar" />
+                  <img src={DEFAULT_AVATAR} alt="Avatar" style="border: 3px solid rgba(156, 163, 175, 0.5);" />
                 {/if}
               </div>
             </div>
@@ -2713,14 +2910,8 @@
     </div> <!-- Cierre de main-scroll-container -->
   {/if}
   
-  <!-- Mostrar encuesta principal sin scroll cuando NO está expandido -->
-  {#if displayOptions.length > 0 && state !== 'expanded'}
-    <div class="vote-cards-section">
-      <!-- Aquí se mostraría la encuesta principal en modo collapsed/peek -->
-    </div>
-  {/if}
-  
-  {#if voteOptions.length === 0 || state !== 'expanded'}
+  <!-- Mostrar contenido cuando NO está expandido o no hay voteOptions -->
+  {#if state !== 'expanded'}
     <div 
       class="sheet-content" 
       onscroll={onScroll}
@@ -2916,6 +3107,13 @@
 </div>
 
 <style>
+  /* Avatares con bordes grises en encuestas adicionales */
+  .header-avatar-real img,
+  .header-avatar-real .avatar-placeholder {
+    box-sizing: border-box;
+    border-radius: 50%;
+  }
+  
   /* Bloquear todas las interacciones durante animaciones de cámara */
   .bottom-sheet.camera-animating {
     pointer-events: none;
@@ -3217,6 +3415,7 @@
     object-fit: cover;
     flex-shrink: 0;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-sizing: border-box; /* Para que el borde no agrande el avatar */
   }
   
   .poll-bar-option-avatar-placeholder {
@@ -3227,6 +3426,7 @@
     font-weight: 700;
     font-size: 16px;
     text-transform: uppercase;
+    box-sizing: border-box; /* Para que el borde no agrande el avatar */
   }
   
   .poll-bar-option-label {
@@ -3271,5 +3471,35 @@
     min-width: 50px;
     text-align: right;
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  
+  /* Mensaje cuando no hay trending */
+  .no-trending-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: rgba(255,255,255,0.7);
+  }
+  
+  .no-trending-message svg {
+    opacity: 0.3;
+    margin-bottom: 20px;
+  }
+  
+  .no-trending-message h3 {
+    font-size: 20px;
+    font-weight: 600;
+    color: white;
+    margin: 0 0 10px 0;
+  }
+  
+  .no-trending-message p {
+    font-size: 14px;
+    color: rgba(255,255,255,0.6);
+    margin: 0;
+    max-width: 300px;
   }
 </style>

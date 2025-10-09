@@ -1,8 +1,16 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+	import PaletteRandomizer from '$lib/components/PaletteRandomizer.svelte';
 	
 	let { children } = $props();
+	
+	function handlePaletteChange(event: CustomEvent) {
+		const palette = event.detail;
+		// Disparar evento global para que GlobeGL lo escuche
+		window.dispatchEvent(new CustomEvent('palettechange', { detail: palette }));
+	}
 	
 	let showSplash = $state(true);
 	let showFullscreenBtn = $state(false);
@@ -23,6 +31,9 @@
 	}
 	
 	onMount(() => {
+		// Activar modo dark por defecto
+		document.documentElement.classList.add('dark');
+		
 		// Detectar si es móvil
 		const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 		
@@ -117,6 +128,12 @@
 </div>
 {/if}
 
+<!-- Theme Toggle -->
+<ThemeToggle />
+
+<!-- Palette Randomizer -->
+<PaletteRandomizer on:palettechange={handlePaletteChange} />
+
 <!-- Botón de pantalla completa movido al BottomSheet -->
 
 {@render children()}
@@ -125,13 +142,11 @@
 	.splash-screen {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.85);
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
+		background: #000000;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding-bottom: 20vh; /* Desplazar hacia arriba */
+		padding-bottom: 20vh;
 		z-index: 999999;
 		animation: fadeOut 1s ease 1.5s forwards;
 	}
@@ -140,7 +155,7 @@
 	.logo-text {
 		font-size: 32px;
 		font-weight: 700;
-		color: #ffffff;
+		color: #c9d1d9;
 		letter-spacing: 1px;
 		animation: fadeInUp 1s ease-out;
 	}

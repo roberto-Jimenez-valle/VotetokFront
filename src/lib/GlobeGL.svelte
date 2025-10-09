@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
+  import { fade } from 'svelte/transition';
   
   const dispatch = createEventDispatcher();
   
@@ -34,6 +35,7 @@
   import { nameOf as nameOfUtil, getDominantKey as getDominantKeyUtil, opacityForIso as opacityForIsoUtil, alphaForTag as alphaForTagUtil } from './utils/globeHelpers';
   import { BottomSheetController, type SheetState } from './globe/bottomSheet';
   import { computeGlobeViewModel } from './utils/globeDataProc';
+  import themeConfig from './config/theme.json';
 
   // Permitir modo "data-in": el padre pasa datos directamente y GlobeGL se auto-configura
   export let geo: any = null;
@@ -717,7 +719,7 @@
         const el = document.createElement('div');
         el.className = 'vote-marker';
         const tag = (d.tag ?? '').toString();
-        const color = colorMap?.[tag] ?? '#9ca3af';
+        const color = colorMap?.[tag] ?? polygonNoDataColor;
         const count = Number((d.count ?? 1));
         const size = Math.max(10, Math.min(36, Math.round(8 + Math.sqrt(count) * 5)));
         el.style.width = `${size}px`;
@@ -739,7 +741,7 @@
           label.style.left = '50%';
           label.style.top = '50%';
           label.style.transform = 'translate(-50%, -50%)';
-          label.style.color = '#fff';
+          label.style.color = '#c9d1d9';
           label.style.fontWeight = '600';
           label.style.fontSize = `${Math.max(9, Math.min(14, Math.round(size * 0.45)))}px`;
           label.style.textShadow = '0 1px 2px rgba(0,0,0,0.6)';
@@ -1049,7 +1051,7 @@
     }
     
     // Rellenar los restantes con el color del primer segmento
-    const fallbackColor = segments[0]?.color || '#9ca3af';
+    const fallbackColor = segments[0]?.color || polygonNoDataColor;
         
     while (cursor < polygons.length) {
       const poly = polygons[cursor];
@@ -1899,10 +1901,10 @@
         // Navigate using manager PRIMERO
         await navigationManager.navigateToCountry(option.id, option.name);
         
-        // LUEGO hacer zoom con adaptación al tamaño del país
+        // LUEGO hacer zoom con adaptación al tamaño del país (sin delay, más rápido)
         const centroid = centroidOf(countryFeature);
         const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
-        scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 700, 100);
+        scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
         
         // Force refreshes to ensure polygons are visible (NO labels - se actualizan después del zoom)
         (async () => {
@@ -1947,9 +1949,9 @@
           // Navigate using manager PRIMERO
           await navigationManager.navigateToSubdivision(state.countryIso, subdivisionId, option.name);
           
-          // LUEGO hacer zoom adaptativo basado en el tamaño de la subdivisión
+          // LUEGO hacer zoom adaptativo basado en el tamaño de la subdivisión (sin delay, más rápido)
           const targetAlt = Math.min(adaptiveAltitude, 0.06); // Máximo 0.06 para activar elevaciones bajas
-          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 700, 150);
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
           
           // Update selected subdivision name and ID
           selectedSubdivisionName = option.name;
@@ -1998,8 +2000,8 @@
               selectedSubdivisionName = state.subdivisionId ? (subSubFeature.properties?.NAME_1 || selectedSubdivisionName) : selectedSubdivisionName;
               selectedCityId = subSubFeature.properties?.ID_2;
               
-              // Navigate and zoom
-              scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 700, 100);
+              // Navigate and zoom (sin delay, más rápido)
+              scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
               
               // Refresh visual (igual que en polygonClick)
               setTimeout(() => {
@@ -2205,7 +2207,7 @@
           lng: centroid.lng,
           text: name || iso,
           size: 12,
-          color: '#ffffff',
+          color: '#c9d1d9',
           opacity: 0.8,
           feature: feat
         };
@@ -2242,7 +2244,7 @@
         lng: centroid.lng,
         text: countryName,
         size: 16,
-        color: '#ffffff',
+        color: '#c9d1d9',
         opacity: 1.0
       }];
       
@@ -2287,7 +2289,7 @@
         lng: finalCentroid.lng,
         text: subdivisionName,
         size: 14,
-        color: '#ffffff',
+        color: '#c9d1d9',
         opacity: 1.0
       }];
       
@@ -2992,23 +2994,58 @@
   }
   function onSheetPointerDown(e: PointerEvent | TouchEvent) { try { sheetCtrl?.pointerDown(e); } catch {} }
 
-  // Controles de color (color pickers) y opacidad (sliders)
-  let capColor = '#ff0000';        // color principal países
-  let capOpacityPct = 100;         // 0-100
-  let sphereColor = '#441220';     // color esfera (océanos)
-  let sphereOpacityPct = 100;      // 0-100
-  let strokeColor = '#961A50';     // color del trazo (bordes)
-  let strokeOpacityPct = 75;       // 0-100
+  // Configuración del tema desde JSON
+  const globeTheme = themeConfig.theme.colors.globe;
+  
+  // Controles de color (color pickers) y opacidad (sliders) - Inicializados desde theme.json
+  let capColor = themeConfig.theme.colors.accent.blue;
+  let capOpacityPct = 100;
+  let sphereColor = globeTheme.sphere; // #0a0a0a
+  let sphereOpacityPct = 100;
+  let strokeColor = globeTheme.stroke; // #333333 gris
+  let strokeOpacityPct = globeTheme.strokeOpacity; // 40 visible
+  let bgColor = globeTheme.background; // #0a0a0a casi negro
+  let polygonNoDataColor = globeTheme.polygonDefault; // #0a0a0a
+  let atmosphereColor = globeTheme.atmosphere; // #1a1a1a muy sutil
+  let atmosphereAltitude = globeTheme.atmosphereAltitude; // 0.12
+  let isDarkTheme = true; // Estado del tema
 
   // Colores derivados (conveniencia)
-  let capBaseColor = capColor;
-  let sphereBaseColor = sphereColor;
-  let strokeBaseColor = strokeColor;
+  $: capBaseColor = capColor;
+  $: sphereBaseColor = sphereColor;
+  $: strokeBaseColor = strokeColor;
   let showSettings = false;
-  let panelTop = 52; // posición vertical del panel de ajustes
+  let panelTop = 52;
   let panelEl: HTMLDivElement | null = null;
-  // Fondo del lienzo (color de background del globo)
-  let bgColor = '#000000';
+  
+  // Observar cambios de tema - TODO unificado desde theme.json
+  function updateColorsForTheme() {
+    const isDark = document.documentElement.classList.contains('dark');
+    isDarkTheme = isDark; // Actualizar estado del tema
+    
+    // Cargar colores desde theme.json
+    const theme = themeConfig.theme.colors;
+    const globeConfig = isDark ? theme.globe : theme.globeLight;
+    
+    // Aplicar configuración del tema seleccionado
+    bgColor = globeConfig.background;
+    sphereColor = globeConfig.sphere;
+    strokeColor = globeConfig.stroke;
+    strokeOpacityPct = globeConfig.strokeOpacity;
+    atmosphereColor = globeConfig.atmosphere;
+    atmosphereAltitude = globeConfig.atmosphereAltitude;
+    capColor = theme.accent.blue;
+    polygonNoDataColor = globeConfig.polygonDefault;
+    
+    // Forzar actualización visual del globo
+    if (globe) {
+      setTimeout(() => {
+        globe.refreshPolyColors?.();
+        globe.refreshPolyStrokes?.();
+      }, 50);
+    }
+  }
+  
   // Filtros/Trending
   let activeTag: string | null = null; // etiqueta seleccionada para resaltar
   // Votos regionales (para renderizar marcadores cuando estamos cerca)
@@ -3113,7 +3150,7 @@
       }
     }
     // Si quedaron sin asignar por alguna razón, rellenar con el color del primer segmento
-    const fallbackColor = segs[0]?.color || '#9ca3af';
+    const fallbackColor = segs[0]?.color || polygonNoDataColor;
     for (const poly of polygons) {
       const props = poly?.properties || {};
       const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || props.NAME_1 || props.name_1 || null;
@@ -3369,10 +3406,6 @@
     return colorMap?.[key] ?? colorMap?.['No data'] ?? capBaseColor;
   }
 
-  // Reactivo: aplicar cambios de color/opacity
-  $: capBaseColor = capColor;
-  $: sphereBaseColor = sphereColor;
-  $: strokeBaseColor = strokeColor;
   // El modo ahora lo controla la barrita inferior
 
   // Segmentos de chart por país seleccionado (top categorías por votos)
@@ -3409,7 +3442,7 @@
       key: k, 
       value: n, 
       pct: (n / total) * 100, 
-      color: colorMap?.[k] ?? '#9ca3af' 
+      color: colorMap?.[k] ?? polygonNoDataColor 
     }));
     
     if (restSum > 0) {
@@ -3609,7 +3642,7 @@
             
             // Forzar actualización de colores después de cargar trending
             await new Promise(resolve => requestAnimationFrame(resolve));
-            await updateGlobeColors('Init - Trending cargado');
+            await updateGlobeColors();
           }
                   }
       }
@@ -3669,12 +3702,54 @@
       }
     };
         window.addEventListener('searchSelect', searchSelectHandler);
+    
+    // Inicializar colores según tema actual
+    updateColorsForTheme();
+    
+    // Observar cambios en el tema
+    const themeObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          updateColorsForTheme();
+        }
+      });
+    });
+    
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
+    // Escuchar cambios de paleta random
+    paletteChangeHandler = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const palette = customEvent.detail;
+      
+      // Aplicar nueva paleta (solo en dark mode)
+      if (isDarkTheme) {
+        bgColor = palette.bg;
+        sphereColor = palette.sphere;
+        strokeColor = palette.stroke;
+        polygonNoDataColor = palette.noData;
+        
+        // Forzar actualización
+        if (globe) {
+          setTimeout(() => {
+            globe.refreshPolyColors?.();
+            globe.refreshPolyStrokes?.();
+          }, 50);
+        }
+      }
+    };
+    
+    window.addEventListener('palettechange', paletteChangeHandler);
   });
 
   function resize() { /* GlobeCanvas maneja su propio tamaño vía CSS */ }
 
   // Store handler reference for cleanup
   let searchSelectHandler: ((event: Event) => Promise<void>) | null = null;
+  let paletteChangeHandler: ((event: Event) => void) | null = null;
 
   onDestroy(() => {
     try {
@@ -3687,6 +3762,10 @@
     if (searchSelectHandler) {
       window.removeEventListener('searchSelect', searchSelectHandler);
     }
+    // Remove palette change listener
+    if (paletteChangeHandler) {
+      window.removeEventListener('palettechange', paletteChangeHandler);
+    }
   });
 
 </script>
@@ -3694,7 +3773,13 @@
 <GlobeCanvas
   bind:this={globe}
   {bgColor}
+  sphereBaseColor={sphereBaseColor}
+  strokeBaseColor={strokeBaseColor}
+  strokeOpacityPct={strokeOpacityPct}
+  {atmosphereColor}
+  {atmosphereAltitude}
   {selectedCityId}
+  {isDarkTheme}
   onPolyCapColor={(feat) => {
     const props = feat?.properties || {};
     const currentLevel = navigationManager?.getCurrentLevel() || 'world';
@@ -3717,7 +3802,9 @@
     if (!activePoll) {
       // Modo trending: verificar que isoDominantKey tenga datos válidos
       if (!isoDominantKey || Object.keys(isoDominantKey).length === 0) {
-        return '#9ca3af';
+        // OPTIMIZACIÓN: Gris muy oscuro para polígonos sin datos
+        // Un pelín más claro que el fondo negro
+        return 'rgba(26,26,26,1)';
       }
     }
     
@@ -3734,16 +3821,19 @@
         return topSeg.color;
       }
       const k = isoDominantKey[featureId] ?? '';
-      return colorMap?.[k] ?? '#9ca3af';
+      const mapColor = colorMap?.[k];
+      // OPTIMIZACIÓN: Gris muy oscuro para polígonos sin datos
+      return mapColor ?? 'rgba(26,26,26,1)';
     }
     
     // PRIORIDAD 3: Usar isoDominantKey con el featureId correcto
     const key = isoDominantKey[featureId] ?? '';
     const color = colorMap?.[key];
     
-    // Si no hay color, devolver gris
+    // OPTIMIZACIÓN: Si no hay color, gris muy oscuro para polígonos inactivos
+    // Un pelín más claro que el fondo para sutilmente distinguirlos
     if (!color) {
-      return '#9ca3af';
+      return 'rgba(26,26,26,1)';
     }
     
     return color;
@@ -3762,7 +3852,7 @@
               }
       
       setTilesEnabled(false);
-      updateGlobeColors('Globe ready');
+      updateGlobeColors();
       updatePolygonsVisibilityExt();
       
       // Inicializar marcadores según altitud actual
@@ -3843,69 +3933,68 @@
       if (currentLevel === 'world' && iso) {
         // Click on country from world view
         
-        // PASO 1: Actualizar datos del país ANTES de navegar
+        // PASO 1: Verificar si hay datos ANTES de permitir la navegación
         // IMPORTANTE: answersData ya está filtrado por la encuesta activa (si existe)
         const countryRecord = answersData?.[iso];
-        if (countryRecord) {
-          const countryData = [countryRecord];
-          countryChartSegments = generateCountryChartSegments(countryData);
-          console.log('[Click País] 📊 countryChartSegments generados:', countryChartSegments.length, countryChartSegments);
-        } else {
-          countryChartSegments = [];
-          console.log('[Click País] ⚠️ No hay datos para el país:', iso);
+        if (!countryRecord) {
+          console.log('[Click País] 🚫 No hay datos para el país:', iso, '- Click bloqueado');
+          return; // BLOQUEAR navegación si no hay datos
         }
         
-        // PASO 2: Esperar un tick para que countryChartSegments se propague
-        await tick();
-        
-        // PASO 3: Navegar (ahora renderCountryView tendrá countryChartSegments actualizado)
-        await navigationManager.navigateToCountry(iso, name);
-        
-        // PASO 4: Hacer zoom con adaptación al tamaño del país
+        // PASO 2: Calcular zoom INMEDIATAMENTE para respuesta instantánea
         const centroid = centroidOf(feat);
         const adaptiveAltitude = calculateAdaptiveZoom(feat);
-        scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 700, 150);
+        scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
         
-        // PASO 5: Forzar refresh de colores DESPUÉS del zoom
-        (async () => {
+        // PASO 3: Actualizar datos del país
+        const countryData = [countryRecord];
+        countryChartSegments = generateCountryChartSegments(countryData);
+        console.log('[Click País] 📊 countryChartSegments generados:', countryChartSegments.length, countryChartSegments);
+        
+        // PASO 4: Navegar DESPUÉS de la animación (500ms + margen)
+        setTimeout(async () => {
+          await tick();
+          await navigationManager.navigateToCountry(iso, name);
+          
+          // Forzar refresh de colores DESPUÉS de la navegación
           await new Promise(resolve => requestAnimationFrame(resolve));
-          await updateGlobeColors('Click en país');
-        })();
+          await updateGlobeColors();
+        }, 600);
         
       } else if (currentLevel === 'country' && feat.properties?.ID_1) {
         // Click on subdivision from country view
         const subdivisionId = feat.properties.ID_1;
         const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1 || name;
         
-        // Mantener el nombre del país
-        selectedCountryIso = iso;
-        
-        // IMPORTANTE: Calcular zoom adaptativo ANTES de navegar
-        const centroid = centroidOf(feat);
-        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
-        const targetAlt = Math.min(adaptiveAltitude, 0.06);
-        
-        // PASO 1: Generar chart segments para la subdivisión ANTES de navegar
+        // PASO 1: Verificar si hay datos ANTES de permitir la navegación
         const subdivisionKey = subdivisionId; // subdivisionId ya es "ESP.1"
         const subdivisionRecord = answersData?.[subdivisionKey];
         console.log('[Click Subdivisión] 🔍 Buscando datos:', { subdivisionKey, hasData: !!subdivisionRecord, answersDataKeys: Object.keys(answersData).slice(0, 5) });
-        if (subdivisionRecord) {
-          subdivisionChartSegments = generateCountryChartSegments([subdivisionRecord]);
-          console.log('[Click Subdivisión] 📊 subdivisionChartSegments generados:', subdivisionChartSegments.length, subdivisionChartSegments);
-        } else {
-          subdivisionChartSegments = [];
-          console.log('[Click Subdivisión] ⚠️ No hay datos para:', subdivisionKey);
+        
+        if (!subdivisionRecord) {
+          console.log('[Click Subdivisión] 🚫 No hay datos para:', subdivisionKey, '- Click bloqueado');
+          return; // BLOQUEAR navegación si no hay datos
         }
         
-        // PASO 2: Navigate using manager (carga datos y polígonos)
-        await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
+        // PASO 2: Calcular zoom INMEDIATAMENTE para respuesta instantánea
+        const centroid = centroidOf(feat);
+        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
+        const targetAlt = Math.min(adaptiveAltitude, 0.06);
+        scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
         
-        // PASO 3: Hacer zoom
-        scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 100);
+        // PASO 3: Actualizar datos
+        subdivisionChartSegments = generateCountryChartSegments([subdivisionRecord]);
+        console.log('[Click Subdivisión] 📊 subdivisionChartSegments generados:', subdivisionChartSegments.length, subdivisionChartSegments);
+        selectedCountryIso = iso;
         
-        // PASO 4: Refresh colores
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        await updateGlobeColors('Click en subdivisión');
+        // PASO 4: Navigate DESPUÉS de la animación (500ms + margen)
+        setTimeout(async () => {
+          await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
+          
+          // Refresh colores después de la navegación
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await updateGlobeColors();
+        }, 600);
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
         // NIVEL 4: Activar selección (viene de etiqueta o sistema de proximidad)
@@ -3998,7 +4087,7 @@
           // Refresh INMEDIATO
           (async () => {
             await new Promise(resolve => requestAnimationFrame(resolve));
-            await updateGlobeColors('Volver a vista mundial');
+            await updateGlobeColors();
           })();
           
         } else if (newLevel === 'country') {
@@ -4023,7 +4112,7 @@
                 }
               }
               
-              await updateGlobeColors('Volver a vista de país');
+              await updateGlobeColors();
             }, 200);
           }
         } else if (newLevel === 'subdivision') {
@@ -4420,6 +4509,11 @@
   </div>
 {/if}
 
+<!-- Overlay semi-transparente para bloquear clics -->
+{#if isZooming}
+  <div class="zoom-overlay" transition:fade={{ duration: 150 }}></div>
+{/if}
+
 <style>
   /* Bloquear elementos durante animaciones de cámara */
   .blocked-during-animation {
@@ -4427,5 +4521,19 @@
     user-select: none !important;
     opacity: 0.6;
     transition: opacity 0.2s ease;
+  }
+
+  /* Overlay semi-transparente para bloquear clics */
+  .zoom-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(1px);
+    z-index: 9998;
+    pointer-events: all;
+    cursor: wait;
   }
 </style>

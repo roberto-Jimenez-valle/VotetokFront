@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "theme": {
+    "name": "VoteTok Theme System",
+    "description": "Sistema de temas con 50+ paletas oscuras elegantes",
+    "version": "2.0.0",
+    
+    "defaultTheme": "GitHub Dark",
+    
+    "colors": {
+      "background": {
+        "primary": "#000000",
+        "secondary": "#0d1117",
+        "card": "#161b22",
+        "muted": "#21262d"
+      },
+      
+      "foreground": {
+        "primary": "#c9d1d9",
+        "secondary": "#8b949e",
+        "muted": "#6e7681"
+      },
+      
+      "accent": {
+        "blue": "#1f6feb",
+        "purple": "#8957e5",
+        "green": "#3fb950",
+        "red": "#f85149",
+        "orange": "#db6d28",
+        "yellow": "#d29922"
+      },
+      
+      "borders": {
+        "default": "#30363d",
+        "muted": "#21262d",
+        "subtle": "#6e7681"
+      },
+      
+      "globe": {
+        "background": "#0c0c0c",
+        "sphere": "#1d1d1d",
+        "atmosphere": "#ccc",
+        "atmosphereEnabled": true,
+        "atmosphereAltitude": 0.12,
+        "stroke": "#ccc",
+        "strokeOpacity": 50,
+        "polygonDefault": "#ccc",
+        "polygonAltitude": 0.015,
+        "polygonAltitudeSelected": 0.016,
+        "polygonAltitudeCity": 0.001
+      },
+      
+      "globeLight": {
+        "background": "#ffffff",
+        "sphere": "#ffffff",
+        "atmosphere": "#87ceeb",
+        "atmosphereEnabled": true,
+        "atmosphereAltitude": 0.15,
+        "stroke": "#d0d7de",
+        "strokeOpacity": 80,
+        "polygonDefault": "#e1e4e8",
+        "polygonAltitude": 0.015,
+        "polygonAltitudeSelected": 0.016,
+        "polygonAltitudeCity": 0.001
+      },
+      
+      "ui": {
+        "overlay": "rgba(0, 0, 0, 0.15)",
+        "overlayDark": "rgba(0, 0, 0, 0.3)",
+        "overlayLight": "rgba(0, 0, 0, 0.05)"
+      }
+    },
+    
+    "opacity": {
+      "full": 100,
+      "high": 80,
+      "medium": 60,
+      "low": 40,
+      "subtle": 20
+    },
+    
+    "animation": {
+      "zoomDuration": 500,
+      "fadeDuration": 150,
+      "transitionDuration": 200
+    },
+    
+    "palettes": {
+      "count": 54,
+      "categories": [
+        "Clásicas (4)",
+        "Púrpuras (6)", 
+        "Azules (8)",
+        "Verdes (6)",
+        "Rojos (5)",
+        "Naranjas (3)",
+        "Grises (5)",
+        "Cyan (3)",
+        "Marrones (4)",
+        "Tonos Fríos (4)",
+        "Únicas (4)"
+      ]
+    }
+  }
+}
