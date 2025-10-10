@@ -7,19 +7,72 @@
   // Helper para delays con Promesas
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   
-  // Función centralizada para actualizar colores del globo
-  async function updateGlobeColors() {
+  // Sistema de cache para evitar repintados innecesarios
+  let lastColorMapHash = '';
+  let isRefreshing = false;
+  
+  // Función para animar fade-in de colores (desvanecimiento suave)
+  function animateFadeIn(duration = 600) {
+    if (isFading) return; // Ya hay animación en curso
+    
+    isFading = true;
+    fadeOpacity = 0.0;
+    const startTime = performance.now();
+    
+    function animate() {
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1.0);
+      
+      // Easing suave (ease-in-out para más visibilidad)
+      fadeOpacity = progress < 0.5
+        ? 2 * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      
+      // Forzar repintado con nueva opacidad
+      globe?.refreshPolyColors?.();
+      
+      if (progress < 1.0) {
+        requestAnimationFrame(animate);
+      } else {
+        fadeOpacity = 1.0;
+        isFading = false;
+      }
+    }
+    
+    requestAnimationFrame(animate);
+  }
+  
+  // Función centralizada para actualizar colores del globo (OPTIMIZADA + FADE)
+  async function updateGlobeColors(withFade = false) {
     // Verificar que los datos necesarios existen
     if (!colorMap || Object.keys(colorMap).length === 0 || !isoDominantKey || Object.keys(isoDominantKey).length === 0) {
       return;
     }
     
-    // Forzar actualización del callback de colores
-    globe?.refreshPolyColors?.();
+    // Evitar múltiples refreshes simultáneos (EXCEPTO si es con fade)
+    if (isRefreshing && !withFade) {
+      return;
+    }
     
-    // Esperar un frame y volver a refrescar para asegurar que se aplica
-    await new Promise(resolve => requestAnimationFrame(resolve));
-    globe?.refreshPolyColors?.();
+    // Generar hash de colorMap para detectar cambios
+    const currentHash = JSON.stringify(Object.keys(colorMap).sort());
+    if (currentHash === lastColorMapHash && !withFade) {
+      return; // No hay cambios, no repintar
+    }
+    
+    isRefreshing = true;
+    lastColorMapHash = currentHash;
+    
+    // Si se solicita fade, animar SIEMPRE
+    if (withFade) {
+      animateFadeIn(600); // 0.6 segundos - rápido pero visible
+    } else {
+      // Una sola llamada a refresh (eliminada la redundancia)
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      globe?.refreshPolyColors?.();
+    }
+    
+    isRefreshing = false;
   }
   import TopTabs from './TopTabs.svelte';
   import './GlobeGL.css';
@@ -110,7 +163,20 @@
   const MIN_ZOOM_ALTITUDE = 0.005; // límite mínimo de zoom (más cerca) - ampliado para permitir más acercamiento
   const MAX_ZOOM_ALTITUDE = 4.0; // límite máximo de zoom (más lejos)
 
-  // Función para calcular el área aproximada de un polígono (en grados cuadrados)
+  // Caches para optimización (evitar recálculos)
+  const areaCache = new Map<string, number>();
+  const zoomCache = new Map<string, number>();
+  const chartSegmentsCache = new Map<string, ChartSeg[]>();
+  
+  // Pre-carga inteligente: cachear próximo nivel durante animación
+  let preloadedPolygons: any[] | null = null;
+  let preloadedCountryIso: string | null = null;
+  
+  // Sistema de fade-in para colores de polígonos
+  let fadeOpacity = 1.0; // 0.0 = transparente, 1.0 = opaco
+  let isFading = false;
+
+  // Función para calcular el área aproximada de un polígono (en grados cuadrados) - CON CACHE
   function calculatePolygonArea(feature: any): number {
     try {
       if (!feature?.geometry?.coordinates) return 0;
@@ -150,8 +216,15 @@
     return area / 2;
   }
   
-  // Función para calcular el zoom adaptativo basado en el tamaño del país
+  // Función para calcular el zoom adaptativo basado en el tamaño del país - CON CACHE
   function calculateAdaptiveZoom(feature: any): number {
+    const featureId = feature?.properties?.ISO_A3 || feature?.properties?.ID_1 || feature?.properties?.ID_2 || '';
+    
+    // Revisar cache primero
+    if (featureId && zoomCache.has(featureId)) {
+      return zoomCache.get(featureId)!;
+    }
+    
     const area = calculatePolygonArea(feature);
     
     // Calcular altitud de forma más proporcional usando una fórmula logarítmica
@@ -188,11 +261,25 @@
     }
     
     // Asegurar que esté dentro de los límites permitidos
-    return Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
+    const result = Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
+    
+    // Guardar en cache para futuros usos
+    if (featureId) {
+      zoomCache.set(featureId, result);
+    }
+    
+    return result;
   }
 
-  // Función para calcular el zoom adaptativo para subdivisiones (estados/comunidades)
+  // Función para calcular el zoom adaptativo para subdivisiones (estados/comunidades) - CON CACHE
   function calculateAdaptiveZoomSubdivision(feature: any): number {
+    const featureId = feature?.properties?.ID_1 || feature?.properties?.ID_2 || feature?.properties?.GID_2 || '';
+    
+    // Revisar cache primero
+    if (featureId && zoomCache.has(featureId)) {
+      return zoomCache.get(featureId)!;
+    }
+    
     const area = calculatePolygonArea(feature);
     
     // Calcular altitud proporcional para subdivisiones con interpolación suave
@@ -225,7 +312,14 @@
     }
     
     // Asegurar que esté dentro de los límites permitidos
-    return Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
+    const result = Math.max(MIN_ZOOM_ALTITUDE, Math.min(targetAltitude, MAX_ZOOM_ALTITUDE));
+    
+    // Guardar en cache para futuros usos
+    if (featureId) {
+      zoomCache.set(featureId, result);
+    }
+    
+    return result;
   }
 
   // Función para simular clic en una ciudad específica (para testing)
@@ -3836,6 +3930,33 @@
       return 'rgba(26,26,26,1)';
     }
     
+    // Aplicar fade opacity si hay animación en curso
+    if (isFading && fadeOpacity < 1.0) {
+      // Transición desde gris oscuro al color final (más visible)
+      const grayColor = [26, 26, 26]; // Color de fondo
+      let targetR = 26, targetG = 26, targetB = 26;
+      
+      // Extraer RGB del color target
+      const rgbaMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
+      if (rgbaMatch) {
+        targetR = parseInt(rgbaMatch[1]);
+        targetG = parseInt(rgbaMatch[2]);
+        targetB = parseInt(rgbaMatch[3]);
+      } else if (color.startsWith('#')) {
+        const hex = color.replace('#', '');
+        targetR = parseInt(hex.substr(0, 2), 16);
+        targetG = parseInt(hex.substr(2, 2), 16);
+        targetB = parseInt(hex.substr(4, 2), 16);
+      }
+      
+      // Interpolar entre gris y color final
+      const r = Math.round(grayColor[0] + (targetR - grayColor[0]) * fadeOpacity);
+      const g = Math.round(grayColor[1] + (targetG - grayColor[1]) * fadeOpacity);
+      const b = Math.round(grayColor[2] + (targetB - grayColor[2]) * fadeOpacity);
+      
+      return `rgb(${r},${g},${b})`;
+    }
+    
     return color;
   }}
   on:movementStart={onMapMovementStart}
@@ -3911,10 +4032,7 @@
   }}
   on:polygonClick={async (e) => {
     // BLOQUEAR clics durante animaciones de zoom
-    if (isZooming) {
-      console.log('[Click] Clic bloqueado durante animación de zoom');
-      return;
-    }
+    if (isZooming) return;
     
     if (!navigationManager) return;
     try {
@@ -3937,7 +4055,6 @@
         // IMPORTANTE: answersData ya está filtrado por la encuesta activa (si existe)
         const countryRecord = answersData?.[iso];
         if (!countryRecord) {
-          console.log('[Click País] 🚫 No hay datos para el país:', iso, '- Click bloqueado');
           return; // BLOQUEAR navegación si no hay datos
         }
         
@@ -3949,17 +4066,38 @@
         // PASO 3: Actualizar datos del país
         const countryData = [countryRecord];
         countryChartSegments = generateCountryChartSegments(countryData);
-        console.log('[Click País] 📊 countryChartSegments generados:', countryChartSegments.length, countryChartSegments);
         
-        // PASO 4: Navegar DESPUÉS de la animación (500ms + margen)
+        // PASO 4: PRE-CARGAR subdivisiones en paralelo durante el zoom (sin bloquear)
+        const preloadPromise = (async () => {
+          try {
+            if (preloadedCountryIso !== iso) {
+              const polys = await loadCountryTopoAsGeoFeatures(iso);
+              preloadedPolygons = polys;
+              preloadedCountryIso = iso;
+            }
+          } catch (e) {
+            console.warn('[PreLoad] Error:', e);
+          }
+        })();
+        
+        // PASO 5: Navegar más temprano (200ms) para que aparezcan antes
         setTimeout(async () => {
           await tick();
-          await navigationManager.navigateToCountry(iso, name);
           
-          // Forzar refresh de colores DESPUÉS de la navegación
+          // Esperar pre-carga (probablemente ya terminó)
+          await preloadPromise;
+          
+          // Usar polígonos pre-cargados si están disponibles
+          if (preloadedPolygons && preloadedCountryIso === iso) {
+            localPolygons = preloadedPolygons;
+            await navigationManager.navigateToCountry(iso, name);
+          } else {
+            await navigationManager.navigateToCountry(iso, name);
+          }
+          
           await new Promise(resolve => requestAnimationFrame(resolve));
-          await updateGlobeColors();
-        }, 600);
+          await updateGlobeColors(true); // true = con fade-in
+        }, 200);
         
       } else if (currentLevel === 'country' && feat.properties?.ID_1) {
         // Click on subdivision from country view
@@ -3969,10 +4107,8 @@
         // PASO 1: Verificar si hay datos ANTES de permitir la navegación
         const subdivisionKey = subdivisionId; // subdivisionId ya es "ESP.1"
         const subdivisionRecord = answersData?.[subdivisionKey];
-        console.log('[Click Subdivisión] 🔍 Buscando datos:', { subdivisionKey, hasData: !!subdivisionRecord, answersDataKeys: Object.keys(answersData).slice(0, 5) });
         
         if (!subdivisionRecord) {
-          console.log('[Click Subdivisión] 🚫 No hay datos para:', subdivisionKey, '- Click bloqueado');
           return; // BLOQUEAR navegación si no hay datos
         }
         
@@ -3984,17 +4120,16 @@
         
         // PASO 3: Actualizar datos
         subdivisionChartSegments = generateCountryChartSegments([subdivisionRecord]);
-        console.log('[Click Subdivisión] 📊 subdivisionChartSegments generados:', subdivisionChartSegments.length, subdivisionChartSegments);
         selectedCountryIso = iso;
         
-        // PASO 4: Navigate DESPUÉS de la animación (500ms + margen)
+        // PASO 4: Navigate más temprano (200ms) para que aparezcan antes
         setTimeout(async () => {
           await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
           
           // Refresh colores después de la navegación
           await new Promise(resolve => requestAnimationFrame(resolve));
-          await updateGlobeColors();
-        }, 600);
+          await updateGlobeColors(true); // true = con fade-in
+        }, 200);
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
         // NIVEL 4: Activar selección (viene de etiqueta o sistema de proximidad)
@@ -4023,10 +4158,7 @@
   }}
   on:globeClick={async (e) => {
     // BLOQUEAR clics durante animaciones de zoom
-    if (isZooming) {
-      console.log('[Click] Clic en globo bloqueado durante animación de zoom');
-      return;
-    }
+    if (isZooming) return;
     
     if (!navigationManager) return;
     

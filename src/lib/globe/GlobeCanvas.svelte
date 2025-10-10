@@ -63,7 +63,7 @@
     return Math.abs(hash % 100) / 100;
   }
   
-  // Public API for parent via bind:this
+  // Public API for parent via bind:this (OPTIMIZADO)
   export function setPolygonsData(data: any[]) {
     if (!world) return;
     try {
@@ -76,9 +76,11 @@
       lastPolygonDataHash = newHash;
       lastPolygonData = data;
       
-      // Aplicar LOD: filtrar polígonos según nivel de detalle
-      const filteredData = applyLODFiltering(data);
-      world.polygonsData(filteredData);
+      // Aplicar datos en requestAnimationFrame para no bloquear
+      requestAnimationFrame(() => {
+        const filteredData = applyLODFiltering(data);
+        world.polygonsData(filteredData);
+      });
     } catch {}
   }
   export function setTilesEnabled(enabled: boolean) {
@@ -133,10 +135,22 @@
     }
   }
 
-  // Force re-apply cap color mapping from parent
+  // Sistema de throttle para evitar refreshes excesivos
+  let lastRefreshTime = 0;
+  const MIN_REFRESH_INTERVAL = 16; // ~60fps máximo
+  
+  // Force re-apply cap color mapping from parent (OPTIMIZADO)
   export function refreshPolyColors() {
     try {
       if (!world) return;
+      
+      // Throttle: evitar refreshes más rápidos que 60fps
+      const now = performance.now();
+      if (now - lastRefreshTime < MIN_REFRESH_INTERVAL) {
+        return;
+      }
+      lastRefreshTime = now;
+      
       world.polygonCapColor((feat: any) => (onPolyCapColor ? onPolyCapColor(feat) : hexToRgba(capBaseColor, 0.8)));
     } catch {}
   }
