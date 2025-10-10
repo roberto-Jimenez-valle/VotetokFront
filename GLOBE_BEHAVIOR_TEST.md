@@ -63,14 +63,7 @@
 **Verificación en consola:**
 ```javascript
 // Ver estado actual
-console.log({
-  colorMap,
-  isoDominantKey,
-  answersData,
-  activePoll,
-  currentLevel: navigationManager?.getCurrentLevel()
-});
-```
+
 
 ---
 
@@ -119,34 +112,6 @@ console.log({
 ---
 
 ## 🔍 Comandos de Debug en Consola
-
-```javascript
-// Ver estado del globo
-window.debugGlobeState = () => {
-  console.log({
-    level: navigationManager?.getCurrentLevel(),
-    activePoll: activePoll?.id,
-    colorMapSize: Object.keys(colorMap || {}).length,
-    isoDominantKeySize: Object.keys(isoDominantKey || {}).length,
-    answersDataSize: Object.keys(answersData || {}).length,
-    worldPolygonsCount: worldPolygons?.length || 0
-  });
-};
-
-// Forzar actualización de colores
-window.forceColorRefresh = () => {
-  globe?.refreshPolyColors?.();
-  console.log('✅ Colores actualizados');
-};
-
-// Ver colores de un país específico
-window.checkCountryColor = (iso) => {
-  const key = isoDominantKey[iso];
-  const color = colorMap[key];
-  const votes = answersData[iso];
-  console.log({ iso, key, color, votes });
-};
-```
 
 ---
 

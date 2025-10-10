@@ -172,15 +172,7 @@ byId[normalizedId] = colorMap[winningOption];
 ```javascript
 // En consola del navegador:
 const polygons = globe.polygonsData();
-polygons.forEach(p => {
-  if (p.properties._isChild) {
-    console.log(
-      'Subdivision:', p.properties.NAME_1,
-      'ID:', p.properties.ID_1,
-      'Color:', p.properties._forcedColor
-    );
-  }
-});
+
 ```
 
 **Deberías ver:**

@@ -49,10 +49,11 @@
       return;
     }
     
+    // FORZAR refresh completo (temporal para debug)
     // Evitar múltiples refreshes simultáneos (EXCEPTO si es con fade)
-    if (isRefreshing && !withFade) {
-      return;
-    }
+    // if (isRefreshing && !withFade) {
+    //   return;
+    // }
     
     // Generar hash de colorMap para detectar cambios
     const currentHash = JSON.stringify(Object.keys(colorMap).sort());
@@ -160,7 +161,7 @@
   const DETAILED_LABELS_ALT = 0.3; // mostrar etiquetas detalladas cuando altitud < 0.3
   
   // Límites de zoom del globo
-  const MIN_ZOOM_ALTITUDE = 0.005; // límite mínimo de zoom (más cerca) - ampliado para permitir más acercamiento
+  const MIN_ZOOM_ALTITUDE = 0.04; // límite mínimo de zoom (más cerca) - ajustado para evitar acercamiento excesivo
   const MAX_ZOOM_ALTITUDE = 4.0; // límite máximo de zoom (más lejos)
 
   // Caches para optimización (evitar recálculos)
@@ -299,16 +300,16 @@
       targetAltitude = 0.30 + (area - 5) / 15 * 0.18;
     } else if (area > 1) {
       // Subdivisiones medianas (Andalucía, Cataluña, regiones francesas): medio-cercano
-      targetAltitude = 0.19 + (area - 1) / 4 * 0.11;
+      targetAltitude = 0.24 + (area - 1) / 4 * 0.11;
     } else if (area > 0.3) {
       // Subdivisiones pequeñas (provincias españolas, departamentos pequeños): cercano
-      targetAltitude = 0.13 + (area - 0.3) / 0.7 * 0.06;
+      targetAltitude = 0.18 + (area - 0.3) / 0.7 * 0.06;
     } else if (area > 0.05) {
       // Subdivisiones muy pequeñas (Delaware, Rhode Island, islas pequeñas): muy cercano
-      targetAltitude = 0.08 + (area - 0.05) / 0.25 * 0.05;
+      targetAltitude = 0.13 + (area - 0.05) / 0.25 * 0.05;
     } else {
-      // Subdivisiones minúsculas (Washington D.C., ciudades-estado, islas diminutas): máximo acercamiento
-      targetAltitude = 0.05 + area / 0.05 * 0.03;
+      // Subdivisiones minúsculas (Washington D.C., ciudades-estado, islas diminutas): zoom controlado
+      targetAltitude = 0.10 + area / 0.05 * 0.03;
     }
     
     // Asegurar que esté dentro de los límites permitidos
@@ -354,7 +355,7 @@
   async function navigateToView(targetLevel: 'world' | 'country' | 'subdivision' | 'city') {
     if (!navigationManager) return;
     
-    const currentLevel = navigationManager.getCurrentLevel();
+    const currentLevel = navigationManager!.getCurrentLevel();
     
     if (targetLevel === 'world') {
       // Limpiar todos los niveles inferiores
@@ -366,7 +367,7 @@
       selectedCityId = null;
       
       // Navegar al mundo y hacer zoom hacia atrás
-      await navigationManager.navigateToWorld();
+      await navigationManager!.navigateToWorld();
       scheduleZoom(0, 0, 2.0, 1000);
       
     } else if (targetLevel === 'country' && selectedCountryIso) {
@@ -377,7 +378,7 @@
       selectedCityId = null;
       
       // Navegar al país y hacer zoom apropiado
-      await navigationManager.navigateToCountry(selectedCountryIso, selectedCountryName || 'Unknown');
+      await navigationManager!.navigateToCountry(selectedCountryIso, selectedCountryName || 'Unknown');
       
       // Encontrar el centroide del país para hacer zoom
       const countryFeature = worldPolygons?.find(p => p.properties?.ISO_A3 === selectedCountryIso);
@@ -400,7 +401,7 @@
       // Navegar a la subdivisión
       if (selectedSubdivisionId) {
         // Navegar primero (carga polígonos)
-        await navigationManager.navigateToSubdivision(selectedCountryIso, selectedSubdivisionId, selectedSubdivisionName);
+        await navigationManager!.navigateToSubdivision(selectedCountryIso, selectedSubdivisionId, selectedSubdivisionName);
         
         // NO hacer zoom aquí - el zoom ya se hizo en el handler de clic
         // Solo refrescar visual
@@ -601,7 +602,6 @@
     const path = `/geojson/${iso}/${id1}.topojson`;
     const resp = await fetch(path);
     if (!resp.ok) {
-      console.warn(`[Subregion] No se encontró el archivo: ${path} (HTTP ${resp.status})`);
       throw new Error(`HTTP ${resp.status} al cargar ${path}`);
     }
     const topo = await resp.json();
@@ -665,10 +665,14 @@
         // Zoom cercano: 75% de las etiquetas
         maxLabels = Math.ceil(polygons.length * 0.75);
         minAreaThreshold = 0.02;
+      } else if (currentAltitude > 0.08) {
+        // Zoom muy cercano (0.08-0.15): 85% de las etiquetas
+        maxLabels = Math.ceil(polygons.length * 0.85);
+        minAreaThreshold = 0.01;
       } else {
-        // Zoom EXTREMO (< 0.15): TODAS las etiquetas
-        maxLabels = polygons.length;
-        minAreaThreshold = 0; // Sin filtro de área
+        // Zoom EXTREMO (< 0.08): 90% de las etiquetas (no 100% para evitar saturación)
+        maxLabels = Math.ceil(polygons.length * 0.9);
+        minAreaThreshold = 0.005; // Filtro mínimo de área
       }
     }
     
@@ -681,11 +685,53 @@
     let skippedByArea = 0;
     let skippedByName = 0;
     
-    for (let i = 0; i < Math.min(maxLabels, polygonsWithArea.length); i++) {
-      const { poly, area } = polygonsWithArea[i];
+    // CRÍTICO: Separar polígonos con datos de los sin datos
+    // Los polígonos con datos SIEMPRE se procesan, sin límite de maxLabels
+    const polygonsWithData: Array<{poly: any, area: number}> = [];
+    const polygonsWithoutData: Array<{poly: any, area: number}> = [];
+    
+    for (const item of polygonsWithArea) {
+      // Detectar el nivel correcto: nivel 2 usa ID_1, nivel 3 usa ID_2
+      let polyId = '';
+      if (currentLevel === 'subdivision') {
+        // Nivel 3: usar ID_2
+        polyId = item.poly.properties?.ID_2 || item.poly.properties?.id_2 || '';
+      } else {
+        // Nivel 2: usar ID_1
+        polyId = item.poly.properties?.ID_1 || item.poly.properties?.id_1 || '';
+      }
+      
+      const hasData = Boolean(polyId && answersData?.[polyId]);
+      
+      if (hasData) {
+        polygonsWithData.push(item);
+      } else {
+        polygonsWithoutData.push(item);
+      }
+    }
+    
+    // Primero procesar TODOS los polígonos con datos (sin límite)
+    // Luego procesar los sin datos hasta completar maxLabels
+    const polygonsToProcess = [
+      ...polygonsWithData,
+      ...polygonsWithoutData.slice(0, Math.max(0, maxLabels - polygonsWithData.length))
+    ];
+    
+    for (let i = 0; i < polygonsToProcess.length; i++) {
+      const { poly, area } = polygonsToProcess[i];
       
       // Filtrar polígonos muy pequeños en zoom cercano
-      if (area < minAreaThreshold) {
+      // PERO: Si el polígono tiene datos, NUNCA filtrarlo por área
+      // Detectar el nivel correcto: nivel 2 usa ID_1, nivel 3 usa ID_2
+      let polyId = '';
+      if (currentLevel === 'subdivision') {
+        polyId = poly.properties?.ID_2 || poly.properties?.id_2 || '';
+      } else {
+        polyId = poly.properties?.ID_1 || poly.properties?.id_1 || '';
+      }
+      const hasDataActive = Boolean(polyId && answersData?.[polyId]);
+      
+      if (area < minAreaThreshold && !hasDataActive) {
         skippedByArea++;
         continue;
       }
@@ -768,6 +814,49 @@
             }
           }
           
+          // Determinar si este polígono tiene datos activos
+          // Construir ID del polígono según el nivel
+          let polyId = '';
+          const currentLevel = navigationManager?.getCurrentLevel() || 'world';
+          
+          if (currentLevel === 'world') {
+            // Nivel mundial: usar ISO_A3
+            polyId = poly.properties.ISO_A3 || poly.properties.iso_a3 || 
+                     poly.properties.GID_0 || poly.properties.gid_0 || '';
+          } else if (currentLevel === 'country') {
+            // Nivel país: ID_1 YA viene con formato completo "BRA.4", "ESP.1"
+            const gid1 = poly.properties.GID_1 || poly.properties.gid_1 || '';
+            const id1 = poly.properties.ID_1 || poly.properties.id_1 || '';
+            
+            if (gid1) {
+              // GID_1 puede venir como "ESP.1_1" o similar, extraer "ESP.1"
+              const parts = gid1.split('_');
+              polyId = parts[0]; // "ESP.1"
+            } else if (id1) {
+              // ID_1 ya viene en formato completo (ej: "BRA.4"), usar directamente
+              polyId = String(id1);
+            }
+          } else if (currentLevel === 'subdivision') {
+            // Nivel subdivisión: ID_2 YA viene con formato completo "ESP.1.8"
+            const gid2 = poly.properties.GID_2 || poly.properties.gid_2 || '';
+            const id2 = poly.properties.ID_2 || poly.properties.id_2 || '';
+            
+            if (gid2) {
+              // GID_2 puede venir como "ESP.1.1_1" o similar, extraer "ESP.1.1"
+              const parts = gid2.split('_');
+              polyId = parts[0]; // "ESP.1.1"
+            } else if (id2) {
+              // ID_2 ya viene en formato completo (ej: "ESP.1.8"), usar directamente
+              polyId = String(id2);
+            } else {
+              // Fallback: usar _parentSubdivision si existe
+              polyId = poly.properties._parentSubdivision || '';
+            }
+          }
+          
+          // Verificar si tiene datos REALES en answersData (votos reales)
+          const hasData = Boolean(polyId && answersData?.[polyId]);
+          
           const label: SubdivisionLabel = {
             id: `label_${labelType}_${poly.properties.ID_1 || poly.properties.id_1 || poly.properties.ISO_A3 || Math.floor(Math.random() * 10000)}`,
             name: name,
@@ -775,7 +864,8 @@
             lng: centroid.lng,
             feature: poly, // Incluir el feature completo para que las etiquetas sean clicables
             size: fontSize, // Tamaño dinámico basado en área y zoom
-            area: area // Guardar área para referencia
+            area: area, // Guardar área para referencia
+            hasData: hasData // Indicador de polígono activo con datos
           };
           labels.push(label);
           usedPositions.push({ lat: centroid.lat, lng: centroid.lng });
@@ -783,17 +873,6 @@
           console.warn('[Labels] Failed to generate label for polygon:', poly.properties);
         }
       }
-    }
-    
-    if (debug) {
-      console.log(`[Labels] Resumen generación:`, {
-        total: polygons.length,
-        procesados: Math.min(maxLabels, polygonsWithArea.length),
-        saltados_area: skippedByArea,
-        saltados_sin_nombre: skippedByName,
-        generados: labels.length,
-        altitude: currentAltitude?.toFixed(3)
-      });
     }
     
         return labels;
@@ -968,12 +1047,22 @@
         return byId;
       }
       
-      const { data } = await response.json();
+      const { data } = await response.json() as { data: Record<string, Record<string, number>> };
       // data puede tener IDs granulares: { "ESP.1.1": {...}, "ESP.1.2": {...}, "ESP.2.1": {...} }
       
                   
-      // Agregar votos por nivel 1 (ESP.1, ESP.2, etc.)
-      const level1Votes = aggregateVotesByLevel(data, 1);
+      // NO AGREGAR - usar solo datos directos del nivel 1
+      // Si la BD tiene ARG.7.1, NO colorear ARG.7
+      const level1Votes: Record<string, Record<string, number>> = {};
+      
+      // Filtrar solo los IDs que son EXACTAMENTE nivel 1 (ARG.1, ARG.7, etc.)
+      for (const [subdivisionId, votes] of Object.entries(data)) {
+        const parts = subdivisionId.split('.');
+        // Solo incluir si tiene exactamente 2 partes (ARG.7, no ARG.7.1)
+        if (parts.length === 2) {
+          level1Votes[subdivisionId] = votes;
+        }
+      }
             
       // Para cada subdivisión nivel 1, calcular la opción ganadora
       for (const [subdivisionKey, votes] of Object.entries(level1Votes)) {
@@ -1019,7 +1108,7 @@
     
     // Solo cargar si hay encuesta activa
     if (!activePoll || !activePoll.id) {
-            return byId;
+      return byId;
     }
     
     // Normalizar subdivisionId para la API (debe ser solo el número, ej: "1" no "ESP.1")
@@ -1044,8 +1133,18 @@
                 return await computeSubdivisionColorsFromVotesLevel3(countryIso, subdivisionId, polygons);
       }
       
-      // Agregar votos por nivel 2 (ESP.1.1, ESP.1.2, etc.)
-      const level2Votes = aggregateVotesByLevel(data, 2);
+      // NO AGREGAR - usar solo datos directos del nivel 2
+      // Si la BD tiene ARG.7.1.5, NO colorear ARG.7.1
+      const level2Votes: Record<string, Record<string, number>> = {};
+      
+      // Filtrar solo los IDs que son EXACTAMENTE nivel 2 (ARG.7.1, no ARG.7.1.5)
+      for (const [subdivisionId, votes] of Object.entries(data)) {
+        const parts = subdivisionId.split('.');
+        // Solo incluir si tiene exactamente 3 partes (ARG.7.1, no ARG.7.1.5)
+        if (parts.length === 3) {
+          level2Votes[subdivisionId] = votes as Record<string, number>;
+        }
+      }
             
       // Para cada sub-subdivisión nivel 2, calcular la opción ganadora
       for (const [subSubdivisionKey, votes] of Object.entries(level2Votes)) {
@@ -1055,39 +1154,30 @@
           const color = colorMap[winner.option];
           
           // Buscar el polígono que coincida con esta sub-subdivisión
+          // Ahora ID_2 del polígono coincide directamente con subSubdivisionKey de la BD (ej: ARG.5.1)
           for (const poly of polygons) {
             const props = poly?.properties || {};
-            const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
+            const id2 = props.ID_2 || props.id_2;
             const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
             
-                        
-            // Múltiples estrategias de coincidencia
-            let matched = false;
-            
-            // Estrategia 1: Coincidencia directa de ID
+            // Coincidencia directa de ID_2 con subSubdivisionKey
             if (String(id2) === subSubdivisionKey) {
-              matched = true;
-            }
-            
-            // Estrategia 2: Coincidencia de nombre
-            if (!matched && name2 === subSubdivisionKey) {
-              matched = true;
-            }
-            
-            // Estrategia 3: Extraer última parte del ID y comparar
-            if (!matched) {
-              const id2Parts = String(id2).split('.');
-              const keyParts = subSubdivisionKey.split('.');
-              const id2Last = id2Parts[id2Parts.length - 1];
-              const keyLast = keyParts[keyParts.length - 1];
-              if (id2Last === keyLast) {
-                matched = true;
-              }
-            }
-            
-            if (matched) {
               byId[String(id2)] = color;
-                            break;
+              break;
+            }
+            
+            // Fallback: Coincidencia por nombre
+            if (name2 === subSubdivisionKey) {
+              byId[String(id2)] = color;
+              break;
+            }
+            
+            // Fallback: Comparar última parte del ID
+            const id2Parts = String(id2).split('.');
+            const keyParts = subSubdivisionKey.split('.');
+            if (id2Parts[id2Parts.length - 1] === keyParts[keyParts.length - 1]) {
+              byId[String(id2)] = color;
+              break;
             }
           }
         }
@@ -1227,8 +1317,14 @@
             if (response.ok) {
               const { data } = await response.json();
                             
-              // Agregar a nivel 1 (ESP.1, ESP.2, etc.)
-              const level1Data = aggregateVotesByLevel(data, 1);
+              // FILTRAR solo nivel 1 exacto (ESP.1, ESP.2) - NO agregar de niveles inferiores
+              const level1Data: Record<string, Record<string, number>> = {};
+              for (const [subdivisionId, votes] of Object.entries(data)) {
+                const parts = subdivisionId.split('.');
+                if (parts.length === 2) {
+                  level1Data[subdivisionId] = votes as Record<string, number>;
+                }
+              }
                             
               // Guardar en cache de nivel country
               countryLevelAnswers = level1Data;
@@ -1289,10 +1385,16 @@
                 try {
                   const pollResponse = await fetch(`/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`);
                   if (pollResponse.ok) {
-                    const { data: pollData } = await pollResponse.json();
+                    const { data: pollData } = await pollResponse.json() as { data: Record<string, Record<string, number>> };
                     
-                    // Agregar a nivel 1 (ESP.1, ESP.2, etc.)
-                    const level1Data = aggregateVotesByLevel(pollData, 1);
+                    // FILTRAR solo nivel 1 exacto - NO agregar
+                    const level1Data: Record<string, Record<string, number>> = {};
+                    for (const [subdivisionId, votes] of Object.entries(pollData)) {
+                      const parts = subdivisionId.split('.');
+                      if (parts.length === 2) {
+                        level1Data[subdivisionId] = votes;
+                      }
+                    }
                     
                     // Sumar TODOS los votos de esta encuesta por subdivisión
                     for (const [subdivisionId, votes] of Object.entries(level1Data as Record<string, Record<string, number>>)) {
@@ -1396,8 +1498,14 @@
             if (response.ok) {
               const { data } = await response.json();
                             
-              // Agregar a nivel 2 (ESP.1.1, ESP.1.2, etc.)
-              const level2Data = aggregateVotesByLevel(data, 2);
+              // FILTRAR solo nivel 2 exacto (ESP.1.1) - NO agregar de niveles inferiores
+              const level2Data: Record<string, Record<string, number>> = {};
+              for (const [subdivisionId, votes] of Object.entries(data)) {
+                const parts = subdivisionId.split('.');
+                if (parts.length === 3) {
+                  level2Data[subdivisionId] = votes as Record<string, number>;
+                }
+              }
               
               // Guardar en cache de nivel subdivision
               subdivisionLevelAnswers = level2Data;
@@ -1457,8 +1565,14 @@
                   if (pollResponse.ok) {
                     const { data: pollData } = await pollResponse.json();
                     
-                    // Agregar a nivel 2 (ESP.1.1, ESP.1.2, etc.)
-                    const level2Data = aggregateVotesByLevel(pollData, 2);
+                    // FILTRAR solo nivel 2 exacto - NO agregar
+                    const level2Data: Record<string, Record<string, number>> = {};
+                    for (const [subdivisionId, votes] of Object.entries(pollData)) {
+                      const parts = subdivisionId.split('.');
+                      if (parts.length === 3) {
+                        level2Data[subdivisionId] = votes as Record<string, number>;
+                      }
+                    }
                     
                     // Sumar TODOS los votos de esta encuesta por sub-subdivisión
                     for (const [subsubdivisionId, votes] of Object.entries(level2Data as Record<string, Record<string, number>>)) {
@@ -1768,28 +1882,19 @@
                             }
         
         // Set subdivision polygons con colores ya aplicados
-        await new Promise<void>((resolve) => {
-          this.globe?.setPolygonsData(markedPolygons);
-          resolve();
-        });
+        this.globe?.setPolygonsData(markedPolygons);
         
-        // Refresh visual usando promesas
-        await Promise.all([
-          new Promise<void>((resolve) => {
-            this.globe?.refreshPolyColors?.();
-            resolve();
-          }),
-          new Promise<void>((resolve) => {
-            this.globe?.refreshPolyAltitudes?.();
-            resolve();
-          })
-          // Labels se actualizan después del zoom automáticamente
-        ]);
+        // REFRESH AGRESIVO: Forzar múltiples refreshes para actualizar cache
+        globe?.refreshPolyColors?.();
+        // Forzar refresh completo de todo
+        setTimeout(() => {
+          globe?.refreshPolyColors?.();
+          globe?.refreshPolyStrokes?.();
+          globe?.refreshPolyAltitudes?.();
+        }, 50);
         
         // Labels se generarán automáticamente después del zoom
-        
-                
-              } catch (error) {
+      } catch (error) {
         console.error('[Navigation] Error rendering subdivision view:', error);
       }
     }
@@ -1852,14 +1957,19 @@
       const options: Array<{ id: string; name: string; iso?: string }> = [];
       
       if (this.state.level === 'world') {
-        // Return all countries from worldPolygons
+        // Return ONLY countries with active data
         if (worldPolygons?.length) {
           const countryMap = new Map<string, string>();
           worldPolygons.forEach(poly => {
             const iso = isoOf(poly);
             const name = nameOf(poly);
+            
+            // FILTRO: Solo agregar si tiene datos activos
             if (iso && name && !countryMap.has(iso)) {
-              countryMap.set(iso, name);
+              const hasData = Boolean(answersData?.[iso]);
+              if (hasData) {
+                countryMap.set(iso, name);
+              }
             }
           });
           countryMap.forEach((name, iso) => {
@@ -1867,7 +1977,7 @@
           });
         }
       } else if (this.state.level === 'country' && this.state.countryIso) {
-        // Return all subdivisions for current country
+        // Return ONLY subdivisions with active data
         try {
           const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(this.state.countryIso, this.state.countryIso);
           const subdivisionMap = new Map<string, string>();
@@ -1875,8 +1985,13 @@
             const props = poly?.properties || {};
             const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
             const name1 = props.NAME_1 || props.name_1 || props.VARNAME_1 || props.varname_1;
+            
+            // FILTRO: Solo agregar si tiene datos activos
             if (id1 && name1 && !subdivisionMap.has(String(id1))) {
-              subdivisionMap.set(String(id1), String(name1));
+              const hasData = Boolean(answersData?.[id1]);
+              if (hasData) {
+                subdivisionMap.set(String(id1), String(name1));
+              }
             }
           });
           subdivisionMap.forEach((name, id) => {
@@ -1886,7 +2001,7 @@
           console.warn('[Navigation] Could not load subdivisions for dropdown:', e);
         }
       } else if (this.state.level === 'subdivision' && this.state.countryIso && this.state.subdivisionId) {
-        // Return all sub-subdivisions for current subdivision
+        // Return ONLY sub-subdivisions with active data
         try {
           const numericPart = this.state.subdivisionId.split('.').pop();
           if (numericPart) {
@@ -1897,8 +2012,13 @@
               const props = poly?.properties || {};
               const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
               const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
+              
+              // FILTRO: Solo agregar si tiene datos activos
               if (id2 && name2 && !subSubMap.has(String(id2))) {
-                subSubMap.set(String(id2), String(name2));
+                const hasData = Boolean(answersData?.[id2]);
+                if (hasData) {
+                  subSubMap.set(String(id2), String(name2));
+                }
               }
             });
             subSubMap.forEach((name, id) => {
@@ -1916,7 +2036,7 @@
   }
 
   // Initialize navigation manager
-  let navigationManager: NavigationManager;
+  let navigationManager: NavigationManager | null = null;
   $: if (globe && !navigationManager) {
     navigationManager = new NavigationManager(globe);
   }
@@ -1937,7 +2057,7 @@
     } else {
             showDropdown = true;
       dropdownSearchQuery = '';
-      const options = await navigationManager.getAvailableOptions();
+      const options = await navigationManager!.getAvailableOptions();
       dropdownOptions = options;
                 }
   }
@@ -1965,7 +2085,7 @@
     
     if (!navigationManager) return;
     
-    const currentLevel = navigationManager.getCurrentLevel();
+    const currentLevel = navigationManager!.getCurrentLevel();
     showDropdown = false;
     dropdownOptions = [];
     dropdownSearchQuery = '';
@@ -1992,8 +2112,12 @@
           countryChartSegments = [];
         }
         
+        // LIMPIAR ETIQUETAS INMEDIATAMENTE antes de navegar
+        subdivisionLabels = [];
+        updateSubdivisionLabels(false);
+        
         // Navigate using manager PRIMERO
-        await navigationManager.navigateToCountry(option.id, option.name);
+        await navigationManager!.navigateToCountry(option.id, option.name);
         
         // LUEGO hacer zoom con adaptación al tamaño del país (sin delay, más rápido)
         const centroid = centroidOf(countryFeature);
@@ -2010,7 +2134,7 @@
       }
     } else if (currentLevel === 'country') {
       // Navigate to subdivision
-      const state = navigationManager.getState();
+      const state = navigationManager!.getState();
       if (state.countryIso) {
         const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(state.countryIso, state.countryIso);
         const subdivisionFeature = subdivisionPolygons.find(poly => {
@@ -2040,11 +2164,15 @@
             countryChartSegments = [];
           }
           
+          // LIMPIAR ETIQUETAS INMEDIATAMENTE antes de navegar
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          
           // Navigate using manager PRIMERO
-          await navigationManager.navigateToSubdivision(state.countryIso, subdivisionId, option.name);
+          await navigationManager!.navigateToSubdivision(state.countryIso, subdivisionId, option.name);
           
           // LUEGO hacer zoom adaptativo basado en el tamaño de la subdivisión (sin delay, más rápido)
-          const targetAlt = Math.min(adaptiveAltitude, 0.06); // Máximo 0.06 para activar elevaciones bajas
+          const targetAlt = Math.max(0.12, adaptiveAltitude); // Altitud mínima 0.12 para evitar acercamiento excesivo
           scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
           
           // Update selected subdivision name and ID
@@ -2071,7 +2199,7 @@
       }
     } else if (currentLevel === 'subdivision') {
       // Navigate to sub-subdivision (level 4)
-      const state = navigationManager.getState();
+      const state = navigationManager!.getState();
       if (state.countryIso && state.subdivisionId) {
         const numericPart = state.subdivisionId.split('.').pop();
         if (numericPart) {
@@ -2138,6 +2266,10 @@
   const LABEL_UPDATE_THROTTLE = 300; // Actualizar etiquetas solo cada 300ms
   let pendingLabelUpdate: any = null;
   
+  // SIEMPRE mostrar solo etiquetas de polígonos con datos
+  // Comportamiento fijo: no mostrar etiquetas de polígonos sin datos
+  const ALWAYS_SHOW_ONLY_ACTIVE = true;
+  
   // Watcher reactivo: cuando termina el zoom, actualizar etiquetas
   $: if (!isZooming && pendingLabelUpdate) {
     const pov = pendingLabelUpdate;
@@ -2148,48 +2280,65 @@
     });
   }
   
-  async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }) {
-    // NO actualizar etiquetas durante animaciones de zoom
-    if (isZooming) {
+  // Watcher reactivo optimizado: actualizar etiquetas cuando answersData cambia
+  let lastAnswersDataLength = 0;
+  $: {
+    const currentLength = Object.keys(answersData || {}).length;
+    if (currentLength > 0 && currentLength !== lastAnswersDataLength && globe && !isZooming) {
+      lastAnswersDataLength = currentLength;
+      requestAnimationFrame(() => {
+        const pov = globe?.pointOfView();
+        if (pov) updateLabelsForCurrentView(pov, true);
+      });
+    }
+  }
+  
+  async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }, forceImmediate: boolean = false) {
+    // NO actualizar etiquetas durante animaciones de zoom (excepto si es forzado)
+    if (isZooming && !forceImmediate) {
       // Guardar para actualizar cuando termine el zoom
       pendingLabelUpdate = pov;
       return;
     }
     
     // Throttle: solo actualizar si han pasado al menos 300ms desde la última actualización
-    const now = performance.now();
-    if (now - lastLabelUpdate < LABEL_UPDATE_THROTTLE) {
-      return;
+    // EXCEPTO si es una actualización forzada (al terminar zoom)
+    if (!forceImmediate) {
+      const now = performance.now();
+      if (now - lastLabelUpdate < LABEL_UPDATE_THROTTLE) {
+        return;
+      }
+      lastLabelUpdate = now;
     }
-    lastLabelUpdate = now;
     
     try {
       const currentLevel = navigationManager?.getCurrentLevel() || 'world';
       const alt = pov.altitude;
       
+      // Actualizar etiquetas según nivel y altitud
+      
+      // LIMPIAR ETIQUETAS PRIMERO para evitar mostrar etiquetas de nivel anterior
+      subdivisionLabels = [];
+      updateSubdivisionLabels(false);
+      
       // LOD DINÁMICO: Mostrar etiquetas según nivel y altitud
       // Cuanto más cerca (menor altitud), más etiquetas
       
       if (currentLevel === 'world') {
-        // Nivel mundial: mostrar países solo cuando estás cerca
-        if (alt < COUNTRY_LABELS_ALT) {
-          await generateWorldCountryLabels(alt);
-        } else {
-          // Muy lejos: sin etiquetas
-          updateSubdivisionLabels(false);
-        }
+        // Nivel mundial: SIEMPRE mostrar países activos (sin restricción de altitud)
+        await generateWorldCountryLabels(alt);
       }
       else if (currentLevel === 'country') {
         const state = navigationManager?.getState();
         if (state?.countryIso) {
-          // Nivel país: mostrar subdivisiones con filtrado según zoom
+          // Nivel país: SIEMPRE mostrar subdivisiones activas
           await generateCountrySubdivisionLabels(state.countryIso, pov);
         }
       }
       else if (currentLevel === 'subdivision') {
         const state = navigationManager?.getState();
         if (state?.countryIso && state?.subdivisionId) {
-          // Nivel subdivisión: mostrar sub-subdivisiones con filtrado según zoom
+          // Nivel subdivisión: SIEMPRE mostrar sub-subdivisiones activas
           await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
         }
       }
@@ -2200,44 +2349,58 @@
 
   // Función para evitar superposición de etiquetas con LOD dinámico
   function removeOverlappingLabels(labels: any[], altitude: number) {
+    const currentLevelForFiltering = navigationManager?.getCurrentLevel() || 'world';
+    
+    // Filtrar y ordenar etiquetas con datos por área (más grandes primero)
+    const sortedLabels = labels
+      .filter(l => l.hasData)
+      .sort((a, b) => (b.area || 0) - (a.area || 0));
+    
+    if (sortedLabels.length === 0) return [];
+    
+    // Si hay pocas etiquetas con datos (≤5), mostrarlas TODAS sin filtrar por distancia
+    if (sortedLabels.length <= 5) {
+      return sortedLabels;
+    }
+    
     // Calcular distancia mínima según altitud y nivel de navegación
     // IMPORTANTE: El filtrado debe ser proporcional al nivel, no absoluto
     
-    const currentLevel = navigationManager?.getCurrentLevel() || 'world';
     let minDistance: number;
     
     // ESTRATEGIA: En cada nivel, usar un porcentaje del área visible
     // Así es relativo al tamaño del polígono
     
-    if (currentLevel === 'world') {
-      // Nivel mundial: filtrado progresivo según altitud
-      if (altitude > 1.5) {
-        minDistance = 10 + (altitude - 1.5) * 10; // Muy lejos: pocos países
-      } else if (altitude > 0.8) {
-        minDistance = 3 + (altitude - 0.8) * 10; // Medio: más países
-      } else {
-        minDistance = 1 + (altitude - 0.0) * 2.5; // Cerca: muchos países
-      }
-    } else if (currentLevel === 'country') {
-      // Nivel país: mostrar subdivisiones proporcionalmente
-      // El zoom adaptativo pone altitudes entre 0.15-0.8 según tamaño del país
-      if (altitude > 0.4) {
-        minDistance = 2 + (altitude - 0.4) * 5; // Alejado: pocas subdivisiones
-      } else if (altitude > 0.2) {
-        minDistance = 0.3 + (altitude - 0.2) * 8.5; // Medio: más subdivisiones  
-      } else {
-        minDistance = 0.05; // Cerca: todas las subdivisiones
-      }
+    if (currentLevelForFiltering === 'world') {
+      // Nivel mundial: MUY permisivo para mostrar países activos
+      minDistance = Math.max(0.5, 2 - altitude); // Más cerca = menor distancia mínima
+    } else if (currentLevelForFiltering === 'country') {
+      // Nivel país: MUY permisivo para mostrar subdivisiones activas
+      minDistance = Math.max(0.2, 1 - altitude * 2); // Muy permisivo
     } else {
-      // Nivel subdivisión: SIEMPRE mostrar todas las etiquetas
-      // Ya estamos en el nivel más detallado, el usuario quiere verlas todas
-      minDistance = 0.01; // Casi sin filtro - solo evitar superposición real
+      // Nivel subdivisión: SISTEMA PROGRESIVO para evitar saturación
+      // Incluso en el nivel más detallado, debemos filtrar según la distancia
+      if (altitude > 0.2) {
+        // Muy alejado: solo las más grandes
+        minDistance = 0.8 + (altitude - 0.2) * 2;
+      } else if (altitude > 0.1) {
+        // Alejado-medio: filtrado moderado
+        minDistance = 0.3 + (altitude - 0.1) * 5;
+      } else if (altitude > 0.05) {
+        // Medio-cerca: filtrado ligero pero visible
+        minDistance = 0.15 + (altitude - 0.05) * 3;
+      } else {
+        // MUY cerca (<0.05): filtrado mínimo pero suficiente para no saturar
+        // Escalado para que cuanto más cerca, menos filtro (pero nunca 0)
+        minDistance = Math.max(0.08, 0.08 + altitude * 1.4);
+      }
     }
     
     const filtered: any[] = [];
     const rejected: any[] = [];
     
-    for (const label of labels) {
+    // Usar sortedLabels (ordenadas por prioridad) en lugar de labels original
+    for (const label of sortedLabels) {
       let overlaps = false;
       let closestDistance = Infinity;
       
@@ -2263,22 +2426,6 @@
       }
     }
     
-    // Debug: mostrar etiquetas rechazadas en nivel subdivisión
-    if (currentLevel === 'subdivision') {
-      console.log(`[LOD] Filtrado de superposiciones:`, {
-        entrada: labels.length,
-        salida: filtered.length,
-        rechazadas: rejected.length,
-        minDistance: minDistance,
-        altitude: altitude.toFixed(3)
-      });
-      
-      if (rejected.length > 0 && rejected.length <= 10) {
-        console.log(`[LOD] Etiquetas rechazadas:`, 
-          rejected.map(r => `${r.name || r.text} (dist: ${r.closestDistance.toFixed(3)})`));
-      }
-    }
-    
     return filtered;
   }
   
@@ -2294,6 +2441,10 @@
         const name = nameOf(feat);
         const iso = isoOf(feat);
         
+        // Verificar si este país tiene datos REALES en answersData (votos reales)
+        // NO usar isoDominantKey porque contiene todos los países (solo colores)
+        const hasData = Boolean(iso && answersData?.[iso]);
+        
         return {
           id: `country-${iso || index}`,
           name: name || iso || `Country-${index}`,
@@ -2303,7 +2454,8 @@
           size: 12,
           color: '#c9d1d9',
           opacity: 0.8,
-          feature: feat
+          feature: feat,
+          hasData: hasData  // CRÍTICO: Agregar para que el filtro funcione
         };
       }).filter(label => label.text);
       
@@ -2413,8 +2565,8 @@
       
       if (countryPolygons?.length) {
         const allLabels = generateSubdivisionLabels(countryPolygons, pov?.altitude);
-        // Filtrar según altitud para LOD dinámico
         const filteredLabels = removeOverlappingLabels(allLabels, pov.altitude);
+        
         subdivisionLabels = filteredLabels;
         updateSubdivisionLabels(true);
       } else {
@@ -2489,6 +2641,7 @@
   // Debounce functions for map movement
   function onMapMovementStart() {
     isMapMoving = true;
+    
     if (mapMovementTimeout) {
       clearTimeout(mapMovementTimeout);
       mapMovementTimeout = null;
@@ -2599,12 +2752,7 @@
   $: {
     const currentId = activePoll?.id || null;
     if (currentId !== lastActivePollId) {
-      if (currentId) {
-        console.log('[ActivePoll] ✅ Encuesta activa:', currentId);
-      } else if (lastActivePollId) {
-        console.warn('[ActivePoll] ⚠️ Encuesta cerrada inesperadamente. Anterior:', lastActivePollId);
-        console.trace(); // Mostrar stack trace para ver quién lo cerró
-      }
+      
       lastActivePollId = currentId;
     }
   }
@@ -2645,7 +2793,7 @@
     
     // Navegar a mundo
     if (navigationManager) {
-      await navigationManager.navigateToWorld();
+      await navigationManager!.navigateToWorld();
     }
     
     // Esperar a que worldPolygons esté disponible (máximo 2 segundos)
@@ -2828,19 +2976,22 @@
       if (pendingZoom && globe) {
                 globe.pointOfView(pendingZoom, pendingZoom.duration);
         
-        // Marcar como completado después de la duración de la animación
+        // Marcar como completado ANTES de que termine la animación para que las etiquetas aparezcan durante la transición
+        // Adelantar 50% de la duración para que aparezcan a mitad de la transición
+        const labelUpdateDelay = Math.max(100, Math.floor(pendingZoom.duration * 0.5));
         setTimeout(() => {
           isZooming = false;
           pendingZoom = null;
           
-          // IMPORTANTE: Forzar actualización de etiquetas cuando termine el zoom
+          // IMPORTANTE: Forzar actualización INMEDIATA de etiquetas cuando termine el zoom
           const pov = globe?.pointOfView();
           if (pov) {
+            // Usar forceImmediate=true para saltarse el throttle y el bloqueo de isZooming
             requestAnimationFrame(() => {
-              updateLabelsForCurrentView(pov);
+              updateLabelsForCurrentView(pov, true);
             });
           }
-                  }, pendingZoom.duration + 50);
+                  }, labelUpdateDelay); // Mostrar etiquetas a mitad de la transición
       }
       zoomTimeout = null;
     }, delay);
@@ -2874,13 +3025,6 @@
       ];
     }
     
-    console.log('[VoteOptions] 📋 Actualizado:', {
-      mode: activePoll ? 'ENCUESTA_ESPECÍFICA' : 'TRENDING',
-      source: activePollOptions.length > 0 ? 'activePollOptions' : 'fallback',
-      count: voteOptions.length,
-      sampleKey: voteOptions[0]?.key,
-      activePollId: activePoll?.id || 'none'
-    });
   }
   
   // Función helper para generar datos de fallback cuando la API no está disponible
@@ -3004,7 +3148,7 @@
     
     // IMPORTANTE: Navegar a vista mundial para mostrar los colores de la encuesta
     if (navigationManager) {
-      await navigationManager.navigateToWorld();
+      await navigationManager!.navigateToWorld();
       await tick();
     }
     
@@ -3151,7 +3295,7 @@
   let lastClusterAlt = -1;
   
   // Etiquetas de subdivisiones (para mostrar nombres permanentemente)
-  type SubdivisionLabel = { id: string; name: string; lat: number; lng: number; feature?: any; size?: number; area?: number; text?: string; color?: string; opacity?: number };
+  type SubdivisionLabel = { id: string; name: string; lat: number; lng: number; feature?: any; size?: number; area?: number; text?: string; color?: string; opacity?: number; hasData?: boolean };
   let subdivisionLabels: SubdivisionLabel[] = [];
   // Amigos por opción (para enriquecer tarjetas en BottomSheet). Claves deben coincidir con los keys de segmentos/opciones
   let friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
@@ -3671,7 +3815,6 @@
         
         return { area, adaptiveAltitude, centroid };
       } else {
-        console.warn('[Test] Country ' + countryIso + ' not found in worldPolygons');
         return null;
       }
     };
@@ -3708,7 +3851,6 @@
         
         return { area, adaptiveAltitude, centroid };
       } else {
-        console.warn('[Test] Subdivision ' + subdivisionName + ' in ' + countryIso + ' not found');
                 return null;
       }
     };
@@ -3791,9 +3933,7 @@
       const option = customEvent.detail;
             if (option && option.id && option.name) {
                 await selectDropdownOption(option);
-      } else {
-        console.warn('[GlobeGL] Invalid option received:', option);
-      }
+      } 
     };
         window.addEventListener('searchSelect', searchSelectHandler);
     
@@ -3905,6 +4045,10 @@
     // PRIORIDAD 1: Si el polígono tiene color forzado (subdivisiones), usarlo SOLO en niveles 2 y 3 Y SOLO SI HAY ENCUESTA ACTIVA
     // En modo trending, NO usar _forcedColor para evitar colores de encuestas cerradas
     if (props._forcedColor && currentLevel !== 'world' && activePoll) {
+      // Debug ARG.1
+      if (featureId === 'ARG.1') {
+        console.log('[DEBUG ARG.1] Usando _forcedColor:', props._forcedColor);
+      }
       return props._forcedColor;
     }
     
@@ -3918,6 +4062,12 @@
       const mapColor = colorMap?.[k];
       // OPTIMIZACIÓN: Gris muy oscuro para polígonos sin datos
       return mapColor ?? 'rgba(26,26,26,1)';
+    }
+    
+    // VERIFICACIÓN CRÍTICA: Si el polígono NO tiene datos reales, usar gris oscuro
+    // Esto evita que polígonos sin votos se coloreen por isoDominantKey con "No data"
+    if (!answersData?.[featureId]) {
+      return 'rgba(26,26,26,1)';
     }
     
     // PRIORIDAD 3: Usar isoDominantKey con el featureId correcto
@@ -3968,7 +4118,7 @@
       // Only initialize NavigationManager to world view
       // NO navegar a mundo si ya hay encuesta abierta
       if (navigationManager && !activePoll) {
-                navigationManager.navigateToWorld();
+                navigationManager!.navigateToWorld();
       } else if (activePoll) {
               }
       
@@ -4043,7 +4193,7 @@
       // Show bottom sheet with polygon data when clicking on polygons
       setSheetState('collapsed');
       
-      const currentLevel = navigationManager.getCurrentLevel();
+      const currentLevel = navigationManager!.getCurrentLevel();
       const iso = isoOf(feat);
       const name = nameOf(feat);
       
@@ -4058,12 +4208,16 @@
           return; // BLOQUEAR navegación si no hay datos
         }
         
-        // PASO 2: Calcular zoom INMEDIATAMENTE para respuesta instantánea
+        // PASO 2: LIMPIAR ETIQUETAS INMEDIATAMENTE antes de cualquier cambio
+        subdivisionLabels = [];
+        updateSubdivisionLabels(false);
+        
+        // PASO 3: Calcular zoom INMEDIATAMENTE para respuesta instantánea
         const centroid = centroidOf(feat);
         const adaptiveAltitude = calculateAdaptiveZoom(feat);
         scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
         
-        // PASO 3: Actualizar datos del país
+        // PASO 4: Actualizar datos del país
         const countryData = [countryRecord];
         countryChartSegments = generateCountryChartSegments(countryData);
         
@@ -4090,10 +4244,14 @@
           // Usar polígonos pre-cargados si están disponibles
           if (preloadedPolygons && preloadedCountryIso === iso) {
             localPolygons = preloadedPolygons;
-            await navigationManager.navigateToCountry(iso, name);
+            await navigationManager!.navigateToCountry(iso, name);
           } else {
-            await navigationManager.navigateToCountry(iso, name);
+            await navigationManager!.navigateToCountry(iso, name);
           }
+          
+          // LIMPIAR ETIQUETAS INMEDIATAMENTE después de navegar
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
           
           await new Promise(resolve => requestAnimationFrame(resolve));
           await updateGlobeColors(true); // true = con fade-in
@@ -4104,32 +4262,55 @@
         const subdivisionId = feat.properties.ID_1;
         const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1 || name;
         
-        // PASO 1: Verificar si hay datos ANTES de permitir la navegación
+        // PASO 1: Verificar si hay datos ANTES de permitir la interacción
         const subdivisionKey = subdivisionId; // subdivisionId ya es "ESP.1"
         const subdivisionRecord = answersData?.[subdivisionKey];
         
         if (!subdivisionRecord) {
-          return; // BLOQUEAR navegación si no hay datos
+          return; // BLOQUEAR si no hay datos
         }
         
-        // PASO 2: Calcular zoom INMEDIATAMENTE para respuesta instantánea
-        const centroid = centroidOf(feat);
-        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
-        const targetAlt = Math.min(adaptiveAltitude, 0.06);
-        scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
-        
-        // PASO 3: Actualizar datos
+        // PASO 2: Actualizar datos en el bottom sheet
         subdivisionChartSegments = generateCountryChartSegments([subdivisionRecord]);
         selectedCountryIso = iso;
         
-        // PASO 4: Navigate más temprano (200ms) para que aparezcan antes
-        setTimeout(async () => {
-          await navigationManager.navigateToSubdivision(iso, subdivisionId, subdivisionName);
+        // PASO 3: Verificar si tiene subdivisiones (nivel 3)
+        // Intentar cargar el archivo de subdivisión para ver si existe
+        const hasSubdivisions = await (async () => {
+          try {
+            const resp = await fetch(`/geojson/${iso}/${subdivisionId}.topojson`, { method: 'HEAD' });
+            return resp.ok;
+          } catch {
+            return false;
+          }
+        })();
+        
+        // PASO 4: Calcular zoom y centrar
+        const centroid = centroidOf(feat);
+        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
+        const targetAlt = Math.max(0.12, adaptiveAltitude);
+        
+        if (hasSubdivisions) {
+          // TIENE subdivisiones: navegar al siguiente nivel
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
           
-          // Refresh colores después de la navegación
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          await updateGlobeColors(true); // true = con fade-in
-        }, 200);
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+          
+          setTimeout(async () => {
+            subdivisionLabels = [];
+            updateSubdivisionLabels(false);
+            
+            await navigationManager!.navigateToSubdivision(iso, subdivisionId, subdivisionName);
+            
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await updateGlobeColors(true);
+          }, 200);
+        } else {
+          // NO tiene subdivisiones: solo centrar cámara y mostrar info
+          console.log(`[Click] ${subdivisionName} no tiene subdivisiones, solo centrando...`);
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+        }
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
         // NIVEL 4: Activar selección (viene de etiqueta o sistema de proximidad)
@@ -4163,7 +4344,7 @@
     if (!navigationManager) return;
     
     try {
-      const currentLevel = navigationManager.getCurrentLevel();
+      const currentLevel = navigationManager!.getCurrentLevel();
       
       // Check if we're in city level (4th level)
       if (selectedCityName) {
@@ -4205,7 +4386,7 @@
         }
         
         // PASO 3: Navigate back to previous level
-        await navigationManager.navigateBack();
+        await navigationManager!.navigateBack();
         
         if (newLevel === 'world') {
           selectedCountryName = null;
@@ -4267,14 +4448,14 @@
 <!-- Navigation breadcrumb - DISABLED, using BottomSheet nav-chips instead -->
 {#if false && navigationManager}
 <div class="navigation-breadcrumb">
-  {#each navigationManager.getHistory() as item, index}
+  {#each navigationManager!.getHistory() as item, index}
     {#if index > 0}
       <span class="breadcrumb-separator">→</span>
     {/if}
     
     {#if item.level === 'world'}
-      {@const isLastItem = index === navigationManager.getHistory().length - 1}
-      {#if isLastItem && navigationManager.getCurrentLevel() === 'world'}
+      {@const isLastItem = index === navigationManager!.getHistory().length - 1}
+      {#if isLastItem && navigationManager!.getCurrentLevel() === 'world'}
         <!-- World level with dropdown to select countries -->
         <div class="breadcrumb-dropdown-wrapper">
           <button on:click={toggleDropdown} 
@@ -4322,7 +4503,7 @@
           subdivisionLabels = [];
           updateSubdivisionLabels(false);
           
-          navigationManager.navigateToWorld();
+          navigationManager!.navigateToWorld();
           selectedCountryIso = null;
           selectedCountryName = null;
           selectedSubdivisionName = null;
@@ -4332,7 +4513,7 @@
         </button>
       {/if}
     {:else if item.level === 'country'}
-      {@const isLastItem = index === navigationManager.getHistory().length - 1}
+      {@const isLastItem = index === navigationManager!.getHistory().length - 1}
       {#if isLastItem}
         <!-- Last item: show as dropdown button -->
         <div class="breadcrumb-dropdown-wrapper">
@@ -4381,7 +4562,8 @@
           subdivisionLabels = [];
           updateSubdivisionLabels(false);
           
-          navigationManager.navigateToCountry(item.iso || '', item.name);
+          navigationManager!.navigateToCountry(item.iso || '', item.name);
+          
           showDropdown = false;
         }} 
                 class="breadcrumb-item">
@@ -4389,7 +4571,7 @@
         </button>
       {/if}
     {:else if item.level === 'subdivision'}
-      {@const isLastItem = index === navigationManager.getHistory().length - 1}
+      {@const isLastItem = index === navigationManager!.getHistory().length - 1}
       {#if isLastItem}
         <!-- Last item: show as dropdown button -->
         <div class="breadcrumb-dropdown-wrapper">
@@ -4452,11 +4634,11 @@
         return;
       }
       
-      if (navigationManager && navigationManager.getCurrentLevel() !== 'world') {
-        await navigationManager.navigateBack();
+      if (navigationManager && navigationManager!.getCurrentLevel() !== 'world') {
+        await navigationManager!.navigateBack();
         
         // Adjust zoom based on new level
-        const newLevel = navigationManager.getCurrentLevel();
+        const newLevel = navigationManager!.getCurrentLevel();
         if (newLevel === 'world') {
           // Vista mundial: mantener posición actual, solo cambiar zoom
           const currentPov = globe?.pointOfView();
@@ -4471,6 +4653,8 @@
           selectedSubdivisionName = null;
         } else if (newLevel === 'country') {
           globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.3 }, 700);
+        } else if (newLevel === 'subdivision') {
+          // Volver a subdivisión
         }
       } else {
         showSettings = false;

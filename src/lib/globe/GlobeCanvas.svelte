@@ -519,7 +519,23 @@
     }
 
     // Eventos
-    world.onPolygonHover(() => {});
+    world.onPolygonHover((polygon: any) => {
+      // Cambiar cursor solo si el polígono tiene datos (no es negro/sin datos)
+      if (polygon) {
+        // Obtener el color del polígono usando la función onPolyCapColor
+        const polygonColor = onPolyCapColor ? onPolyCapColor(polygon) : null;
+        // Si el polígono tiene un color diferente al negro/gris oscuro, mostrar pointer
+        const hasData = polygonColor && 
+                        polygonColor !== '#000000' && 
+                        polygonColor !== '#1a1a1a' && 
+                        polygonColor !== 'rgba(26,26,26,1)' &&
+                        polygonColor !== '#9ca3af';
+        world.controls().domElement.style.cursor = hasData ? 'pointer' : 'default';
+      } else {
+        // Sin hover, restaurar cursor
+        world.controls().domElement.style.cursor = 'default';
+      }
+    });
     world.onPolygonClick((feat: any, event: MouseEvent) => {
       dispatch('polygonClick', { feat, event });
     });

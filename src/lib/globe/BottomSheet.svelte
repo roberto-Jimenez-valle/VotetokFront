@@ -119,22 +119,17 @@
   async function loadMainPoll() {
     // Si hay encuesta activa, no cargar trending (GlobeGL lo maneja)
     if (activePoll && activePoll.id) {
-      console.log('[BottomSheet] Encuesta activa detectada - No cargar trending');
       trendingPollsData = [];
       return;
     }
     
     try {
       const currentRegion = selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global';
-      console.log('[BottomSheet] Cargando trending para región:', currentRegion);
       
       // Limitar a 12 encuestas trending (3 páginas de 4)
       const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(currentRegion)}&limit=12&hours=168`);
       if (!response.ok) throw new Error('Failed to load trending polls');
       const { data } = await response.json();
-      
-      console.log('[BottomSheet] 🔍 Raw data recibida de API:', data?.length || 0, 'items');
-      console.log('[BottomSheet] 🔍 IDs raw:', data?.map((p: any) => p.id).join(', ') || 'ninguno');
       
       if (data && Array.isArray(data) && data.length > 0) {
         // Contar duplicados ANTES de filtrar
@@ -143,10 +138,8 @@
         const duplicatesCount = allIds.length - uniqueIdSet.size;
         
         if (duplicatesCount > 0) {
-          console.warn('[BottomSheet] ⚠️ La API devolvió', duplicatesCount, 'duplicados');
           // Mostrar cuáles IDs están duplicados
           const duplicatedIds = allIds.filter((id, index) => allIds.indexOf(id) !== index);
-          console.warn('[BottomSheet] ⚠️ IDs duplicados:', [...new Set(duplicatedIds)].join(', '));
         }
         
         // Filtrar duplicados por ID y ordenar por trendingScore
@@ -157,11 +150,8 @@
           .sort((a: any, b: any) => (b.trendingScore || b.totalVotes || 0) - (a.trendingScore || a.totalVotes || 0));
         
         trendingPollsData = uniquePolls;
-        console.log('[BottomSheet] ✅ Trending cargado:', uniquePolls.length, 'encuestas únicas (de', data.length, 'totales)');
-        console.log('[BottomSheet] 📊 IDs finales:', uniquePolls.map((p: any) => p.id).join(', '));
       } else {
         trendingPollsData = [];
-        console.log('[BottomSheet] ⚠️ No se encontraron trending polls para', currentRegion);
       }
     } catch (error) {
       console.error('[BottomSheet] Error loading trending polls:', error);
@@ -1171,14 +1161,6 @@
           topOptionLabel = filteredOptions[0]?.optionLabel || filteredOptions[0]?.label || '';
           topVotes = filteredOptions[0]?.votesInLocation || filteredOptions[0]?.votes || filteredOptions[0]?._count?.votes || 0;
         }
-        
-        // Log para debug
-        console.log(`[Trending] Poll "${poll.title}" en "${currentLocation || 'Global'}":`, {
-          topOption: topOptionLabel,
-          topVotes: topVotes,
-          color: topOptionColor,
-          hasLocationData: !!poll.votesByLocation
-        });
       }
       
       return {
@@ -1193,11 +1175,7 @@
     // Verificar duplicados en el mapeo
     const keys = mapped.map(m => m.key);
     const uniqueKeys = new Set(keys);
-    if (keys.length !== uniqueKeys.size) {
-      console.error('[BottomSheet] ❌ DUPLICADOS DETECTADOS en trendingPolls:', keys);
-    } else {
-      console.log('[BottomSheet] ✅ Sin duplicados en trendingPolls. Keys:', keys.join(', '));
-    }
+   
     
     return mapped;
   })();
@@ -1434,14 +1412,7 @@
         const count = legendMap[opt.key] || 0;
         const pct = totalCount > 0 ? (count / totalCount) * 100 : 0;
         
-        // Debug: Log para ver si coinciden las claves
-        if (count === 0 && legendItems.length > 0) {
-          console.log('[BottomSheet] ⚠️ No match:', {
-            optKey: opt.key,
-            legendKeys: Object.keys(legendMap),
-            legendMap
-          });
-        }
+       
         
         return {
           key: opt.key,
