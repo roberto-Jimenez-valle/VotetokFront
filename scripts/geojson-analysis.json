@@ -1,0 +1,66 @@
+{
+  "totalCountriesAnalyzed": 10,
+  "globalProperties": [],
+  "countryAnalysis": {
+    "ESP": {
+      "country": "ESP",
+      "fileCount": 12,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "USA": {
+      "country": "USA",
+      "fileCount": 51,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "FRA": {
+      "country": "FRA",
+      "fileCount": 14,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "DEU": {
+      "country": "DEU",
+      "fileCount": 15,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "ITA": {
+      "country": "ITA",
+      "fileCount": 20,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "GBR": {
+      "country": "GBR",
+      "fileCount": 5,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "MEX": {
+      "country": "MEX",
+      "fileCount": 33,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "BRA": {
+      "country": "BRA",
+      "fileCount": 27,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "ARG": {
+      "country": "ARG",
+      "fileCount": 25,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    },
+    "JPN": {
+      "country": "JPN",
+      "fileCount": 48,
+      "sampleProperties": null,
+      "allPropertyKeys": {}
+    }
+  }
+}

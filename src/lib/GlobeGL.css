@@ -1072,6 +1072,8 @@ header h1 {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  position: relative;
+  z-index: 1;
 }
 
 .vote-card:focus {
@@ -1109,6 +1111,18 @@ header h1 {
 
 .vote-card.collapsed {
   background: rgba(255,255,255,0.06);
+}
+
+/* Estilo para la opción votada - borde plano del color de la opción */
+.vote-card.voted {
+  border: 3px solid var(--card-color) !important;
+  background: rgba(255,255,255,0.12);
+  position: relative;
+}
+
+.vote-card.voted:hover {
+  transform: translateY(-4px);
+  border: 3px solid var(--card-color) !important;
 }
 
 /* Header con avatar y título */
@@ -1982,9 +1996,10 @@ header h1 {
   gap: 4px;
   flex-wrap: nowrap;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  position: relative;
 }
 
 .vote-summary-info::-webkit-scrollbar {
@@ -1996,6 +2011,8 @@ header h1 {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1000;
 }
 
 .vote-actions {
@@ -2119,6 +2136,145 @@ header h1 {
 
 .action-badge:hover svg {
   opacity: 0.8;
+}
+
+/* Estilos para el botón de voto */
+.action-badge.action-vote,
+.stat-badge.action-vote {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.action-badge.action-vote:hover,
+.stat-badge.action-vote:hover {
+  opacity: 0.8;
+}
+
+/* Estado: no ha votado */
+.action-badge.action-vote.no-vote svg,
+.stat-badge.action-vote.no-vote svg {
+  opacity: 0.6;
+}
+
+.action-badge.action-vote.no-vote .vote-label {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+/* Estado: ha votado - solo cambia el color del icono */
+.action-badge.action-vote.has-voted svg path,
+.stat-badge.action-vote.has-voted svg path {
+  stroke: var(--vote-color, #3b82f6);
+  fill: var(--vote-color, #3b82f6);
+}
+
+.action-badge.action-vote.has-voted span,
+.stat-badge.action-vote.has-voted span {
+  color: var(--vote-color, #3b82f6);
+}
+
+/* Animación al votar - pop y vuela al icono */
+@keyframes voteFloatToIcon {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 1;
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  95% {
+    left: var(--icon-x, 50%);
+    top: var(--icon-y, 50%);
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0.8;
+  }
+  100% {
+    left: var(--icon-x, 50%);
+    top: var(--icon-y, 50%);
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0;
+  }
+}
+
+@keyframes buttonPop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3);
+    opacity: 0;
+  }
+}
+
+.action-badge.action-vote,
+.stat-badge.action-vote {
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+}
+
+.action-badge.action-vote.vote-animate::after,
+.stat-badge.action-vote.vote-animate::after {
+  content: "✓";
+  position: fixed;
+  left: var(--vote-x, 50%);
+  top: var(--vote-y, 50%);
+  transform: translate(-50%, -50%);
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--vote-color, #3b82f6);
+  pointer-events: none;
+  z-index: 99999;
+  text-shadow: 
+    0 0 8px var(--vote-color, #3b82f6),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+  filter: drop-shadow(0 0 6px var(--vote-color, #3b82f6));
+  animation: voteFloatToIcon 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* Efecto de onda al votar */
+.action-badge.action-vote.vote-animate::before,
+.stat-badge.action-vote.vote-animate::before {
+  content: "";
+  position: fixed;
+  left: var(--vote-x, 50%);
+  top: var(--vote-y, 50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--vote-color, #3b82f6);
+  pointer-events: none;
+  z-index: 99998;
+  animation: ripple 0.6s cubic-bezier(0, 0, 0.2, 1) forwards;
+}
+
+.action-badge.action-vote.vote-animate,
+.stat-badge.action-vote.vote-animate {
+  animation: buttonPop 0.25s ease-out;
+}
+
+.vote-label {
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .total-votes {
@@ -3848,6 +4004,8 @@ header h1 {
   margin-bottom: 0;
   padding: 0;
   animation: fadeInUp 0.4s ease-out;
+  position: relative;
+  overflow: visible;
 }
 
 @keyframes fadeInUp {

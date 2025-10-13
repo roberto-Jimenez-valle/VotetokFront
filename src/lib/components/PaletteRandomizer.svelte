@@ -104,7 +104,7 @@
     notification.textContent = `🎨 ${paletteName}`;
     notification.style.cssText = `
       position: fixed;
-      top: 70px;
+      top: 114px;
       right: 16px;
       background: rgba(0, 0, 0, 0.8);
       backdrop-filter: blur(10px);
@@ -144,7 +144,7 @@
 <style>
   .palette-randomizer {
     position: fixed;
-    top: 16px;
+    top: 60px;
     right: 80px;
     z-index: 99999;
     background: rgba(255, 255, 255, 0.1);

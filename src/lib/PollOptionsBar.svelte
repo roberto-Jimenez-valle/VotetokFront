@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Plus } from 'lucide-svelte';
+  
   type PollOption = {
     key: string;
     label: string;
@@ -11,6 +13,7 @@
     id: number;
     title: string;
     options: PollOption[];
+    isCollaborative?: boolean;
   };
 
   let { poll = null } = $props<{ poll: Poll | null }>();
@@ -19,6 +22,12 @@
 
   function toggleExpanded() {
     expanded = !expanded;
+  }
+  
+  function addNewOption() {
+    console.log('Añadiendo nueva opción a la encuesta colaborativa');
+    // TODO: Implementar lógica para añadir nueva opción
+    // Esto podría emitir un evento o hacer una llamada API
   }
   
   // Debug: Log cuando cambia poll
@@ -65,30 +74,46 @@
 
   <!-- Opciones expandidas -->
   {#if expanded}
-  <div class="options-expanded">
-    {#each optionsWithPct.sort((a: any, b: any) => b.pct - a.pct) as option}
-      <div class="option-item">
-        <div class="option-info">
-          {#if option.avatarUrl}
-            <img src={option.avatarUrl} alt={option.label} class="option-avatar" />
-          {:else}
-            <div class="option-avatar-placeholder" style="background-color: {option.color};">
-              {option.label.charAt(0)}
+  <div class="options-expanded-wrapper">
+    <div class="options-expanded-container">
+      <div class="options-expanded">
+        {#each optionsWithPct.sort((a: any, b: any) => b.pct - a.pct) as option}
+          <div class="option-item">
+            <div class="option-info">
+              {#if option.avatarUrl}
+                <img src={option.avatarUrl} alt={option.label} class="option-avatar" />
+              {:else}
+                <div class="option-avatar-placeholder" style="background-color: {option.color};">
+                  {option.label.charAt(0)}
+                </div>
+              {/if}
+              <span class="option-label">{option.label}</span>
             </div>
-          {/if}
-          <span class="option-label">{option.label}</span>
-        </div>
-        <div class="option-stats">
-          <div class="option-bar-bg">
-            <div 
-              class="option-bar-fill" 
-              style="width: {option.pct}%; background-color: {option.color};"
-            ></div>
+            <div class="option-stats">
+              <div class="option-bar-bg">
+                <div 
+                  class="option-bar-fill" 
+                  style="width: {option.pct}%; background-color: {option.color};"
+                ></div>
+              </div>
+              <span class="option-pct">{option.pct.toFixed(1)}%</span>
+            </div>
           </div>
-          <span class="option-pct">{option.pct.toFixed(1)}%</span>
-        </div>
+        {/each}
       </div>
-    {/each}
+      
+      <!-- Botón añadir opción (solo para encuestas colaborativas) -->
+      {#if poll?.isCollaborative}
+        <button
+          type="button"
+          class="add-option-button-inline"
+          onclick={addNewOption}
+          title="Añadir nueva opción"
+        >
+          <Plus class="w-5 h-5" />
+        </button>
+      {/if}
+    </div>
   </div>
   {/if}
 </div>
@@ -169,12 +194,27 @@
     transition: transform 0.3s ease;
   }
 
-  .options-expanded {
+  .options-expanded-wrapper {
     margin-top: 12px;
+    animation: expandDown 0.3s ease;
+  }
+  
+  .options-expanded-container {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 0 -16px;
+    padding: 0.75rem 0;
+  }
+  
+  .options-expanded {
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    animation: expandDown 0.3s ease;
+    padding: 0 16px;
+    overflow-y: auto;
+    max-height: 300px;
   }
 
   @keyframes expandDown {
@@ -255,5 +295,37 @@
     font-weight: 600;
     min-width: 45px;
     text-align: right;
+  }
+  
+  /* Botón añadir opción - exacto como CreatePollModal */
+  .add-option-button-inline {
+    flex-shrink: 0;
+    min-width: 50px;
+    width: 50px;
+    align-self: stretch;
+    background: rgba(255, 255, 255, 0.03);
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0 12px 12px 0;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 1.25rem;
+    font-weight: 300;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 16px;
+    z-index: 0;
+  }
+  
+  .add-option-button-inline:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-left-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .add-option-button-inline:active {
+    transform: scale(0.95);
   }
 </style>

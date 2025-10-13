@@ -12,7 +12,10 @@
 
   function toggle() { open = !open; }
   function select(tab: typeof options[number]) {
+    console.log('[TopTabs] 🔘 Tab seleccionado:', tab);
+    console.log('[TopTabs] 🔘 Tab anterior:', active);
     active = tab;
+    console.log('[TopTabs] 📤 Disparando evento change con:', tab);
     dispatch('change', tab);
     open = false;
   }

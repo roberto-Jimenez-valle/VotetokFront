@@ -2,6 +2,15 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import '$lib/styles/trending-ranking.css';
   import type { Poll } from './types';
+  import { currentUser } from '$lib/stores';
+  
+  
+  // Componentes de sección completos
+  import ActivePollSection from './cards/sections/ActivePollSection.svelte';
+  import TrendingPollsSection from './cards/sections/TrendingPollsSection.svelte';
+  import SinglePollSection from './cards/sections/SinglePollSection.svelte';
+  import WhoToFollowSection from './cards/sections/WhoToFollowSection.svelte';
+  import AdCard from './cards/sections/AdCard.svelte';
 
   // Helper para reemplazar setTimeout con Promesas
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -12,9 +21,37 @@
   
   // Estado de acordeón full-width (sin scroll): índice activo por grid
   let activeAccordionMainIndex: number | null = null;
-  const activeAccordionByPoll: Record<string, number | null> = {};
+  let activeAccordionByPoll: Record<string, number | null> = {};
   let lastMainOptionsSignature = '';
   const pollOptionSignatures: Record<string, string> = {};
+  
+  // Estado de votos del usuario: Record<pollId, optionKey>
+  let userVotes: Record<string, string> = {};
+  
+  // Estado para votación múltiple: Record<pollId, optionKey[]>
+  let multipleVotes: Record<string, string[]> = {};
+  
+  // Estado para añadir nueva opción en encuestas colaborativas
+  let showAddOptionModal: Record<string, boolean> = {};
+  let newOptionLabel: Record<string, string> = {};
+  
+  // Estado para opciones colaborativas en edición
+  let pendingCollaborativeOption: Record<string, string | null> = {}; // pollId -> tempId de la opción en edición
+  let editingOptionColors: Record<string, string> = {}; // tempId -> color seleccionado
+  
+  // Coordenadas del último click para la animación
+  let voteClickX = 0;
+  let voteClickY = 0;
+  let voteIconX = 0;
+  let voteIconY = 0;
+  let voteIconElement: HTMLElement | null = null;
+  
+  // Votos visibles en el UI (con retraso para la animación)
+  let displayVotes: Record<string, string> = {};
+  
+  // Estado para efectos de votación
+  let voteEffectActive = false;
+  let voteEffectPollId: string | null = null;
   
   // Estado de expansión de títulos de encuestas
   const pollTitleExpanded: Record<string, boolean> = {};
@@ -50,6 +87,94 @@
     if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
     return num.toString();
   }
+
+  // Helper para calcular tiempo restante de una encuesta
+  function getTimeRemaining(closedAt: Date | string | null | undefined): string {
+    if (!closedAt) return '';
+    
+    const now = Date.now();
+    const end = new Date(closedAt).getTime();
+    const diff = end - now;
+    
+    if (diff <= 0) return 'Cerrada';
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+
+  // Helper para obtener color del indicador de tiempo
+  function getTimeRemainingColor(closedAt: Date | string | null | undefined): 'red' | 'yellow' | 'green' | 'gray' {
+    if (!closedAt) return 'gray';
+    
+    const diff = new Date(closedAt).getTime() - Date.now();
+    const hours = diff / (1000 * 60 * 60);
+    
+    if (hours <= 0) return 'gray'; // Cerrada
+    if (hours <= 1) return 'red';
+    if (hours <= 6) return 'yellow';
+    return 'green';
+  }
+
+  // Helper para calcular porcentaje de tiempo transcurrido
+  function getTimeProgress(closedAt: Date | string | null | undefined, createdAt?: Date | string | null): number {
+    if (!closedAt) return 0;
+    
+    const now = Date.now();
+    const end = new Date(closedAt).getTime();
+    const start = createdAt ? new Date(createdAt).getTime() : end - (7 * 24 * 60 * 60 * 1000); // 7 días por defecto
+    
+    if (now >= end) return 100; // Completado
+    if (now <= start) return 0; // No ha empezado
+    
+    const total = end - start;
+    const elapsed = now - start;
+    
+    return Math.min(100, Math.max(0, (elapsed / total) * 100));
+  }
+
+  // Helper para verificar si una encuesta está expirada
+  function isPollExpired(closedAt: Date | string | null | undefined): boolean {
+    if (!closedAt) return false;
+    return new Date(closedAt).getTime() <= Date.now();
+  }
+
+  // Helper para verificar si una encuesta puede recibir votos
+  function canVoteOnPoll(poll: any): boolean {
+    if (!poll) return false;
+    if (poll.status !== 'active') return false;
+    if (isPollExpired(poll.closedAt)) return false;
+    return true;
+  }
+
+  // Actualizar tiempos cada minuto
+  let timeUpdateInterval: number | undefined;
+  
+  onMount(() => {
+    // Actualizar cada 60 segundos
+    timeUpdateInterval = setInterval(() => {
+      // Forzar re-render para actualizar contadores
+      if (trendingPollsData.length > 0) {
+        trendingPollsData = [...trendingPollsData];
+      }
+      if (additionalPolls.length > 0) {
+        additionalPolls = [...additionalPolls];
+      }
+      if (activePoll) {
+        activePoll = { ...activePoll };
+      }
+    }, 60000) as unknown as number;
+    
+    return () => {
+      if (timeUpdateInterval) {
+        clearInterval(timeUpdateInterval);
+      }
+    };
+  });
 
   // Helper para cargar datos históricos desde API
   async function loadHistoricalData(pollId: number, days: number) {
@@ -195,6 +320,7 @@
           type: poll.type || 'poll',
           region: selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global',
           options: poll.options.map((opt: any) => ({
+            id: opt.id,
             key: opt.optionKey,
             label: opt.optionLabel,
             color: opt.color,
@@ -217,8 +343,15 @@
                 return transformed;
       }));
       
-      // Agregar polls sin causar re-renders múltiples
-      additionalPolls = [...additionalPolls, ...transformedPolls];
+      // Agregar polls FILTRANDO DUPLICADOS para evitar error "each_key_duplicate"
+      const allPolls = [...additionalPolls, ...transformedPolls];
+      
+      // Filtrar duplicados por ID (mantener solo la primera ocurrencia)
+      const uniquePolls = allPolls.filter((poll, index, self) => 
+        index === self.findIndex((p) => p.id === poll.id)
+      );
+      
+      additionalPolls = uniquePolls;
       currentPollsPage = page;
       
     } catch (error) {
@@ -495,7 +628,7 @@
     };
   }
   
-  // Función para hacer scroll a la card activa y centrarla
+  // FunciÃ³n para hacer scroll a la card activa y centrarla
   function scrollToActiveCard(grid: HTMLElement, cardIndex: number) {
     const cards = grid.querySelectorAll('.vote-card');
     const activeCard = cards[cardIndex] as HTMLElement;
@@ -723,13 +856,15 @@
   export let isTransitioning = false; // Si debe usar transición CSS
   export let isCameraAnimating = false; // Si hay una animación de cámara en curso
   export let selectedCountryName: string | null = null;
+  export let selectedCountryIso: string | null = null;
   export let selectedSubdivisionName: string | null = null;
+  export let selectedSubdivisionId: string | null = null;
   export let selectedCityName: string | null = null;
   export let countryChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let subdivisionChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
-  export let voteOptions: Array<{ key: string; label: string; color: string; votes: number; pollData?: any }> = [];
+  export let voteOptions: Array<{ key: string; label: string; color: string; votes: number; pollData?: any; isEditing?: boolean }> = [];
   export let legendItems: Array<{ key: string; color: string; count: number }> = [];
   export let activePoll: any = null;
   // Estadísticas de la encuesta principal
@@ -1005,8 +1140,8 @@
     // Cargar datos iniciales desde la API
     loadMainPoll(); // Cargar trending topic como encuesta principal
     loadUserSuggestions();
-    // NO cargar additionalPolls al inicio - solo cuando el usuario haga scroll
-    // loadAdditionalPolls(1);
+    // Cargar primera página de encuestas adicionales al inicio
+    loadAdditionalPolls(1);
     
     // Detectar cambios de pantalla completa
     const handleFullscreenChange = () => {
@@ -1073,6 +1208,11 @@
   function onCardKeydown(e: KeyboardEvent, optionKey: string) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      // Para teclado, usar posición del elemento
+      const target = e.target as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      voteClickX = rect.left + rect.width / 2;
+      voteClickY = rect.top + rect.height / 2;
       handleVote(optionKey);
     }
   }
@@ -1103,16 +1243,15 @@
     return floors;
   }
 
-  // Opciones derivadas de los segments (normalizadas a 100%)
+  // Opciones derivadas de los segments (YA normalizadas desde GlobeGL)
   $: displayOptions = (() => {
     const segs = activeSegments || [];
-    const values = segs.map(s => Number(s.pct) || 0);
-    const norm = normalizeTo100(values);
-    return segs.map((s, i) => ({
+    // NO re-normalizar - los segments ya tienen pct calculado correctamente
+    return segs.map((s) => ({
       key: s.key,
       label: s.key,
       color: s.color,
-      pct: norm[i]
+      pct: Number(s.pct) || 0 // Usar directamente el pct que ya viene calculado
     }));
   })();
   
@@ -1179,12 +1318,40 @@
     
     return mapped;
   })();
-  $: sortedDisplayOptions = trendingPolls; // Alias para compatibilidad con código existente
+  // Filtrar trending polls para no mostrar encuestas que ya están en additionalPolls o activePoll
+  let filteredTrendingPolls: any[] = [];
+  $: {
+    const additionalPollIds = new Set(additionalPolls.map(p => p.id));
+    filteredTrendingPolls = trendingPolls.filter(poll => {
+      const pollId = poll.pollData?.id?.toString();
+      // Excluir si es la encuesta activa o si ya está en additionalPolls
+      if (activePoll?.id && pollId === activePoll.id.toString()) return false;
+      if (pollId && additionalPollIds.has(pollId)) return false;
+      return true;
+    });
+  }
+  
+  // Filtrar additionalPolls para no mostrar la encuesta activa Y eliminar duplicados
+  let filteredAdditionalPolls: any[] = [];
+  $: {
+    const filtered = additionalPolls.filter(poll => {
+      // Excluir si es la encuesta activa
+      if (activePoll?.id && poll.id === activePoll.id.toString()) return false;
+      return true;
+    });
+    
+    // IMPORTANTE: Eliminar duplicados por ID como medida de seguridad extra
+    filteredAdditionalPolls = filtered.filter((poll, index, self) => 
+      index === self.findIndex((p) => p.id === poll.id)
+    );
+  }
+  
+  $: sortedDisplayOptions = filteredTrendingPolls; // Alias para compatibilidad con código existente
   // Solo paginar si hay MÁS de 4 encuestas (no repetir si hay menos)
-  $: shouldPaginateMain = trendingPolls.length > TRENDING_PER_PAGE;
+  $: shouldPaginateMain = filteredTrendingPolls.length > TRENDING_PER_PAGE;
   $: paginatedMainOptions = shouldPaginateMain 
-    ? getPaginatedOptions(trendingPolls, currentPageMain, TRENDING_PER_PAGE)
-    : { items: trendingPolls, totalPages: 1, hasNext: false, hasPrev: false };
+    ? getPaginatedOptions(filteredTrendingPolls, currentPageMain, TRENDING_PER_PAGE)
+    : { items: filteredTrendingPolls, totalPages: 1, hasNext: false, hasPrev: false };
   
   // Dirección de transición para trending
   let trendingTransitionDirection: 'next' | 'prev' | null = null;
@@ -1265,63 +1432,571 @@
   }
   
   // Función para manejar el voto
-  function handleVote(optionKey: string, pollId?: string) {
+  async function handleVote(optionKey: string, pollId?: string) {
+    console.log('='.repeat(50));
+    console.log('[BottomSheet handleVote] 🗳️ INICIO DE VOTO');
+    console.log('[BottomSheet handleVote] optionKey:', optionKey);
+    console.log('[BottomSheet handleVote] pollId:', pollId);
+    console.log('[BottomSheet handleVote] activePoll:', activePoll ? activePoll.id : 'null');
+    console.log('[BottomSheet handleVote] additionalPolls.length:', additionalPolls.length);
+    console.log('='.repeat(50));
+    
     // Si es la encuesta principal (trending), abrir la encuesta específica
     if (!pollId && voteOptions.length > 0) {
       const option = voteOptions.find((o: any) => o.key === optionKey);
       if (option?.pollData) {
-                // Abrir la encuesta específica
+        // Abrir la encuesta específica
         openTrendingPoll(option.pollData);
         return;
       }
     }
     
-    if (pollId) {
-      dispatch('vote', { option: optionKey, pollId });
-    } else {
+    // Determinar el ID de la encuesta
+    const votePollId = pollId || (activePoll?.id ? activePoll.id.toString() : 'main');
+    
+    // Si ya votó por esta misma opción, desmarcar el voto
+    if (userVotes[votePollId] === optionKey) {
+      // Crear nuevo objeto sin esta propiedad para reactividad
+      const { [votePollId]: _, ...rest } = userVotes;
+      Object.assign(userVotes, rest);
+      // Forzar actualización
+      userVotes = { ...rest };
+      // Actualizar display inmediatamente al desmarcar
+      displayVotes = { ...rest };
+      console.log('Voto desmarcado');
+      return;
+    }
+    
+    // Registrar o cambiar el voto del usuario (forzar reactividad)
+    userVotes = { ...userVotes, [votePollId]: optionKey };
+    
+    // Capturar posición del icono de votos
+    if (voteIconElement) {
+      const rect = voteIconElement.getBoundingClientRect();
+      voteIconX = rect.left + rect.width / 2;
+      voteIconY = rect.top + rect.height / 2;
+    }
+    
+    // Activar efecto visual de votación
+    voteEffectActive = true;
+    voteEffectPollId = votePollId;
+    
+    // Actualizar displayVotes después de la animación
+    setTimeout(() => {
+      displayVotes = { ...userVotes };
+      voteEffectActive = false;
+      voteEffectPollId = null;
+    }, 1200); // Mismo tiempo que la animación
+    
+    // Enviar voto al backend DIRECTAMENTE desde aquí
+    await sendVoteToBackend(optionKey, pollId);
+    
+    // Solo notificar al padre si NO es una encuesta trending (additionalPolls)
+    // Si tiene pollId, es una encuesta trending y ya se manejó aquí
+    if (!pollId) {
       onVote(optionKey);
-      dispatch('vote', { option: optionKey });
+    }
+    
+    console.log('[BottomSheet] Voto registrado y enviado:', optionKey, 'en encuesta:', votePollId);
+  }
+  
+  // Nueva función para enviar voto directamente desde BottomSheet
+  async function sendVoteToBackend(optionKey: string, pollId?: string) {
+    console.log('[BottomSheet sendVote] 🎯 Iniciando envío de voto');
+    console.log('[BottomSheet sendVote] optionKey:', optionKey);
+    console.log('[BottomSheet sendVote] pollId:', pollId);
+    
+    // Determinar qué encuesta - buscar por ID (string o number)
+    let poll;
+    if (pollId) {
+      // Buscar en additionalPolls (comparación flexible)
+      poll = additionalPolls.find(p => p.id == pollId || p.id === pollId.toString());
+      console.log('[BottomSheet sendVote] Buscando en additionalPolls:', poll ? 'Encontrada' : 'No encontrada');
+    } else {
+      poll = activePoll;
+      console.log('[BottomSheet sendVote] Usando activePoll');
+    }
+    
+    if (!poll) {
+      console.error('[BottomSheet sendVote] ❌ No se encontró la encuesta');
+      console.error('[BottomSheet sendVote] additionalPolls:', additionalPolls);
+      return;
+    }
+    
+    console.log('[BottomSheet sendVote] ✅ Encuesta encontrada:', {
+      id: poll.id,
+      title: poll.question,
+      totalOptions: poll.options?.length
+    });
+    
+    // Buscar la opción - puede estar como 'key', 'optionKey', etc.
+    const option = poll.options?.find((opt: any) => 
+      opt.key === optionKey || 
+      opt.optionKey === optionKey ||
+      opt.label === optionKey ||
+      opt.optionLabel === optionKey
+    );
+    
+    if (!option) {
+      console.error('[BottomSheet sendVote] ❌ Opción no encontrada:', optionKey);
+      console.error('[BottomSheet sendVote] Opciones disponibles:', poll.options);
+      console.error('[BottomSheet sendVote] Primera opción completa:', JSON.stringify(poll.options?.[0], null, 2));
+      return;
+    }
+    
+    console.log('[BottomSheet sendVote] ✅ Opción encontrada:', option);
+    console.log('[BottomSheet sendVote] Opción completa:', JSON.stringify(option, null, 2));
+    
+    // Obtener optionId - puede estar en diferentes formatos
+    const optionId = option.id || option.optionId;
+    if (!optionId && optionId !== 0) {
+      console.error('[BottomSheet sendVote] âŒ La opción no tiene ID:', option);
+      console.error('[BottomSheet sendVote] Campos disponibles:', Object.keys(option));
+      return;
+    }
+    
+    const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+    
+    console.log('[BottomSheet sendVote] 📤 Enviando al servidor:', {
+      url: `/api/polls/${numericPollId}/vote`,
+      pollId: numericPollId,
+      optionId,
+      optionKey
+    });
+    
+    try {
+      // Obtener ubicación real del usuario (con fallback)
+      let latitude = 40.4168;  // Madrid por defecto
+      let longitude = -3.7038;
+      let geoCountryIso3 = 'ESP';
+      let geoCountryName = 'España';
+      let geoSubdivisionId: string | null = null;
+      let geoSubdivisionName: string | null = null;
+      
+      // Intentar obtener geolocalización del navegador
+      console.log('[BottomSheet] 🔍 Iniciando proceso de geolocalización...');
+      
+      try {
+        if (navigator.geolocation) {
+          console.log('[BottomSheet] ✅ navigator.geolocation está disponible');
+          
+          const position: any = await new Promise((resolve, reject) => {
+            console.log('[BottomSheet] 📡 Solicitando posición GPS...');
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 3000,
+              maximumAge: 300000 // 5 minutos
+            });
+          });
+          
+          latitude = position.coords.latitude;
+          longitude = position.coords.longitude;
+          console.log('[BottomSheet] 📍 Ubicación GPS obtenida:', { latitude, longitude });
+          
+          // Determinar país y subdivisión desde las coordenadas
+          try {
+            const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
+            
+            if (geocodeResponse.ok) {
+              const geocodeData = await geocodeResponse.json();
+              
+              if (geocodeData.found) {
+                geoCountryIso3 = geocodeData.countryIso3;
+                geoCountryName = geocodeData.countryName;
+                geoSubdivisionId = geocodeData.subdivisionId;
+                geoSubdivisionName = geocodeData.subdivisionName;
+              } else {
+                console.warn('[BottomSheet] ⚠️ geocodeData.found es false');
+              }
+            } else {
+              console.error('[BottomSheet] ❌ Respuesta geocode no OK:', geocodeResponse.status);
+            }
+          } catch (geocodeError) {
+            console.error('[BottomSheet] ❌ Error en geocoding:', geocodeError);
+          }
+        } else {
+          console.error('[BottomSheet] ❌ navigator.geolocation NO está disponible');
+        }
+      } catch (geoError) {
+        console.error('[BottomSheet] ❌ Error obteniendo geolocalización:', geoError);
+      }
+      
+      console.log('[BottomSheet] 🎯 Valores finales antes del voto:');
+      console.log('  - geoSubdivisionId:', geoSubdivisionId);
+      console.log('  - selectedSubdivisionId:', selectedSubdivisionId);
+      
+      // Preparar datos del voto
+      // Prioridad: 1) Ubicación del globo seleccionada, 2) Geocoding de GPS, 3) Fallback
+      const voteData = {
+        optionId,
+        userId: $currentUser?.id || null,
+        latitude,
+        longitude,
+        countryIso3: selectedCountryIso || geoCountryIso3,
+        countryName: selectedCountryName || geoCountryName,
+        subdivisionId: selectedSubdivisionId || geoSubdivisionId || null,
+        subdivisionName: selectedSubdivisionName || geoSubdivisionName || null,
+        cityName: selectedCityName || null
+      };
+      
+      console.log('[BottomSheet sendVote] 📦 Datos completos del voto:');
+      console.log('  - optionId:', voteData.optionId, typeof voteData.optionId);
+      console.log('  - userId:', voteData.userId, typeof voteData.userId);
+      console.log('  - latitude:', voteData.latitude, typeof voteData.latitude);
+      console.log('  - longitude:', voteData.longitude, typeof voteData.longitude);
+      console.log('  - countryIso3:', voteData.countryIso3, typeof voteData.countryIso3);
+      console.log('  - countryName:', voteData.countryName);
+      console.log('  - subdivisionId:', voteData.subdivisionId, '← ⚠️', voteData.subdivisionId ? 'OK' : 'NULL - No has seleccionado región en el globo');
+      console.log('  - subdivisionName:', voteData.subdivisionName);
+      console.log('  - cityName:', voteData.cityName);
+      console.log('\n⚠️ IMPORTANTE: selectedSubdivisionId desde props:', selectedSubdivisionId);
+      console.log('⚠️ IMPORTANTE: selectedCountryIso desde props:', selectedCountryIso);
+      
+      const response = await fetch(`/api/polls/${numericPollId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(voteData)
+      });
+      
+      console.log('[BottomSheet sendVote] Respuesta recibida:', response.status);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[BottomSheet sendVote] ✅ Voto guardado exitosamente:', result);
+        
+        // Actualizar contadores localmente (forzar reactividad)
+        if (poll.totalVotes !== undefined) {
+          poll.totalVotes++;
+          console.log('[BottomSheet sendVote] Contador actualizado:', poll.totalVotes);
+        }
+        if (option.votes !== undefined) {
+          option.votes++;
+        }
+        
+        // Forzar actualización de la UI
+        additionalPolls = [...additionalPolls];
+        if (activePoll) {
+          activePoll = { ...activePoll };
+        }
+      } else {
+        const error = await response.json();
+        console.error('[BottomSheet sendVote] ❌ Error del servidor:', error);
+      }
+    } catch (error) {
+      console.error('[BottomSheet sendVote] ❌ Error de red:', error);
+    }
+  }
+  
+  // Función para manejar votación múltiple
+  async function handleMultipleVote(optionKey: string, pollId: string) {
+    const poll = additionalPolls.find(p => p.id === pollId) || activePoll;
+    if (!poll || poll.type !== 'multiple') return;
+    
+    // Inicializar array si no existe
+    if (!multipleVotes[pollId]) {
+      multipleVotes[pollId] = [];
+    }
+    
+    // Alternar selección
+    const currentVotes = multipleVotes[pollId];
+    const index = currentVotes.indexOf(optionKey);
+    
+    if (index > -1) {
+      // Quitar voto
+      multipleVotes[pollId] = currentVotes.filter(k => k !== optionKey);
+    } else {
+      // Añadir voto
+      multipleVotes[pollId] = [...currentVotes, optionKey];
+    }
+    
+    // Forzar reactividad
+    multipleVotes = { ...multipleVotes };
+  }
+  
+  // Función para confirmar votos múltiples
+  async function confirmMultipleVotes(pollId: string) {
+    const votes = multipleVotes[pollId];
+    if (!votes || votes.length === 0) return;
+    
+    // Enviar cada voto al backend
+    for (const optionKey of votes) {
+      await sendVoteToBackend(optionKey, pollId);
+    }
+    
+    // Marcar como votado
+    userVotes = { ...userVotes, [pollId]: votes.join(',') };
+    displayVotes = { ...userVotes };
+    
+    console.log('[BottomSheet] Votos múltiples confirmados:', votes);
+  }
+  
+  // Función para añadir nueva opción directamente (como CreatePollModal)
+  function addNewCollaborativeOption(pollId: string) {
+    // Verificar si ya hay una opción pendiente de confirmar
+    if (pendingCollaborativeOption[pollId]) {
+      console.log('[BottomSheet] Ya hay una opción pendiente. Confírmala primero.');
+      return;
+    }
+    
+    const poll = additionalPolls.find(p => p.id.toString() === pollId) || 
+                 (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
+    
+    if (!poll || poll.type !== 'collaborative' || poll.options.length >= 10) return;
+    
+    // Generar un ID temporal único
+    const tempId = `temp-${Date.now()}`;
+    
+    // Generar un color aleatorio
+    const colors = [
+      '#ef4444', '#f97316', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
+      '#dc2626', '#ea580c', '#d97706', '#059669', '#2563eb', '#7c3aed', '#db2777', '#0d9488'
+    ];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    
+    // Crear la nueva opción vacía CON FLAG DE EDICIÓN
+    const newOption = {
+      id: tempId,
+      key: tempId,
+      label: '',
+      color: randomColor,
+      votes: 0,
+      isEditing: true // ← Flag directo en la opción
+    };
+    
+    // También mantener el registro para compatibilidad
+    pendingCollaborativeOption[pollId] = tempId;
+    editingOptionColors[tempId] = randomColor;
+    
+    // Actualizar la encuesta PRIMERO
+    if (poll.id === activePoll?.id) {
+      // Para activePoll, actualizar directamente con spread completo
+      activePoll = { 
+        ...activePoll, 
+        options: [...activePoll.options, newOption] 
+      };
+    } else {
+      // Para additionalPolls
+      poll.options = [...poll.options, newOption];
+      additionalPolls = [...additionalPolls];
+    }
+    
+    // Ir a la última página y activar la nueva opción con un delay mayor
+    const totalOptions = (poll.id === activePoll?.id ? activePoll.options.length : poll.options.length);
+    const OPTIONS_PER_PAGE = 4;
+    const lastPage = Math.ceil(totalOptions / OPTIONS_PER_PAGE) - 1;
+    const indexInPage = (totalOptions - 1) % OPTIONS_PER_PAGE;
+    
+    if (poll.id === activePoll?.id) {
+      currentPageMain = lastPage;
+      // Delay más largo para asegurar que la reactividad se procese
+      setTimeout(() => {
+        activeAccordionMainIndex = indexInPage;
+      }, 100);
+    } else {
+      currentPageByPoll = { ...currentPageByPoll, [pollId]: lastPage };
+      setTimeout(() => {
+        activeAccordionByPoll = { ...activeAccordionByPoll, [pollId]: indexInPage };
+      }, 100);
+    }
+    
+    console.log('[BottomSheet] Nueva opción colaborativa creada (pendiente):', {
+      newOption,
+      pollId,
+      tempId,
+      pendingState: pendingCollaborativeOption
+    });
+  }
+  
+  // Función para confirmar y guardar la nueva opción colaborativa
+  async function confirmCollaborativeOption(pollId: string) {
+    const tempId = pendingCollaborativeOption[pollId];
+    if (!tempId) return;
+    
+    const poll = additionalPolls.find(p => p.id.toString() === pollId) || 
+                 (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
+    if (!poll) return;
+    
+    const option = poll.options.find((o:any) => o.key === tempId);
+    if (!option || !option.label.trim()) {
+      alert('Debes escribir un nombre para la opción');
+      return;
+    }
+    
+    try {
+      const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+      
+      const response = await fetch(`/api/polls/${numericPollId}/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: option.label.trim(),
+          color: option.color,
+          userId: $currentUser?.id || null
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Actualizar la opción temporal con los datos del servidor
+        option.id = result.data.id;
+        option.key = result.data.optionKey;
+        delete option.isEditing; // ← Quitar flag de edición
+        
+        // Actualizar la encuesta
+        if (poll.id === activePoll?.id) {
+          activePoll = { ...activePoll };
+        } else {
+          additionalPolls = [...additionalPolls];
+        }
+        
+        // Limpiar el estado de edición
+        delete pendingCollaborativeOption[pollId];
+        delete editingOptionColors[tempId];
+        pendingCollaborativeOption = { ...pendingCollaborativeOption };
+        editingOptionColors = { ...editingOptionColors };
+        
+        console.log('[BottomSheet] Opción colaborativa confirmada:', result.data);
+      } else {
+        const error = await response.json();
+        console.error('[BottomSheet] Error confirmando opción:', error);
+        alert('Error al guardar la opción. Inténtalo de nuevo.');
+      }
+    } catch (error) {
+      console.error('[BottomSheet] Error de red:', error);
+      alert('Error de conexión. Inténtalo de nuevo.');
+    }
+  }
+  
+  // Función para cancelar la creación de una opción colaborativa
+  function cancelCollaborativeOption(pollId: string) {
+    const tempId = pendingCollaborativeOption[pollId];
+    if (!tempId) return;
+    
+    const poll = additionalPolls.find(p => p.id.toString() === pollId) || 
+                 (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
+    if (!poll) return;
+    
+    // Eliminar la opción temporal
+    poll.options = poll.options.filter((o : any) => o.key !== tempId);
+    
+    // Actualizar la encuesta
+    if (poll.id === activePoll?.id) {
+      activePoll = { ...activePoll };
+    } else {
+      additionalPolls = [...additionalPolls];
+    }
+    
+    // Limpiar el estado de edición
+    delete pendingCollaborativeOption[pollId];
+    delete editingOptionColors[tempId];
+    pendingCollaborativeOption = { ...pendingCollaborativeOption };
+    editingOptionColors = { ...editingOptionColors };
+    
+    console.log('[BottomSheet] Opción colaborativa cancelada');
+  }
+  
+  // Función para añadir nueva opción (colaborativa)
+  async function addNewOption(pollId: string) {
+    const label = newOptionLabel[pollId]?.trim();
+    if (!label) return;
+    
+    const poll = additionalPolls.find(p => p.id === pollId) || activePoll;
+    if (!poll || poll.type !== 'collaborative') return;
+    
+    try {
+      const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+      
+      const response = await fetch(`/api/polls/${numericPollId}/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label,
+          userId: $currentUser?.id || null
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[BottomSheet] Nueva opción añadida:', result);
+        
+        // Actualizar la encuesta localmente
+        const newOption = {
+          id: result.data.id,
+          key: result.data.optionKey,
+          label: result.data.optionLabel,
+          color: result.data.color,
+          votes: 0
+        };
+        
+        poll.options = [...poll.options, newOption];
+        
+        // Forzar actualización
+        additionalPolls = [...additionalPolls];
+        if (activePoll?.id === pollId) {
+          activePoll = { ...activePoll };
+        }
+        
+        // Limpiar y cerrar modal
+        newOptionLabel[pollId] = '';
+        showAddOptionModal[pollId] = false;
+        showAddOptionModal = { ...showAddOptionModal };
+      } else {
+        const error = await response.json();
+        console.error('[BottomSheet] Error añadiendo opción:', error);
+      }
+    } catch (error) {
+      console.error('[BottomSheet] Error de red:', error);
     }
   }
   
   // Función para abrir una encuesta trending específica
   function openTrendingPoll(pollData: any) {
+    if (!pollData) {
+      console.error('[openTrendingPoll] pollData is undefined');
+      return;
+    }
+    
+    // Generar ID Ãºnico si no existe
+    const pollId = pollData.id ? pollData.id.toString() : `temp-${Date.now()}-${Math.random()}`;
+    
     // Transformar la encuesta a formato Poll y agregarla al inicio de additionalPolls
     const transformedPoll = {
-      id: pollData.id.toString(),
-      question: pollData.title,
+      id: pollId,
+      question: pollData.question || pollData.title || 'Encuesta',
       type: pollData.type || 'poll',
       region: selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global',
-      options: pollData.options.map((opt: any) => ({
-        key: opt.optionKey,
-        label: opt.optionLabel,
-        color: opt.color,
-        votes: opt.voteCount,
+      options: (pollData.options || []).map((opt: any, idx: number) => ({
+        id: opt.id || `opt-${idx}`,
+        key: opt.optionKey || opt.key || `option-${idx}`,
+        label: opt.optionLabel || opt.label || `OpciÃ³n ${idx + 1}`,
+        color: opt.color || `hsl(${idx * 60}, 70%, 50%)`,
+        votes: opt.voteCount || opt.votes || 0,
         avatarUrl: opt.avatarUrl
       })),
       totalVotes: pollData.totalVotes || 0,
       totalViews: pollData.totalViews || 0,
+      closedAt: pollData.closedAt,
       creator: pollData.user ? {
-        id: pollData.user.id.toString(),
-        name: pollData.user.displayName,
-        handle: pollData.user.username,
+        id: pollData.user.id ? pollData.user.id.toString() : 'unknown',
+        name: pollData.user.displayName || pollData.user.name || 'Usuario',
+        handle: pollData.user.username || pollData.user.handle || 'user',
         avatarUrl: pollData.user.avatarUrl,
-        verified: pollData.user.verified
+        verified: pollData.user.verified || false
       } : undefined,
-      publishedAt: pollData.createdAt,
+      publishedAt: pollData.createdAt || pollData.publishedAt,
       friendsByOption: {}
     };
     
     // Agregar al inicio de additionalPolls si no existe ya
     if (!additionalPolls.find(p => p.id === transformedPoll.id)) {
       additionalPolls = [transformedPoll, ...additionalPolls];
-          }
+    }
     
     // Abrir la encuesta en el globo
-        openAdditionalPollInGlobe(transformedPoll as Poll);
+    openAdditionalPollInGlobe(transformedPoll as Poll);
   }
   
-  // Función para detectar scroll al final y cargar más encuestas
+  // FunciÃ³n para detectar scroll al final y cargar mÃ¡s encuestas
   function handlePollScroll(e: Event) {
     onScroll(e);
     
@@ -1819,98 +2494,51 @@
       
       <!-- PRIORIDAD 1: Si hay encuesta activa (activePoll), mostrarla PRIMERO -->
       {#if activePoll && activePoll.id && voteOptions.length > 0}
-        {@const activeSegments = voteOptions}
-        {@const sortedActiveOptions = activeSegments.sort((a, b) => b.votes - a.votes)}
-        {@const shouldPaginateActive = sortedActiveOptions.length > OPTIONS_PER_PAGE}
-        {@const paginatedActiveOptions = shouldPaginateActive 
-          ? getPaginatedOptions(sortedActiveOptions, currentPageMain, OPTIONS_PER_PAGE)
-          : { items: sortedActiveOptions, totalPages: 1, hasNext: false, hasPrev: false }}
+        <ActivePollSection
+          {activePoll}
+          {voteOptions}
+          {state}
+          activeAccordionMainIndex={activeAccordionMainIndex}
+          {currentPageMain}
+          {transitionDirectionMain}
+          {userVotes}
+          {multipleVotes}
+          {OPTIONS_PER_PAGE}
+          on:optionClick={(e) => {
+            const { event, optionKey, pollId } = e.detail;
+            voteClickX = event.clientX;
+            voteClickY = event.clientY;
+            if (activePoll.type === 'multiple') {
+              handleMultipleVote(optionKey, pollId);
+            } else {
+              handleVote(optionKey);
+            }
+          }}
+          on:setActive={(e) => activeAccordionMainIndex = e.detail.index}
+          on:pageChange={(e) => {
+            transitionDirectionMain = e.detail.page < currentPageMain ? 'prev' : 'next';
+            currentPageMain = e.detail.page;
+            (async () => {
+              await delay(50);
+              activeAccordionMainIndex = 0;
+              await delay(350);
+              transitionDirectionMain = null;
+            })();
+          }}
+          on:confirmMultiple={(e) => confirmMultipleVotes(e.detail.pollId)}
+          on:confirmCollaborative={(e) => confirmCollaborativeOption(e.detail.pollId)}
+          on:cancelCollaborative={(e) => cancelCollaborativeOption(e.detail.pollId)}
+          on:addOption={(e) => addNewCollaborativeOption(e.detail.pollId)}
+          on:dragStart={(e) => handleDragStart(e.detail.event)}
+        />
         
+        <!-- Stats y acciones de la encuesta activa -->
+        {@const mainPollId = activePoll?.id ? activePoll.id.toString() : 'main'}
+        {@const userVotedOption = displayVotes[mainPollId]}
+        {@const votedOptionData = userVotedOption ? voteOptions.find(o => o.key === userVotedOption) : null}
+        {@const currentVote = userVotes[mainPollId]}
+        {@const currentVoteOptionData = currentVote ? voteOptions.find(o => o.key === currentVote) : null}
         <div class="vote-cards-section active-poll-section">
-          <!-- Título de la encuesta activa -->
-          <div class="topic-header">
-            <div class="header-with-avatar">
-              <div class="header-content">
-                <h3>{activePoll.question || activePoll.title || 'Encuesta'}</h3>
-                <div class="topic-meta">
-                  <span class="topic-type">Encuesta • {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
-                  {#if activePoll.createdAt}
-                    <span class="topic-time">• {getRelativeTime(Math.floor((Date.now() - new Date(activePoll.createdAt).getTime()) / 60000))}</span>
-                  {/if}
-                </div>
-              </div>
-              {#if activePoll.user?.avatarUrl}
-                <div class="header-avatar header-avatar-real">
-                  <img src={activePoll.user.avatarUrl} alt={activePoll.user.displayName} />
-                </div>
-              {:else}
-                <div class="header-avatar header-avatar-real">
-                  <img src={DEFAULT_AVATAR} alt="Avatar" />
-                </div>
-              {/if}
-            </div>
-          </div>
-          
-          <!-- Grid de opciones de la encuesta activa -->
-          <div class="vote-cards-grid accordion fullwidth {activeAccordionMainIndex != null ? 'open' : ''}"
-               style="--items: {paginatedActiveOptions.items.length}"
-               role="group" aria-label="Opciones de encuesta activa"
-               bind:this={mainGridRef}
-               onpointerdown={(e) => handleDragStart(e)}
-               ontouchstart={(e) => handleDragStart(e)}>
-            {#each paginatedActiveOptions.items as option, index (option.key)}
-              <button 
-                class="vote-card {activeAccordionMainIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionMainIndex !== index) ? 'collapsed' : ''}" 
-                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, option.votes))}%; --fill-pct-val: {Math.max(0, Math.min(100, option.votes))}; --flex: {Math.max(0.5, option.votes / 10)};" 
-                onclick={() => {
-                  if (activeAccordionMainIndex !== index) { setActiveMain(index); return; }
-                  handleVote(option.key);
-                }}
-                onfocus={() => setActiveMain(index)}
-                onkeydown={(e) => onCardKeydown(e, option.key)}
-                type="button"
-              >
-                <div class="card-header">
-                  <h2 class="question-title">{option.label}</h2>
-                  <img class="creator-avatar" src={DEFAULT_AVATAR} alt={option.label} loading="lazy" />
-                </div>
-                <div class="card-content">
-                  <div class="percentage-display">
-                    <span
-                      class="percentage-large"
-                      style="font-size: {(activeAccordionMainIndex === index && state === 'expanded'
-                        ? fontSizeForPct(option.votes)
-                        : Math.min(fontSizeForPct(option.votes), 21))}px"
-                    >
-                      {Math.round(option.votes)}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            {/each}
-          </div>
-          
-          {#if shouldPaginateActive}
-            <div class="pagination-dots">
-              {#each Array(paginatedActiveOptions.totalPages) as _, pageIndex}
-                <button 
-                  class="pagination-dot {pageIndex === currentPageMain ? 'active' : ''}"
-                  onclick={async () => { 
-                    transitionDirectionMain = pageIndex < currentPageMain ? 'prev' : 'next';
-                    currentPageMain = pageIndex;
-                    await delay(50);
-                    activeAccordionMainIndex = 0;
-                    await delay(350);
-                    transitionDirectionMain = null;
-                  }}
-                  type="button"
-                  aria-label="Bloque {pageIndex + 1}"
-                ></button>
-              {/each}
-            </div>
-          {/if}
-          
-          <!-- Información de la encuesta activa -->
           <div class="vote-summary-info">
             <div class="vote-stats">
               <div class="stat-badge">
@@ -1929,6 +2557,28 @@
                 </svg>
                 <span>{formatNumber(activePoll.totalViews || 0)}</span>
               </div>
+              <button 
+                bind:this={voteIconElement}
+                class="stat-badge action-vote {userVotedOption ? 'has-voted' : 'no-vote'} {voteEffectActive && voteEffectPollId === mainPollId ? 'vote-animate' : ''}" 
+                type="button" 
+                title={userVotedOption ? `Tu voto: ${votedOptionData?.label || userVotedOption}` : "Aún no has votado"}
+                style="{userVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''} {voteEffectActive && voteEffectPollId === mainPollId && currentVoteOptionData ? `--vote-x: ${voteClickX}px; --vote-y: ${voteClickY}px; --icon-x: ${voteIconX}px; --icon-y: ${voteIconY}px; --vote-color: ${currentVoteOptionData.color};` : ''}"
+                onclick={(e) => {
+                  voteClickX = e.clientX;
+                  voteClickY = e.clientY;
+                  if (userVotedOption) {
+                    const { [mainPollId]: _, ...rest } = userVotes;
+                    userVotes = { ...rest };
+                    displayVotes = { ...rest };
+                  }
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill={userVotedOption ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 11l3 3L22 4"/>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                <span>{formatNumber(activePoll.totalVotes || 0)}</span>
+              </button>
             </div>
             <div class="vote-actions">
               <button class="action-badge" type="button" title="Guardar">
@@ -1961,893 +2611,82 @@
       
       <!-- PRIORIDAD 2: Mostrar TRENDING (solo si NO hay encuesta activa O después de mostrarla) -->
       {#if trendingPolls.length > 0}
-        <div class="vote-cards-section">
-          <!-- Título de trending (solo si NO hay encuesta activa) -->
-          {#if !activePoll || !activePoll.id}
-            <div class="topic-header">
-              {#if selectedCountryName && selectedSubdivisionName}
-                <div class="header-content">
-                  <h3>Trending en {selectedSubdivisionName}</h3>
-                  <div class="topic-meta">
-                    <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • {selectedCountryName}</span>
-                  </div>
-                </div>
-              {:else if selectedCountryName}
-                <div class="header-content">
-                  <h3>Trending en {selectedCountryName}</h3>
-                  <div class="topic-meta">
-                    <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Nacional</span>
-                  </div>
-                </div>
-              {:else}
-                <div class="header-content">
-                  <h3>Trending Global</h3>
-                  <div class="topic-meta">
-                    <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Mundial</span>
-                  </div>
-                </div>
-              {/if}
-            </div>
-          {/if}
-          
-          <!-- TRENDING RANKING: Diseño profesional tipo leaderboard -->
-      <div class="trending-ranking-container {trendingTransitionDirection ? 'trending-transition trending-transition-' + trendingTransitionDirection : ''}"
-           bind:this={trendingGridRef}
-           ontouchstart={(e) => {
-             const touch = e.touches[0];
-             touchStartX = touch.clientX;
-             touchStartY = touch.clientY;
-           }}
-           ontouchmove={(e) => {
-             if (touchStartX === 0) return;
-             const touch = e.touches[0];
-             const deltaX = touch.clientX - touchStartX;
-             const deltaY = touch.clientY - touchStartY;
-             
-             
-             // Solo si el movimiento horizontal es mayor que el vertical
-             if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-               e.preventDefault(); // Prevenir scroll
-               
-               if (deltaX > 0 && currentPageMain > 0) {
-                 trendingTransitionDirection = 'prev';
-                 (async () => {
-                   await delay(10);
-                   currentPageMain--;
-                   await delay(300);
-                   trendingTransitionDirection = null;
-                 })();
-               } else if (deltaX < 0 && shouldPaginateMain && currentPageMain < paginatedMainOptions.totalPages - 1) {
-                 trendingTransitionDirection = 'next';
-                 (async () => {
-                   await delay(10);
-                   currentPageMain++;
-                   await delay(300);
-                   trendingTransitionDirection = null;
-                 })();
-               } else {
-               }
-               touchStartX = 0;
-               touchStartY = 0;
-             }
-           }}
-           ontouchend={() => { 
-             touchStartX = 0; 
-             touchStartY = 0;
-           }}
-           ontouchcancel={() => { 
-             touchStartX = 0; 
-             touchStartY = 0;
-           }}>
-        {#each paginatedMainOptions.items as option, index (option.key)}
-          {@const pollData = option.pollData}
-          {@const rankNumber = (currentPageMain * TRENDING_PER_PAGE) + index + 1}
-          {@const rankChange = index === 0 ? 2 : index === 1 ? -1 : index === 2 ? 0 : 1}
-          <div 
-            class="trending-rank-item rank-{rankNumber}"
-            style="--rank-color: {option.color};"
-            onclick={() => {
-              if (pollData) {
-                openTrendingPoll(pollData);
-              }
-            }}
-            onkeydown={(e) => { 
-              if (e.key === 'Enter' || e.key === ' ') { 
-                e.preventDefault(); 
-                if (pollData) {
-                  openTrendingPoll(pollData);
-                }
-              }
-            }}
-            role="button"
-            tabindex="0"
-          >
-            <!-- Avatar del creador con borde de color -->
-            <div class="rank-avatar" style="--poll-color: {option.color}">
-              {#if pollData?.user?.avatarUrl}
-                <img src={pollData.user.avatarUrl} alt={pollData.user.displayName} style="border: 3px solid {option.color};" />
-              {:else}
-                <div class="rank-avatar-placeholder" style="background: {option.color}; border: 3px solid {option.color};">
-                  {rankNumber}
-                </div>
-              {/if}
-            </div>
-            
-            <!-- Posición del ranking con flecha de cambio -->
-            <div class="rank-position">
-              <span class="rank-number">{rankNumber}</span>
-              {#if rankChange > 0}
-                <svg class="rank-change rank-up" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M7 14l5-5 5 5z"/>
-                </svg>
-              {:else if rankChange < 0}
-                <svg class="rank-change rank-down" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M7 10l5 5 5-5z"/>
-                </svg>
-              {:else}
-                <span class="rank-change rank-same">—</span>
-              {/if}
-            </div>
-            
-            <!-- Contenido: Título de la encuesta -->
-            <div class="rank-content">
-              <h3 class="rank-title">{option.label}</h3>
-              <div class="rank-meta">
-                {#if pollData?.user?.displayName}
-                  <span class="rank-author">
-                    {pollData.user.displayName}
-                    {#if pollData.user.verified}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: #3b82f6; margin-left: 2px;">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
-                    {/if}
-                  </span>
-                  <span class="rank-separator">•</span>
-                {/if}
-                <span class="rank-votes">
-                  {formatNumber(option.votes || pollData?.totalVotes || 0)} votos
-                </span>
-              </div>
-            </div>
-            
-            <!-- Menú de 3 puntos -->
-            <button 
-              class="rank-menu-btn"
-              onclick={(e) => {
-                e.stopPropagation();
-                openPollOptionsModal(pollData);
-              }}
-              type="button"
-              aria-label="Más opciones"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="2"/>
-                <circle cx="12" cy="12" r="2"/>
-                <circle cx="12" cy="19" r="2"/>
-              </svg>
-            </button>
-          </div>
-        {/each}
-      </div>
-      
-      <!-- Indicadores de paginación tipo Instagram para main poll -->
-      {#if shouldPaginateMain}
-        <div class="pagination-dots {paginatedMainOptions.totalPages > 25 ? 'many-pages' : ''}">
-          {#each Array(paginatedMainOptions.totalPages) as _, pageIndex}
-            <button 
-              class="pagination-dot {pageIndex === currentPageMain ? 'active' : ''}"
-              onclick={async () => { 
-                const oldPage = currentPageMain;
-                transitionDirectionMain = pageIndex < oldPage ? 'prev' : 'next';
-                currentPageMain = pageIndex;
-                await delay(50);
-                const newPageOptions = getPaginatedOptions(sortedDisplayOptions, pageIndex);
-                activeAccordionMainIndex = pageIndex < oldPage 
-                  ? newPageOptions.items.length - 1 
-                  : 0;
-                await delay(350);
-                transitionDirectionMain = null;
-              }}
-              type="button"
-              aria-label="Bloque {pageIndex + 1}"
-            ></button>
-          {/each}
-        </div>
+        <TrendingPollsSection
+          {trendingPolls}
+          {selectedCountryName}
+          {selectedSubdivisionName}
+          {currentPageMain}
+          trendingTransitionDirection={trendingTransitionDirection}
+          {mainPollViews}
+          showActivePoll={!!(activePoll && activePoll.id)}
+          TRENDING_PER_PAGE={TRENDING_PER_PAGE}
+          hasMorePolls={additionalPolls.length > 0}
+          on:openPoll={(e) => openTrendingPoll(e.detail.poll)}
+          on:pollOptions={(e) => openPollOptionsModal(e.detail.poll)}
+          on:pageChange={(e) => {
+            currentPageMain = e.detail.page;
+            trendingTransitionDirection = e.detail.direction;
+            (async () => {
+              await delay(300);
+              trendingTransitionDirection = null;
+            })();
+          }}
+        />
       {/if}
       
-      <!-- Información total debajo de trending -->
-      <div 
-        class="vote-summary-info"
-      >
-        <div class="vote-stats">
-          <div class="stat-badge">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-              <rect x="3" y="3" width="7" height="7"/>
-              <rect x="14" y="3" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
-              <rect x="14" y="14" width="7" height="7"/>
-            </svg>
-            <span>{formatNumber(trendingPolls.length)}</span>
-          </div>
-          <div class="stat-badge">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            <span>{formatNumber(mainPollViews)}</span>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Separador después de trending -->
-      {#if additionalPolls.length > 0}
-        <div 
-          class="more-polls-divider"
-        >
-          <div class="divider-line"></div>
-          <span class="divider-text">Ver otras encuestas de {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
-          <div class="divider-line"></div>
-        </div>
-      {/if}
-      </div> <!-- Cierre de vote-cards-section trending -->
-      {:else if !activePoll || !activePoll.id}
-        <!-- Mensaje cuando NO hay trending disponible (solo si no hay encuesta activa) -->
-        <div class="vote-cards-section">
-          <div class="no-trending-message">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-            <h3>No hay encuestas trending</h3>
-            <p>Aún no hay encuestas populares en {selectedSubdivisionName || selectedCountryName || 'esta región'}</p>
-          </div>
-        </div>
-      {/if} <!-- Cierre de condicional trendingPolls -->
-      
-      <!-- Encuestas adicionales dentro del mismo contenedor scrolleable -->
-      {#each additionalPolls as poll, pollIndex (poll.id)}
+      <!-- Encuestas adicionales usando componentes modularizados -->
+      {#each filteredAdditionalPolls as poll, pollIndex (poll.id ?? `poll-${pollIndex}`)}
         
         <!-- Insertar anuncios cada 3 encuestas -->
         {#if pollIndex === 2}
-          <div class="ad-card">
-            <span class="ad-label">Patrocinado</span>
-            <div class="ad-content">
-              <div class="ad-image ad-image-real">
-                <img src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=200&h=200&fit=crop" alt="Anuncio" />
-              </div>
-              <div class="ad-text">
-                <h4>VoteTok Premium</h4>
-                <p>Accede a encuestas exclusivas y análisis detallados</p>
-                <button class="ad-cta">Probar gratis</button>
-              </div>
-            </div>
-          </div>
+          <AdCard 
+            title="VoteTok Premium"
+            description="Accede a encuestas exclusivas y anÃ¡lisis detallados"
+            ctaText="Probar gratis"
+            imageUrl="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=200&h=200&fit=crop"
+            isSponsored={true}
+          />
         {/if}
 
         <!-- Insertar sección "A quien seguir" después de la 5ta encuesta -->
         {#if pollIndex === 5 && pollIndex < additionalPolls.length - 2 && userSuggestions.length > 0}
-          <div class="suggestions-card">
-            <h4 class="suggestions-title">A quién seguir</h4>
-            <div class="suggestions-scroll">
-              {#each userSuggestions as user, idx}
-                <div class="suggestion-item">
-                  {#if user.avatarUrl}
-                    <img class="suggestion-avatar" src={user.avatarUrl} alt={user.displayName} />
-                  {:else}
-                    <div class="suggestion-avatar" style="background: linear-gradient({135 + idx * 30}deg, hsl({idx * 45}, 70%, 60%), hsl({idx * 45 + 40}, 70%, 50%))">
-                      {user.displayName.charAt(0)}
-                    </div>
-                  {/if}
-                  <div class="suggestion-info">
-                    <span class="suggestion-name">
-                      {user.displayName}
-                      {#if user.verified}
-                        <span class="verified-badge">✓</span>
-                      {/if}
-                    </span>
-                    <span class="suggestion-bio">{user.bio}</span>
-                  </div>
-                  <button class="suggestion-follow">Seguir</button>
-                </div>
-              {/each}
-            </div>
-          </div>
+          <WhoToFollowSection {userSuggestions} />
         {/if}
         
-        <div class="poll-item">
-          <!-- Header de la encuesta -->
-          <div class="poll-header">
-            <div class="header-with-avatar">
-              <div class="header-content">
-                {#if poll.type === 'hashtag'}
-                  <div class="poll-question-wrapper">
-                    <h3 
-                      class="poll-question" 
-                      class:expanded={pollTitleExpanded[poll.id]}
-                      class:truncated={pollTitleTruncated[poll.id] && !pollTitleExpanded[poll.id]}
-                      data-type="hashtag"
-                      bind:this={pollTitleElements[poll.id]}
-                      onmouseenter={() => {
-                        if (!pollTitleExpanded[poll.id] && pollTitleElements[poll.id]) {
-                          pollTitleTruncated[poll.id] = checkTruncation(pollTitleElements[poll.id]);
-                        }
-                      }}
-                      onclick={() => {
-                        if (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id]) {
-                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
-                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
-                        }
-                      }}
-                      onkeydown={(e) => {
-                        if ((e.key === 'Enter' || e.key === ' ') && (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id])) {
-                          e.preventDefault();
-                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
-                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
-                        }
-                      }}
-                      role={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 'button' : undefined}
-                    >
-                      #{poll.question}
-                      {#if pollTitleExpanded[poll.id]}
-                        <span class="collapse-indicator-poll"> [−]</span>
-                      {/if}
-                    </h3>
-                  </div>
-                  <div class="poll-meta">
-                    <span class="poll-type">Hashtag trending • {poll.region}</span>
-                    <span class="poll-time">• {poll.publishedAt ? getRelativeTime(Math.floor((Date.now() - new Date(poll.publishedAt).getTime()) / 60000)) : ''}</span>
-                  </div>
-                {:else if poll.type === 'trending'}
-                  <div class="poll-question-wrapper">
-                    <h3 
-                      class="poll-question" 
-                      class:expanded={pollTitleExpanded[poll.id]}
-                      class:truncated={pollTitleTruncated[poll.id] && !pollTitleExpanded[poll.id]}
-                      bind:this={pollTitleElements[poll.id]}
-                      onmouseenter={() => {
-                        if (!pollTitleExpanded[poll.id] && pollTitleElements[poll.id]) {
-                          pollTitleTruncated[poll.id] = checkTruncation(pollTitleElements[poll.id]);
-                        }
-                      }}
-                      onclick={() => {
-                        if (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id]) {
-                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
-                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
-                        }
-                      }}
-                      onkeydown={(e) => {
-                        if ((e.key === 'Enter' || e.key === ' ') && (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id])) {
-                          e.preventDefault();
-                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
-                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
-                        }
-                      }}
-                      role={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 'button' : undefined}
-                    >
-                      Trending en {poll.region}
-                      {#if pollTitleExpanded[poll.id]}
-                        <span class="collapse-indicator-poll"> [−]</span>
-                      {/if}
-                    </h3>
-                  </div>
-                  <div class="poll-meta">
-                    <span class="poll-type">Encuestas más votadas</span>
-                    <span class="poll-time">• {poll.publishedAt ? getRelativeTime(Math.floor((Date.now() - new Date(poll.publishedAt).getTime()) / 60000)) : ''}</span>
-                  </div>
-                {:else}
-                  <div class="poll-question-wrapper">
-                    <h3 
-                      class="poll-question" 
-                      class:expanded={pollTitleExpanded[poll.id]}
-                      class:truncated={pollTitleTruncated[poll.id] && !pollTitleExpanded[poll.id]}
-                      bind:this={pollTitleElements[poll.id]}
-                      onmouseenter={() => {
-                        if (!pollTitleExpanded[poll.id] && pollTitleElements[poll.id]) {
-                          pollTitleTruncated[poll.id] = checkTruncation(pollTitleElements[poll.id]);
-                        }
-                      }}
-                      onclick={() => {
-                        if (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id]) {
-                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
-                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
-                        }
-                      }}
-                      onkeydown={(e) => {
-                        if ((e.key === 'Enter' || e.key === ' ') && (pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id])) {
-                          e.preventDefault();
-                          pollTitleExpanded[poll.id] = !pollTitleExpanded[poll.id];
-                          if (pollTitleExpanded[poll.id]) pollTitleTruncated[poll.id] = false;
-                        }
-                      }}
-                      role={pollTitleTruncated[poll.id] || pollTitleExpanded[poll.id] ? 'button' : undefined}
-                    >
-                      {poll.question}
-                      {#if pollTitleExpanded[poll.id]}
-                        <span class="collapse-indicator-poll"> [−]</span>
-                      {/if}
-                    </h3>
-                  </div>
-                  <div class="poll-meta">
-                    <span class="poll-type">Encuesta • {poll.region}</span>
-                    <span class="poll-time">• {poll.publishedAt ? getRelativeTime(Math.floor((Date.now() - new Date(poll.publishedAt).getTime()) / 60000)) : ''}</span>
-                  </div>
-                {/if}
-              </div>
-              <div class="header-avatar header-avatar-real">
-                {#if poll.creator?.avatarUrl}
-                  <img src={poll.creator.avatarUrl} alt={poll.creator.name} style="border: 3px solid rgba(156, 163, 175, 0.5);" />
-                {:else if poll.creator?.name}
-                  <div class="avatar-placeholder" style="background: linear-gradient(135deg, hsl({pollIndex * 45}, 70%, 60%), hsl({pollIndex * 45 + 40}, 70%, 50%)); border: 3px solid rgba(156, 163, 175, 0.5);">
-                    {poll.creator.name.charAt(0)}
-                  </div>
-                {:else}
-                  <img src={DEFAULT_AVATAR} alt="Avatar" style="border: 3px solid rgba(156, 163, 175, 0.5);" />
-                {/if}
-              </div>
-            </div>
-          </div>
-          
-          <!-- Grid de opciones de votación -->
-          {#if poll && poll.options && poll.options.length > 0}
-            {@const sortedPollOptions = getNormalizedOptions(poll).sort((a, b) => b.pct - a.pct)}
-            {@const shouldPaginatePoll = sortedPollOptions.length > OPTIONS_PER_PAGE}
-            {@const currentPage = currentPageByPoll[poll.id] || 0}
-            {@const paginatedPoll = shouldPaginatePoll 
-              ? getPaginatedOptions(sortedPollOptions, currentPage)
-              : { items: sortedPollOptions, totalPages: 1, hasNext: false, hasPrev: false }}
-            {@const isChartView = currentPage === -1}
-            {@const isSingleOptionPoll = sortedPollOptions.length === 1}
-            <div class="vote-cards-grid accordion fullwidth {activeAccordionByPoll[poll.id] != null ? 'open' : ''} {isSingleOptionPoll || isChartView ? 'compact-one' : ''}"
-               style="--items: {isChartView ? 1 : paginatedPoll.items.length}"
-               role="group" aria-label={'Opciones de ' + poll.region}
-               bind:this={pollGridRefs[poll.id]}
-               onpointerdown={(e) => handleDragStart(e, poll.id)}
-               ontouchstart={(e) => handleDragStart(e, poll.id)}>
-              {#if isChartView}
-                <!-- Vista de gráfico combinado -->
-                <button 
-                  class="vote-card" 
-                  style="--card-color: {paginatedPoll.items[0]?.color};" 
-                  onclick={() => exitChartView(poll.id)}
-                  type="button"
-                >
-                  <!-- Header con avatar y título -->
-                  <div class="card-header">
-                    <h2 class="question-title">Gráfico Combinado</h2>
-                    <img class="creator-avatar" src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
-                  </div>
-
-                  <!-- Contenido principal: gráfico combinado -->
-                  <div class="card-content">
-                    <div class="vote-chart-container">
-                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-                      <svg 
-                        class="vote-chart" 
-                        viewBox="0 0 300 150" 
-                        preserveAspectRatio="none"
-                        role="application"
-                        aria-label="Gráfico de tendencia de votos interactivo"
-                        tabindex="0"
-                        onmousedown={(e) => handleChartBrushStart(e, e.currentTarget)}
-                        onmousemove={(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}
-                        onmouseup={handleChartBrushEnd}
-                        onmouseleave={() => { handleChartBrushEnd(); handleChartMouseLeave(); }}
-                        ontouchstart={(e) => handleChartBrushStart(e, e.currentTarget)}
-                        ontouchmove={(e) => handleChartBrushMove(e, e.currentTarget)}
-                        ontouchend={handleChartBrushEnd}
-                        ontouchcancel={handleChartBrushEnd}
-                      >
-                        <!-- Renderizar línea para cada opción -->
-                        {#each sortedPollOptions as opt}
-                          {@const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct)}
-                          <path
-                            d="{createChartPath(optData, 300, 150)}"
-                            fill="none"
-                            stroke="{opt.color}"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            opacity="{isBrushing ? 0.3 : 0.8}"
-                          />
-                        {/each}
-                        
-                        <!-- Líneas activas cuando está en brush -->
-                        {#if isBrushing && chartBrushCurrent !== null}
-                          <defs>
-                            <clipPath id="activeClip-combined-{poll.id}">
-                              <rect x="0" y="0" width="{chartBrushCurrent}" height="150" />
-                            </clipPath>
-                          </defs>
-                          {#each sortedPollOptions as opt}
-                            {@const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct)}
-                            <path
-                              d="{createChartPath(optData, 300, 150)}"
-                              fill="none"
-                              stroke="{opt.color}"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              clip-path="url(#activeClip-combined-{poll.id})"
-                            />
-                          {/each}
-                        {/if}
-                        
-                        <!-- Línea vertical de hover -->
-                        {#if chartHoverData}
-                          <line
-                            x1="{chartHoverData.x}"
-                            y1="0"
-                            x2="{chartHoverData.x}"
-                            y2="150"
-                            stroke="white"
-                            stroke-width="1"
-                            opacity="0.5"
-                            stroke-dasharray="4 4"
-                          />
-                        {/if}
-                      </svg>
-                      
-                      <!-- Tooltip interactivo -->
-                      {#if chartHoverData}
-                        {@const allVotes = sortedPollOptions.map(opt => {
-                          const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct);
-                          const dataIndex = Math.round(((chartHoverData?.x ?? 0) / 300) * (optData.length - 1));
-                          return optData[dataIndex]?.votes || 0;
-                        }).reduce((sum, votes) => sum + votes, 0)}
-                        <div class="chart-tooltip">
-                          <div class="tooltip-header">
-                            <div class="tooltip-date">{formatChartDate(chartHoverData?.date ?? new Date(), selectedTimeRange)}</div>
-                            <div class="tooltip-total">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
-                                <path d="M9 11l3 3L22 4"></path>
-                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                              </svg>
-                              {formatNumber(allVotes)}
-                            </div>
-                          </div>
-                          {#each sortedPollOptions as opt}
-                            {@const optData = generateHistoricalData(timeRanges.find(r => r.id === selectedTimeRange)?.days || 30, opt.pct)}
-                            {@const dataIndex = Math.round(((chartHoverData?.x ?? 0) / 300) * (optData.length - 1))}
-                            {@const dataPoint = optData[dataIndex]}
-                            {#if dataPoint}
-                              <div class="tooltip-row">
-                                <div class="tooltip-option-name" style="color: {opt.color}">{opt.key}</div>
-                                <div class="tooltip-value">
-                                  {formatNumber(dataPoint.votes)}
-                                </div>
-                              </div>
-                            {/if}
-                          {/each}
-                        </div>
-                      {/if}
-                      
-                      <!-- Botones de selección de rango temporal abajo -->
-                      <div class="time-range-selector time-range-bottom">
-                        {#each timeRanges as range}
-                          <div
-                            class="time-range-btn"
-                            class:active={selectedTimeRange === range.id}
-                            onclick={(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}
-                            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); selectedTimeRange = range.id; }}}
-                            role="button"
-                            tabindex="0"
-                          >
-                            {range.label}
-                          </div>
-                        {/each}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              {:else}
-             
-              {#each paginatedPoll.items as option, index (option.key)}
-              <button 
-                class="vote-card {activeAccordionByPoll[poll.id] === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionByPoll[poll.id] !== index) ? 'collapsed' : ''}" 
-                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, option.pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, option.pct))}; --flex: {Math.max(0.5, option.pct / 10)};" 
-                onclick={() => {
-                  // Si solo hay 1 opción en total, no hacer nada (solo mostrar gráfico)
-                  if (isSingleOptionPoll) { return; }
-                  // Si hay más de 1 opción, usar lógica de acordeón
-                  if (activeAccordionByPoll[poll.id] !== index) { setActiveForPoll(poll.id, index); return; }
-                  handleVote(option.key, poll.id);
-                }}
-                onfocus={() => !isSingleOptionPoll ? setActiveForPoll(poll.id, index) : null}
-                onkeydown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    if (activeAccordionByPoll[poll.id] !== index) { setActiveForPoll(poll.id, index); return; }
-                    handleVote(option.key, poll.id);
-                  }
-                }}
-                type="button"
-              >
-                <!-- Header con avatar y título (solo si hay más de 1 opción) -->
-                {#if !isSingleOptionPoll}
-                <div class="card-header">
-                  <h2 class="question-title">{option.label}</h2>
-                  <img class="creator-avatar" src={option.avatarUrl || DEFAULT_AVATAR} alt={option.label} loading="lazy" />
-                </div>
-                {/if}
-
-                <!-- Contenido principal -->
-                <div class="card-content" class:card-content-full={isSingleOptionPoll}>
-                  {#if isSingleOptionPoll}
-                    <!-- Gráfico para encuestas de una sola opción -->
-                    <div class="vote-chart-container">
-                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-                      <svg 
-                        class="vote-chart" 
-                        viewBox="0 0 300 150" 
-                        preserveAspectRatio="none"
-                        role="application"
-                        aria-label="Gráfico de tendencia de votos interactivo"
-                        tabindex="0"
-                        onmousedown={(e) => handleChartBrushStart(e, e.currentTarget)}
-                        onmousemove={(e) => isBrushing ? handleChartBrushMove(e, e.currentTarget) : handleChartMouseMove(e, e.currentTarget)}
-                        onmouseup={handleChartBrushEnd}
-                        onmouseleave={() => { handleChartBrushEnd(); handleChartMouseLeave(); }}
-                        ontouchstart={(e) => handleChartBrushStart(e, e.currentTarget)}
-                        ontouchmove={(e) => handleChartBrushMove(e, e.currentTarget)}
-                        ontouchend={handleChartBrushEnd}
-                        ontouchcancel={handleChartBrushEnd}
-                      >
-                        <defs>
-                          <linearGradient id="chartGradient-{poll.id}" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" style="stop-color:{option.color};stop-opacity:0.3" />
-                            <stop offset="100%" style="stop-color:{option.color};stop-opacity:0" />
-                          </linearGradient>
-                        </defs>
-                        <!-- Área bajo la curva -->
-                        <path
-                          d="{createChartPath(historicalData, 300, 150)} L 300,150 L 0,150 Z"
-                          fill="url(#chartGradient-{poll.id})"
-                        />
-                        
-                        <!-- Línea del gráfico completa -->
-                        <path
-                          d="{createChartPath(historicalData, 300, 150)}"
-                          fill="none"
-                          stroke="{option.color}"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          opacity="{isBrushing ? 0.3 : 1}"
-                        />
-                        
-                        <!-- Línea activa (parte izquierda) cuando está en brush -->
-                        {#if isBrushing && chartBrushCurrent !== null}
-                          <defs>
-                            <clipPath id="activeClip-{poll.id}">
-                              <rect x="0" y="0" width="{chartBrushCurrent}" height="150" />
-                            </clipPath>
-                          </defs>
-                          <path
-                            d="{createChartPath(historicalData, 300, 150)}"
-                            fill="none"
-                            stroke="{option.color}"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            clip-path="url(#activeClip-{poll.id})"
-                          />
-                        {/if}
-                        
-                        <!-- Línea vertical de hover -->
-                        {#if chartHoverData}
-                          <line
-                            x1="{chartHoverData.x}"
-                            y1="0"
-                            x2="{chartHoverData.x}"
-                            y2="150"
-                            stroke="white"
-                            stroke-width="1"
-                            opacity="0.5"
-                            stroke-dasharray="4 4"
-                          />
-                          <!-- Punto en la línea -->
-                          <circle
-                            cx="{chartHoverData.x}"
-                            cy="{150 - ((chartHoverData.y - Math.min(...historicalData.map(d => d.y))) / (Math.max(...historicalData.map(d => d.y)) - Math.min(...historicalData.map(d => d.y)) || 1)) * 150}"
-                            r="4"
-                            fill="{option.color}"
-                            stroke="white"
-                            stroke-width="2"
-                          />
-                        {/if}
-                      </svg>
-                      
-                      <!-- Tooltip interactivo -->
-                      {#if chartHoverData}
-                        <div class="chart-tooltip">
-                          <div class="tooltip-row">
-                            <div class="tooltip-date">{formatChartDate(chartHoverData.date, selectedTimeRange)}</div>
-                            <div class="tooltip-value">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
-                                <path d="M9 11l3 3L22 4"></path>
-                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                              </svg>
-                              {formatNumber(chartHoverData.votes)}
-                            </div>
-                          </div>
-                        </div>
-                      {/if}
-                      
-                      <!-- Botones de selección de rango temporal abajo -->
-                      <div class="time-range-selector time-range-bottom">
-                        {#each timeRanges as range}
-                          <div
-                            class="time-range-btn"
-                            class:active={selectedTimeRange === range.id}
-                            onclick={(e) => { e.stopPropagation(); selectedTimeRange = range.id; }}
-                            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); selectedTimeRange = range.id; }}}
-                            role="button"
-                            tabindex="0"
-                          >
-                            {range.label}
-                          </div>
-                        {/each}
-                      </div>
-                    </div>
-                  {:else}
-                    <!-- Porcentaje tradicional para múltiples opciones -->
-                    <div class="percentage-display">
-                      <span
-                        class="percentage-large"
-                        style="font-size: {(activeAccordionByPoll[poll.id] === index && state === 'expanded'
-                          ? fontSizeForPct(option.pct)
-                          : Math.min(fontSizeForPct(option.pct), 21))}px"
-                      >
-                        {Math.round(option.pct)}
-                      </span>
-                    </div>
-                  {/if}
-                  
-                  <!-- Avatares de amigos posicionados absolutamente (solo si hay amigos que votaron) -->
-                  {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
-                    <div class="friend-avatars-absolute">
-                      {#each poll.friendsByOption[option.key].slice(0, 3) as friend, i}
-                        <img 
-                          class="friend-avatar-floating" 
-                          src={friend.avatarUrl || DEFAULT_AVATAR}
-                          alt={friend.name}
-                          loading="lazy"
-                          style="z-index: {10 - i};"
-                        />
-                      {/each}
-                    </div>
-                  {/if}
-                </div>
-              </button>
-              {/each}
-              {/if}
-            </div>
+        <!-- Renderizar encuesta con componente -->
+        <SinglePollSection
+          {poll}
+          {pollIndex}
+          {state}
+          activeAccordionIndex={activeAccordionByPoll[poll.id] ?? null}
+          currentPage={currentPageByPoll[poll.id] || 0}
+          {userVotes}
+          {multipleVotes}
+          {pollTitleExpanded}
+          {pollTitleTruncated}
+          {pollTitleElements}
+          on:optionClick={(e) => handleVote(e.detail.optionKey, e.detail.pollId)}
+          on:setActive={(e) => setActiveForPoll(e.detail.pollId, e.detail.index)}
+          on:confirmMultiple={(e) => confirmMultipleVotes(e.detail.pollId)}
+          on:addOption={(e) => addNewCollaborativeOption(e.detail.pollId)}
+          on:openInGlobe={(e) => openAdditionalPollInGlobe(e.detail.poll)}
+          on:dragStart={(e) => handleDragStart(e.detail.event, e.detail.pollId)}
+          on:pageChange={(e) => {
+            const pollId = e.detail.pollId;
+            const newPage = e.detail.page;
+            currentPageByPoll = { ...currentPageByPoll, [pollId]: newPage };
             
-            <!-- Indicadores de paginación tipo Instagram para additional poll -->
-            {#if shouldPaginatePoll}
-              <div class="pagination-dots {paginatedPoll.totalPages > 25 ? 'many-pages' : ''}">
-                {#each Array(paginatedPoll.totalPages) as _, pageIndex}
-                  <button 
-                    class="pagination-dot {pageIndex === (currentPageByPoll[poll.id] || 0) ? 'active' : ''}"
-                    onclick={() => { 
-                                            const oldPage = currentPageByPoll[poll.id] || 0;
-                      
-                      if (oldPage === pageIndex) {
-                                                return;
-                      }
-                      
-                      // Actualizar página - IMPORTANTE: crear nuevo objeto para reactividad
-                      currentPageByPoll = { ...currentPageByPoll, [poll.id]: pageIndex };
-                      
-                      // Establecer acordeón activo inmediatamente
-                      const sortedOptions = getNormalizedOptions(poll).sort((a, b) => b.pct - a.pct);
-                      const newPageOptions = getPaginatedOptions(sortedOptions, pageIndex);
-                      
-                      // IMPORTANTE: Abrir el acordeón de la primera opción
-                      if (newPageOptions.items.length > 0) {
-                        activeAccordionByPoll[poll.id] = 0;
-                      }
-                      
-                                                                                      }}
-                    type="button"
-                    aria-label="Bloque {pageIndex + 1}"
-                  ></button>
-                {/each}
-              </div>
-            {/if}
-            <!-- Información de la encuesta -->
-            <div class="vote-summary-info">
-              <div class="vote-stats">
-                <button 
-                  class="stat-badge" 
-                  class:active={(currentPageByPoll[poll.id] || 0) === -1}
-                  type="button" 
-                  title={(currentPageByPoll[poll.id] || 0) === -1 ? 'Vista opciones' : 'Vista gráfico'}
-                  onclick={() => { 
-                    if ((currentPageByPoll[poll.id] || 0) === -1) {
-                      exitChartView(poll.id);
-                    } else {
-                      goToChartView(poll.id);
-                    }
-                  }}
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    {#if (currentPageByPoll[poll.id] || 0) === -1}
-                      <rect x="3" y="3" width="7" height="7"/>
-                      <rect x="14" y="3" width="7" height="7"/>
-                      <rect x="3" y="14" width="7" height="7"/>
-                      <rect x="14" y="14" width="7" height="7"/>
-                    {:else}
-                      <line x1="12" y1="20" x2="12" y2="10"></line>
-                      <line x1="18" y1="20" x2="18" y2="4"></line>
-                      <line x1="6" y1="20" x2="6" y2="16"></line>
-                    {/if}
-                  </svg>
-                  <span>{formatNumber(poll.options.length)}</span>
-                </button>
-                <div class="stat-badge">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 11l3 3L22 4"></path>
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                  </svg>
-                  <span>{formatNumber(poll.totalVotes)}</span>
-                </div>
-                <div class="stat-badge">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                  <span>{formatNumber(poll.totalViews)}</span>
-                </div>
-              </div>
-              <div class="vote-actions">
-                <button class="action-badge" type="button" title="Guardar">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                  </svg>
-                  <span>{formatNumber(0)}</span>
-                </button>
-                <button class="action-badge" type="button" title="Republicar">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <path d="M17 1l4 4-4 4"/>
-                    <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-                    <path d="M7 23l-4-4 4-4"/>
-                    <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-                  </svg>
-                  <span>{formatNumber(0)}</span>
-                </button>
-                <button class="action-badge action-share" type="button" title="Compartir">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <circle cx="18" cy="5" r="3"/>
-                    <circle cx="6" cy="12" r="3"/>
-                    <circle cx="18" cy="19" r="3"/>
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                  </svg>
-                  <span>{formatNumber(0)}</span>
-                </button>
-                <button 
-                  class="action-badge action-globe" 
-                  type="button" 
-                  title="Ver en el globo"
-                  aria-label="Ver en el globo"
-                  onclick={() => openAdditionalPollInGlobe(poll)}
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="2" y1="12" x2="22" y2="12"/>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          {/if}
-        </div>
-      {/each}
+            const sortedOptions = getNormalizedOptions(poll).sort((a, b) => b.pct - a.pct);
+            const newPageOptions = getPaginatedOptions(sortedOptions, newPage);
+            
+            if (newPageOptions.items.length > 0) {
+              activeAccordionByPoll[pollId] = 0;
+            }
+          }}
+        />
+      {/each} 
 
-      <!-- Indicador de carga solo cuando está cargando -->
+      <!-- Indicador de carga solo cuando estÃ¡ cargando -->
       {#if isLoadingPolls}
         <div class="loading-more">
           <div class="loading-spinner"></div>
@@ -2881,7 +2720,7 @@
     </div> <!-- Cierre de main-scroll-container -->
   {/if}
   
-  <!-- Mostrar contenido cuando NO está expandido o no hay voteOptions -->
+  <!-- Mostrar contenido cuando NO estÃ¡ expandido o no hay voteOptions -->
   {#if state !== 'expanded'}
     <div 
       class="sheet-content" 
@@ -2968,7 +2807,7 @@
     </div>
   {/if}
   
-  <!-- Botón flotante "volver al inicio" -->
+  <!-- BotÃ³n flotante "volver al inicio" -->
   {#if showScrollToTop && state === 'expanded'}
     <button
       class="scroll-to-top-btn"
@@ -3077,400 +2916,6 @@
   {/if}
 </div>
 
-<style>
-  /* Avatares con bordes grises en encuestas adicionales */
-  .header-avatar-real img,
-  .header-avatar-real .avatar-placeholder {
-    box-sizing: border-box;
-    border-radius: 50%;
-  }
-  
-  /* Bloquear todas las interacciones durante animaciones de cámara */
-  .bottom-sheet.camera-animating {
-    pointer-events: none;
-    user-select: none;
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-  }
-  
-  /* Modal de opciones de encuesta */
-  .poll-options-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 10001;
-    display: flex;
-    align-items: flex-end;
-    animation: fadeIn 0.2s ease-out;
-  }
-  
-  .poll-options-modal {
-    background: #1a1a1a;
-    border-radius: 16px 16px 0 0;
-    width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
-    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    transition: transform 0.1s ease-out;
-  }
-  
-  .modal-drag-handle {
-    width: 40px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
-    margin: 12px auto 8px;
-  }
-  
-  @keyframes slideUp {
-    from {
-      transform: translateY(100%);
-    }
-    to {
-      transform: translateY(0);
-    }
-  }
-  
-  .poll-options-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .poll-options-title h3 {
-    margin: 0 0 4px 0;
-    color: white;
-    font-size: 18px;
-    font-weight: 600;
-  }
-  
-  .poll-options-title p {
-    margin: 0;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
-  }
-  
-  .close-modal-btn {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 24px;
-    cursor: pointer;
-    padding: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .poll-options-list {
-    padding: 8px 0;
-  }
-  
-  .poll-option-item {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background 0.2s;
-    text-align: left;
-  }
-  
-  .poll-option-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  
-  .poll-option-item svg {
-    flex-shrink: 0;
-  }
-  
-  .poll-option-danger {
-    color: #ef4444;
-  }
-  
-  /* Barra de opciones de encuesta profesional */
-  .poll-options-bar-container {
-    background: transparent;
-    padding: 8px 0;
-    width: 100%;
-    animation: slideInFromTop 0.3s ease;
-    position: relative;
-  }
-  
-  @keyframes slideInFromTop {
-    from {
-      opacity: 0;
-      transform: translateY(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  .poll-bar-title {
-    margin-bottom: 8px;
-    padding: 0 12px;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    position: relative;
-  }
-  
-  .poll-bar-title h3 {
-    font-size: 13px;
-    font-weight: 600;
-    color: white;
-    text-align: center;
-    margin: 0;
-    line-height: 1.3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    flex: 1;
-  }
-  
-  .poll-close-btn {
-    background: rgba(255,255,255,0.1);
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: white;
-    font-size: 14px;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
-  }
-  
-  .poll-close-btn:hover {
-    background: rgba(255,255,255,0.2);
-    transform: scale(1.1);
-  }
-  
-  .poll-bar-chart {
-    width: 100%;
-    background: none;
-    border: none;
-    padding: 0 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  .poll-bar-segments {
-    flex: 1;
-    height: 10px;
-    border-radius: 5px;
-    overflow: hidden;
-    display: flex;
-    background: rgba(255,255,255,0.1);
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
-  }
-  
-  .poll-bar-segment {
-    height: 100%;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-  }
-  
-  .poll-bar-chart:hover .poll-bar-segment {
-    opacity: 0.85;
-  }
-  
-  .poll-bar-icon {
-    color: #9ca3af;
-    font-size: 14px;
-    transition: transform 0.3s ease, color 0.2s ease;
-    user-select: none;
-  }
-  
-  .poll-bar-chart:hover .poll-bar-icon {
-    color: #ffffff;
-  }
-  
-  .poll-bar-options-expanded {
-    margin-top: 12px;
-    padding: 0 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    animation: expandDown 0.3s ease;
-    max-height: 300px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    width: 100%;
-    /* CRÍTICO para móvil: permitir scroll vertical */
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-  }
-  
-  @keyframes expandDown {
-    from {
-      opacity: 0;
-      max-height: 0;
-    }
-    to {
-      opacity: 1;
-      max-height: 300px;
-    }
-  }
-  
-  .poll-bar-option-item {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 10px;
-    transition: background 0.2s ease, transform 0.2s ease;
-    width: 100%;
-    border: none;
-    text-align: left;
-    cursor: default;
-  }
-  
-  .poll-bar-option-item.is-trending-poll {
-    cursor: pointer;
-  }
-  
-  .poll-bar-option-item.is-trending-poll:hover {
-    background: rgba(255,255,255,0.15);
-    transform: translateX(2px);
-  }
-  
-  .poll-bar-option-item:hover {
-    background: rgba(255,255,255,0.12);
-  }
-  
-  .poll-bar-option-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-  }
-  
-  .poll-bar-option-hint {
-    margin-left: auto;
-    font-size: 11px;
-    color: rgba(255,255,255,0.6);
-    font-weight: 500;
-  }
-  
-  .poll-bar-option-avatar,
-  .poll-bar-option-avatar-placeholder {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    box-sizing: border-box; /* Para que el borde no agrande el avatar */
-  }
-  
-  .poll-bar-option-avatar-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 700;
-    font-size: 16px;
-    text-transform: uppercase;
-    box-sizing: border-box; /* Para que el borde no agrande el avatar */
-  }
-  
-  .poll-bar-option-label {
-    color: white;
-    font-size: 14px;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-  }
-  
-  .poll-bar-option-stats {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-    min-width: 0;
-    width: 100%;
-  }
-  
-  .poll-bar-option-progress-bg {
-    flex: 1;
-    height: 8px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 4px;
-    overflow: hidden;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
-  }
-  
-  .poll-bar-option-progress-fill {
-    height: 100%;
-    transition: width 0.5s ease;
-    border-radius: 4px;
-    box-shadow: 0 0 10px rgba(255,255,255,0.3);
-  }
-  
-  .poll-bar-option-pct {
-    color: #e5e7eb;
-    font-size: 13px;
-    font-weight: 700;
-    min-width: 50px;
-    text-align: right;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  }
-  
-  /* Mensaje cuando no hay trending */
-  .no-trending-message {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
-    color: rgba(255,255,255,0.7);
-  }
-  
-  .no-trending-message svg {
-    opacity: 0.3;
-    margin-bottom: 20px;
-  }
-  
-  .no-trending-message h3 {
-    font-size: 20px;
-    font-weight: 600;
-    color: white;
-    margin: 0 0 10px 0;
-  }
-  
-  .no-trending-message p {
-    font-size: 14px;
-    color: rgba(255,255,255,0.6);
-    margin: 0;
-    max-width: 300px;
-  }
+<style >
+  @import '$lib/styles/bottom-sheet.css';
 </style>

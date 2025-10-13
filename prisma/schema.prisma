@@ -16,6 +16,8 @@ model User {
   bio          String?
   role         String    @default("user")
   verified     Boolean   @default(false)
+  countryIso3  String?   @map("country_iso3")      // País del usuario
+  subdivisionId String?  @map("subdivision_id")    // Región/estado del usuario
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -26,6 +28,8 @@ model User {
   featuredProfile    FeaturedUser?
   followers          UserFollower[]    @relation("UserFollowers")
   following          UserFollower[]    @relation("UserFollowing")
+  interests          UserInterest[]
+  hashtagFollows     UserHashtagFollow[]
 
   @@map("users")
 }
@@ -196,7 +200,8 @@ model Hashtag {
   usageCount Int      @default(0) @map("usage_count")
   createdAt  DateTime @default(now()) @map("created_at")
 
-  polls PollHashtag[]
+  polls          PollHashtag[]
+  userFollows    UserHashtagFollow[]
 
   @@map("hashtags")
 }
@@ -210,4 +215,108 @@ model PollHashtag {
 
   @@id([pollId, hashtagId])
   @@map("poll_hashtags")
+}
+
+// Nuevas tablas para sistema de recomendaciones "Para ti"
+
+model UserInterest {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  category   String   // Categoría de interés
+  score      Float    @default(1.0) // Score de interés (aumenta con interacciones)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([userId])
+  @@map("user_interests")
+}
+
+model UserHashtagFollow {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  hashtagId Int      @map("hashtag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hashtag Hashtag @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hashtagId])
+  @@index([userId])
+  @@index([hashtagId])
+  @@map("user_hashtag_follows")
+}
+
+// ===============================================
+// TABLAS MAESTRAS GEOGRÁFICAS - 3 NIVELES
+// ===============================================
+
+// NIVEL 0: Países
+model Country {
+  id          Int            @id @default(autoincrement())
+  iso3        String         @unique                      // Código ISO3 (ESP, USA, FRA)
+  iso2        String?                                     // Código ISO2 (ES, US, FR)
+  name        String                                      // Nombre oficial
+  nameLocal   String?        @map("name_local")          // Nombre en idioma local
+  latitude    Float                                       // Latitud del centroide
+  longitude   Float                                       // Longitud del centroide
+  hasLevel1   Boolean        @default(false) @map("has_level1")  // Tiene subdivisiones nivel 1
+  hasLevel2   Boolean        @default(false) @map("has_level2")  // Tiene subdivisiones nivel 2
+  createdAt   DateTime       @default(now()) @map("created_at")
+  
+  subdivisions Subdivision[]
+  
+  @@index([iso3])
+  @@index([latitude, longitude])
+  @@map("countries")
+}
+
+// NIVEL 1, 2, 3: Subdivisiones jerárquicas
+// Nivel 1: Estados/Comunidades Autónomas (ESP.1, USA.CA)
+// Nivel 2: Provincias/Condados (ESP.1.2, USA.CA.001)
+// Nivel 3: Municipios/Cities (ESP.1.2.3)
+model Subdivision {
+  id              Int      @id @default(autoincrement())
+  
+  // Jerarquía
+  countryId       Int      @map("country_id")
+  country         Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  
+  subdivisionId   String   @unique @map("subdivision_id")  // ID jerárquico completo (ESP.1, ESP.1.2, ESP.1.2.3)
+  level           Int                                      // Nivel: 1, 2, 3
+  parentId        Int?     @map("parent_id")              // ID del registro padre en esta tabla
+  parent          Subdivision? @relation("SubdivisionHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Subdivision[] @relation("SubdivisionHierarchy")
+  
+  // Identificación del nivel actual
+  level1Id        String?  @map("level1_id")              // Número ID nivel 1 (ej: "1", "13")
+  level2Id        String?  @map("level2_id")              // Número ID nivel 2 (ej: "2", "28")
+  level3Id        String?  @map("level3_id")              // Número ID nivel 3
+  
+  // Nombres
+  name            String                                   // Nombre principal
+  nameLocal       String?  @map("name_local")             // Nombre local
+  nameVariant     String?  @map("name_variant")           // Nombre variante
+  nameEnglish     String?  @map("name_english")           // Nombre en inglés
+  
+  // Tipo de subdivisión
+  type            String?                                  // Tipo (ej: "Comunidad Autónoma", "State", "Province")
+  typeLocal       String?  @map("type_local")             // Tipo en idioma local
+  
+  // Geolocalización
+  latitude        Float                                    // Latitud del centroide
+  longitude       Float                                    // Longitud del centroide
+  
+  // Metadata
+  createdAt       DateTime @default(now()) @map("created_at")
+  
+  @@index([countryId])
+  @@index([level])
+  @@index([parentId])
+  @@index([subdivisionId])
+  @@index([latitude, longitude])
+  @@index([level, latitude, longitude])
+  @@map("subdivisions")
 }

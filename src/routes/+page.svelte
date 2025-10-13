@@ -4,6 +4,7 @@
 	// Usamos un componente dedicado GlobeGL basado en Globe.gl
 	import GlobeGL from '$lib/GlobeGL.svelte';
 	import NavBottom from '$lib/nav-bottom.svelte';
+	import CreatePollModal from '$lib/CreatePollModal.svelte';
 	import type { Poll } from '$lib/types';
 
 	// topUsers eliminado - usar API
@@ -28,6 +29,18 @@
 	} | null;
 	
 	let selectedPoll = $state<SelectedPoll>(null);
+	let isCreatePollModalOpen = $state(false);
+	
+	function handleOpenCreatePoll() {
+		isCreatePollModalOpen = true;
+	}
+	
+	function handlePollCreated(event: CustomEvent<any>) {
+		const newPoll = event.detail;
+		console.log('Poll created:', newPoll);
+		// Aquí podrías recargar las encuestas o mostrar un mensaje de éxito
+		// TODO: Implementar lógica para mostrar la encuesta recién creada en el globo
+	}
 	
 	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {
 		const state = event.detail.state;
@@ -92,8 +105,14 @@
 
 		<!-- Barra inferior sobre el globo -->
 		<div class="relative ">
-			<NavBottom bind:hidden={hideNav} />
+			<NavBottom bind:hidden={hideNav} on:openCreatePoll={handleOpenCreatePoll} />
 		</div>
+		
+		<!-- Modal para crear encuestas -->
+		<CreatePollModal 
+			bind:isOpen={isCreatePollModalOpen}
+			on:created={handlePollCreated}
+		/>
 	</div>
 
 

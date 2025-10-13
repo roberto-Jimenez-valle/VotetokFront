@@ -50,7 +50,7 @@
 <style>
   .theme-toggle {
     position: fixed;
-    top: 16px;
+    top: 60px;
     right: 16px;
     z-index: 99999;
     background: transparent;

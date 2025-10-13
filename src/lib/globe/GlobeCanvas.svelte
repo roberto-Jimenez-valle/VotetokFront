@@ -18,6 +18,7 @@
   export let activeTag: string | null = null;
   export let onPolyCapColor: (feat: any) => string;
   export let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada (nivel 4)
+  export let centerPolygonId: string | null = null; // ID del polígono centrado para resaltado
 
   // ALTITUDES FIJAS para mejor rendimiento (sin cálculos dinámicos)
   const POLY_ALT = 0.015; // Elevación fija para todos los polígonos
@@ -78,6 +79,7 @@
       
       // Aplicar datos en requestAnimationFrame para no bloquear
       requestAnimationFrame(() => {
+        if (!world) return; // Verificar que world siga disponible
         const filteredData = applyLODFiltering(data);
         world.polygonsData(filteredData);
       });
@@ -135,6 +137,75 @@
     }
   }
 
+  // Detectar polígono más cercano al centro de la pantalla usando el punto de vista
+  export function getCenterPolygon(): any | null {
+    try {
+      if (!world) return null;
+      
+      // Obtener el punto de vista actual (centro de la cámara)
+      const pov = world.pointOfView && world.pointOfView();
+      if (!pov || !pov.lat || !pov.lng) return null;
+      
+      // Obtener todos los datos de polígonos actuales
+      const polygons = (world as any).polygonsData && (world as any).polygonsData();
+      if (!polygons || !Array.isArray(polygons) || polygons.length === 0) return null;
+      
+      // Función para calcular distancia entre dos puntos (lat, lng)
+      const distance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+        const dLat = lat2 - lat1;
+        const dLng = lng2 - lng1;
+        return Math.sqrt(dLat * dLat + dLng * dLng);
+      };
+      
+      // Función para obtener el centroide de un polígono
+      const getCentroid = (feature: any) => {
+        if (!feature || !feature.geometry) return null;
+        
+        const coords = feature.geometry.coordinates;
+        if (!coords || coords.length === 0) return null;
+        
+        let sumLat = 0, sumLng = 0, count = 0;
+        
+        const processCoords = (arr: any[]) => {
+          if (typeof arr[0] === 'number' && arr.length >= 2) {
+            // Es un punto [lng, lat]
+            sumLng += arr[0];
+            sumLat += arr[1];
+            count++;
+          } else if (Array.isArray(arr[0])) {
+            // Es un array de coordenadas
+            arr.forEach(processCoords);
+          }
+        };
+        
+        processCoords(coords);
+        
+        if (count === 0) return null;
+        return { lat: sumLat / count, lng: sumLng / count };
+      };
+      
+      // Encontrar el polígono más cercano al centro de la vista
+      let closestPolygon = null;
+      let minDistance = Infinity;
+      
+      for (const polygon of polygons) {
+        const centroid = getCentroid(polygon);
+        if (!centroid) continue;
+        
+        const dist = distance(pov.lat, pov.lng, centroid.lat, centroid.lng);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestPolygon = polygon;
+        }
+      }
+      
+      return closestPolygon;
+    } catch (error) {
+      console.warn('[GlobeCanvas] Error detectando polígono central:', error);
+      return null;
+    }
+  }
+
   // Sistema de throttle para evitar refreshes excesivos
   let lastRefreshTime = 0;
   const MIN_REFRESH_INTERVAL = 16; // ~60fps máximo
@@ -160,10 +231,14 @@
     try {
       if (!world) return;
       world.polygonStrokeColor((feat: any) => {
-        const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
+        const props = feat?.properties || {};
+        const cityId = props._cityId || props.ID_2;
+        
+        // Solo resaltar ciudad seleccionada (nivel 4)
         if (selectedCityId && cityId === selectedCityId) {
           return '#ffffff';
         }
+        
         return 'rgba(5,5,5,0.5)'; // Seminegro con opacidad 50%
       });
     } catch {}
@@ -175,12 +250,22 @@
       if (!world) return;
       
       world.polygonAltitude((feat: any) => {
-        const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
+        const props = feat?.properties || {};
+        const cityId = props._cityId || props.ID_2;
+        const id1 = String(props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || '');
+        const id2 = String(props.ID_2 || props.id_2 || props.GID_2 || props.gid_2 || '');
+        
         const isSelected = selectedCityId && cityId === selectedCityId;
+        const isCentered = centerPolygonId && (id1 === centerPolygonId || id2 === centerPolygonId);
         
         // NIVEL 4: Si hay ciudad seleccionada, elevación muy baja
         if (selectedCityId) {
           return isSelected ? POLY_ALT_SELECTED : POLY_ALT_CITY_MODE;
+        }
+        
+        // Polígono centrado: elevación mayor para destacar
+        if (isCentered) {
+          return 0.025; // Más elevado que el normal
         }
         
         // Variación aleatoria muy sutil: ±0.0025
@@ -244,33 +329,254 @@
         world.htmlTransitionDuration && world.htmlTransitionDuration(200); // Smooth transitions for LOD
         
         world.htmlElement && world.htmlElement((d: any) => {
-          const el = document.createElement('div');
-          el.className = 'subdivision-label-fixed';
-          el.textContent = d.name || d.text;
-          el.style.color = d.color || '#ffffff';
+          // Contenedor principal - posicionado exactamente en lat/lng (centroide)
+          const wrapper = document.createElement('div');
+          wrapper.style.position = 'relative';
+          wrapper.style.pointerEvents = 'none'; // El wrapper no captura eventos
           
-          // Use size from label data if available, otherwise default
-          const fontSize = d.size || 11;
-          el.style.fontSize = `${fontSize}px`;
-          
-          el.style.fontWeight = 'bold';
-          el.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
-          el.style.textAlign = 'center';
-          el.style.whiteSpace = 'nowrap';
-          el.style.transform = 'translate(-50%, -50%)';
-          el.style.fontFamily = 'Arial, sans-serif';
-          el.style.userSelect = 'none';
-          
-          // Apply opacity if specified
-          if (d.opacity !== undefined) {
-            el.style.opacity = String(d.opacity);
+          // Si es etiqueta centrada, agregar línea desde el centroide con diseño profesional
+          if (d._isCenterLabel) {
+            // Calcular mejor dirección basada en la posición del polígono en pantalla
+            const pov = world.pointOfView();
+            const centerLat = d.lat || 0;
+            const centerLng = d.lng || 0;
+            
+            // Calcular posición relativa al centro de la vista
+            const latDiff = centerLat - (pov.lat || 0);
+            const lngDiff = centerLng - (pov.lng || 0);
+            
+            // Determinar dirección inteligente: priorizar lados con más espacio
+            let direction = 'bottom'; // default
+            
+            // Calcular distancias normalizadas (0-1)
+            const normalizedLat = (latDiff + 90) / 180; // 0 = sur, 1 = norte
+            const normalizedLng = ((lngDiff + 180) % 360) / 360; // 0-1
+            
+            // Calcular espacios disponibles (más espacio = valor más alto)
+            const spaceBottom = normalizedLat; // Más espacio abajo si está arriba (valor alto)
+            const spaceTop = 1 - normalizedLat; // Más espacio arriba si está abajo
+            const spaceRight = normalizedLng < 0.5 ? 0.5 + normalizedLng : normalizedLng - 0.5;
+            const spaceLeft = normalizedLng > 0.5 ? 1.5 - normalizedLng : 0.5 - normalizedLng;
+            
+            // Elegir dirección con más espacio
+            const spaces = [
+              { dir: 'bottom', space: spaceBottom },
+              { dir: 'top', space: spaceTop },
+              { dir: 'right', space: spaceRight },
+              { dir: 'left', space: spaceLeft }
+            ];
+            
+            // Ordenar por espacio disponible y elegir el mayor
+            spaces.sort((a, b) => b.space - a.space);
+            direction = spaces[0].dir;
+            
+            // Punto en el centroide del polígono - más pequeño
+            const centerDot = document.createElement('div');
+            centerDot.style.position = 'absolute';
+            centerDot.style.left = '0';
+            centerDot.style.top = '0';
+            centerDot.style.transform = 'translate(-50%, -50%)';
+            centerDot.style.width = '6px';
+            centerDot.style.height = '6px';
+            centerDot.style.borderRadius = '50%';
+            centerDot.style.backgroundColor = '#ffffff';
+            centerDot.style.border = '1.5px solid rgba(255, 255, 255, 0.3)';
+            centerDot.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.7), 0 0 15px rgba(255, 255, 255, 0.3)';
+            centerDot.style.animation = 'fadeIn 0.4s ease-out';
+            centerDot.style.zIndex = '10';
+            centerDot.style.pointerEvents = 'none'; // NO capturar eventos - dejar pasar al label
+            
+            // Línea que sale del centroide en la dirección calculada
+            const connectorLine = document.createElement('div');
+            connectorLine.style.position = 'absolute';
+            connectorLine.style.boxShadow = '0 0 4px rgba(255, 255, 255, 0.4)';
+            connectorLine.style.animation = 'fadeIn 0.5s ease-out 0.2s backwards';
+            connectorLine.style.pointerEvents = 'none'; // NO capturar eventos - dejar pasar al label
+            
+            // Configurar según dirección (líneas más cortas)
+            if (direction === 'bottom') {
+              connectorLine.style.left = '0';
+              connectorLine.style.top = '0';
+              connectorLine.style.transform = 'translateX(-50%)';
+              connectorLine.style.width = '1.5px';
+              connectorLine.style.height = '40px';
+              connectorLine.style.background = 'linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.2))';
+            } else if (direction === 'top') {
+              connectorLine.style.left = '0';
+              connectorLine.style.bottom = '0';
+              connectorLine.style.transform = 'translateX(-50%)';
+              connectorLine.style.width = '1.5px';
+              connectorLine.style.height = '40px';
+              connectorLine.style.background = 'linear-gradient(to top, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.2))';
+            } else if (direction === 'right') {
+              connectorLine.style.left = '0';
+              connectorLine.style.top = '0';
+              connectorLine.style.transform = 'translateY(-50%)';
+              connectorLine.style.width = '50px';
+              connectorLine.style.height = '1.5px';
+              connectorLine.style.background = 'linear-gradient(to right, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.2))';
+            } else { // left
+              connectorLine.style.right = '0';
+              connectorLine.style.top = '0';
+              connectorLine.style.transform = 'translateY(-50%)';
+              connectorLine.style.width = '50px';
+              connectorLine.style.height = '1.5px';
+              connectorLine.style.background = 'linear-gradient(to left, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.2))';
+            }
+            
+            // Almacenar dirección para uso en el label
+            d._labelDirection = direction;
+            
+            wrapper.appendChild(centerDot);
+            wrapper.appendChild(connectorLine);
           }
           
-          // Las etiquetas NUNCA bloquean eventos - siempre pointer-events: none
-          // La selección se hace por sistema de proximidad en on:globeClick
-          el.style.pointerEvents = 'none';
+          // Contenedor de la etiqueta
+          const label = document.createElement('div');
+          const labelText = d.name || d.text;
           
-          return el;
+          // Estilo diferenciado para etiquetas centradas
+          if (d._isCenterLabel) {
+            // Separar palabras con <br> para texto multilínea, agrupando palabras cortas
+            const words = labelText.split(' ');
+            if (words.length > 1) {
+              // Agrupar palabras cortas (2-3 letras) con la siguiente palabra
+              const lines = [];
+              let currentLine = '';
+              
+              for (let i = 0; i < words.length; i++) {
+                const word = words[i];
+                const nextWord = words[i + 1];
+                
+                if (currentLine) {
+                  currentLine += ' ' + word;
+                } else {
+                  currentLine = word;
+                }
+                
+                // Si la palabra actual es corta (<=3 letras) y hay una siguiente, continuar
+                if (word.length <= 3 && nextWord) {
+                  continue;
+                }
+                
+                // Si no, guardar la línea actual y resetear
+                lines.push(currentLine);
+                currentLine = '';
+              }
+              
+              // Si queda algo en currentLine, agregarlo
+              if (currentLine) {
+                lines.push(currentLine);
+              }
+              
+              label.innerHTML = lines.join('<br>');
+            } else {
+              label.textContent = labelText;
+            }
+            label.style.whiteSpace = 'normal';
+            label.style.userSelect = 'none';
+            label.style.lineHeight = '1.3';
+            label.style.maxWidth = '120px'; // Limitar ancho máximo
+            
+            // Estilo más compacto con fondo tipo badge
+            label.style.position = 'absolute';
+            label.style.color = '#ffffff';
+            label.style.fontSize = `${d.size || 9}px`; // Aún más pequeño
+            label.style.fontWeight = '500';
+            label.style.letterSpacing = '0.8px';
+            label.style.textTransform = 'uppercase';
+            label.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+            label.style.animation = 'fadeIn 0.6s ease-out 0.5s backwards';
+            
+            // Fondo profesional tipo badge más compacto
+            label.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.6) 100%)';
+            label.style.padding = '4px 8px'; // Más compacto
+            label.style.borderRadius = '4px';
+            label.style.backdropFilter = 'blur(10px)';
+            label.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+            label.style.boxShadow = '0 3px 15px rgba(0,0,0,0.6), 0 0 1px rgba(255,255,255,0.2)';
+            label.style.textShadow = '0 1px 2px rgba(0,0,0,0.8)';
+            
+            // HACER LA ETIQUETA CLICABLE
+            label.style.pointerEvents = 'auto';
+            label.style.cursor = 'pointer';
+            label.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease';
+            
+            // Efecto hover
+            label.onmouseenter = () => {
+              label.style.transform = label.style.transform.includes('translateX') 
+                ? label.style.transform.replace(/scale\([^)]*\)/g, '').trim() + ' scale(1.05)'
+                : label.style.transform.replace(/scale\([^)]*\)/g, '').trim() + ' scale(1.05)';
+              label.style.boxShadow = '0 4px 20px rgba(255,255,255,0.3), 0 0 2px rgba(255,255,255,0.4)';
+            };
+            label.onmouseleave = () => {
+              label.style.transform = label.style.transform.replace(/scale\([^)]*\)/g, '').trim();
+              label.style.boxShadow = '0 3px 15px rgba(0,0,0,0.6), 0 0 1px rgba(255,255,255,0.2)';
+            };
+            
+            // Evento de click en la etiqueta
+            label.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.stopImmediatePropagation();
+              console.log('[LabelElement] Click capturado en etiqueta HTML', d.name);
+              if (d.feature) {
+                // Disparar evento de click con el feature asociado
+                dispatch('labelClick', { feat: d.feature, event: e });
+              } else {
+                console.warn('[LabelElement] Etiqueta sin feature:', d);
+              }
+            };
+            
+            // También capturar mousedown para evitar que otros handlers lo intercepten
+            label.onmousedown = (e) => {
+              e.stopPropagation();
+            };
+            
+            label.onmouseup = (e) => {
+              e.stopPropagation();
+            };
+            
+            // Posicionar según dirección calculada (ajustado a líneas más cortas)
+            const direction = d._labelDirection || 'bottom';
+            if (direction === 'bottom') {
+              label.style.left = '0';
+              label.style.top = '45px'; // Ajustado para línea de 40px
+              label.style.transform = 'translateX(-50%)';
+              label.style.textAlign = 'center';
+            } else if (direction === 'top') {
+              label.style.left = '0';
+              label.style.bottom = '45px'; // Ajustado para línea de 40px
+              label.style.transform = 'translateX(-50%)';
+              label.style.textAlign = 'center';
+            } else if (direction === 'right') {
+              label.style.left = '55px'; // Ajustado para línea de 50px
+              label.style.top = '0';
+              label.style.transform = 'translateY(-50%)';
+              label.style.textAlign = 'left';
+            } else { // left
+              label.style.right = '55px'; // Ajustado para línea de 50px
+              label.style.top = '0';
+              label.style.transform = 'translateY(-50%)';
+              label.style.textAlign = 'right';
+            }
+          } else {
+            // Estilo normal para otras etiquetas
+            label.textContent = labelText;
+            label.style.whiteSpace = 'nowrap';
+            label.style.userSelect = 'none';
+            label.style.textAlign = 'left';
+            label.style.color = d.color || '#ffffff';
+            label.style.fontSize = `${d.size || 9}px`; // Más pequeño también
+            label.style.fontWeight = 'bold';
+            label.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+            if (d.opacity !== undefined) {
+              label.style.opacity = String(d.opacity);
+            }
+          }
+          
+          wrapper.appendChild(label);
+          return wrapper;
         });
         
               } else {
@@ -683,3 +989,29 @@
 </script>
 
 <div bind:this={rootEl} class="globe-wrap"></div>
+
+<style>
+  :global {
+    @keyframes fadeInRight {
+      from {
+        opacity: 0;
+        transform: scaleX(0);
+        transform-origin: left;
+      }
+      to {
+        opacity: 1;
+        transform: scaleX(1);
+        transform-origin: left;
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+  }
+</style>

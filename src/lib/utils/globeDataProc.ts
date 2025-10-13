@@ -25,7 +25,7 @@ import { getDominantKey as getDominantKeyUtil } from '$lib/utils/globeHelpers';
  * Extrae el identificador de un feature (puede ser ISO_A3, ID_1, ID_2, etc.)
  * IMPORTANTE: Buscar del más específico al más general
  */
-function getFeatureId(f: any): string {
+export function getFeatureId(f: any): string {
   const p = f?.properties ?? {};
   
   // Nivel 3 (sub-subdivisiones): ID_2, GID_2, etc. - MÁS ESPECÍFICO

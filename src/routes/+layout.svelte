@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import PaletteRandomizer from '$lib/components/PaletteRandomizer.svelte';
+	import { setCurrentUser } from '$lib/stores';
 	
 	let { children } = $props();
 	
@@ -31,6 +32,20 @@
 	}
 	
 	onMount(() => {
+		// 🎯 Configurar usuario de prueba para sistema de recomendaciones
+		setCurrentUser({
+			id: 15,
+			username: 'testuser',
+			displayName: 'Usuario de Prueba',
+			email: 'testuser@votetok.com',
+			avatarUrl: 'https://i.pravatar.cc/150?u=testuser',
+			verified: false,
+			countryIso3: 'ESP',
+			subdivisionId: '1',
+			role: 'user'
+		});
+		console.log('👤 Usuario de prueba configurado: testuser (ID: 15)');
+		
 		// Activar modo dark por defecto
 		document.documentElement.classList.add('dark');
 		

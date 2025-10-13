@@ -13,8 +13,11 @@
 	$effect(() => {
 			});
 
+	import { createEventDispatcher } from 'svelte';
+	const dispatch = createEventDispatcher();
+
 	function irANuevaEncuesta() {
-		goto('/poll/new');
+		dispatch('openCreatePoll');
 	} 
 </script>
 

@@ -23,7 +23,20 @@ export const GET: RequestHandler = async ({ url }) => {
           gte: dateLimit,
         },
       },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        description: true,
+        category: true,
+        imageUrl: true,
+        type: true,
+        status: true,
+        totalVotes: true,
+        totalViews: true,
+        createdAt: true,
+        updatedAt: true,
+        closedAt: true,  // ← AGREGAR closedAt
         user: {
           select: {
             id: true,
@@ -34,6 +47,15 @@ export const GET: RequestHandler = async ({ url }) => {
           },
         },
         options: {
+          select: {
+            id: true,
+            optionKey: true,
+            optionLabel: true,
+            color: true,
+            avatarUrl: true,
+            voteCount: true,
+            displayOrder: true,
+          },
           orderBy: { displayOrder: 'asc' },
         },
         _count: {

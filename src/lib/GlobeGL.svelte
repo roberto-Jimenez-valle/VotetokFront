@@ -78,6 +78,7 @@
   import TopTabs from './TopTabs.svelte';
   import './GlobeGL.css';
   import { worldMap$, worldData$, loadGlobeData } from './stores/globeData';
+  import { currentUser } from './stores';
   import { get as getStore } from 'svelte/store';
   import { clamp, hexToRgba } from './utils/colors';
   import { centroidOf, isoOf, pointInFeature } from './utils/geo';
@@ -88,7 +89,7 @@
   import GlobeCanvas from './globe/GlobeCanvas.svelte';
   import { nameOf as nameOfUtil, getDominantKey as getDominantKeyUtil, opacityForIso as opacityForIsoUtil, alphaForTag as alphaForTagUtil } from './utils/globeHelpers';
   import { BottomSheetController, type SheetState } from './globe/bottomSheet';
-  import { computeGlobeViewModel } from './utils/globeDataProc';
+  import { computeGlobeViewModel, getFeatureId } from './utils/globeDataProc';
   import themeConfig from './config/theme.json';
 
   // Permitir modo "data-in": el padre pasa datos directamente y GlobeGL se auto-configura
@@ -147,6 +148,14 @@
   $: filteredDropdownOptions = dropdownOptions.filter(option => 
     option.name.toLowerCase().includes(dropdownSearchQuery.toLowerCase())
   );
+  
+  // Tab activo para "Para ti" vs "Tendencias"
+  // Por defecto "Tendencias" hasta que Prisma se regenere correctamente
+  let activeTopTab: 'Para ti' | 'Tendencias' | 'Live' = 'Tendencias';
+  
+  // Obtener usuario actual del store
+  let userData: typeof $currentUser = null;
+  $: userData = $currentUser;
   // Visibilidad de polígonos (capa coroplética)
   let polygonsVisible = true;
   // Polígonos del dataset global (choropleth): se preservan siempre
@@ -632,250 +641,90 @@
     return feats;
   }
 
-  // Generar etiquetas tanto para países (NAME_1) como subdivisiones (NAME_2)
+  // Generar etiquetas SOLO para polígonos con datos activos (votos)
+  // SIMPLIFICADO: Sin filtros complejos, solo mostrar lo que tiene votos
   function generateSubdivisionLabels(polygons: any[], currentAltitude?: number): SubdivisionLabel[] {
     const labels: SubdivisionLabel[] = [];
     const currentLevel = navigationManager?.getCurrentLevel() || 'world';
-    const debug = currentLevel === 'subdivision'; // Debug solo en nivel subdivisión
-        
-    // Calcular áreas de polígonos para priorización
+    
+    // Calcular áreas para determinar tamaño de etiqueta
     const polygonsWithArea = polygons.map(poly => ({
       poly,
       area: calculatePolygonArea(poly)
     }));
     
-    // Ordenar por área (más grandes primero)
+    // Ordenar por área (más grandes primero) para mejor visualización
     polygonsWithArea.sort((a, b) => b.area - a.area);
     
-    // Determinar cuántas etiquetas mostrar según la altitud
-    // SISTEMA LOD: Cuanto MÁS CERCA (menor altitud), MÁS etiquetas
-    let maxLabels = polygons.length;
-    let minAreaThreshold = 0; // Área mínima para mostrar etiqueta
-    
-    if (currentAltitude !== undefined) {
-      if (currentAltitude > 0.5) {
-        // Zoom muy alejado: solo las 10 más grandes
-        maxLabels = Math.min(10, polygons.length);
-        minAreaThreshold = 0.1;
-      } else if (currentAltitude > 0.3) {
-        // Zoom medio: 50% de las etiquetas
-        maxLabels = Math.ceil(polygons.length * 0.5);
-        minAreaThreshold = 0.05;
-      } else if (currentAltitude > 0.15) {
-        // Zoom cercano: 75% de las etiquetas
-        maxLabels = Math.ceil(polygons.length * 0.75);
-        minAreaThreshold = 0.02;
-      } else if (currentAltitude > 0.08) {
-        // Zoom muy cercano (0.08-0.15): 85% de las etiquetas
-        maxLabels = Math.ceil(polygons.length * 0.85);
-        minAreaThreshold = 0.01;
-      } else {
-        // Zoom EXTREMO (< 0.08): 90% de las etiquetas (no 100% para evitar saturación)
-        maxLabels = Math.ceil(polygons.length * 0.9);
-        minAreaThreshold = 0.005; // Filtro mínimo de área
-      }
-    }
-    
-        
-    // Sistema de detección de colisiones para evitar solapamiento
-    // DESACTIVADO: Ahora usamos removeOverlappingLabels después, que es más inteligente
-    const usedPositions: Array<{lat: number, lng: number}> = [];
-    let minDistance = 0; // Sin filtro interno, se aplica después con removeOverlappingLabels
-    
-    let skippedByArea = 0;
-    let skippedByName = 0;
-    
-    // CRÍTICO: Separar polígonos con datos de los sin datos
-    // Los polígonos con datos SIEMPRE se procesan, sin límite de maxLabels
-    const polygonsWithData: Array<{poly: any, area: number}> = [];
-    const polygonsWithoutData: Array<{poly: any, area: number}> = [];
-    
-    for (const item of polygonsWithArea) {
-      // Detectar el nivel correcto: nivel 2 usa ID_1, nivel 3 usa ID_2
+    for (const { poly, area } of polygonsWithArea) {
+      // Determinar polyId según el nivel de navegación
       let polyId = '';
-      if (currentLevel === 'subdivision') {
-        // Nivel 3: usar ID_2
-        polyId = item.poly.properties?.ID_2 || item.poly.properties?.id_2 || '';
-      } else {
-        // Nivel 2: usar ID_1
-        polyId = item.poly.properties?.ID_1 || item.poly.properties?.id_1 || '';
+      if (currentLevel === 'world') {
+        polyId = poly.properties.ISO_A3 || poly.properties.iso_a3 || 
+                 poly.properties.GID_0 || poly.properties.gid_0 || '';
+      } else if (currentLevel === 'country') {
+        const gid1 = poly.properties.GID_1 || poly.properties.gid_1 || '';
+        const id1 = poly.properties.ID_1 || poly.properties.id_1 || '';
+        polyId = gid1 ? gid1.split('_')[0] : String(id1);
+      } else if (currentLevel === 'subdivision') {
+        const gid2 = poly.properties.GID_2 || poly.properties.gid_2 || '';
+        const id2 = poly.properties.ID_2 || poly.properties.id_2 || '';
+        polyId = gid2 ? gid2.split('_')[0] : String(id2);
       }
       
+      // SOLO procesar polígonos con datos activos (votos)
       const hasData = Boolean(polyId && answersData?.[polyId]);
+      if (!hasData) continue;
       
-      if (hasData) {
-        polygonsWithData.push(item);
-      } else {
-        polygonsWithoutData.push(item);
-      }
-    }
-    
-    // Primero procesar TODOS los polígonos con datos (sin límite)
-    // Luego procesar los sin datos hasta completar maxLabels
-    const polygonsToProcess = [
-      ...polygonsWithData,
-      ...polygonsWithoutData.slice(0, Math.max(0, maxLabels - polygonsWithData.length))
-    ];
-    
-    for (let i = 0; i < polygonsToProcess.length; i++) {
-      const { poly, area } = polygonsToProcess[i];
-      
-      // Filtrar polígonos muy pequeños en zoom cercano
-      // PERO: Si el polígono tiene datos, NUNCA filtrarlo por área
-      // Detectar el nivel correcto: nivel 2 usa ID_1, nivel 3 usa ID_2
-      let polyId = '';
-      if (currentLevel === 'subdivision') {
-        polyId = poly.properties?.ID_2 || poly.properties?.id_2 || '';
-      } else {
-        polyId = poly.properties?.ID_1 || poly.properties?.id_1 || '';
-      }
-      const hasDataActive = Boolean(polyId && answersData?.[polyId]);
-      
-      if (area < minAreaThreshold && !hasDataActive) {
-        skippedByArea++;
-        continue;
-      }
-      
+      // Obtener nombre del polígono
       let name = null;
       let labelType = '';
       
-      // Prioridad: nivel 2 (NAME_2), luego subdivisiones (hijos), luego países (padres)
       if (poly?.properties?._isLevel2) {
         name = poly.properties.NAME_2 || poly.properties.name_2 || 
-               poly.properties.NAME || poly.properties.name ||
-               poly.properties.VARNAME_2 || poly.properties.varname_2 ||
-               poly.properties.NL_NAME_2 || poly.properties.nl_name_2;
+               poly.properties.NAME || poly.properties.name;
         labelType = 'level2';
       } else if (poly?.properties?._isChild && poly?.properties?._subdivisionName) {
         name = poly.properties._subdivisionName;
         labelType = 'subdivision';
       } else if (poly?.properties?._isParent) {
         name = poly.properties.NAME_1 || poly.properties.name_1 || 
-               poly.properties.NAME || poly.properties.name ||
-               poly.properties.VARNAME_1 || poly.properties.varname_1 ||
-               poly.properties.NL_NAME_1 || poly.properties.nl_name_1;
+               poly.properties.NAME || poly.properties.name;
         labelType = 'country';
       } else {
         name = poly.properties?.NAME_1 || poly.properties?.name_1 || 
                poly.properties?.NAME_2 || poly.properties?.name_2 ||
-               poly.properties?.NAME || poly.properties?.name ||
-               poly.properties?.VARNAME_1 || poly.properties?.varname_1;
+               poly.properties?.NAME || poly.properties?.name;
         labelType = 'fallback';
-      }
-      
-      if (!name) {
-        skippedByName++;
-        if (debug) {
-          console.log('[Labels] Polígono sin nombre:', {
-            area: area.toFixed(3),
-            props: Object.keys(poly?.properties || {})
-          });
-        }
       }
       
       if (name) {
         try {
           const centroid = centroidOf(poly);
           
-          // Verificar colisión con etiquetas existentes (SIEMPRE activo)
-          if (currentAltitude !== undefined && minDistance > 0) {
-            let tooClose = false;
-            for (const pos of usedPositions) {
-              const dist = Math.sqrt(
-                Math.pow(centroid.lat - pos.lat, 2) + 
-                Math.pow(centroid.lng - pos.lng, 2)
-              );
-              if (dist < minDistance) {
-                tooClose = true;
-                break;
-              }
-            }
-            if (tooClose) {
-              continue; // Saltar esta etiqueta si está muy cerca de otra
-            }
-          }
-          
-          // Calcular tamaño de fuente basado en área y altitud
-          let fontSize = 11; // Tamaño base
-          const MIN_FONT_SIZE = 9; // Tamaño mínimo más grande para legibilidad
-          const MAX_FONT_SIZE = 14; // Tamaño máximo
-          
-          if (currentAltitude !== undefined) {
-            if (currentAltitude > 0.5) {
-              // Zoom alejado: textos más grandes
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, 10 + Math.sqrt(area) * 0.3));
-            } else if (currentAltitude > 0.3) {
-              // Zoom medio: textos medianos
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(12, 9 + Math.sqrt(area) * 0.2));
-            } else {
-              // Zoom cercano/subdivisión: tamaño más uniforme y visible
-              // En nivel subdivisión, usar tamaño base sin mucha variación
-              fontSize = Math.max(MIN_FONT_SIZE, Math.min(11, 9 + Math.sqrt(area) * 0.1));
-            }
-          }
-          
-          // Determinar si este polígono tiene datos activos
-          // Construir ID del polígono según el nivel
-          let polyId = '';
-          const currentLevel = navigationManager?.getCurrentLevel() || 'world';
-          
-          if (currentLevel === 'world') {
-            // Nivel mundial: usar ISO_A3
-            polyId = poly.properties.ISO_A3 || poly.properties.iso_a3 || 
-                     poly.properties.GID_0 || poly.properties.gid_0 || '';
-          } else if (currentLevel === 'country') {
-            // Nivel país: ID_1 YA viene con formato completo "BRA.4", "ESP.1"
-            const gid1 = poly.properties.GID_1 || poly.properties.gid_1 || '';
-            const id1 = poly.properties.ID_1 || poly.properties.id_1 || '';
-            
-            if (gid1) {
-              // GID_1 puede venir como "ESP.1_1" o similar, extraer "ESP.1"
-              const parts = gid1.split('_');
-              polyId = parts[0]; // "ESP.1"
-            } else if (id1) {
-              // ID_1 ya viene en formato completo (ej: "BRA.4"), usar directamente
-              polyId = String(id1);
-            }
-          } else if (currentLevel === 'subdivision') {
-            // Nivel subdivisión: ID_2 YA viene con formato completo "ESP.1.8"
-            const gid2 = poly.properties.GID_2 || poly.properties.gid_2 || '';
-            const id2 = poly.properties.ID_2 || poly.properties.id_2 || '';
-            
-            if (gid2) {
-              // GID_2 puede venir como "ESP.1.1_1" o similar, extraer "ESP.1.1"
-              const parts = gid2.split('_');
-              polyId = parts[0]; // "ESP.1.1"
-            } else if (id2) {
-              // ID_2 ya viene en formato completo (ej: "ESP.1.8"), usar directamente
-              polyId = String(id2);
-            } else {
-              // Fallback: usar _parentSubdivision si existe
-              polyId = poly.properties._parentSubdivision || '';
-            }
-          }
-          
-          // Verificar si tiene datos REALES en answersData (votos reales)
-          const hasData = Boolean(polyId && answersData?.[polyId]);
+          // Calcular tamaño de fuente basado en área
+          const MIN_FONT_SIZE = 10;
+          const MAX_FONT_SIZE = 14;
+          const fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, 9 + Math.sqrt(area) * 0.2));
           
           const label: SubdivisionLabel = {
-            id: `label_${labelType}_${poly.properties.ID_1 || poly.properties.id_1 || poly.properties.ISO_A3 || Math.floor(Math.random() * 10000)}`,
+            id: `label_${labelType}_${polyId}`,
             name: name,
             lat: centroid.lat,
             lng: centroid.lng,
-            feature: poly, // Incluir el feature completo para que las etiquetas sean clicables
-            size: fontSize, // Tamaño dinámico basado en área y zoom
-            area: area, // Guardar área para referencia
-            hasData: hasData // Indicador de polígono activo con datos
+            feature: poly,
+            size: fontSize,
+            area: area,
+            hasData: true // Siempre true porque solo generamos etiquetas con datos
           };
           labels.push(label);
-          usedPositions.push({ lat: centroid.lat, lng: centroid.lng });
         } catch (e) {
           console.warn('[Labels] Failed to generate label for polygon:', poly.properties);
         }
       }
     }
     
-        return labels;
+    return labels;
   }
 
   // Configuración de marcadores HTML para votos
@@ -941,29 +790,13 @@
   function updateSubdivisionLabels(visible: boolean) {
     if (!globe) return;
     try {
-      if (visible && subdivisionLabels?.length) {
-        const currentLevel = navigationManager?.getCurrentLevel() || 'world';
-        if (currentLevel === 'subdivision') {
-          console.log(`[UpdateLabels] Enviando ${subdivisionLabels.length} etiquetas al globo`);
-          
-          // Buscar Santa Cruz específicamente
-          const santaCruz = subdivisionLabels.find(l => 
-            (l.name || l.text || '').toLowerCase().includes('santa cruz')
-          );
-          if (santaCruz) {
-            console.log(`[UpdateLabels] Santa Cruz ENCONTRADA:`, {
-              name: santaCruz.name || santaCruz.text,
-              lat: santaCruz.lat,
-              lng: santaCruz.lng,
-              size: santaCruz.size
-            });
-          } else {
-            console.warn(`[UpdateLabels] Santa Cruz NO encontrada en las ${subdivisionLabels.length} etiquetas`);
-          }
-        }
-                globe.setTextLabels?.(subdivisionLabels);
+      // SISTEMA SIMPLIFICADO: Solo mostrar la etiqueta del polígono centrado
+      if (visible && isCenterPolygonActive) {
+        const centerLabels = subdivisionLabels.filter(l => l._isCenterLabel);
+        globe.setTextLabels?.(centerLabels);
       } else {
-                globe.setTextLabels?.([]);
+        // Si no hay polígono centrado o no visible, limpiar todas las etiquetas
+        globe.setTextLabels?.([]);
       }
     } catch (e) {
       console.warn('Error updating labels:', e);
@@ -1343,11 +1176,33 @@
                 isoDominantKey = vm.isoDominantKey;
                 legendItems = vm.legendItems;
                 isoIntensity = vm.isoIntensity;
+                
+                // FORZAR REFRESH DE COLORES - Los polígonos ya están renderizados, actualizar sus colores
+                console.log('[Navigation] 🎨 Actualizando colores de polígonos con datos recién cargados');
+                this.globe?.refreshPolyColors?.();
               }
               
-                                                      }
+              // MOSTRAR ETIQUETA después de cargar datos (NIVEL 2 - Encuesta específica)
+              console.log('[Navigation] 🎯 Nivel 2 (Encuesta): Mostrando etiqueta después de cargar datos');
+              console.log('[Navigation] 📊 answersData tiene', Object.keys(answersData || {}).length, 'claves');
+              console.log('[Navigation] 📊 Primeras claves:', Object.keys(answersData || {}).slice(0, 5));
+              
+              const filteredPolygons = countryPolygons.filter((p: any) => !p.properties?._isParent);
+              console.log('[Navigation] 📦 Polígonos filtrados:', filteredPolygons.length);
+              
+              // Esperar a que el globo renderice Y a que answersData esté disponible
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              
+              // Intentar mostrar etiqueta
+              showFirstLabelWithData(filteredPolygons);
+              
+              // Verificar si se mostró
+              console.log('[Navigation] 🏷️ Etiquetas después de showFirstLabelWithData:', subdivisionLabels.length);
+            }
           } catch (error) {
-            // Error loading subdivision data
+            console.warn('[Navigation] ⚠️ Error loading subdivision data:', error);
+            // NO MOSTRAR ETIQUETA AÚN - esperar al fallback final
           }
         } else if (!activePoll) {
           // MODO TRENDING: Cargar datos de trending para este país
@@ -1432,10 +1287,33 @@
                 isoDominantKey = vm.isoDominantKey;
                 legendItems = vm.legendItems;
                 isoIntensity = vm.isoIntensity;
+                
+                // FORZAR REFRESH DE COLORES - Los polígonos ya están renderizados, actualizar sus colores
+                console.log('[Navigation] 🎨 Actualizando colores de polígonos con datos trending recién cargados');
+                this.globe?.refreshPolyColors?.();
               }
+              
+              // MOSTRAR ETIQUETA después de cargar datos (NIVEL 2 - Trending)
+              console.log('[Navigation] 🎯 Nivel 2 (Trending): Mostrando etiqueta después de cargar datos');
+              console.log('[Navigation] 📊 answersData tiene', Object.keys(answersData || {}).length, 'claves');
+              console.log('[Navigation] 📊 Primeras claves:', Object.keys(answersData || {}).slice(0, 5));
+              
+              const filteredPolygonsTrending = countryPolygons.filter((p: any) => !p.properties?._isParent);
+              console.log('[Navigation] 📦 Polígonos filtrados:', filteredPolygonsTrending.length);
+              
+              // Esperar a que el globo renderice Y a que answersData esté disponible
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              
+              // Intentar mostrar etiqueta
+              showFirstLabelWithData(filteredPolygonsTrending);
+              
+              // Verificar si se mostró
+              console.log('[Navigation] 🏷️ Etiquetas después de showFirstLabelWithData:', subdivisionLabels.length);
             }
           } catch (error) {
-            // Error loading trending data
+            console.warn('[Navigation] ⚠️ Error loading trending data:', error);
+            // NO MOSTRAR ETIQUETA AÚN - esperar al fallback final
           }
         }
         
@@ -1444,9 +1322,61 @@
           this.globe?.refreshPolyColors?.();
           resolve();
         });
+        
+        // FALLBACK FINAL: SIEMPRE mostrar una etiqueta (NIVEL 2)
+        // Verificar si ya se mostró alguna etiqueta
+        console.log('[Navigation] 🔍 Verificando etiquetas antes del fallback final:', subdivisionLabels.length);
+        const hasLabel = subdivisionLabels.length > 0;
+        
+        if (!hasLabel) {
+          console.log('[Navigation] 🔄 Nivel 2 (Fallback Final): Forzando etiqueta de subdivisión');
+          console.log('[Navigation] 📊 answersData disponible:', Object.keys(answersData || {}).length, 'claves');
+          
+          // SOLO mostrar etiquetas de polígonos con datos
+          const filteredPolygonsFallback = countryPolygons.filter((p: any) => !p.properties?._isParent);
+          console.log('[Navigation] 📦 Polígonos para fallback:', filteredPolygonsFallback.length);
+          
+          if (filteredPolygonsFallback.length > 0) {
+            // Primer intento
+            await new Promise(resolve => setTimeout(resolve, 400));
+            showFirstLabelWithData(filteredPolygonsFallback);
+            console.log('[Navigation] 🏷️ Después del 1er intento:', subdivisionLabels.length, 'etiquetas');
+            
+            // Si no encontró datos, esperar más (los datos pueden estar cargando)
+            if (subdivisionLabels.length === 0) {
+              console.log('[Navigation] ⌛ Reintentando después de esperar datos...');
+              await new Promise(resolve => setTimeout(resolve, 600));
+              showFirstLabelWithData(filteredPolygonsFallback);
+              console.log('[Navigation] 🏷️ Después del 2do intento:', subdivisionLabels.length, 'etiquetas');
+            }
+          } else {
+            console.log('[Navigation] ⚠️ No hay polígonos de subdivisión cargados');
+          }
+        } else {
+          console.log('[Navigation] ✅ Nivel 2: Etiqueta ya mostrada (' + subdivisionLabels.length + ')');
+        }
 
       } catch (error) {
+        console.error('[Navigation] ❌ Error crítico navegando al país:', error);
+        console.error('[Navigation] 🔙 Volviendo al mundo...');
+        
+        // Limpiar estado completamente antes de volver
+        subdivisionLabels = [];
+        updateSubdivisionLabels(false);
+        selectedCountryName = null;
+        selectedCountryIso = null;
+        selectedSubdivisionName = null;
+        selectedCityId = null;
+        localPolygons = [];
+        preloadedPolygons = null;
+        preloadedCountryIso = null;
+        
+        // Volver al mundo
         await this.navigateToWorld();
+        
+        // Forzar actualización de colores
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        await updateGlobeColors(false);
       }
     }
 
@@ -1522,6 +1452,16 @@
                 legendItems = vm.legendItems;
                 isoIntensity = vm.isoIntensity;
               }
+              
+              // MOSTRAR ETIQUETA después de cargar datos (NIVEL 3/4 - Encuesta específica)
+              console.log('[Navigation] 🎯 Nivel 3/4 (Encuesta): Mostrando etiqueta después de cargar datos');
+              console.log('[Navigation] 📊 answersData keys:', Object.keys(answersData || {}).length);
+              console.log('[Navigation] 📦 Polígonos para mostrar:', subdivisionPolygons.length);
+              
+              // Esperar a que el globo renderice antes de mostrar etiqueta
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              showFirstLabelWithData(subdivisionPolygons);
             }
           } catch (error) {
             // Error loading sub-subdivision data
@@ -1610,6 +1550,16 @@
                 legendItems = vm.legendItems;
                 isoIntensity = vm.isoIntensity;
               }
+              
+              // MOSTRAR ETIQUETA después de cargar datos (NIVEL 3/4 - Trending)
+              console.log('[Navigation] 🎯 Nivel 3/4 (Trending): Mostrando etiqueta después de cargar datos');
+              console.log('[Navigation] 📊 answersData keys:', Object.keys(answersData || {}).length);
+              console.log('[Navigation] 📦 Polígonos para mostrar:', subdivisionPolygons.length);
+              
+              // Esperar a que el globo renderice antes de mostrar etiqueta
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              showFirstLabelWithData(subdivisionPolygons);
             }
           } catch (error) {
             // Error loading trending data
@@ -1621,6 +1571,14 @@
           this.globe?.refreshPolyColors?.();
           resolve();
         });
+        
+        // FALLBACK: Si no se cargaron datos de API, mostrar etiqueta de la subdivisión (NIVEL 3/4)
+        // Este código solo se ejecuta si ninguno de los bloques anteriores mostró etiqueta
+        if (!activePoll && Object.keys(answersData || {}).length === 0) {
+          console.log('[Navigation] 🔄 Nivel 3/4 (Fallback): Mostrando nombre de la subdivisión');
+          await new Promise(resolve => setTimeout(resolve, 300));
+          await generateSubdivisionNameLabel();
+        }
 
       } catch (error) {
         // Error navigating to subdivision
@@ -1646,6 +1604,12 @@
       selectedSubdivisionId = null;
       selectedCityName = null;
       selectedCityId = null;
+      
+      // LIMPIAR polígono centrado al volver a nivel mundial
+      centerPolygon = null;
+      centerPolygonId = null;
+      isCenterPolygonActive = false;
+      removeCenterPolygonLabel();
 
       this.history = [{ level: 'world', name: 'World' }];
 
@@ -1704,9 +1668,19 @@
         this.globe?.refreshPolyColors?.();
         resolve();
       });
+      
+      // NIVEL MUNDIAL: NO mostrar etiquetas automáticamente
+      // Las etiquetas solo se muestran en niveles 2, 3 y 4
+      console.log('[Navigation] 🌍 Nivel Mundial: Sin etiquetas automáticas');
     }
 
     async navigateBack() {
+      
+      // LIMPIAR polígono centrado antes de navegar hacia atrás
+      centerPolygon = null;
+      centerPolygonId = null;
+      isCenterPolygonActive = false;
+      removeCenterPolygonLabel();
       
       if (this.state.level === 'subdivision') {
         // From subdivision back to country
@@ -1715,12 +1689,14 @@
         
         if (countryIso && countryName) {
           await this.navigateToCountry(countryIso, countryName);
+          // Auto-selección se activa automáticamente en navigateToCountry
         } else {
           await this.navigateToWorld();
         }
       } else if (this.state.level === 'country') {
         // From country back to world
         await this.navigateToWorld();
+        // No auto-selección en nivel mundial
       }
       // Already at world level - do nothing
     }
@@ -1951,6 +1927,50 @@
     getState(): NavigationState { return { ...this.state }; }
     getHistory(): typeof this.history { return [...this.history]; }
     getCurrentLevel(): NavigationLevel { return this.state.level; }
+    
+    // Navigate back to previous level
+    async goBack() {
+      const currentLevel = this.state.level;
+      const navState = this.getState();
+      
+      console.log('[Navigation] goBack - currentLevel:', currentLevel, 'navState:', navState);
+      
+      // Detectar si estamos en nivel 4 (sub-subdivisiones)
+      // Nivel 4 es cuando tenemos más de 2 niveles en el history
+      const isLevel4 = currentLevel === 'subdivision' && 
+                       this.history.length > 3;
+      
+      if (isLevel4) {
+        // Nivel 4 -> Volver directamente a nivel 0 (world)
+        console.log('[Navigation] 🔙 Volviendo de nivel 4 directamente a mundo');
+        const currentPov = globe?.pointOfView();
+        const currentLat = currentPov?.lat || 0;
+        const currentLng = currentPov?.lng || 0;
+        await this.navigateToWorld();
+        scheduleZoom(currentLat, currentLng, 2.0, 1000);
+      } else if (currentLevel === 'subdivision') {
+        // Nivel 3 -> Volver directamente a nivel 0 (world)
+        console.log('[Navigation] 🔙 Volviendo de nivel 3 (subdivision) directamente a mundo');
+        const currentPov = globe?.pointOfView();
+        const currentLat = currentPov?.lat || 0;
+        const currentLng = currentPov?.lng || 0;
+        await this.navigateToWorld();
+        scheduleZoom(currentLat, currentLng, 2.0, 1000);
+      } else if (currentLevel === 'country') {
+        // Nivel 2 -> Volver a nivel 1 (world)
+        console.log('[Navigation] 🔙 Volviendo de nivel 2 (country) a nivel 1 (world)');
+        
+        // Obtener posición actual antes de navegar
+        const currentPov = globe?.pointOfView();
+        const currentLat = currentPov?.lat || 0;
+        const currentLng = currentPov?.lng || 0;
+        
+        await this.navigateToWorld();
+        
+        // Mantener la posición actual, solo alejarse
+        scheduleZoom(currentLat, currentLng, 2.0, 1000);
+      }
+    }
     
     // Get available options for next level
     async getAvailableOptions(): Promise<Array<{ id: string; name: string; iso?: string }>> {
@@ -2294,156 +2314,29 @@
   }
   
   async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }, forceImmediate: boolean = false) {
-    // NO actualizar etiquetas durante animaciones de zoom (excepto si es forzado)
-    if (isZooming && !forceImmediate) {
-      // Guardar para actualizar cuando termine el zoom
-      pendingLabelUpdate = pov;
-      return;
-    }
-    
-    // Throttle: solo actualizar si han pasado al menos 300ms desde la última actualización
-    // EXCEPTO si es una actualización forzada (al terminar zoom)
-    if (!forceImmediate) {
-      const now = performance.now();
-      if (now - lastLabelUpdate < LABEL_UPDATE_THROTTLE) {
-        return;
-      }
-      lastLabelUpdate = now;
-    }
-    
-    try {
-      const currentLevel = navigationManager?.getCurrentLevel() || 'world';
-      const alt = pov.altitude;
-      
-      // Actualizar etiquetas según nivel y altitud
-      
-      // LIMPIAR ETIQUETAS PRIMERO para evitar mostrar etiquetas de nivel anterior
-      subdivisionLabels = [];
-      updateSubdivisionLabels(false);
-      
-      // LOD DINÁMICO: Mostrar etiquetas según nivel y altitud
-      // Cuanto más cerca (menor altitud), más etiquetas
-      
-      if (currentLevel === 'world') {
-        // Nivel mundial: SIEMPRE mostrar países activos (sin restricción de altitud)
-        await generateWorldCountryLabels(alt);
-      }
-      else if (currentLevel === 'country') {
-        const state = navigationManager?.getState();
-        if (state?.countryIso) {
-          // Nivel país: SIEMPRE mostrar subdivisiones activas
-          await generateCountrySubdivisionLabels(state.countryIso, pov);
-        }
-      }
-      else if (currentLevel === 'subdivision') {
-        const state = navigationManager?.getState();
-        if (state?.countryIso && state?.subdivisionId) {
-          // Nivel subdivisión: SIEMPRE mostrar sub-subdivisiones activas
-          await generateSubSubdivisionLabels(state.countryIso, state.subdivisionId, pov);
-        }
-      }
-    } catch (e) {
-      console.warn('[Labels] Error updating labels for current view:', e);
-    }
+    // SISTEMA SIMPLIFICADO: Solo el sistema de polígono centrado
+    // No hay etiquetas automáticas, solo la etiqueta del polígono en el centro
+    // Las etiquetas se manejan completamente en autoSelectCenterPolygon
+    return;
   }
 
-  // Función para evitar superposición de etiquetas con LOD dinámico
-  function removeOverlappingLabels(labels: any[], altitude: number) {
-    const currentLevelForFiltering = navigationManager?.getCurrentLevel() || 'world';
-    
-    // Filtrar y ordenar etiquetas con datos por área (más grandes primero)
-    const sortedLabels = labels
-      .filter(l => l.hasData)
-      .sort((a, b) => (b.area || 0) - (a.area || 0));
-    
-    if (sortedLabels.length === 0) return [];
-    
-    // Si hay pocas etiquetas con datos (≤5), mostrarlas TODAS sin filtrar por distancia
-    if (sortedLabels.length <= 5) {
-      return sortedLabels;
-    }
-    
-    // Calcular distancia mínima según altitud y nivel de navegación
-    // IMPORTANTE: El filtrado debe ser proporcional al nivel, no absoluto
-    
-    let minDistance: number;
-    
-    // ESTRATEGIA: En cada nivel, usar un porcentaje del área visible
-    // Así es relativo al tamaño del polígono
-    
-    if (currentLevelForFiltering === 'world') {
-      // Nivel mundial: MUY permisivo para mostrar países activos
-      minDistance = Math.max(0.5, 2 - altitude); // Más cerca = menor distancia mínima
-    } else if (currentLevelForFiltering === 'country') {
-      // Nivel país: MUY permisivo para mostrar subdivisiones activas
-      minDistance = Math.max(0.2, 1 - altitude * 2); // Muy permisivo
-    } else {
-      // Nivel subdivisión: SISTEMA PROGRESIVO para evitar saturación
-      // Incluso en el nivel más detallado, debemos filtrar según la distancia
-      if (altitude > 0.2) {
-        // Muy alejado: solo las más grandes
-        minDistance = 0.8 + (altitude - 0.2) * 2;
-      } else if (altitude > 0.1) {
-        // Alejado-medio: filtrado moderado
-        minDistance = 0.3 + (altitude - 0.1) * 5;
-      } else if (altitude > 0.05) {
-        // Medio-cerca: filtrado ligero pero visible
-        minDistance = 0.15 + (altitude - 0.05) * 3;
-      } else {
-        // MUY cerca (<0.05): filtrado mínimo pero suficiente para no saturar
-        // Escalado para que cuanto más cerca, menos filtro (pero nunca 0)
-        minDistance = Math.max(0.08, 0.08 + altitude * 1.4);
-      }
-    }
-    
-    const filtered: any[] = [];
-    const rejected: any[] = [];
-    
-    // Usar sortedLabels (ordenadas por prioridad) en lugar de labels original
-    for (const label of sortedLabels) {
-      let overlaps = false;
-      let closestDistance = Infinity;
-      
-      for (const existing of filtered) {
-        const dx = label.lng - existing.lng;
-        const dy = label.lat - existing.lat;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance < closestDistance) {
-          closestDistance = distance;
-        }
-        
-        if (distance < minDistance) {
-          overlaps = true;
-          break;
-        }
-      }
-      
-      if (!overlaps) {
-        filtered.push(label);
-      } else {
-        rejected.push({ ...label, closestDistance });
-      }
-    }
-    
-    return filtered;
-  }
+  // ELIMINADO: removeOverlappingLabels ya no es necesario
+  // Con el sistema LOD simplificado, solo mostramos etiquetas de polígonos con datos activos
   
   async function generateWorldCountryLabels(altitude: number) {
+    // En nivel mundial NO debe haber polígono centrado activo, pero por si acaso
+    console.log('[Labels] Generando etiquetas de países mundiales...');
+    
     try {
       if (!worldPolygons?.length) return;
       
       // NO usar cache - necesitamos recalcular según altitud para LOD dinámico
       
-      // Generate labels for world countries
+      // Generate labels for world countries - MOSTRAR TODOS LOS PAÍSES
       const allLabels = worldPolygons.map((feat, index) => {
         const centroid = centroidOf(feat);
         const name = nameOf(feat);
         const iso = isoOf(feat);
-        
-        // Verificar si este país tiene datos REALES en answersData (votos reales)
-        // NO usar isoDominantKey porque contiene todos los países (solo colores)
-        const hasData = Boolean(iso && answersData?.[iso]);
         
         return {
           id: `country-${iso || index}`,
@@ -2451,19 +2344,21 @@
           lat: centroid.lat,
           lng: centroid.lng,
           text: name || iso,
-          size: 12,
-          color: '#c9d1d9',
-          opacity: 0.8,
-          feature: feat,
-          hasData: hasData  // CRÍTICO: Agregar para que el filtro funcione
+          size: 9,
+          color: '#ffffff',
+          opacity: 0.9,
+          feature: feat
         };
       }).filter(label => label.text);
       
-      // Filtrar etiquetas superpuestas según altitud (LOD dinámico)
-      const labels = removeOverlappingLabels(allLabels, altitude);
+      console.log('[Labels] Total países con nombre:', allLabels.length);
       
-      subdivisionLabels = labels;
+      // MOSTRAR TODOS los países, no filtrar por datos
+      subdivisionLabels = allLabels;
+      
+      console.log('[Labels] Etiquetas mundiales asignadas:', subdivisionLabels.length);
       updateSubdivisionLabels(true);
+      console.log('[Labels] updateSubdivisionLabels(true) ejecutado');
       
           } catch (e) {
       console.warn('[Labels] Error generating world country labels:', e);
@@ -2480,6 +2375,9 @@
       const centroid = countryCentroidCache.get(state.countryIso);
       if (!centroid) return;
       
+      // Obtener el feature del país desde worldPolygons
+      const countryFeature = worldPolygons?.find(p => isoOf(p) === state.countryIso);
+      
       // Obtener el nombre del país desde el historial de navegación
       const countryName = navigationManager?.getHistory()?.find(h => h.level === 'country')?.name || state.countryIso;
       
@@ -2491,7 +2389,9 @@
         text: countryName,
         size: 16,
         color: '#c9d1d9',
-        opacity: 1.0
+        opacity: 1.0,
+        _isCenterLabel: true,
+        feature: countryFeature // IMPORTANTE: Incluir el feature para que el click funcione
       }];
       
       subdivisionLabels = labels;
@@ -2511,15 +2411,22 @@
       // Obtener el centroide de la subdivisión desde el cache
       const subdivisionKey = `${state.countryIso}/${state.subdivisionId}`;
       const centroid = subregionCentroidCache.get(subdivisionKey);
+      
+      // Obtener el feature de la subdivisión desde el cache de polígonos
+      const subdivisionPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
+      let subdivisionFeature = null;
+      
       if (!centroid) {
         // Si no tenemos el centroide en cache, intentar calcularlo desde los polígonos
-        const subdivisionPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
         if (subdivisionPolygons?.length) {
           const calculatedCentroid = centroidOf(subdivisionPolygons[0]);
           subregionCentroidCache.set(subdivisionKey, calculatedCentroid);
+          subdivisionFeature = subdivisionPolygons[0];
         } else {
           return;
         }
+      } else if (subdivisionPolygons?.length) {
+        subdivisionFeature = subdivisionPolygons[0];
       }
       
       // Obtener el nombre de la subdivisión desde el historial de navegación
@@ -2536,7 +2443,9 @@
         text: subdivisionName,
         size: 14,
         color: '#c9d1d9',
-        opacity: 1.0
+        opacity: 1.0,
+        _isCenterLabel: true,
+        feature: subdivisionFeature // IMPORTANTE: Incluir el feature para que el click funcione
       }];
       
       subdivisionLabels = labels;
@@ -2548,6 +2457,8 @@
   }
 
   async function generateCountrySubdivisionLabels(iso: string, pov: { lat: number; lng: number; altitude: number }) {
+    console.log('[Labels] Generando etiquetas de subdivisiones para país:', iso);
+    
     try {
       // Level 1 subdivisions are in ISO.topojson (e.g., RUS.topojson, ESP.topojson)
       // First try to get from NavigationManager cache
@@ -2565,12 +2476,16 @@
       
       if (countryPolygons?.length) {
         const allLabels = generateSubdivisionLabels(countryPolygons, pov?.altitude);
-        const filteredLabels = removeOverlappingLabels(allLabels, pov.altitude);
         
-        subdivisionLabels = filteredLabels;
-        updateSubdivisionLabels(true);
+        // SOLO mostrar si hay subdivisiones con datos
+        if (allLabels.length > 0) {
+          subdivisionLabels = allLabels;
+          updateSubdivisionLabels(true);
+        } else {
+          console.log('[Labels] No hay subdivisiones con datos para mostrar etiquetas');
+        }
       } else {
-        console.warn('[Labels] No subdivision polygons found for', iso);
+        console.log('[Labels] No hay polígonos de subdivisión cargados');
       }
     } catch (e) {
       console.warn('[Labels] Error generating country subdivision labels:', e);
@@ -2578,6 +2493,8 @@
   }
 
   async function generateSubSubdivisionLabels(countryIso: string, subdivisionId: string, pov: { lat: number; lng: number; altitude: number }) {
+    console.log('[Labels] Generando etiquetas de sub-subdivisiones para:', countryIso, subdivisionId);
+    
     try {
       // For sub-subdivisions, look for separate files like ESP.1.topojson, RUS.40.topojson, etc.
       // Extract the numeric part from subdivisionId (e.g., "RUS.40" -> "40", "ESP.1" -> "1")
@@ -2621,10 +2538,14 @@
             }));
             
             const allLabels = generateSubdivisionLabels(markedPolygons, pov?.altitude);
-            // Filtrar según altitud para LOD dinámico
-            const filteredLabels = removeOverlappingLabels(allLabels, pov.altitude);
-            subdivisionLabels = filteredLabels;
-            updateSubdivisionLabels(true);
+            
+            // FALLBACK: Si no hay sub-subdivisiones con datos, mostrar el nombre de la subdivisión
+            if (allLabels.length === 0) {
+              await generateSubdivisionNameLabel();
+            } else {
+              subdivisionLabels = allLabels;
+              updateSubdivisionLabels(true);
+            }
             return;
           }
         } else {
@@ -2740,6 +2661,12 @@
   let selectedSubdivisionId: string | null = null; // ID de la subdivisión seleccionada
   let selectedCityName: string | null = null;
   let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada para resaltado (nivel 4)
+  
+  // Sistema de detección de polígono centrado al arrastrar
+  let centerPolygon: any | null = null; // Polígono actualmente centrado
+  let centerPolygonId: string | null = null; // ID del polígono centrado para resaltado
+  let isCenterPolygonActive = false; // Si el sistema de polígono centrado está activo
+  
   let SHEET_STATE: SheetState = 'peek'; // Mostrar información mundial por defecto
   
   // CONTEXTO DE ENCUESTA ACTIVA
@@ -2820,15 +2747,63 @@
   
   // Función para cargar datos de trending (múltiples encuestas agregadas)
   async function loadTrendingData() {
+    console.log('[loadTrendingData] 🚀 Iniciando carga de datos...');
+    console.log('[loadTrendingData] Tab activo:', activeTopTab);
+    console.log('[loadTrendingData] Usuario:', userData?.username, 'ID:', userData?.id);
     
     try {
-      // Cargar encuestas trending desde la API
-      const response = await fetch('/api/polls/trending-by-region?region=Global&limit=20');
+      // Determinar qué API usar según el tab activo
+      let apiUrl = '/api/polls/trending-by-region?region=Global&limit=20';
+      
+      if (activeTopTab === 'Para ti' && userData?.id) {
+        // Si está en "Para ti" y hay usuario logueado, usar API personalizada
+        apiUrl = `/api/polls/for-you?userId=${userData.id}&limit=20`;
+        console.log('[loadTrendingData] 🎯 Cargando recomendaciones personalizadas para usuario:', userData.username);
+      } else if (activeTopTab === 'Para ti' && !userData) {
+        // Si está en "Para ti" pero no hay usuario, mostrar mensaje
+        console.log('[loadTrendingData] ℹ️ "Para ti" requiere usuario autenticado. Mostrando trending...');
+        // Usar trending como fallback
+      } else {
+        console.log('[loadTrendingData] 🌍 Cargando encuestas trending globales');
+      }
+      
+      console.log('[loadTrendingData] 📡 Llamando a API:', apiUrl);
+      
+      // Cargar encuestas desde la API correspondiente
+      const response = await fetch(apiUrl);
       if (!response.ok) {
+        console.error('[GlobeGL] ❌ Error en API:', response.status, response.statusText);
+        
+        // Si falla "Para ti", hacer fallback automático a trending
+        if (activeTopTab === 'Para ti') {
+          console.log('[GlobeGL] 🔄 Fallback automático: usando Tendencias');
+          const fallbackResponse = await fetch('/api/polls/trending-by-region?region=Global&limit=20');
+          if (!fallbackResponse.ok) {
+            console.error('[GlobeGL] ❌ Fallback también falló');
+            return;
+          }
+          const fallbackData = await fallbackResponse.json();
+          const { data: trendingPolls } = fallbackData;
+          // Continuar con los datos de fallback
+          await processTrendingPolls(trendingPolls);
+          return;
+        }
         return;
       }
       
       const { data: trendingPolls } = await response.json();
+      console.log('[loadTrendingData] ✅ Respuesta recibida:', trendingPolls?.length, 'encuestas');
+      await processTrendingPolls(trendingPolls);
+      console.log('[loadTrendingData] ✅ Datos procesados correctamente');
+    } catch (error) {
+      console.error('[GlobeGL] ❌ Error cargando datos:', error);
+    }
+  }
+  
+  // Función auxiliar para procesar las encuestas trending
+  async function processTrendingPolls(trendingPolls: any[]) {
+    console.log('[processTrendingPolls] 🔄 Procesando', trendingPolls?.length, 'encuestas');
+    try {
             
       // MODO TRENDING: Cada encuesta es una "opción"
       // Los países se pintan según qué encuesta tiene más votos totales
@@ -2841,8 +2816,8 @@
       // Crear activePollOptions con las encuestas trending como opciones
       activePollOptions = [];
       
-      for (let i = 0; i < trendingPolls.length; i++) {
-        const poll = trendingPolls[i];
+      // Cargar datos de votos de todas las encuestas en paralelo
+      const pollDataPromises = trendingPolls.map(async (poll, i) => {
         const pollKey = `poll_${poll.id}`;
         const pollColor = pollColors[i % pollColors.length];
         aggregatedColors[pollKey] = pollColor;
@@ -2876,7 +2851,10 @@
         } catch (error) {
           // Error loading poll data - continuar con siguiente encuesta
         }
-      }
+      });
+      
+      // Esperar a que todas las encuestas carguen
+      await Promise.all(pollDataPromises);
       
       // Actualizar votos totales en activePollOptions
       activePollOptions = activePollOptions.map(option => {
@@ -2904,6 +2882,10 @@
       }
       
       // Actualizar datos globales
+      console.log('[processTrendingPolls] 📊 Actualizando datos globales...');
+      console.log('[processTrendingPolls] Países con datos:', Object.keys(aggregatedData).length);
+      console.log('[processTrendingPolls] Encuestas activas:', activePollOptions?.length);
+      
       answersData = aggregatedData;
       colorMap = aggregatedColors;
       
@@ -2934,17 +2916,24 @@
       // Refrescar colores del globo
       await new Promise(resolve => requestAnimationFrame(resolve));
       
-      // Forzar actualización de polígonos con los nuevos colores
-      if (globe?.setPolygonsData) {
+      // IMPORTANTE: Solo actualizar polígonos mundiales si estamos en nivel mundial
+      // Si estamos en país/subdivisión, NO sobrescribir con polígonos mundiales
+      const currentLevel = navigationManager?.getCurrentLevel();
+      if (currentLevel === 'world' && globe?.setPolygonsData) {
+        console.log('[processTrendingPolls] 🗺️ Actualizando polígonos mundiales (nivel: world)');
         globe.setPolygonsData(worldPolygons);
+      } else {
+        console.log('[processTrendingPolls] ⏭️ Saltando actualización de polígonos (nivel:', currentLevel, ')');
       }
       
       await updateGlobeColors();
       globe?.refreshPolyColors?.();
       
+      console.log('[processTrendingPolls] ✅ Colores actualizados en el globo');
+      
     } catch (error) {
       // Error crítico cargando trending
-      console.error('[GlobeGL] Error loading trending:', error);
+      console.error('[processTrendingPolls] ❌ Error loading trending:', error);
     }
   }
   
@@ -2953,6 +2942,9 @@
   let pendingZoom: { lat: number; lng: number; altitude: number; duration: number } | null = null;
   let zoomTimeout: ReturnType<typeof setTimeout> | null = null;
   let isZooming = false;
+  let labelClickInProgress = false; // Bloquea globeClick después de labelClick
+  let isProgrammaticZoom = false; // Flag para indicar que el zoom es programático (no manual del usuario)
+  let programmaticZoomTimeout: any = null;
   
   function scheduleZoom(lat: number, lng: number, altitude: number, duration: number = 700, delay: number = 0) {
     // Cancelar cualquier zoom pendiente
@@ -2963,6 +2955,14 @@
     
     // CRÍTICO: Marcar como zooming INMEDIATAMENTE para bloquear etiquetas
     isZooming = true;
+    
+    // Marcar como zoom programático para ignorar detección de zoom out
+    isProgrammaticZoom = true;
+    
+    // Limpiar timeout anterior si existe
+    if (programmaticZoomTimeout) {
+      clearTimeout(programmaticZoomTimeout);
+    }
     
     // Si ya hay un zoom en progreso, esperar a que termine
     if (delay === 0 && pendingZoom) {
@@ -2991,7 +2991,15 @@
               updateLabelsForCurrentView(pov, true);
             });
           }
-                  }, labelUpdateDelay); // Mostrar etiquetas a mitad de la transición
+        }, labelUpdateDelay); // Mostrar etiquetas a mitad de la transición
+        
+        // Desactivar flag de zoom programático después de que termine la animación
+        // Usar la misma duración que isZooming para liberar el control al usuario más rápido
+        // Añadir solo 150ms extra (suficiente para evitar falsos positivos)
+        programmaticZoomTimeout = setTimeout(() => {
+          isProgrammaticZoom = false;
+          console.log('[Zoom] ✅ Zoom programático completado, detector de zoom out reactivado');
+        }, pendingZoom.duration + 150);
       }
       zoomTimeout = null;
     }, delay);
@@ -3049,19 +3057,135 @@
   
   // Función para manejar votos
   function handleVote(optionKey: string) {
-        
-    // Incrementar el contador de votos para la opción seleccionada
+    console.log('[handleVote] 🗳️ Votando por:', optionKey);
+    
+    // 1. Incrementar contador localmente (optimistic update)
     voteOptions = voteOptions.map(option => 
       option.key === optionKey 
         ? { ...option, votes: option.votes + 1 }
         : option
     );
     
-    // Aquí podrías enviar el voto al servidor
-    // await sendVoteToServer(optionKey, selectedCountryName, selectedSubdivisionName, selectedCityName);
+    // 2. Incrementar total de votos de la encuesta activa
+    if (activePoll) {
+      activePoll = {
+        ...activePoll,
+        totalVotes: (activePoll.totalVotes || 0) + 1
+      };
+    }
     
-    // Mostrar feedback visual (opcional)
+    // 3. Enviar voto al servidor
+    sendVoteToServer(optionKey);
+  }
+  
+  // Función para enviar voto al servidor
+  async function sendVoteToServer(optionKey: string) {
+    console.log('[sendVote] 🎯 Iniciando envío de voto');
+    console.log('[sendVote] activePoll:', activePoll);
+    console.log('[sendVote] optionKey:', optionKey);
+    
+    if (!activePoll || !activePoll.id) {
+      console.error('[sendVote] ❌ No hay encuesta activa. activePoll:', activePoll);
+      return;
+    }
+    
+    try {
+      console.log('[sendVote] 🔍 Buscando opción en:', activePoll.options);
+      
+      // Encontrar la opción para obtener su ID
+      const option = activePoll.options?.find((opt: any) => opt.optionKey === optionKey);
+      if (!option) {
+        console.error('[sendVote] ❌ Opción no encontrada:', optionKey);
+        console.error('[sendVote] Opciones disponibles:', activePoll.options);
+        return;
       }
+      
+      console.log('[sendVote] ✅ Opción encontrada:', option);
+      
+      // Obtener ubicación real del usuario (con fallback)
+      let latitude = 40.4168;  // Madrid por defecto
+      let longitude = -3.7038;
+      let geoCountryIso3 = 'ESP';
+      let geoCountryName = 'España';
+      let geoSubdivisionId: string | null = null;
+      let geoSubdivisionName: string | null = null;
+      
+      // Intentar obtener geolocalización del navegador
+      try {
+        if (navigator.geolocation) {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 3000,
+              maximumAge: 300000 // 5 minutos
+            });
+          });
+          latitude = (position as any).coords.latitude;
+          longitude = (position as any).coords.longitude;
+          console.log('[sendVote] 📍 Ubicación GPS obtenida:', { latitude, longitude });
+          
+          // Determinar país y subdivisión desde las coordenadas
+          try {
+            const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
+            if (geocodeResponse.ok) {
+              const geocodeData = await geocodeResponse.json();
+              if (geocodeData.found) {
+                geoCountryIso3 = geocodeData.countryIso3;
+                geoCountryName = geocodeData.countryName;
+                geoSubdivisionId = geocodeData.subdivisionId;
+                geoSubdivisionName = geocodeData.subdivisionName;
+                console.log('[sendVote] 🌍 Ubicación geocodificada:', {
+                  país: geoCountryName,
+                  subdivisión: geoSubdivisionName,
+                  subdivisionId: geoSubdivisionId
+                });
+              }
+            }
+          } catch (geocodeError) {
+            console.warn('[sendVote] ⚠️ Error en geocoding:', geocodeError);
+          }
+        }
+      } catch (geoError) {
+        console.warn('[sendVote] ⚠️ No se pudo obtener geolocalización, usando valores por defecto:', geoError);
+      }
+      
+      const countryIso3 = selectedCountryIso || geoCountryIso3;
+      const countryName = selectedCountryName || geoCountryName;
+      
+      console.log('[sendVote] 📤 Enviando al servidor:', {
+        pollId: activePoll.id,
+        optionId: option.id,
+        optionKey,
+        latitude,
+        longitude,
+        countryIso3
+      });
+      
+      const response = await fetch(`/api/polls/${activePoll.id}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          optionId: option.id,
+          userId: getStore(currentUser)?.id || null,  // ID del usuario autenticado
+          latitude,
+          longitude,
+          countryIso3,
+          countryName,
+          subdivisionId: selectedSubdivisionId || geoSubdivisionId || null,
+          subdivisionName: selectedSubdivisionName || geoSubdivisionName || null,
+          cityName: selectedCityName || null
+        })
+      });
+      
+      if (response.ok) {
+        console.log('[sendVote] ✅ Voto registrado en servidor');
+      } else {
+        const error = await response.json();
+        console.error('[sendVote] ❌ Error:', error);
+      }
+    } catch (error) {
+      console.error('[sendVote] ❌ Error de red:', error);
+    }
+  }
   
   // Función para abrir una encuesta en el globo con sus opciones visualizadas
   async function handleOpenPollInGlobe(event: CustomEvent<{ poll: any; options: Array<{ key: string; label: string; color: string; votes: number }> }>) {
@@ -3295,8 +3419,365 @@
   let lastClusterAlt = -1;
   
   // Etiquetas de subdivisiones (para mostrar nombres permanentemente)
-  type SubdivisionLabel = { id: string; name: string; lat: number; lng: number; feature?: any; size?: number; area?: number; text?: string; color?: string; opacity?: number; hasData?: boolean };
+  type SubdivisionLabel = { id?: string; name: string; lat: number; lng: number; feature?: any; size?: number; area?: number; text?: string; color?: string; opacity?: number; hasData?: boolean; _isCenterLabel?: boolean };
   let subdivisionLabels: SubdivisionLabel[] = [];
+  
+  // Guardar etiquetas originales antes de mostrar solo la centrada
+  let originalSubdivisionLabels: SubdivisionLabel[] = [];
+  
+  // Agregar etiqueta destacada para el polígono centrado (SOLO esta etiqueta)
+  function addCenterPolygonLabel() {
+    if (!centerPolygon || !globe) return;
+    
+    try {
+      // LIMPIAR TODAS las etiquetas existentes primero
+      subdivisionLabels = [];
+      originalSubdivisionLabels = [];
+      updateSubdivisionLabels(false);
+      
+      // Obtener el centroide del polígono
+      const centroid = centroidOf(centerPolygon);
+      
+      // Obtener nombre usando la misma lógica simple: del más específico al más general
+      const props = centerPolygon.properties;
+      let name = 'Región';
+      
+      // Primero intentar NAME_2 (nivel 3 y 4)
+      if (props?.NAME_2 || props?.name_2) {
+        name = props.NAME_2 || props.name_2;
+      }
+      // Luego NAME_1 (nivel 2)
+      else if (props?.NAME_1 || props?.name_1) {
+        name = props.NAME_1 || props.name_1;
+      }
+      // Finalmente NAME/ADMIN (nivel 1 - mundial)
+      else if (props?.NAME || props?.name || props?.ADMIN || props?.admin) {
+        name = props.NAME || props.name || props.ADMIN || props.admin;
+      }
+      
+      console.log('[CenterLabel] Nombre obtenido:', name, '| ID:', centerPolygonId);
+      
+      // Crear etiqueta destacada con estilo profesional
+      const centerLabel: SubdivisionLabel = {
+        lat: centroid.lat,
+        lng: centroid.lng,
+        name: name,
+        size: 16, // Tamaño destacado pero no excesivo
+        color: '#ffffff', // Blanco puro para mejor legibilidad
+        opacity: 1,
+        _isCenterLabel: true, // Marcador especial para estilos avanzados
+        feature: centerPolygon // IMPORTANTE: Incluir el feature para que el click funcione
+      };
+      
+      // Reemplazar TODAS las etiquetas con solo la centrada
+      subdivisionLabels = [centerLabel];
+      
+      // Actualizar en el globo
+      updateSubdivisionLabels(true);
+    } catch (error) {
+      console.warn('[CenterLabel] Error agregando etiqueta:', error);
+    }
+  }
+  
+  // Remover etiqueta del polígono centrado (sin restaurar las originales)
+  function removeCenterPolygonLabel() {
+    if (!globe) return;
+    
+    try {
+      // Limpiar TODAS las etiquetas
+      subdivisionLabels = [];
+      originalSubdivisionLabels = [];
+      
+      // Actualizar en el globo (ocultar todas)
+      updateSubdivisionLabels(false);
+    } catch (error) {
+      console.warn('[CenterLabel] Error removiendo etiqueta:', error);
+    }
+  }
+  // Función SIMPLE: mostrar UNA etiqueta del primer polígono con datos
+  function showFirstLabelWithData(polygons: any[]) {
+    try {
+      console.log('[FirstLabel] 🔍 Buscando primer polígono con datos entre', polygons.length, 'polígonos');
+      console.log('[FirstLabel] 📊 answersData tiene', Object.keys(answersData || {}).length, 'claves');
+      console.log('[FirstLabel] 📊 Primeras 10 claves de answersData:', Object.keys(answersData || {}).slice(0, 10));
+      
+      let checkedCount = 0;
+      
+      for (const poly of polygons) {
+        const props = poly.properties;
+        if (!props) continue;
+        
+        checkedCount++;
+        
+        // Usar la MISMA función que usa el sistema de coloreado
+        const polyId = getFeatureId(poly);
+        
+        if (checkedCount <= 5) {
+          console.log(`[FirstLabel] Polígono #${checkedCount}: ID="${polyId}", tiene datos=${!!answersData?.[polyId]}, NAME_1=${props.NAME_1}, NAME_2=${props.NAME_2}, NAME=${props.NAME}`);
+        }
+        
+        // Verificar si tiene datos
+        if (!polyId || !answersData?.[polyId]) continue;
+        
+        // Obtener nombre
+        let name = '';
+        if (props.NAME_2 || props.name_2) name = props.NAME_2 || props.name_2;
+        else if (props.NAME_1 || props.name_1) name = props.NAME_1 || props.name_1;
+        else if (props.NAME || props.name) name = props.NAME || props.name;
+        
+        if (!name) continue;
+        
+        // Calcular centroide
+        const centroid = centroidOf(poly);
+        if (!centroid) continue;
+        
+        // ENCONTRADO - Mostrar solo esta etiqueta
+        console.log('[FirstLabel] ✅ Encontrado:', name, '(ID:', polyId + ')');
+        
+        subdivisionLabels = [{
+          lat: centroid.lat,
+          lng: centroid.lng,
+          name: name,
+          size: 14,
+          color: '#ffffff',
+          opacity: 1.0,
+          _isCenterLabel: true,
+          feature: poly // IMPORTANTE: Incluir el feature para que el click funcione
+        }];
+        
+        updateSubdivisionLabels(true);
+        return; // Ya terminamos
+      }
+      
+      console.log('[FirstLabel] ❌ No se encontró ningún polígono con datos');
+      
+    } catch (e) {
+      console.warn('[FirstLabel] ❌ Error:', e);
+    }
+  }
+  
+  // Función para auto-seleccionar polígono más cercano al centro
+  function autoSelectCenterPolygon(forceActivate: boolean = false) {
+    // Activar SOLO en niveles 2, 3 y 4 (country, subdivision)
+    const currentLevel = navigationManager?.getCurrentLevel();
+    if (!currentLevel) return;
+    
+    // En nivel mundial: NO activar NUNCA (sin etiquetas automáticas)
+    if (currentLevel === 'world') {
+      console.log('[AutoSelect] Nivel mundial: auto-selección desactivada');
+      return;
+    }
+    
+    // Esperar un frame para que el globo haya renderizado
+    requestAnimationFrame(() => {
+      try {
+        const detected = globe?.getCenterPolygon?.();
+        
+        // Si no detecta polígono (polígono pequeño o no hay en centro exacto)
+        // buscar directamente el más cercano, especialmente si forceActivate=true
+        if (!detected || !detected.properties) {
+          console.log('[AutoSelect] No se detectó polígono centrado, buscando el más cercano');
+          findClosestPolygonWithData(currentLevel, true); // Forzar búsqueda inmediata
+          return;
+        }
+        
+        if (detected && detected.properties) {
+          const props = detected.properties;
+          let detectedId = '';
+          
+          // Usar la misma lógica que globeDataProc.ts: del más específico al más general
+          if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
+            // Nivel 3 o 4: tiene ID_2
+            detectedId = String(props.ID_2 || props.id_2 || props.GID_2 || props.gid_2);
+          } else if (props.ID_1 || props.id_1 || props.GID_1 || props.gid_1) {
+            // Nivel 2: tiene ID_1
+            detectedId = String(props.ID_1 || props.id_1 || props.GID_1 || props.gid_1);
+          } else if (props.ISO_A3 || props.iso_a3) {
+            // Nivel 1: país
+            detectedId = String(props.ISO_A3 || props.iso_a3 || '').toUpperCase();
+          }
+          
+          // Verificar si tiene datos (EN TODOS LOS NIVELES)
+          const hasData = detectedId && answersData?.[detectedId];
+          
+          if (hasData) {
+            // Solo activar si tiene datos
+            centerPolygon = detected;
+            centerPolygonId = detectedId;
+            isCenterPolygonActive = true;
+            globe?.refreshPolyAltitudes?.();
+            addCenterPolygonLabel();
+            console.log('[AutoSelect] Polígono centrado activado:', detectedId, 'en nivel:', currentLevel);
+          } else {
+            console.log('[AutoSelect] Polígono sin datos, buscando el más cercano:', detectedId, 'nivel:', currentLevel);
+            // Si el centrado no tiene datos, buscar el más cercano que sí tenga (forzado)
+            findClosestPolygonWithData(currentLevel, true);
+          }
+        }
+        // Nota: El caso "no hay polígono detectado" ya se maneja arriba con return
+      } catch (e) {
+        console.warn('[AutoSelect] Error auto-seleccionando polígono:', e);
+      }
+    });
+  }
+  
+  // Throttle para búsqueda de polígono más cercano
+  let lastClosestSearch = 0;
+  const CLOSEST_SEARCH_THROTTLE = 300; // ms - reducido para mejor detección de polígonos pequeños
+  
+  // Función para encontrar el polígono más cercano al centro que tenga datos
+  function findClosestPolygonWithData(currentLevel: string, forceSearch: boolean = false) {
+    // Throttle: evitar búsquedas muy frecuentes (excepto si es forzado)
+    if (!forceSearch) {
+      const now = performance.now();
+      const timeSinceLastSearch = now - lastClosestSearch;
+      if (timeSinceLastSearch < CLOSEST_SEARCH_THROTTLE) {
+        console.log('[FindClosest] ⏱️ Throttle activo, esperando:', (CLOSEST_SEARCH_THROTTLE - timeSinceLastSearch).toFixed(0), 'ms');
+        return;
+      }
+      lastClosestSearch = now;
+    } else {
+      console.log('[FindClosest] 🚀 Búsqueda forzada (sin throttle)');
+    }
+    
+    try {
+      const pov = globe?.pointOfView();
+      if (!pov) return;
+      
+      let polygonsToCheck: any[] = [];
+      const state = navigationManager?.getState();
+      
+      // Detectar si es nivel 4
+      const isLevel4 = currentLevel === 'subdivision' && !!state?.subdivisionId;
+      
+      // Obtener los polígonos según el nivel
+      if (currentLevel === 'world') {
+        polygonsToCheck = worldPolygons || [];
+        console.log('[FindClosest] Nivel mundial, polígonos disponibles:', polygonsToCheck.length);
+      } else if (currentLevel === 'country') {
+        if (state?.countryIso) {
+          polygonsToCheck = navigationManager?.['polygonCache']?.get(state.countryIso) || [];
+          console.log('[FindClosest] Nivel país, polígonos disponibles:', polygonsToCheck.length);
+        }
+      } else if (currentLevel === 'subdivision') {
+        if (isLevel4) {
+          // Nivel 4: subdivisiones de una subdivisión
+          const cacheKey = `${state.countryIso}.${state.subdivisionId}`;
+          polygonsToCheck = navigationManager?.['polygonCache']?.get(cacheKey) || [];
+          console.log('[FindClosest] Nivel 4 (sub-subdivisión)', {
+            cacheKey: cacheKey,
+            countryIso: state.countryIso,
+            subdivisionId: state.subdivisionId,
+            polígonos: polygonsToCheck.length,
+            cacheKeys: Array.from(navigationManager?.['polygonCache']?.keys() || [])
+          });
+        } else if (state?.countryIso) {
+          // Nivel 3: subdivisiones de un país
+          polygonsToCheck = navigationManager?.['polygonCache']?.get(state.countryIso) || [];
+          console.log('[FindClosest] Nivel 3 (subdivisión)', {
+            countryIso: state.countryIso,
+            polígonos: polygonsToCheck.length
+          });
+        }
+      }
+      
+      if (!polygonsToCheck.length) {
+        console.log('[FindClosest] No hay polígonos disponibles para buscar en nivel:', currentLevel, 'isLevel4:', isLevel4);
+        return;
+      }
+      
+      // Calcular distancias y encontrar el más cercano con datos
+      let closestPolygon = null;
+      let closestId = '';
+      let minDistance = Infinity;
+      
+      // Contadores para logging
+      let polygonsWithId = 0;
+      let polygonsWithData = 0;
+      const foundIds: string[] = [];
+      const idsWithData: string[] = [];
+      
+      for (const poly of polygonsToCheck) {
+        const props = poly.properties;
+        if (!props) continue;
+        
+        // Usar la misma lógica que globeDataProc.ts: del más específico al más general
+        let polyId = '';
+        if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
+          // Nivel 3 o 4: tiene ID_2
+          polyId = String(props.ID_2 || props.id_2 || props.GID_2 || props.gid_2);
+        } else if (props.ID_1 || props.id_1 || props.GID_1 || props.gid_1) {
+          // Nivel 2: tiene ID_1
+          polyId = String(props.ID_1 || props.id_1 || props.GID_1 || props.gid_1);
+        } else if (props.ISO_A3 || props.iso_a3) {
+          // Nivel 1: país
+          polyId = String(props.ISO_A3 || props.iso_a3 || '').toUpperCase();
+        }
+        
+        if (polyId) {
+          polygonsWithId++;
+          foundIds.push(polyId);
+        }
+        
+        // Verificar si tiene datos
+        if (!polyId || !answersData?.[polyId]) continue;
+        
+        polygonsWithData++;
+        idsWithData.push(polyId);
+        
+        // Calcular centroide del polígono
+        const centroid = centroidOf(poly);
+        if (!centroid) continue;
+        
+        // Calcular distancia al punto de vista actual
+        const distance = Math.sqrt(
+          Math.pow(centroid.lat - pov.lat, 2) + 
+          Math.pow(centroid.lng - pov.lng, 2)
+        );
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestPolygon = poly;
+          closestId = polyId;
+        }
+      }
+      
+      // Logging de estadísticas detallado
+      const answersDataKeys = Object.keys(answersData || {});
+      console.log('[FindClosest] Estadísticas:', {
+        nivel: currentLevel,
+        isLevel4: isLevel4,
+        totalPolígonos: polygonsToCheck.length,
+        conID: polygonsWithId,
+        conDatos: polygonsWithData,
+        encontrado: !!closestId
+      });
+      console.log('[FindClosest] IDs encontrados (muestra):', foundIds.slice(0, 10));
+      console.log('[FindClosest] IDs con datos:', idsWithData);
+      console.log('[FindClosest] answersData keys (muestra):', answersDataKeys.slice(0, 20));
+      
+      // Activar el polígono más cercano si se encontró
+      if (closestPolygon && closestId) {
+        centerPolygon = closestPolygon;
+        centerPolygonId = closestId;
+        isCenterPolygonActive = true;
+        globe?.refreshPolyAltitudes?.();
+        addCenterPolygonLabel();
+        console.log('[FindClosest] ✅ Polígono más cercano activado:', closestId, 'distancia:', minDistance.toFixed(3), 'nivel:', isLevel4 ? '4' : currentLevel);
+      } else {
+        console.log('[FindClosest] ❌ No se encontró ningún polígono con datos');
+        // FALLBACK: Si no encontramos ninguno pero hay polígonos con datos, mostrar UNA etiqueta
+        if (polygonsWithData > 0 && idsWithData.length > 0) {
+          console.log('[FindClosest] 🔄 FALLBACK: Mostrando etiqueta del primer polígono con datos');
+          showFirstLabelWithData(polygonsToCheck);
+        }
+      }
+      
+    } catch (e) {
+      console.warn('[FindClosest] Error buscando polígono más cercano:', e);
+    }
+  }
+  
   // Amigos por opción (para enriquecer tarjetas en BottomSheet). Claves deben coincidir con los keys de segmentos/opciones
   let friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
   // Visitas por opción (para chips y header)
@@ -3454,8 +3935,37 @@
   // Declaraciones para listas derivadas de Tendencias
   let trendingTagsOnly: Array<{ type: 'tag'; key: string }> = [];
   let trendingAccountsOnly: Array<{ type: 'account'; handle: string; avatar: string }> = [];
- 
-  
+
+  // Handler para cambio de tab "Para ti" / "Tendencias"
+  async function handleTopTabChange(event: CustomEvent<string>) {
+    console.log('[handleTopTabChange] 📥 Evento recibido:', event.detail);
+    const newTab = event.detail as 'Para ti' | 'Tendencias' | 'Live';
+    
+    console.log('[handleTopTabChange] Tab actual (antes de binding):', activeTopTab);
+    console.log('[handleTopTabChange] Tab nuevo:', newTab);
+    
+    // IMPORTANTE: No comparar con activeTopTab porque bind:active ya lo actualizó
+    // Solo verificar que el tab sea válido
+    
+    console.log('[handleTopTabChange] 🔄 Tab cambiado a:', newTab);
+    // activeTopTab ya está actualizado por bind:active, no hace falta setearlo aquí
+    
+    // En modo trending (nivel mundial), SIEMPRE recargar al cambiar tab
+    // Esto permite cambiar entre "Para ti" y "Tendencias" dinámicamente
+    if (navigationState.level === 'world') {
+      console.log('[GlobeGL] 🔃 Recargando encuestas para nuevo tab...');
+      
+      // Limpiar la encuesta activa para forzar modo trending
+      activePoll = null;
+      
+      // Recargar datos según el nuevo tab
+      await loadTrendingData();
+      await updateGlobeColors(true); // Con fade
+    } else {
+      // Si estás en nivel regional (país o subdivisión), mantener la vista actual
+      console.log('[GlobeGL] ℹ️ En nivel regional - el cambio de tab se aplicará al volver a nivel mundial');
+    }
+  }
 
   // Activar/desactivar teselas OSM según visibilidad de polígonos
   function setTilesEnabled(enabled: boolean) {
@@ -3600,20 +4110,39 @@
 
   async function loadCountryTopoAsGeoFeatures(iso: string): Promise<any[]> {
     const path = '/geojson/' + iso + '/' + iso + '.topojson';
+    console.log(`[LoadTopo] Cargando ${path}...`);
+    
     const resp = await fetch(path);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' al cargar ' + path);
+    if (!resp.ok) {
+      console.error(`[LoadTopo] ❌ HTTP ${resp.status} al cargar ${path}`);
+      throw new Error('HTTP ' + resp.status + ' al cargar ' + path);
+    }
+    
+    console.log(`[LoadTopo] Parseando JSON...`);
     const topo = await resp.json();
+    
+    console.log(`[LoadTopo] Convirtiendo a GeoJSON...`);
     // Carga dinámica de topojson-client para convertir a GeoJSON
     const mod = await import(/* @vite-ignore */ 'topojson-client');
     const objects = topo.objects || {};
     const firstKey = Object.keys(objects)[0];
-    if (!firstKey) return [];
+    
+    if (!firstKey) {
+      console.warn(`[LoadTopo] ⚠️ No hay objetos en ${path}`);
+      return [];
+    }
+    
     const fc = (mod as any).feature(topo, objects[firstKey]);
     const feats: any[] = Array.isArray(fc?.features) ? fc.features : [];
+    
+    console.log(`[LoadTopo] ✅ ${feats.length} features cargadas para ${iso}`);
+    
+    // Añadir propiedades necesarias
     for (const f of feats) {
       if (!f.properties) f.properties = {};
       if (!f.properties.ISO_A3) f.properties.ISO_A3 = iso;
     }
+    
     return feats;
   }
 
@@ -3800,6 +4329,7 @@
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     
+    // Sistema de doble click deshabilitado - solo zoom out para navegar
     
     // Función de testing para probar zoom adaptativo con diferentes países
     (window as any).testAdaptiveZoom = (countryIso: string) => {
@@ -4013,6 +4543,7 @@
   {atmosphereColor}
   {atmosphereAltitude}
   {selectedCityId}
+  {centerPolygonId}
   {isDarkTheme}
   onPolyCapColor={(feat) => {
     const props = feat?.properties || {};
@@ -4151,6 +4682,52 @@
         return;
       }
       
+      // DETECTAR ZOOM OUT EXTREMO PARA VOLVER ATRÁS AUTOMÁTICAMENTE
+      const navLevel = navigationManager?.getCurrentLevel();
+      if (navLevel && navLevel !== 'world' && navigationManager && !isZooming) {
+        const navState = navigationManager.getState();
+        
+        // Detectar si estamos en nivel 4 (sub-subdivisiones)
+        // Nivel 4 es cuando tenemos más de 3 niveles en el history (world, country, subdivision, sub-subdivision)
+        const history = navigationManager.getHistory();
+        const isLevel4 = navLevel === 'subdivision' && history.length > 3;
+        
+        // Umbrales para volver atrás según el nivel
+        let zoomOutThreshold = 2.5;
+        let levelName = 'unknown';
+        
+        if (isLevel4) {
+          // Nivel 4 (sub-subdivisiones) -> volver a nivel 3 (subdivision)
+          zoomOutThreshold = 0.6;
+          levelName = 'level4';
+        } else if (navLevel === 'subdivision') {
+          // Nivel 3 (subdivision) -> volver a nivel 2 (country)
+          zoomOutThreshold = 1.2;
+          levelName = 'subdivision';
+        } else if (navLevel === 'country') {
+          // Nivel 2 (country) -> volver a nivel 1 (world)
+          // AUMENTADO de 2.2 a 3.0 para dar margen a países muy grandes (Rusia, Canadá)
+          zoomOutThreshold = 3.0;
+          levelName = 'country';
+        }
+        
+        // IGNORAR si el zoom es programático (transición automática)
+        if (isProgrammaticZoom) {
+          // Zoom programático en curso, no detectar zoom out
+          return;
+        }
+        
+        if (pov.altitude > zoomOutThreshold) {
+          console.log(`[Navigation] 🔙 Zoom out detectado en nivel ${levelName} (altitude: ${pov.altitude.toFixed(2)}, threshold: ${zoomOutThreshold}) - Volviendo atrás`);
+          setTimeout(async () => {
+            if (navigationManager && !isZooming) {
+              await navigationManager.goBack();
+            }
+          }, 150);
+          return;
+        }
+      }
+      
       // Actualizar altitud para mostrar en la UI
       currentAltitude = pov.altitude;
       // Emitir evento de cambio de altitud
@@ -4176,8 +4753,97 @@
       // Esto hace que los polígonos se aplanen cuando haces zoom extremo
       globe?.refreshPolyAltitudes?.();
       
-      // Siempre actualizar etiquetas con el nuevo sistema LOD (incluso durante movimiento)
-      updateLabelsForCurrentView(pov).catch(e => console.warn('Label update error:', e));
+      // Sistema simplificado: las etiquetas se manejan solo por autoSelectCenterPolygon
+      // No hay sistema LOD de etiquetas múltiples
+      
+      // SISTEMA DE DETECCIÓN DE POLÍGONO CENTRADO
+      const currentLevel = navigationManager?.getCurrentLevel();
+      if (currentLevel) {
+        // En nivel mundial: solo activar si altitude < 1.8 (zoom in)
+        // EN OTROS NIVELES: SIEMPRE activar sin restricciones de altitude
+        if (currentLevel === 'world' && pov.altitude >= 1.8) {
+          // Muy alejado en vista mundial, no mostrar etiquetas
+          if (isCenterPolygonActive) {
+            // Limpiar etiqueta si había una activa
+            centerPolygon = null;
+            centerPolygonId = null;
+            isCenterPolygonActive = false;
+            removeCenterPolygonLabel();
+          }
+          return; // No continuar con detección
+        }
+        
+        console.log('[CenterPolygon] Detección activa en nivel:', currentLevel, 'altitude:', pov.altitude.toFixed(2), 'pov:', {lat: pov.lat.toFixed(2), lng: pov.lng.toFixed(2)});
+        
+        // Detectar polígono en el centro de la pantalla
+        const detected = globe?.getCenterPolygon?.();
+        
+        console.log('[CenterPolygon] getCenterPolygon resultado:', detected ? 'SÍ detectado' : 'NO detectado');
+        
+        // Si no detecta polígono en centro (polígono pequeño), buscar el más cercano
+        if (!detected || !detected.properties) {
+          console.log('[CenterPolygon] ⚠️ No detectado en centro, buscando más cercano');
+          findClosestPolygonWithData(currentLevel);
+          return; // Terminar aquí
+        }
+        
+        if (detected && detected.properties) {
+          const props = detected.properties;
+          let detectedId = '';
+          
+          // Usar la misma lógica que globeDataProc.ts: del más específico al más general
+          // Esto funciona automáticamente para TODOS los niveles
+          if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
+            // Nivel 3 o 4: tiene ID_2
+            detectedId = String(props.ID_2 || props.id_2 || props.GID_2 || props.gid_2);
+          } else if (props.ID_1 || props.id_1 || props.GID_1 || props.gid_1) {
+            // Nivel 2: tiene ID_1
+            detectedId = String(props.ID_1 || props.id_1 || props.GID_1 || props.gid_1);
+          } else if (props.ISO_A3 || props.iso_a3) {
+            // Nivel 1: país
+            detectedId = String(props.ISO_A3 || props.iso_a3 || '').toUpperCase();
+          }
+          
+          console.log('[CenterPolygon] Nivel:', currentLevel, '| detectedId:', detectedId);
+          console.log('[CenterPolygon] Props del polígono:', {
+            NAME_1: props.NAME_1,
+            NAME_2: props.NAME_2,
+            ID_1: props.ID_1,
+            ID_2: props.ID_2,
+            GID_1: props.GID_1,
+            GID_2: props.GID_2
+          });
+          
+          // Verificar si tiene datos antes de activar (EN TODOS LOS NIVELES)
+          const hasData = detectedId && answersData?.[detectedId];
+          
+          console.log('[CenterPolygon] hasData:', hasData, '| buscando ID:', detectedId);
+          console.log('[CenterPolygon] answersData keys (primeros 20):', Object.keys(answersData || {}).slice(0, 20));
+          
+          if (hasData) {
+            // Solo activar si tiene datos
+            // Solo actualizar si cambió el polígono
+            if (detectedId !== centerPolygonId) {
+              centerPolygon = detected;
+              centerPolygonId = detectedId;
+              isCenterPolygonActive = true;
+              // Refrescar elevación para destacar el polígono
+              globe?.refreshPolyAltitudes?.();
+              
+              // Agregar etiqueta destacada para el polígono centrado
+              addCenterPolygonLabel();
+              console.log('[CenterPolygon] Activado:', detectedId, 'nivel:', currentLevel);
+            }
+          } else {
+            // No tiene datos, buscar el más cercano
+            console.log('[CenterPolygon] ❌ Sin datos para ID:', detectedId);
+            console.log('[CenterPolygon] Nombre del polígono:', props.NAME_1 || props.NAME_2 || 'Sin nombre');
+            console.log('[CenterPolygon] Buscando polígono más cercano con datos...');
+            findClosestPolygonWithData(currentLevel);
+          }
+        }
+        // Nota: El caso "no hay polígono detectado" ya se maneja arriba con return
+      }
     } catch {}
   }}
   on:polygonClick={async (e) => {
@@ -4205,7 +4871,9 @@
         // IMPORTANTE: answersData ya está filtrado por la encuesta activa (si existe)
         const countryRecord = answersData?.[iso];
         if (!countryRecord) {
-          return; // BLOQUEAR navegación si no hay datos
+          console.log('[PolygonClick] País sin datos, tratando como click fuera');
+          // NO HAY DATOS: Tratar como click fuera (no hace nada en nivel mundial)
+          return;
         }
         
         // PASO 2: LIMPIAR ETIQUETAS INMEDIATAMENTE antes de cualquier cambio
@@ -4225,36 +4893,49 @@
         const preloadPromise = (async () => {
           try {
             if (preloadedCountryIso !== iso) {
+              console.log(`[PreLoad] Cargando polígonos para ${iso}...`);
               const polys = await loadCountryTopoAsGeoFeatures(iso);
+              console.log(`[PreLoad] ✅ ${polys.length} polígonos cargados para ${iso}`);
               preloadedPolygons = polys;
               preloadedCountryIso = iso;
             }
           } catch (e) {
-            console.warn('[PreLoad] Error:', e);
+            console.error(`[PreLoad] ❌ Error cargando ${iso}:`, e);
+            // Reset en caso de error
+            preloadedPolygons = null;
+            preloadedCountryIso = null;
           }
         })();
         
         // PASO 5: Navegar más temprano (200ms) para que aparezcan antes
         setTimeout(async () => {
-          await tick();
-          
-          // Esperar pre-carga (probablemente ya terminó)
-          await preloadPromise;
-          
-          // Usar polígonos pre-cargados si están disponibles
-          if (preloadedPolygons && preloadedCountryIso === iso) {
-            localPolygons = preloadedPolygons;
-            await navigationManager!.navigateToCountry(iso, name);
-          } else {
-            await navigationManager!.navigateToCountry(iso, name);
+          try {
+            await tick();
+            
+            // Esperar pre-carga (probablemente ya terminó)
+            await preloadPromise;
+            
+            // Usar polígonos pre-cargados si están disponibles
+            if (preloadedPolygons && preloadedCountryIso === iso) {
+              console.log(`[Navigate] Usando polígonos pre-cargados para ${iso}`);
+              localPolygons = preloadedPolygons;
+              await navigationManager!.navigateToCountry(iso, name);
+            } else {
+              console.log(`[Navigate] Navegando a ${iso} sin pre-carga`);
+              await navigationManager!.navigateToCountry(iso, name);
+            }
+            
+            // NO LIMPIAR ETIQUETAS - navigateToCountry ya las mostró
+            // Las etiquetas se gestionan dentro de navigateToCountry
+            
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await updateGlobeColors(true); // true = con fade-in
+          } catch (navError) {
+            console.error(`[Navigate] ❌ Error navegando a ${iso}:`, navError);
+            // En caso de error, intentar recuperar el estado
+            subdivisionLabels = [];
+            updateSubdivisionLabels(false);
           }
-          
-          // LIMPIAR ETIQUETAS INMEDIATAMENTE después de navegar
-          subdivisionLabels = [];
-          updateSubdivisionLabels(false);
-          
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          await updateGlobeColors(true); // true = con fade-in
         }, 200);
         
       } else if (currentLevel === 'country' && feat.properties?.ID_1) {
@@ -4267,7 +4948,33 @@
         const subdivisionRecord = answersData?.[subdivisionKey];
         
         if (!subdivisionRecord) {
-          return; // BLOQUEAR si no hay datos
+          console.log('[PolygonClick] Subdivisión sin datos, volviendo atrás');
+          // NO HAY DATOS: Volver a nivel mundial
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          centerPolygon = null;
+          centerPolygonId = null;
+          isCenterPolygonActive = false;
+          
+          const currentPov = globe?.pointOfView();
+          scheduleZoom(
+            currentPov?.lat || 20, 
+            currentPov?.lng || 0, 
+            MAX_ZOOM_ALTITUDE,
+            1000
+          );
+          
+          await navigationManager!.navigateBack();
+          
+          selectedCountryName = null;
+          selectedCountryIso = null;
+          selectedSubdivisionName = null;
+          selectedCityId = null;
+          
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await updateGlobeColors();
+          
+          return;
         }
         
         // PASO 2: Actualizar datos en el bottom sheet
@@ -4307,26 +5014,101 @@
             await updateGlobeColors(true);
           }, 200);
         } else {
-          // NO tiene subdivisiones: solo centrar cámara y mostrar info
+          // NO tiene subdivisiones: solo centrar cámara, mostrar info y activar etiqueta
           console.log(`[Click] ${subdivisionName} no tiene subdivisiones, solo centrando...`);
           scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+          
+          // ACTIVAR polígono centrado con etiqueta
+          setTimeout(() => {
+            centerPolygon = feat;
+            centerPolygonId = subdivisionKey;
+            isCenterPolygonActive = true;
+            globe?.refreshPolyAltitudes?.();
+            addCenterPolygonLabel();
+            console.log('[Click] Polígono activado con etiqueta:', subdivisionKey);
+          }, 250); // Esperar que el zoom haya avanzado
         }
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
-        // NIVEL 4: Activar selección (viene de etiqueta o sistema de proximidad)
+        // NIVEL 3 o 4: Activar selección con etiqueta
         const cityName = feat.properties.NAME_2 || feat.properties.name_2 || name;
         const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1;
+        const cityId = feat.properties.ID_2;
         
-                
-        // Activar nivel 4
+        // Verificar si tiene datos
+        const cityRecord = answersData?.[cityId];
+        if (!cityRecord) {
+          console.log('[PolygonClick] Ciudad sin datos, volviendo a nivel país');
+          // NO HAY DATOS: Volver a nivel país
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          centerPolygon = null;
+          centerPolygonId = null;
+          isCenterPolygonActive = false;
+          
+          const currentPov = globe?.pointOfView();
+          scheduleZoom(currentPov?.lat || 0, currentPov?.lng || 0, 0.8, 700);
+          
+          await navigationManager!.navigateBack();
+          
+          selectedSubdivisionName = null;
+          selectedCityId = null;
+          
+          // Mostrar etiqueta al volver
+          if (selectedCountryIso && activePoll?.id) {
+            const countryIso = selectedCountryIso;
+            setTimeout(async () => {
+              const subdivisionColorById = await computeSubdivisionColorsFromDatabase(countryIso, localPolygons || []);
+              
+              for (const poly of (localPolygons || [])) {
+                const id1 = poly.properties?.ID_1;
+                if (id1 && subdivisionColorById[String(id1)]) {
+                  poly.properties._forcedColor = subdivisionColorById[String(id1)];
+                }
+              }
+              
+              await updateGlobeColors();
+              
+              const filteredPolygons = (localPolygons || []).filter((p: any) => !p.properties?._isParent);
+              if (filteredPolygons.length > 0) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                showFirstLabelWithData(filteredPolygons);
+              } else {
+                // FALLBACK: Mostrar nombre del país
+                await generateCountryNameLabel();
+              }
+            }, 200);
+          } else {
+            setTimeout(async () => {
+              const filteredPolygons = (localPolygons || []).filter((p: any) => !p.properties?._isParent);
+              if (filteredPolygons.length > 0) {
+                showFirstLabelWithData(filteredPolygons);
+              } else {
+                // FALLBACK: Mostrar nombre del país
+                await generateCountryNameLabel();
+              }
+            }, 400);
+          }
+          
+          return;
+        }
+        
+        // Activar nivel 3/4
         selectedCityName = cityName;
         selectedSubdivisionName = subdivisionName;
-        selectedCityId = feat.properties.ID_2;
+        selectedCityId = cityId;
+        
+        // ACTIVAR polígono centrado con etiqueta
+        centerPolygon = feat;
+        centerPolygonId = cityId;
+        isCenterPolygonActive = true;
         
         // Refresh visual
         setTimeout(() => {
           globe?.refreshPolyStrokes?.();
           globe?.refreshPolyAltitudes?.();
+          addCenterPolygonLabel();
+          console.log('[Click] Polígono nivel 3/4 activado con etiqueta:', cityId);
         }, 100);
         
         // Generate city data
@@ -4338,13 +5120,28 @@
     }
   }}
   on:globeClick={async (e) => {
+    console.log('[GlobeClick] 🔵 Evento disparado - isZooming:', isZooming, 'labelClickInProgress:', labelClickInProgress);
+    
     // BLOQUEAR clics durante animaciones de zoom
-    if (isZooming) return;
+    if (isZooming) {
+      console.log('[GlobeClick] ⛔ Bloqueado por isZooming');
+      return;
+    }
+    
+    // BLOQUEAR si acabamos de hacer click en una etiqueta
+    if (labelClickInProgress) {
+      console.log('[GlobeClick] ⛔ Bloqueado por labelClick en progreso');
+      return;
+    }
     
     if (!navigationManager) return;
     
     try {
       const currentLevel = navigationManager!.getCurrentLevel();
+      console.log('[GlobeClick] ✅ Procesando click en nivel:', currentLevel);
+      
+      // ELIMINADO: código que navegaba al polígono centrado
+      // Ahora SIEMPRE vuelve atrás al hacer click fuera
       
       // Check if we're in city level (4th level)
       if (selectedCityName) {
@@ -4366,9 +5163,12 @@
       }
       if (currentLevel !== 'world') {
         
-        // PASO 1: OCULTAR ETIQUETAS INMEDIATAMENTE antes de cualquier animación
+        // PASO 1: LIMPIAR TODO - etiquetas y estado de polígono centrado
         subdivisionLabels = [];
         updateSubdivisionLabels(false);
+        centerPolygon = null;
+        centerPolygonId = null;
+        isCenterPolygonActive = false;
         
         // PASO 2: Iniciar zoom para bloquear nuevas etiquetas
         const currentPov = globe?.pointOfView();
@@ -4412,7 +5212,7 @@
           const currentPov = globe?.pointOfView();
           scheduleZoom(currentPov?.lat || 0, currentPov?.lng || 0, 0.8, 700);
           
-          // Recargar colores de subdivisiones DESPUÉS
+          // Recargar colores y MOSTRAR ETIQUETA
           if (selectedCountryIso && activePoll?.id) {
             const countryIso = selectedCountryIso;
                         setTimeout(async () => {
@@ -4426,7 +5226,28 @@
               }
               
               await updateGlobeColors();
+              
+              // MOSTRAR ETIQUETA después de volver a nivel 2
+              const filteredPolygons = (localPolygons || []).filter((p: any) => !p.properties?._isParent);
+              if (filteredPolygons.length > 0) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                showFirstLabelWithData(filteredPolygons);
+              } else {
+                // FALLBACK: Si no hay polígonos, mostrar nombre del país
+                await generateCountryNameLabel();
+              }
             }, 200);
+          } else {
+            // Sin encuesta activa, mostrar etiqueta de todos modos
+            setTimeout(async () => {
+              const filteredPolygons = (localPolygons || []).filter((p: any) => !p.properties?._isParent);
+              if (filteredPolygons.length > 0) {
+                showFirstLabelWithData(filteredPolygons);
+              } else {
+                // FALLBACK: Si no hay polígonos, mostrar nombre del país
+                await generateCountryNameLabel();
+              }
+            }, 400);
           }
         } else if (newLevel === 'subdivision') {
           // Clear only city level (already handled above)
@@ -4438,12 +5259,162 @@
       console.error('[Click] Error handling globe click:', e);
     }
   }}
+  on:labelClick={async (e) => {
+    // Manejar click en etiqueta: navegar al polígono de la etiqueta
+    if (isZooming) return;
+    if (!navigationManager) return;
+    
+    // ACTIVAR BANDERA para bloquear globeClick
+    labelClickInProgress = true;
+    console.log('[LabelClick] 🚫 Bloqueando globeClick temporalmente');
+    
+    // Desactivar después de 1000ms (tiempo suficiente para que complete la navegación)
+    setTimeout(() => {
+      labelClickInProgress = false;
+      console.log('[LabelClick] ✅ Desbloqueando globeClick');
+    }, 1000);
+    
+    try {
+      const feat = e.detail?.feat;
+      if (!feat) {
+        console.warn('[LabelClick] No hay feature en la etiqueta');
+        labelClickInProgress = false; // Desbloquear inmediatamente si hay error
+        return;
+      }
+      
+      console.log('[LabelClick] ✨ Click en etiqueta, navegando a polígono:', feat.properties);
+      
+      const currentLevel = navigationManager!.getCurrentLevel();
+      const iso = isoOf(feat);
+      const name = nameOf(feat);
+      
+      // NO VERIFICAR DATOS - La etiqueta solo existe si el polígono tiene datos
+      // showFirstLabelWithData ya verificó esto antes de crear la etiqueta
+      console.log('[LabelClick] Nivel actual:', currentLevel);
+      console.log('[LabelClick] ISO:', iso, 'Nombre:', name);
+      
+      // Mostrar bottom sheet con datos del polígono
+      setSheetState('collapsed');
+      
+      // Navegar según el nivel actual y las propiedades del feature
+      if (currentLevel === 'world' && iso) {
+        // Nivel mundial: navegar a país
+        const countryRecord = answersData?.[iso];
+        if (!countryRecord) return;
+        
+        subdivisionLabels = [];
+        updateSubdivisionLabels(false);
+        
+        const centroid = centroidOf(feat);
+        const adaptiveAltitude = calculateAdaptiveZoom(feat);
+        scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
+        
+        const countryData = [countryRecord];
+        countryChartSegments = generateCountryChartSegments(countryData);
+        
+        setTimeout(async () => {
+          await tick();
+          await navigationManager!.navigateToCountry(iso, name);
+          // NO LIMPIAR ETIQUETAS - navigateToCountry ya las mostró
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await updateGlobeColors(true);
+        }, 200);
+        
+      } else if (currentLevel === 'country' && feat.properties?.ID_1) {
+        // Nivel país: navegar a subdivisión
+        const subdivisionId = feat.properties.ID_1;
+        const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1 || name;
+        
+        console.log('[LabelClick] 🗺️ Nivel país → Navegando a subdivisión');
+        console.log('[LabelClick] subdivisionId:', subdivisionId);
+        console.log('[LabelClick] subdivisionName:', subdivisionName);
+        console.log('[LabelClick] iso:', iso);
+        
+        const subdivisionKey = subdivisionId;
+        const subdivisionRecord = answersData?.[subdivisionKey];
+        
+        console.log('[LabelClick] subdivisionRecord existe:', !!subdivisionRecord);
+        console.log('[LabelClick] answersData tiene', Object.keys(answersData || {}).length, 'claves');
+        
+        // NO VERIFICAR DATOS - La etiqueta solo existe si el feature tiene datos
+        // Continuar con la navegación aunque subdivisionRecord sea undefined
+        if (subdivisionRecord) {
+          subdivisionChartSegments = generateCountryChartSegments([subdivisionRecord]);
+        }
+        selectedCountryIso = iso;
+        
+        const hasSubdivisions = await (async () => {
+          try {
+            const resp = await fetch(`/geojson/${iso}/${subdivisionId}.topojson`, { method: 'HEAD' });
+            return resp.ok;
+          } catch { return false; }
+        })();
+        
+        const centroid = centroidOf(feat);
+        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
+        const targetAlt = Math.max(0.12, adaptiveAltitude);
+        
+        if (hasSubdivisions) {
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+          
+          setTimeout(async () => {
+            // NO LIMPIAR ETIQUETAS - navigateToSubdivision ya las mostrará
+            await navigationManager!.navigateToSubdivision(iso, subdivisionId, subdivisionName);
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await updateGlobeColors(true);
+          }, 200);
+        } else {
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+          setTimeout(() => {
+            centerPolygon = feat;
+            centerPolygonId = subdivisionKey;
+            isCenterPolygonActive = true;
+            globe?.refreshPolyAltitudes?.();
+            addCenterPolygonLabel();
+          }, 250);
+        }
+        
+      } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
+        // Nivel subdivisión: zoom a nivel 4
+        const cityName = feat.properties.NAME_2 || feat.properties.name_2 || name;
+        const cityId = feat.properties.ID_2;
+        
+        console.log('[LabelClick] 🏙️ Nivel subdivisión → Zoom a nivel 4');
+        console.log('[LabelClick] cityId:', cityId);
+        console.log('[LabelClick] cityName:', cityName);
+        
+        const cityRecord = answersData?.[cityId];
+        console.log('[LabelClick] cityRecord existe:', !!cityRecord);
+        
+        // NO VERIFICAR DATOS - La etiqueta solo existe si el feature tiene datos
+        selectedCityName = cityName;
+        selectedCityId = cityId;
+        
+        const centroid = centroidOf(feat);
+        scheduleZoom(centroid.lat, centroid.lng, 0.08, 500);
+        
+        setTimeout(() => {
+          globe?.refreshPolyStrokes?.();
+          globe?.refreshPolyAltitudes?.();
+          addCenterPolygonLabel();
+        }, 100);
+      }
+      
+    } catch (error) {
+      console.error('[LabelClick] Error handling label click:', error);
+      labelClickInProgress = false; // Desbloquear en caso de error
+    }
+  }}
 />
 <!-- Degradado superior usando el color de fondo actual -->
 <div
   class="globe-top-fade"
   style={`background: linear-gradient(to bottom, ${bgColor} 0%, ${hexToRgba(bgColor, 1)} 25%, ${hexToRgba(bgColor, 0.3)} 70%, transparent 100%)`}
 ></div>
+
+<!-- Zoom out para volver - sin indicador visual -->
 
 <!-- Navigation breadcrumb - DISABLED, using BottomSheet nav-chips instead -->
 {#if false && navigationManager}
@@ -4671,7 +5642,9 @@
 <!-- Tabs compactos (Para ti → menú) junto a la lupa -->
 <div class="tabs-float" class:blocked-during-animation={isZooming}>
   <TopTabs
+    bind:active={activeTopTab}
     options={["Para ti", "Tendencias", "Live"]}
+    on:change={handleTopTabChange}
   />
 </div>
 
@@ -4680,6 +5653,7 @@
 <div class:blocked-during-animation={isZooming}>
   <TagBar
     bind:activeTag
+    activeTopTab={activeTopTab}
     {showAccountsLine}
     {paraTiTags}
     {paraTiAccounts}
@@ -4721,7 +5695,9 @@
   isTransitioning={sheetIsTransitioning}
   isCameraAnimating={isZooming}
   {selectedCountryName}
+  {selectedCountryIso}
   {selectedSubdivisionName}
+  {selectedSubdivisionId}
   {selectedCityName}
   {countryChartSegments}
   {subdivisionChartSegments}
@@ -4830,6 +5806,8 @@
   <div class="zoom-overlay" transition:fade={{ duration: 150 }}></div>
 {/if}
 
+<!-- Indicador visual del polígono centrado eliminado - ahora se usa etiqueta y elevación -->
+
 <style>
   /* Bloquear elementos durante animaciones de cámara */
   .blocked-during-animation {
@@ -4852,4 +5830,5 @@
     pointer-events: all;
     cursor: wait;
   }
+
 </style>
