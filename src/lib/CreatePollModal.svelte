@@ -2,6 +2,7 @@
   import { fade, fly } from 'svelte/transition';
   import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
+  import { currentUser } from '$lib/stores';
   
   const dispatch = createEventDispatcher();
   
@@ -48,14 +49,13 @@
     id: string;
     label: string;
     color: string;
-    avatarUrl: string;
   };
   
   type PollType = 'single' | 'multiple' | 'rating' | 'reactions' | 'collaborative';
   
   let options: PollOption[] = [
-    { id: '1', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)], avatarUrl: '' },
-    { id: '2', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)], avatarUrl: '' }
+    { id: '1', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)] },
+    { id: '2', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)] }
   ];
   
   let pollType: PollType = 'single';
@@ -171,8 +171,7 @@
     options = [...options, {
       id: newId,
       label: '',
-      color: COLORS[randomColorIndex],
-      avatarUrl: ''
+      color: COLORS[randomColorIndex]
     }];
     
     // Ir a la última página
@@ -199,8 +198,7 @@
       newOptions.push({
         id: String(Date.now() + i),
         label: `${icons} (${i}/${ratingCount})`,
-        color: COLORS[Math.floor(Math.random() * COLORS.length)],
-        avatarUrl: ''
+        color: COLORS[Math.floor(Math.random() * COLORS.length)]
       });
     }
     options = newOptions;
@@ -349,6 +347,7 @@
       
       // Preparar datos para enviar
       const pollData = {
+        userId: $currentUser?.id || undefined,
         title: title.trim(),
         description: description.trim() || undefined,
         category: category,
@@ -361,7 +360,6 @@
           optionKey: opt.id,
           optionLabel: opt.label.trim(),
           color: opt.color,
-          avatarUrl: opt.avatarUrl || undefined,
           displayOrder: index
         })),
         // Opciones específicas por tipo
@@ -445,8 +443,8 @@
     location = '';
     duration = '7d';
     options = [
-      { id: '1', label: '', color: COLORS[0], avatarUrl: '' },
-      { id: '2', label: '', color: COLORS[1], avatarUrl: '' }
+      { id: '1', label: '', color: COLORS[0] },
+      { id: '2', label: '', color: COLORS[1] }
     ];
     errors = {};
   }
@@ -1452,7 +1450,8 @@
   .vote-card .card-header,
   .vote-card .card-content {
     position: relative;
-    z-index: 1;
+    z-index: 0;
+    background: transparent;
   }
   
   .card-header {
@@ -1463,6 +1462,9 @@
     justify-content: flex-start;
     position: relative;
     flex: 1;
+    background: transparent;
+    z-index: 1;
+    pointer-events: none;
   }
   
   .vote-card.collapsed .card-header {
@@ -1491,6 +1493,10 @@
     -webkit-box-orient: vertical;
     word-break: break-word;
     min-height: 56px;
+    background: transparent;
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
   }
   
   .vote-card.is-active .question-title {
@@ -1628,6 +1634,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+    z-index: 0;
+    background: transparent;
+    pointer-events: none;
   }
   
   .percentage-display.is-active {
@@ -1640,6 +1650,8 @@
     font-weight: 700;
     color: white;
     line-height: 1;
+    background: transparent;
+    pointer-events: none;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     transition: font-size 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }

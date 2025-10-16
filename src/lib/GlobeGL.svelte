@@ -2864,21 +2864,12 @@
         return { ...option, votes: totalVotesForPoll };
       });
       
-      // Si no hay datos, usar fallback
+      // Si no hay datos reales, NO generar fallback MOCK
+      // El globo debe mostrar gris cuando no hay votos
       if (Object.keys(aggregatedData).length === 0) {
-                // Generar datos de fallback con las encuestas trending
-        const fallbackOptions = trendingPolls.slice(0, 5).map((poll: any, index: number) => ({
-          key: `poll_${poll.id}`,
-          label: poll.title || poll.question,
-          color: poll.options?.[0]?.color || `hsl(${index * 72}, 70%, 60%)`,
-          votes: poll.totalVotes || 100,
-          pollData: poll
-        }));
-        generateFallbackPollData(aggregatedData, fallbackOptions);
-        fallbackOptions.forEach((opt: { key: string; label: string; color: string; votes: number }) => {
-          aggregatedColors[opt.key] = opt.color;
-        });
-        activePollOptions = fallbackOptions;
+        console.log('[processTrendingPolls] ⚠️ No hay votos reales - mostrando globo sin datos');
+        // NO generar datos MOCK - dejar aggregatedData vacío
+        // activePollOptions ya tiene las encuestas pero sin votos
       }
       
       // Actualizar datos globales
@@ -3035,157 +3026,8 @@
     
   }
   
-  // Función helper para generar datos de fallback cuando la API no está disponible
-  function generateFallbackPollData(answersData: Record<string, Record<string, number>>, options: Array<{ key: string; label: string; color: string; votes: number }>) {
-        
-    // Obtener todos los códigos ISO de los países
-    const countryCodes = worldPolygons?.map(p => p.properties?.ISO_A3).filter(Boolean) || [];
-    
-    // Para cada país, asignar votos simulados basados en los votos totales de cada opción
-    countryCodes.forEach(iso => {
-      const countryAnswers: Record<string, number> = {};
-      options.forEach(option => {
-        // Distribuir votos de forma más realista (no completamente aleatorio)
-        const baseVotes = option.votes || 100;
-        const randomFactor = 0.5 + Math.random(); // Factor entre 0.5 y 1.5
-        countryAnswers[option.key] = Math.floor((baseVotes / countryCodes.length) * randomFactor);
-      });
-      answersData[iso] = countryAnswers;
-    });
-    
-      }
-  
-  // Función para manejar votos
-  function handleVote(optionKey: string) {
-    console.log('[handleVote] 🗳️ Votando por:', optionKey);
-    
-    // 1. Incrementar contador localmente (optimistic update)
-    voteOptions = voteOptions.map(option => 
-      option.key === optionKey 
-        ? { ...option, votes: option.votes + 1 }
-        : option
-    );
-    
-    // 2. Incrementar total de votos de la encuesta activa
-    if (activePoll) {
-      activePoll = {
-        ...activePoll,
-        totalVotes: (activePoll.totalVotes || 0) + 1
-      };
-    }
-    
-    // 3. Enviar voto al servidor
-    sendVoteToServer(optionKey);
-  }
-  
-  // Función para enviar voto al servidor
-  async function sendVoteToServer(optionKey: string) {
-    console.log('[sendVote] 🎯 Iniciando envío de voto');
-    console.log('[sendVote] activePoll:', activePoll);
-    console.log('[sendVote] optionKey:', optionKey);
-    
-    if (!activePoll || !activePoll.id) {
-      console.error('[sendVote] ❌ No hay encuesta activa. activePoll:', activePoll);
-      return;
-    }
-    
-    try {
-      console.log('[sendVote] 🔍 Buscando opción en:', activePoll.options);
-      
-      // Encontrar la opción para obtener su ID
-      const option = activePoll.options?.find((opt: any) => opt.optionKey === optionKey);
-      if (!option) {
-        console.error('[sendVote] ❌ Opción no encontrada:', optionKey);
-        console.error('[sendVote] Opciones disponibles:', activePoll.options);
-        return;
-      }
-      
-      console.log('[sendVote] ✅ Opción encontrada:', option);
-      
-      // Obtener ubicación real del usuario (con fallback)
-      let latitude = 40.4168;  // Madrid por defecto
-      let longitude = -3.7038;
-      let geoCountryIso3 = 'ESP';
-      let geoCountryName = 'España';
-      let geoSubdivisionId: string | null = null;
-      let geoSubdivisionName: string | null = null;
-      
-      // Intentar obtener geolocalización del navegador
-      try {
-        if (navigator.geolocation) {
-          const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 3000,
-              maximumAge: 300000 // 5 minutos
-            });
-          });
-          latitude = (position as any).coords.latitude;
-          longitude = (position as any).coords.longitude;
-          console.log('[sendVote] 📍 Ubicación GPS obtenida:', { latitude, longitude });
-          
-          // Determinar país y subdivisión desde las coordenadas
-          try {
-            const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
-            if (geocodeResponse.ok) {
-              const geocodeData = await geocodeResponse.json();
-              if (geocodeData.found) {
-                geoCountryIso3 = geocodeData.countryIso3;
-                geoCountryName = geocodeData.countryName;
-                geoSubdivisionId = geocodeData.subdivisionId;
-                geoSubdivisionName = geocodeData.subdivisionName;
-                console.log('[sendVote] 🌍 Ubicación geocodificada:', {
-                  país: geoCountryName,
-                  subdivisión: geoSubdivisionName,
-                  subdivisionId: geoSubdivisionId
-                });
-              }
-            }
-          } catch (geocodeError) {
-            console.warn('[sendVote] ⚠️ Error en geocoding:', geocodeError);
-          }
-        }
-      } catch (geoError) {
-        console.warn('[sendVote] ⚠️ No se pudo obtener geolocalización, usando valores por defecto:', geoError);
-      }
-      
-      const countryIso3 = selectedCountryIso || geoCountryIso3;
-      const countryName = selectedCountryName || geoCountryName;
-      
-      console.log('[sendVote] 📤 Enviando al servidor:', {
-        pollId: activePoll.id,
-        optionId: option.id,
-        optionKey,
-        latitude,
-        longitude,
-        countryIso3
-      });
-      
-      const response = await fetch(`/api/polls/${activePoll.id}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          optionId: option.id,
-          userId: getStore(currentUser)?.id || null,  // ID del usuario autenticado
-          latitude,
-          longitude,
-          countryIso3,
-          countryName,
-          subdivisionId: selectedSubdivisionId || geoSubdivisionId || null,
-          subdivisionName: selectedSubdivisionName || geoSubdivisionName || null,
-          cityName: selectedCityName || null
-        })
-      });
-      
-      if (response.ok) {
-        console.log('[sendVote] ✅ Voto registrado en servidor');
-      } else {
-        const error = await response.json();
-        console.error('[sendVote] ❌ Error:', error);
-      }
-    } catch (error) {
-      console.error('[sendVote] ❌ Error de red:', error);
-    }
-  }
+  // NOTA: Votación se maneja completamente en BottomSheet.svelte
+  // No hay funciones de voto aquí - solo visualización del globo
   
   // Función para abrir una encuesta en el globo con sus opciones visualizadas
   async function handleOpenPollInGlobe(event: CustomEvent<{ poll: any; options: Array<{ key: string; label: string; color: string; votes: number }> }>) {
@@ -3255,13 +3097,12 @@
         const { data } = await response.json();
         Object.assign(newAnswersData, data);
       } else {
-        // Fallback: generar datos simulados basados en las opciones de la encuesta
-        generateFallbackPollData(newAnswersData, options);
+        // NO generar datos fallback MOCK - solo usar datos reales
+        console.warn('[OpenPoll] ⚠️ No hay datos de votos para esta encuesta');
       }
     } catch (error) {
       console.error('[GlobeGL] ❌ Error loading poll data from API:', error);
-      // Fallback: generar datos simulados
-      generateFallbackPollData(newAnswersData, options);
+      // NO generar datos fallback MOCK - solo usar datos reales
     }
     
     // Guardar en cache mundial
@@ -3359,18 +3200,109 @@
   // Configuración del tema desde JSON
   const globeTheme = themeConfig.theme.colors.globe;
   
-  // Controles de color (color pickers) y opacidad (sliders) - Inicializados desde theme.json
+  // Función auxiliar para cargar tema guardado o usar Carbon por defecto
+  function getInitialThemeColors() {
+    try {
+      const saved = localStorage.getItem('votetok-theme');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('[GlobeGL] Inicializando con tema guardado:', parsed);
+        
+        // Todas las paletas oscuras (deben coincidir con UnifiedThemeToggle)
+        const darkPalettes = [
+          { name: 'Carbon', bg: '#0a0a0a', sphere: '#1a1a1a', stroke: '#2e2e2e', noData: '#141414', atmosphere: '#1a1a1a' },
+          { name: 'Dark', bg: '#000000', sphere: '#161b22', stroke: '#30363d', noData: '#181a20', atmosphere: '#161b22' },
+          { name: 'Slate', bg: '#0e1012', sphere: '#1a1e24', stroke: '#2e3640', noData: '#14181c', atmosphere: '#1a1e24' },
+          { name: 'Steel', bg: '#0f1113', sphere: '#1c2026', stroke: '#303840', noData: '#151a1e', atmosphere: '#1c2026' },
+          { name: 'Graphite', bg: '#0d0f10', sphere: '#191d20', stroke: '#2d3338', noData: '#13161a', atmosphere: '#191d20' },
+          { name: 'Deep Purple', bg: '#0a0015', sphere: '#1a0b2e', stroke: '#3d1e6d', noData: '#16003e', atmosphere: '#1a0b2e' },
+          { name: 'Midnight Purple', bg: '#0f0a1e', sphere: '#1a1234', stroke: '#2e2052', noData: '#150f28', atmosphere: '#1a1234' },
+          { name: 'Violet Night', bg: '#100920', sphere: '#1e1238', stroke: '#3a2561', noData: '#180e2d', atmosphere: '#1e1238' },
+          { name: 'Indigo Night', bg: '#08091a', sphere: '#0f1233', stroke: '#1e245c', noData: '#0c0e26', atmosphere: '#0f1233' },
+          { name: 'Magenta Night', bg: '#1a001a', sphere: '#2e002e', stroke: '#4d004d', noData: '#240024', atmosphere: '#2e002e' },
+          { name: 'Ocean Night', bg: '#001a2e', sphere: '#002642', stroke: '#284b63', noData: '#003049', atmosphere: '#002642' },
+          { name: 'Cyber Blue', bg: '#000d1a', sphere: '#001a33', stroke: '#00334d', noData: '#00152b', atmosphere: '#001a33' },
+          { name: 'Navy Deep', bg: '#00101c', sphere: '#001e36', stroke: '#003d5c', noData: '#001829', atmosphere: '#001e36' },
+          { name: 'Arctic Night', bg: '#0a1420', sphere: '#14263d', stroke: '#284a66', noData: '#101d2e', atmosphere: '#14263d' },
+          { name: 'Aqua Deep', bg: '#001a1a', sphere: '#002e2e', stroke: '#004d4d', noData: '#002424', atmosphere: '#002e2e' },
+          { name: 'Teal Deep', bg: '#081615', sphere: '#0f2928', stroke: '#1a4d4a', noData: '#0c1f1e', atmosphere: '#0f2928' },
+          { name: 'Turquoise Night', bg: '#001a15', sphere: '#002e26', stroke: '#004d42', noData: '#002219', atmosphere: '#002e26' },
+          { name: 'Forest Dark', bg: '#0d1b0f', sphere: '#1b2e1f', stroke: '#2d4a33', noData: '#19291c', atmosphere: '#1b2e1f' },
+          { name: 'Emerald Night', bg: '#081512', sphere: '#102822', stroke: '#1d4a3d', noData: '#0d1e19', atmosphere: '#102822' },
+          { name: 'Jade Dark', bg: '#091713', sphere: '#112924', stroke: '#1f4a40', noData: '#0e201c', atmosphere: '#112924' },
+          { name: 'Lime Dark', bg: '#0f1a00', sphere: '#1c2e00', stroke: '#304d00', noData: '#162200', atmosphere: '#1c2e00' },
+          { name: 'Gold Dark', bg: '#1a1500', sphere: '#2e2600', stroke: '#4d4200', noData: '#221c00', atmosphere: '#2e2600' },
+          { name: 'Amber Dark', bg: '#1a1200', sphere: '#2e2200', stroke: '#524000', noData: '#221a00', atmosphere: '#2e2200' },
+          { name: 'Orange Night', bg: '#1a0800', sphere: '#2e1400', stroke: '#4d2400', noData: '#220e00', atmosphere: '#2e1400' },
+          { name: 'Copper Night', bg: '#1a0d00', sphere: '#2e1800', stroke: '#4d2800', noData: '#221100', atmosphere: '#2e1800' },
+          { name: 'Bronze Night', bg: '#1a0f00', sphere: '#2e1c00', stroke: '#523600', noData: '#221400', atmosphere: '#2e1c00' },
+          { name: 'Crimson Dark', bg: '#1a0000', sphere: '#2b0808', stroke: '#4a1414', noData: '#1f0303', atmosphere: '#2b0808' },
+          { name: 'Ruby Night', bg: '#180005', sphere: '#2a0a10', stroke: '#4d1a25', noData: '#1e0408', atmosphere: '#2a0a10' },
+          { name: 'Burgundy', bg: '#150008', sphere: '#26000f', stroke: '#45001f', noData: '#1b000c', atmosphere: '#26000f' },
+          { name: 'Pink Dark', bg: '#1a0010', sphere: '#2e001e', stroke: '#4d0033', noData: '#220016', atmosphere: '#2e001e' },
+        ];
+        
+        // Todas las paletas claras
+        const lightPalettes = [
+          { name: 'Cloud', bg: '#d0d2d4', sphere: '#bcc0c4', stroke: '#a8adb2', noData: '#c4c7ca', atmosphere: '#bcc0c4' },
+          { name: 'Pearl', bg: '#d3d3d3', sphere: '#c0c0c0', stroke: '#adadad', noData: '#c8c8c8', atmosphere: '#c0c0c0' },
+          { name: 'Silver', bg: '#c8cacc', sphere: '#b5b8bb', stroke: '#a1a5a9', noData: '#bdc0c3', atmosphere: '#b5b8bb' },
+          { name: 'Cream', bg: '#d7d7d7', sphere: '#c7c7c7', stroke: '#b7b7b7', noData: '#cfcfcf', atmosphere: '#c7c7c7' },
+          { name: 'Ivory', bg: '#d8d8d6', sphere: '#c8c8c4', stroke: '#b8b8b2', noData: '#d0d0cd', atmosphere: '#c8c8c4' },
+          { name: 'Lavender Mist', bg: '#d0cfe0', sphere: '#bdbccf', stroke: '#aaa8be', noData: '#c6c5d8', atmosphere: '#bdbccf' },
+          { name: 'Lilac Dream', bg: '#d2d0e1', sphere: '#bfbdd1', stroke: '#aca9c0', noData: '#c8c6d9', atmosphere: '#bfbdd1' },
+          { name: 'Purple Haze', bg: '#c5c3d8', sphere: '#b2b0c5', stroke: '#9e9bb2', noData: '#bbb9ce', atmosphere: '#b2b0c5' },
+          { name: 'Violet Soft', bg: '#d8d0e0', sphere: '#c5bdd1', stroke: '#b0a8be', noData: '#cec6d8', atmosphere: '#c5bdd1' },
+          { name: 'Sky Whisper', bg: '#c8d7e1', sphere: '#b5c7d1', stroke: '#a0b6c0', noData: '#becfd9', atmosphere: '#b5c7d1' },
+          { name: 'Ice Blue', bg: '#c9d8e2', sphere: '#b6c8d2', stroke: '#a1b7c1', noData: '#bfd0da', atmosphere: '#b6c8d2' },
+          { name: 'Ocean Mist', bg: '#c0d0d8', sphere: '#adc0c8', stroke: '#98afb7', noData: '#b6c8d0', atmosphere: '#adc0c8' },
+          { name: 'Steel Blue', bg: '#b8c8d0', sphere: '#a5b8c0', stroke: '#90a7af', noData: '#aec0c8', atmosphere: '#a5b8c0' },
+          { name: 'Aqua Light', bg: '#c0d8d8', sphere: '#adc8c8', stroke: '#98b7b7', noData: '#b6d0d0', atmosphere: '#adc8c8' },
+          { name: 'Turquoise Soft', bg: '#b8e0d8', sphere: '#a5d0c8', stroke: '#90bfb6', noData: '#add8d0', atmosphere: '#a5d0c8' },
+          { name: 'Mint Breeze', bg: '#c9d8d0', sphere: '#b6c8be', stroke: '#a1b7ab', noData: '#bfd0c6', atmosphere: '#b6c8be' },
+          { name: 'Sage Whisper', bg: '#cad9d0', sphere: '#b7c9be', stroke: '#a2b8ab', noData: '#c0d1c6', atmosphere: '#b7c9be' },
+          { name: 'Forest Mist', bg: '#c0d0c8', sphere: '#adc0b5', stroke: '#98afa0', noData: '#b6c8be', atmosphere: '#adc0b5' },
+          { name: 'Emerald Light', bg: '#b8d0c8', sphere: '#a5c0b5', stroke: '#90afa0', noData: '#aec8be', atmosphere: '#a5c0b5' },
+          { name: 'Lime Light', bg: '#d0e0b8', sphere: '#c0d0a5', stroke: '#afbf90', noData: '#c8d8ad', atmosphere: '#c0d0a5' },
+          { name: 'Gold Light', bg: '#e0d8b0', sphere: '#d0c89d', stroke: '#bfb688', noData: '#d8d0a6', atmosphere: '#d0c89d' },
+          { name: 'Sand', bg: '#d8d0c8', sphere: '#c5bdb5', stroke: '#b0a89f', noData: '#cec6be', atmosphere: '#c5bdb5' },
+          { name: 'Beige', bg: '#d8d0c0', sphere: '#c5bdad', stroke: '#b0a898', noData: '#cec6b6', atmosphere: '#c5bdad' },
+          { name: 'Orange Light', bg: '#e0c8b8', sphere: '#d0b8a5', stroke: '#bfa690', noData: '#d8c0ad', atmosphere: '#d0b8a5' },
+          { name: 'Copper Soft', bg: '#e0c8b0', sphere: '#d0b89d', stroke: '#bfa688', noData: '#d8c0a6', atmosphere: '#d0b89d' },
+          { name: 'Peach Silk', bg: '#dcd2ce', sphere: '#c9bfb9', stroke: '#b6aba4', noData: '#d6c8c3', atmosphere: '#c9bfb9' },
+          { name: 'Terracotta', bg: '#d0c0b8', sphere: '#bdada5', stroke: '#a89890', noData: '#c6b6ae', atmosphere: '#bdada5' },
+          { name: 'Rose Blush', bg: '#dcd0d3', sphere: '#c9bdc0', stroke: '#b6a9ad', noData: '#d6c6c9', atmosphere: '#c9bdc0' },
+          { name: 'Coral Soft', bg: '#d8c8c8', sphere: '#c5b5b5', stroke: '#b0a0a0', noData: '#cebebe', atmosphere: '#c5b5b5' },
+          { name: 'Pink Soft', bg: '#e0c0d0', sphere: '#d0adc0', stroke: '#bf98af', noData: '#d8b6c8', atmosphere: '#d0adc0' },
+        ];
+        
+        const palettes = parsed.isDark ? darkPalettes : lightPalettes;
+        const palette = palettes[parsed.paletteIndex] || darkPalettes[0];
+        console.log('[GlobeGL] Paleta inicial seleccionada:', palette.name);
+        console.log('[GlobeGL] isDark del tema guardado:', parsed.isDark);
+        return { ...palette, isDark: parsed.isDark };
+      }
+    } catch (e) {
+      console.warn('[GlobeGL] Error al cargar tema inicial:', e);
+    }
+    // Default: Carbon oscuro
+    return { bg: '#0a0a0a', sphere: '#1a1a1a', stroke: '#2e2e2e', noData: '#141414', atmosphere: '#1a1a1a', isDark: true };
+  }
+  
+  const initialColors = getInitialThemeColors();
+
+  // Controles de color (color pickers) y opacidad (sliders) - Inicializados con tema guardado o Carbon
   let capColor = themeConfig.theme.colors.accent.blue;
   let capOpacityPct = 100;
-  let sphereColor = globeTheme.sphere; // #0a0a0a
+  let sphereColor = initialColors.sphere;
   let sphereOpacityPct = 100;
-  let strokeColor = globeTheme.stroke; // #333333 gris
+  let strokeColor = initialColors.stroke;
   let strokeOpacityPct = globeTheme.strokeOpacity; // 40 visible
-  let bgColor = globeTheme.background; // #0a0a0a casi negro
-  let polygonNoDataColor = globeTheme.polygonDefault; // #0a0a0a
-  let atmosphereColor = globeTheme.atmosphere; // #1a1a1a muy sutil
-  let atmosphereAltitude = globeTheme.atmosphereAltitude; // 0.12
-  let isDarkTheme = true; // Estado del tema
+  let bgColor = initialColors.bg;
+  let polygonNoDataColor = initialColors.noData;
+  let atmosphereColor = initialColors.atmosphere;
+  let atmosphereAltitude = 0.12; // Altura sutil para atmósfera
+  let isDarkTheme = initialColors.isDark; // Estado del tema desde localStorage o true por defecto
 
   // Colores derivados (conveniencia)
   $: capBaseColor = capColor;
@@ -3380,10 +3312,21 @@
   let panelTop = 52;
   let panelEl: HTMLDivElement | null = null;
   
+  // Flag para evitar sobrescribir tema guardado de localStorage
+  let hasLoadedSavedTheme = false;
+  
   // Observar cambios de tema - TODO unificado desde theme.json
   function updateColorsForTheme() {
+    // No sobrescribir si hay un tema guardado que aún no se ha aplicado
+    if (hasLoadedSavedTheme) {
+      console.log('[GlobeGL] Ignorando updateColorsForTheme - tema guardado ya cargado');
+      return;
+    }
+    
     const isDark = document.documentElement.classList.contains('dark');
     isDarkTheme = isDark; // Actualizar estado del tema
+    
+    console.log('[GlobeGL] updateColorsForTheme ejecutado - cargando desde theme.json');
     
     // Cargar colores desde theme.json
     const theme = themeConfig.theme.colors;
@@ -4467,14 +4410,27 @@
     };
         window.addEventListener('searchSelect', searchSelectHandler);
     
-    // Inicializar colores según tema actual
-    updateColorsForTheme();
+    // Verificar si hay tema guardado antes de inicializar colores
+    const hasSavedTheme = localStorage.getItem('votetok-theme');
+    if (!hasSavedTheme) {
+      // Solo inicializar desde theme.json si NO hay tema guardado
+      console.log('[GlobeGL] No hay tema guardado, inicializando desde theme.json');
+      updateColorsForTheme();
+    }
     
-    // Observar cambios en el tema
+    // SIEMPRE observar cambios de clase .dark para actualizar isDarkTheme
+    // Esto es necesario para que funcione el cambio día/noche en tiempo real
     const themeObserver = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.attributeName === 'class') {
-          updateColorsForTheme();
+          const isDark = document.documentElement.classList.contains('dark');
+          console.log('[GlobeGL] MutationObserver: cambio de clase .dark ->', isDark);
+          isDarkTheme = isDark; // SIEMPRE actualizar isDarkTheme
+          
+          // Solo actualizar colores completos si NO hay tema guardado
+          if (!hasSavedTheme) {
+            updateColorsForTheme();
+          }
         }
       });
     });
@@ -4484,25 +4440,42 @@
       attributeFilter: ['class']
     });
     
+    if (hasSavedTheme) {
+      console.log('[GlobeGL] Tema guardado detectado, esperando evento palettechange');
+      hasLoadedSavedTheme = true;
+    }
+    
     // Escuchar cambios de paleta random
     paletteChangeHandler = (event: Event) => {
       const customEvent = event as CustomEvent;
       const palette = customEvent.detail;
       
-      // Aplicar nueva paleta (solo en dark mode)
-      if (isDarkTheme) {
-        bgColor = palette.bg;
-        sphereColor = palette.sphere;
-        strokeColor = palette.stroke;
-        polygonNoDataColor = palette.noData;
-        
-        // Forzar actualización
-        if (globe) {
-          setTimeout(() => {
-            globe.refreshPolyColors?.();
-            globe.refreshPolyStrokes?.();
-          }, 50);
-        }
+      console.log('[GlobeGL] Evento palettechange recibido:', palette);
+      
+      // Marcar que se ha cargado un tema desde localStorage para evitar sobrescritura
+      hasLoadedSavedTheme = true;
+      
+      // Aplicar nueva paleta con transición suave
+      bgColor = palette.bg;
+      sphereColor = palette.sphere;
+      strokeColor = palette.stroke;
+      polygonNoDataColor = palette.noData;
+      
+      // Si la paleta incluye atmosphere, aplicarlo
+      if (palette.atmosphere) {
+        atmosphereColor = palette.atmosphere;
+      }
+      
+      console.log('[GlobeGL] Colores aplicados - bg:', bgColor, 'sphere:', sphereColor, 'stroke:', strokeColor);
+      
+      // Actualizar colores del globo y polígonos
+      // La transición suave del globo (esfera y fondo) se maneja automáticamente en GlobeCanvas
+      if (globe) {
+        globe.refreshPolyStrokes?.();
+        globe.refreshPolyColors?.();
+        console.log('[GlobeGL] Globe refresh ejecutado');
+      } else {
+        console.warn('[GlobeGL] Globe aún no está inicializado');
       }
     };
     
@@ -4514,6 +4487,17 @@
   // Store handler reference for cleanup
   let searchSelectHandler: ((event: Event) => Promise<void>) | null = null;
   let paletteChangeHandler: ((event: Event) => void) | null = null;
+  
+  // CRÍTICO: Forzar actualización de polígonos cuando cambia isDarkTheme
+  $: if (globe && isDarkTheme !== undefined) {
+    try {
+      // Usar el método existente refreshPolyColors para forzar re-render
+      console.log('[GlobeGL] isDarkTheme cambió a:', isDarkTheme, '- forzando actualización de polígonos');
+      globe.refreshPolyColors();
+    } catch (e) {
+      console.error('[GlobeGL] Error al actualizar polígonos:', e);
+    }
+  }
 
   onDestroy(() => {
     try {
@@ -4567,9 +4551,8 @@
     if (!activePoll) {
       // Modo trending: verificar que isoDominantKey tenga datos válidos
       if (!isoDominantKey || Object.keys(isoDominantKey).length === 0) {
-        // OPTIMIZACIÓN: Gris muy oscuro para polígonos sin datos
-        // Un pelín más claro que el fondo negro
-        return 'rgba(26,26,26,1)';
+        // Sin datos: gris claro con más transparencia en modo oscuro, gris oscuro con más transparencia en modo claro
+        return isDarkTheme ? 'rgba(180, 180, 180, 0.25)' : 'rgba(60, 60, 60, 0.25)';
       }
     }
     
@@ -4591,31 +4574,30 @@
       }
       const k = isoDominantKey[featureId] ?? '';
       const mapColor = colorMap?.[k];
-      // OPTIMIZACIÓN: Gris muy oscuro para polígonos sin datos
-      return mapColor ?? 'rgba(26,26,26,1)';
+      // Sin datos: gris claro con más transparencia en modo oscuro, gris oscuro con más transparencia en modo claro
+      return mapColor ?? (isDarkTheme ? 'rgba(180, 180, 180, 0.25)' : 'rgba(60, 60, 60, 0.25)');
     }
     
-    // VERIFICACIÓN CRÍTICA: Si el polígono NO tiene datos reales, usar gris oscuro
+    // VERIFICACIÓN CRÍTICA: Si el polígono NO tiene datos reales, usar color según tema
     // Esto evita que polígonos sin votos se coloreen por isoDominantKey con "No data"
     if (!answersData?.[featureId]) {
-      return 'rgba(26,26,26,1)';
+      return isDarkTheme ? 'rgba(180, 180, 180, 0.25)' : 'rgba(60, 60, 60, 0.25)';
     }
     
     // PRIORIDAD 3: Usar isoDominantKey con el featureId correcto
     const key = isoDominantKey[featureId] ?? '';
     const color = colorMap?.[key];
     
-    // OPTIMIZACIÓN: Si no hay color, gris muy oscuro para polígonos inactivos
-    // Un pelín más claro que el fondo para sutilmente distinguirlos
+    // Si no hay color: gris claro con más transparencia en modo oscuro, gris oscuro con más transparencia en modo claro
     if (!color) {
-      return 'rgba(26,26,26,1)';
+      return isDarkTheme ? 'rgba(180, 180, 180, 0.25)' : 'rgba(60, 60, 60, 0.25)';
     }
     
     // Aplicar fade opacity si hay animación en curso
     if (isFading && fadeOpacity < 1.0) {
-      // Transición desde gris oscuro al color final (más visible)
-      const grayColor = [26, 26, 26]; // Color de fondo
-      let targetR = 26, targetG = 26, targetB = 26;
+      // Transición desde gris claro (modo oscuro) o gris oscuro (modo claro) al color final
+      const baseColor = isDarkTheme ? [180, 180, 180] : [60, 60, 60];
+      let targetR = baseColor[0], targetG = baseColor[1], targetB = baseColor[2];
       
       // Extraer RGB del color target
       const rgbaMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
@@ -4630,12 +4612,15 @@
         targetB = parseInt(hex.substr(4, 2), 16);
       }
       
-      // Interpolar entre gris y color final
-      const r = Math.round(grayColor[0] + (targetR - grayColor[0]) * fadeOpacity);
-      const g = Math.round(grayColor[1] + (targetG - grayColor[1]) * fadeOpacity);
-      const b = Math.round(grayColor[2] + (targetB - grayColor[2]) * fadeOpacity);
+      // Interpolar entre color base (gris con opacidad) y color final
+      const r = Math.round(baseColor[0] + (targetR - baseColor[0]) * fadeOpacity);
+      const g = Math.round(baseColor[1] + (targetG - baseColor[1]) * fadeOpacity);
+      const b = Math.round(baseColor[2] + (targetB - baseColor[2]) * fadeOpacity);
       
-      return `rgb(${r},${g},${b})`;
+      // Interpolar opacidad: de 0.25 (gris base muy transparente) a 1.0 (color final opaco)
+      const alpha = 0.25 + (0.75 * fadeOpacity);
+      
+      return `rgba(${r},${g},${b},${alpha})`;
     }
     
     return color;
@@ -5720,7 +5705,6 @@
   onPointerDown={onSheetPointerDown}
   onScroll={onSheetScroll}
   onNavigateToView={navigateToView}
-  onVote={handleVote}
   onLoadMorePolls={loadMorePolls}
   onLocateMe={locateMe}
   onToggleSettings={() => { showSettings = !showSettings; }}

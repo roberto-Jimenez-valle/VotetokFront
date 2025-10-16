@@ -4,8 +4,7 @@ import { prisma } from '$lib/server/prisma';
 export const GET: RequestHandler = async ({ url }) => {
   const pollId = url.searchParams.get('poll');
   const country = url.searchParams.get('country');
-  const subdivision = url.searchParams.get('subdivision');
-  const city = url.searchParams.get('city');
+  const subdivisionLevel = url.searchParams.get('subdivision');
 
   if (!pollId) {
     throw error(400, 'Poll ID is required');
@@ -17,21 +16,25 @@ export const GET: RequestHandler = async ({ url }) => {
   };
 
   if (country) {
-    where.countryIso3 = country;
+    where.subdivision = {
+      subdivisionId: {
+        startsWith: country  // ESP, FRA, etc.
+      }
+    };
   }
 
-  if (subdivision) {
-    where.subdivisionName = subdivision;
-  }
-
-  if (city) {
-    where.cityName = city;
+  if (subdivisionLevel) {
+    where.subdivision = {
+      ...where.subdivision,
+      level: Number(subdivisionLevel)  // 1, 2 o 3
+    };
   }
 
   // Obtener votos geolocalizados
   const votes = await prisma.vote.findMany({
     where,
     include: {
+      subdivision: true,
       option: {
         select: {
           id: true,
@@ -56,11 +59,12 @@ export const GET: RequestHandler = async ({ url }) => {
   // Formatear para compatibilidad con el formato anterior
   const formattedVotes = votes.map((vote) => ({
     id: `VOTE-${vote.id}`,
-    iso3: vote.countryIso3,
+    iso3: vote.subdivision.subdivisionId.split('.')[0],  // Extraer país
     lat: vote.latitude,
     lng: vote.longitude,
     tag: vote.option.optionKey,
-    city: vote.cityName,
+    subdivisionName: vote.subdivision.name,
+    subdivisionLevel: vote.subdivision.level,
     timestamp: vote.createdAt.toISOString(),
     option: {
       key: vote.option.optionKey,
@@ -81,8 +85,7 @@ export const GET: RequestHandler = async ({ url }) => {
       filters: {
         pollId: Number(pollId),
         country,
-        subdivision,
-        city,
+        subdivisionLevel,
       },
     },
   });

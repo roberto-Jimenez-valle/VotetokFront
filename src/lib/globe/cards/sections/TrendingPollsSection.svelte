@@ -49,18 +49,10 @@
   }
   
   // Reactive data
-  $: displayOptions = trendingPolls.map((poll, index) => {
-    const totalVotes = poll.totalVotes || poll.options?.reduce((sum: number, opt: any) => sum + (opt.votes || 0), 0) || 0;
-    return {
-      key: `poll-${poll.id ?? index}`,
-      label: poll.question || poll.title || 'Encuesta',
-      color: poll.options?.[0]?.color || '#3b82f6',
-      votes: totalVotes,
-      pollData: poll
-    };
-  });
+  // Los datos ya vienen transformados desde BottomSheet con { key, label, color, votes, pollData }
+  $: displayOptions = trendingPolls;
   
-  $: sortedDisplayOptions = displayOptions.sort((a, b) => b.votes - a.votes);
+  $: sortedDisplayOptions = displayOptions.sort((a, b) => (b.votes || 0) - (a.votes || 0));
   $: shouldPaginateMain = sortedDisplayOptions.length > TRENDING_PER_PAGE;
   $: paginatedMainOptions = shouldPaginateMain
     ? getPaginatedOptions(sortedDisplayOptions, currentPageMain, TRENDING_PER_PAGE)
@@ -123,21 +115,21 @@
         <div class="header-content">
           <h3>Trending en {selectedSubdivisionName}</h3>
           <div class="topic-meta">
-            <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • {selectedCountryName}</span>
+            <span class="topic-type">{displayOptions.length} {displayOptions.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Regional</span>
           </div>
         </div>
       {:else if selectedCountryName}
         <div class="header-content">
           <h3>Trending en {selectedCountryName}</h3>
           <div class="topic-meta">
-            <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Nacional</span>
+            <span class="topic-type">{displayOptions.length} {displayOptions.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Nacional</span>
           </div>
         </div>
       {:else}
         <div class="header-content">
           <h3>Trending Global</h3>
           <div class="topic-meta">
-            <span class="topic-type">{trendingPolls.length} {trendingPolls.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Mundial</span>
+            <span class="topic-type">{displayOptions.length} {displayOptions.length === 1 ? 'encuesta' : 'encuestas'} más votadas • Mundial</span>
           </div>
         </div>
       {/if}

@@ -2,6 +2,98 @@
 <html lang="es">
 	<head>
 		<meta charset="utf-8" />
+		
+		<!-- Estilos CRÍTICOS primero - antes que NADA -->
+		<style>
+			/* MODO CLARO - Estilos aplicados inmediatamente */
+			html:not(.dark) {
+				background-color: #e8e8e8 !important;
+			}
+			
+			html:not(.dark) body {
+				background-color: #e8e8e8 !important;
+			}
+			
+			/* Logo VoteTok - ULTRA ESPECÍFICO con múltiples selectores para ganar especificidad */
+			html:not(.dark) header h1,
+			html:not(.dark) header.top-0 h1,
+			html:not(.dark) header h1.text-xl,
+			html:not(.dark) header h1.sm\:text-3xl,
+			html:not(.dark) header h1.font-extrabold,
+			html:not(.dark) h1.tracking-tight,
+			html:not(.dark) h1 {
+				color: #1a1a1a !important;
+				text-shadow: none !important;
+			}
+			
+			/* Sobrescribir el estilo header h1 { color: white } */
+			html:not(.dark) header h1 {
+				color: #1a1a1a !important;
+			}
+			
+			/* Para ti y tabs */
+			html:not(.dark) .tabs-trigger,
+			html:not(.dark) .tabs-trigger *,
+			html:not(.dark) .tabs-trigger span {
+				color: #1a1a1a !important;
+			}
+			
+			html:not(.dark) .tabs-trigger svg,
+			html:not(.dark) .tabs-trigger svg * {
+				color: #1a1a1a !important;
+				fill: #1a1a1a !important;
+				stroke: #1a1a1a !important;
+			}
+		</style>
+		
+		<!-- Script CRÍTICO: Aplicar tema guardado ANTES de cualquier render -->
+		<script>
+			(function() {
+				try {
+					const savedTheme = localStorage.getItem('votetok-theme');
+					console.log('[Theme] 🚀 app.html ejecutándose - localStorage raw:', savedTheme);
+					
+					if (savedTheme) {
+						const theme = JSON.parse(savedTheme);
+						console.log('[Theme] 🚀 Tema parseado:', theme);
+						console.log('[Theme] 🔍 theme.isDark tipo:', typeof theme.isDark, 'valor:', theme.isDark);
+						console.log('[Theme] 🔍 theme completo:', JSON.stringify(theme));
+						
+						// IMPORTANTE: Primero remover TODAS las clases, luego aplicar
+						document.documentElement.className = '';
+						
+						// Validación ESTRICTA: SOLO agregar .dark si isDark es EXACTAMENTE true
+						if (theme.isDark === true) {
+							document.documentElement.classList.add('dark');
+							console.log('[Theme] ✅ MODO OSCURO - isDark es true - Clase .dark AGREGADA');
+						} else if (theme.isDark === false) {
+							console.log('[Theme] ✅ MODO CLARO - isDark es false - Clase .dark NO agregada');
+						} else {
+							// Si no es boolean, convertir
+							const isDarkMode = theme.isDark === 'true' || theme.isDark === 1;
+							if (isDarkMode) {
+								document.documentElement.classList.add('dark');
+								console.log('[Theme] ⚠️ MODO OSCURO - isDark era string/number:', theme.isDark);
+							} else {
+								console.log('[Theme] ⚠️ MODO CLARO - isDark era:', theme.isDark);
+							}
+						}
+						
+						console.log('[Theme] 🔍 Estado FINAL - tiene .dark:', document.documentElement.classList.contains('dark'));
+						console.log('[Theme] 🔍 classList completo:', document.documentElement.classList.toString());
+					} else {
+						// Sin tema guardado, modo oscuro por defecto
+						document.documentElement.classList.add('dark');
+						console.log('[Theme] ⚪ Sin tema guardado, aplicando OSCURO por defecto');
+					}
+				} catch (e) {
+					// Error, modo oscuro por defecto
+					document.documentElement.classList.add('dark');
+					console.error('[Theme] ❌ Error en app.html:', e);
+				}
+			})();
+		</script>
+		
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<link rel="apple-touch-icon" href="/favicon.png" />
 		<link rel="manifest" href="/manifest.webmanifest" crossorigin="anonymous" />
@@ -51,6 +143,7 @@
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 				font-display: swap;
 			}
+			
 		</style>
 		
 		<!-- Script para calcular vh real (fix teclado móvil) -->
@@ -66,6 +159,39 @@
 		</script>
 		
 		%sveltekit.head%
+		
+		<!-- Estilos de modo claro - DESPUÉS de sveltekit.head para tener prioridad final -->
+		<style>
+			/* Variables CSS para colores según tema */
+			html.dark {
+				--logo-color: white;
+			}
+			
+			html:not(.dark) {
+				--logo-color: #1a1a1a;
+			}
+			
+			/* Logo negro en modo claro - máxima especificidad */
+			html:not(.dark) header h1,
+			html:not(.dark) header.top-0 h1,
+			html:not(.dark) header h1.text-xl,
+			html:not(.dark) header h1.sm\:text-3xl,
+			html:not(.dark) header h1.font-extrabold,
+			html:not(.dark) h1.tracking-tight {
+				color: #1a1a1a !important;
+			}
+			
+			/* Para ti negro en modo claro */
+			html:not(.dark) .tabs-trigger,
+			html:not(.dark) .tabs-trigger * {
+				color: #1a1a1a !important;
+			}
+			
+			html:not(.dark) .tabs-trigger svg {
+				color: #1a1a1a !important;
+				fill: #1a1a1a !important;
+			}
+		</style>
 	</head>
 	<body data-sveltekit-preload-data="hover">
 		<div style="display: contents">%sveltekit.body%</div>

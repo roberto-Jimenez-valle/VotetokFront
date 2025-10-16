@@ -32,11 +32,9 @@ export const GET: RequestHandler = async ({ url }) => {
         imageUrl: true,
         type: true,
         status: true,
-        totalVotes: true,
-        totalViews: true,
         createdAt: true,
         updatedAt: true,
-        closedAt: true,  // ← INCLUIR closedAt
+        closedAt: true,
         user: {
           select: {
             id: true,
@@ -47,14 +45,19 @@ export const GET: RequestHandler = async ({ url }) => {
           },
         },
         options: {
-          select: {
-            id: true,
-            optionKey: true,
-            optionLabel: true,
-            color: true,
-            avatarUrl: true,
-            voteCount: true,
-            displayOrder: true,
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                avatarUrl: true,
+                displayName: true
+              }
+            },
+            _count: {
+              select: {
+                votes: true
+              }
+            }
           },
           orderBy: { displayOrder: 'asc' },
         },
@@ -72,16 +75,15 @@ export const GET: RequestHandler = async ({ url }) => {
     // Calcular score de trending para cada encuesta
     const pollsWithScore = polls.map(poll => {
       // Factores del score:
-      // 1. Votos totales (peso: 1.0)
-      const votesScore = poll.totalVotes;
+      // 1. Votos totales (peso: 1.0) - calculado desde _count.votes
+      const totalVotes = poll._count.votes;
+      const votesScore = totalVotes;
       
-      // 2. Vistas (peso: 0.5)
-      const viewsScore = poll.totalViews * 0.5;
+      // 2. Vistas (peso: 0.5) - campo legacy, usar votos como proxy
+      const viewsScore = totalVotes * 1.5; // Asumir 3x visualizaciones por voto
       
-      // 3. Engagement rate (votos/vistas) (peso: 2.0)
-      const engagementRate = poll.totalViews > 0 
-        ? (poll.totalVotes / poll.totalViews) * 2.0 
-        : 0;
+      // 3. Engagement rate (peso: 2.0)
+      const engagementRate = totalVotes > 0 ? 2.0 : 0;
       
       // 4. Comentarios (peso: 3.0 - más valioso)
       const commentsScore = poll._count.comments * 3.0;
@@ -111,7 +113,15 @@ export const GET: RequestHandler = async ({ url }) => {
     // Ordenar por score y tomar los top
     const trendingPolls = pollsWithScore
       .sort((a, b) => b.trendingScore - a.trendingScore)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map(poll => ({
+        ...poll,
+        options: poll.options.map(option => ({
+          ...option,
+          voteCount: option._count.votes,
+          avatarUrl: option.createdBy?.avatarUrl || null
+        }))
+      }));
 
     return json({
       data: trendingPolls,

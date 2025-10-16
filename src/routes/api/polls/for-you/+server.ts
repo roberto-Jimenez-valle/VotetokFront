@@ -109,6 +109,20 @@ export const GET: RequestHandler = async ({ url, locals }) => {
           },
         },
         options: {
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                avatarUrl: true,
+                displayName: true
+              }
+            },
+            _count: {
+              select: {
+                votes: true
+              }
+            }
+          },
           orderBy: { displayOrder: 'asc' },
         },
         hashtags: {
@@ -154,8 +168,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       }
 
       // Factor 5: Engagement general (peso: 0.5)
+      const totalVotes = poll._count.votes;
       const engagementScore = (
-        poll.totalVotes * 0.1 +
+        totalVotes * 0.1 +
         poll._count.comments * 0.3 +
         poll._count.interactions * 0.2
       );
@@ -176,7 +191,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const recommendedPolls = pollsWithScore
       .filter(p => p.personalizedScore > 0) // Solo encuestas con algún match
       .sort((a, b) => b.personalizedScore - a.personalizedScore)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map(poll => ({
+        ...poll,
+        options: poll.options.map(option => ({
+          ...option,
+          voteCount: option._count.votes,
+          avatarUrl: option.createdBy?.avatarUrl || null
+        }))
+      }));
 
     // 8. Si no hay suficientes recomendaciones personalizadas, rellenar con trending
     if (recommendedPolls.length < limit) {
@@ -203,6 +226,20 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             },
           },
           options: {
+            include: {
+              createdBy: {
+                select: {
+                  id: true,
+                  avatarUrl: true,
+                  displayName: true
+                }
+              },
+              _count: {
+                select: {
+                  votes: true
+                }
+              }
+            },
             orderBy: { displayOrder: 'asc' },
           },
           hashtags: {
@@ -218,14 +255,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             },
           },
         },
-        orderBy: { totalVotes: 'desc' },
+        orderBy: { createdAt: 'desc' }, // No se puede ordenar por totalVotes virtual
         take: remaining,
       });
 
-      // Agregar trending al final con score bajo
+      // Agregar trending al final con score bajo (ya transformados)
       trendingPolls.forEach(poll => {
         recommendedPolls.push({
           ...poll,
+          options: poll.options.map(option => ({
+            ...option,
+            voteCount: option._count.votes,
+            avatarUrl: option.createdBy?.avatarUrl || null
+          })),
           personalizedScore: 0.1,
         });
       });

@@ -15,7 +15,7 @@ export const GET: RequestHandler = async ({ params }) => {
   }
 
   // Obtener estadísticas
-  const [totalVotes, votesByOption, votesByCountry, votesByCity] = await Promise.all([
+  const [totalVotes, votesByOption, votesBySubdivision] = await Promise.all([
     // Total de votos
     prisma.vote.count({
       where: { pollId },
@@ -28,23 +28,30 @@ export const GET: RequestHandler = async ({ params }) => {
       _count: true,
     }),
 
-    // Votos por país
+    // Votos por subdivisión (incluye país, comunidad, provincia)
     prisma.vote.groupBy({
-      by: ['countryIso3'],
+      by: ['subdivisionId'],
       where: { pollId },
       _count: true,
     }),
-
-    // Votos por ciudad
-    prisma.vote.groupBy({
-      by: ['cityName'],
-      where: { 
-        pollId,
-        cityName: { not: null },
-      },
-      _count: true,
-    }),
   ]);
+
+  // Obtener datos completos de subdivisiones para agrupar por país
+  const subdivisions = await prisma.subdivision.findMany({
+    where: {
+      id: {
+        in: votesBySubdivision.map(v => v.subdivisionId)
+      }
+    },
+    select: {
+      id: true,
+      subdivisionId: true,
+      name: true,
+      level: true
+    }
+  });
+
+  const subdivisionMap = new Map(subdivisions.map(s => [s.id, s]));
 
   // Formatear resultados
   const votesByOptionMap = votesByOption.reduce((acc, item) => {
@@ -52,24 +59,32 @@ export const GET: RequestHandler = async ({ params }) => {
     return acc;
   }, {} as Record<number, number>);
 
-  const votesByCountryMap = votesByCountry.reduce((acc, item) => {
-    acc[item.countryIso3] = item._count;
-    return acc;
-  }, {} as Record<string, number>);
+  // Agrupar por país (nivel 1)
+  const votesByCountryMap: Record<string, number> = {};
+  const votesBySubdivisionMap: Record<string, { name: string, level: number, count: number }> = {};
 
-  const votesByCityMap = votesByCity.reduce((acc, item) => {
-    if (item.cityName) {
-      acc[item.cityName] = item._count;
+  for (const vote of votesBySubdivision) {
+    const sub = subdivisionMap.get(vote.subdivisionId);
+    if (sub) {
+      // Extraer código país
+      const countryIso = sub.subdivisionId.split('.')[0];
+      votesByCountryMap[countryIso] = (votesByCountryMap[countryIso] || 0) + vote._count;
+      
+      // Guardar también por subdivisión
+      votesBySubdivisionMap[sub.subdivisionId] = {
+        name: sub.name,
+        level: sub.level,
+        count: vote._count
+      };
     }
-    return acc;
-  }, {} as Record<string, number>);
+  }
 
   return json({
     data: {
       totalVotes,
       votesByOption: votesByOptionMap,
       votesByCountry: votesByCountryMap,
-      votesByCity: votesByCityMap,
+      votesBySubdivision: votesBySubdivisionMap,
     },
   });
 };

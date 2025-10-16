@@ -6,7 +6,6 @@
   
   
   // Componentes de sección completos
-  import ActivePollSection from './cards/sections/ActivePollSection.svelte';
   import TrendingPollsSection from './cards/sections/TrendingPollsSection.svelte';
   import SinglePollSection from './cards/sections/SinglePollSection.svelte';
   import WhoToFollowSection from './cards/sections/WhoToFollowSection.svelte';
@@ -52,11 +51,18 @@
   // Estado para efectos de votación
   let voteEffectActive = false;
   let voteEffectPollId: string | null = null;
+  let voteEffectColor: string = '#10b981'; // Color de la opción votada para la animación
   
   // Estado de expansión de títulos de encuestas
   const pollTitleExpanded: Record<string, boolean> = {};
   const pollTitleTruncated: Record<string, boolean> = {};
   const pollTitleElements: Record<string, HTMLElement> = {};
+  
+  // Estado del color picker para opciones colaborativas
+  let colorPickerOpenFor: { pollId: string; optionKey: string } | null = null;
+  let selectedHue = 0;
+  let selectedSaturation = 85;
+  let isDraggingColor = false;
   
   // Función para verificar si un elemento está truncado
   function checkTruncation(element: HTMLElement | undefined): boolean {
@@ -71,7 +77,7 @@
   
   // Estado de transición para animaciones
   let transitionDirectionMain: 'next' | 'prev' | null = null;
-  const transitionDirectionByPoll: Record<string, 'next' | 'prev' | null> = {};
+  let transitionDirectionByPoll: Record<string, 'next' | 'prev' | null> = {};
 
   // Helper para formato de tiempo relativo
   function getRelativeTime(minutesAgo: number): string {
@@ -324,11 +330,18 @@
             key: opt.optionKey,
             label: opt.optionLabel,
             color: opt.color,
-            votes: opt.voteCount,
-            avatarUrl: opt.avatarUrl
+            votes: opt._count?.votes || 0,  // Auto-calculado desde votos
+            avatarUrl: opt.createdBy?.avatarUrl || poll.user?.avatarUrl  // Desde relación User
           })),
-          totalVotes: poll.totalVotes || 0,
-          totalViews: poll.totalViews || 0,
+          totalVotes: poll._count?.votes || 0,  // Auto-calculado desde votos
+          totalViews: 0,  // Campo legacy - no se usa
+          user: poll.user ? {
+            id: poll.user.id,
+            displayName: poll.user.displayName,
+            username: poll.user.username,
+            avatarUrl: poll.user.avatarUrl,
+            verified: poll.user.verified
+          } : undefined,
           creator: poll.user ? {
             id: poll.user.id.toString(),
             name: poll.user.displayName,
@@ -803,7 +816,9 @@
               }
             }
           } else {
-            const totalPages = Math.ceil(sortedDisplayOptions.length / OPTIONS_PER_PAGE);
+            const totalPages = voteOptions.length > 0 
+              ? Math.ceil(voteOptions.length / OPTIONS_PER_PAGE)
+              : Math.ceil(sortedDisplayOptions.length / OPTIONS_PER_PAGE);
             if (currentPageMain < totalPages - 1) {
               nextPageMain();
               touchStartX = touch.clientX;
@@ -855,6 +870,7 @@
   export let y = 0; // translateY px
   export let isTransitioning = false; // Si debe usar transición CSS
   export let isCameraAnimating = false; // Si hay una animación de cámara en curso
+  // Props de selección manual (para UI, no para votos - ahora usamos geocoding automático)
   export let selectedCountryName: string | null = null;
   export let selectedCountryIso: string | null = null;
   export let selectedSubdivisionName: string | null = null;
@@ -892,7 +908,7 @@
   export let onScroll: (e: Event) => void = () => {};
   export const navigationManager: any = null; // Used by parent component
   export let onNavigateToView: (level: 'world' | 'country' | 'subdivision' | 'city') => void = () => {};
-  export let onVote: (optionKey: string) => void = () => {};
+  // onVote eliminado - BottomSheet maneja votos internamente
   export let currentAltitude: number = 0; // Altitud actual del globo
   export let onLocateMe: () => void = () => {};
   export let onToggleSettings: () => void = () => {};
@@ -1491,12 +1507,7 @@
     // Enviar voto al backend DIRECTAMENTE desde aquí
     await sendVoteToBackend(optionKey, pollId);
     
-    // Solo notificar al padre si NO es una encuesta trending (additionalPolls)
-    // Si tiene pollId, es una encuesta trending y ya se manejó aquí
-    if (!pollId) {
-      onVote(optionKey);
-    }
-    
+    // Voto completamente manejado por BottomSheet, no notifica al padre
     console.log('[BottomSheet] Voto registrado y enviado:', optionKey, 'en encuesta:', votePollId);
   }
   
@@ -1548,14 +1559,23 @@
     console.log('[BottomSheet sendVote] Opción completa:', JSON.stringify(option, null, 2));
     
     // Obtener optionId - puede estar en diferentes formatos
-    const optionId = option.id || option.optionId;
-    if (!optionId && optionId !== 0) {
-      console.error('[BottomSheet sendVote] âŒ La opción no tiene ID:', option);
+    const rawOptionId = option.id || option.optionId;
+    if (!rawOptionId && rawOptionId !== 0) {
+      console.error('[BottomSheet sendVote] ❌ La opción no tiene ID:', option);
       console.error('[BottomSheet sendVote] Campos disponibles:', Object.keys(option));
       return;
     }
     
+    // Convertir a número - CRÍTICO para el backend
+    const optionId = typeof rawOptionId === 'string' ? parseInt(rawOptionId) : rawOptionId;
     const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+    
+    console.log('[BottomSheet sendVote] 🔢 IDs convertidos:', {
+      optionId: optionId,
+      optionIdType: typeof optionId,
+      pollId: numericPollId,
+      pollIdType: typeof numericPollId
+    });
     
     console.log('[BottomSheet sendVote] 📤 Enviando al servidor:', {
       url: `/api/polls/${numericPollId}/vote`,
@@ -1568,93 +1588,103 @@
       // Obtener ubicación real del usuario (con fallback)
       let latitude = 40.4168;  // Madrid por defecto
       let longitude = -3.7038;
-      let geoCountryIso3 = 'ESP';
-      let geoCountryName = 'España';
-      let geoSubdivisionId: string | null = null;
-      let geoSubdivisionName: string | null = null;
       
-      // Intentar obtener geolocalización del navegador
-      console.log('[BottomSheet] 🔍 Iniciando proceso de geolocalización...');
+      // Sistema híbrido de geolocalización: GPS → IP → Fallback (igual que GlobeGL)
+      let locationMethod = 'default';
+      let subdivisionId: number | null = null;
       
+      // PASO 1: Intentar GPS (más preciso, requiere permiso)
       try {
         if (navigator.geolocation) {
-          console.log('[BottomSheet] ✅ navigator.geolocation está disponible');
-          
-          const position: any = await new Promise((resolve, reject) => {
-            console.log('[BottomSheet] 📡 Solicitando posición GPS...');
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 3000,
-              maximumAge: 300000 // 5 minutos
+              timeout: 5000,
+              maximumAge: 300000,
+              enableHighAccuracy: true
             });
           });
-          
           latitude = position.coords.latitude;
           longitude = position.coords.longitude;
-          console.log('[BottomSheet] 📍 Ubicación GPS obtenida:', { latitude, longitude });
-          
-          // Determinar país y subdivisión desde las coordenadas
-          try {
-            const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
-            
-            if (geocodeResponse.ok) {
-              const geocodeData = await geocodeResponse.json();
-              
-              if (geocodeData.found) {
-                geoCountryIso3 = geocodeData.countryIso3;
-                geoCountryName = geocodeData.countryName;
-                geoSubdivisionId = geocodeData.subdivisionId;
-                geoSubdivisionName = geocodeData.subdivisionName;
-              } else {
-                console.warn('[BottomSheet] ⚠️ geocodeData.found es false');
-              }
-            } else {
-              console.error('[BottomSheet] ❌ Respuesta geocode no OK:', geocodeResponse.status);
-            }
-          } catch (geocodeError) {
-            console.error('[BottomSheet] ❌ Error en geocoding:', geocodeError);
-          }
-        } else {
-          console.error('[BottomSheet] ❌ navigator.geolocation NO está disponible');
+          locationMethod = 'gps';
+          console.log('[BottomSheet] 📍 GPS obtenido:', { latitude, longitude, accuracy: position.coords.accuracy + 'm' });
         }
-      } catch (geoError) {
-        console.error('[BottomSheet] ❌ Error obteniendo geolocalización:', geoError);
+      } catch (gpsError) {
+        console.warn('[BottomSheet] ⚠️ GPS no disponible:', gpsError);
+        console.log('[BottomSheet] 💡 Razón común en móvil: requiere HTTPS, no HTTP');
+        
+        // PASO 2: Fallback a IP Geolocation (aproximado, sin permiso)
+        try {
+          console.log('[BottomSheet] 🔄 Intentando geolocalización por IP...');
+          const ipResponse = await fetch('https://ipapi.co/json/', { 
+            signal: AbortSignal.timeout(5000) 
+          });
+          
+          if (ipResponse.ok) {
+            const ipData = await ipResponse.json();
+            if (ipData.latitude && ipData.longitude) {
+              latitude = ipData.latitude;
+              longitude = ipData.longitude;
+              locationMethod = 'ip';
+              console.log('[BottomSheet] ✅ IP Geolocation obtenida:', {
+                latitude,
+                longitude,
+                city: ipData.city,
+                region: ipData.region,
+                country: ipData.country_name,
+                ip: ipData.ip
+              });
+            }
+          }
+        } catch (ipError) {
+          console.error('[BottomSheet] ❌ IP Geolocation falló:', ipError);
+          console.log('[BottomSheet] 📍 Usando coordenadas por defecto (Madrid)');
+        }
       }
       
-      console.log('[BottomSheet] 🎯 Valores finales antes del voto:');
-      console.log('  - geoSubdivisionId:', geoSubdivisionId);
-      console.log('  - selectedSubdivisionId:', selectedSubdivisionId);
+      // PASO 3: Geocodificar a subdivisión con point-in-polygon
+      try {
+        const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
+        if (geocodeResponse.ok) {
+          const geocodeData = await geocodeResponse.json();
+          if (geocodeData.found && geocodeData.subdivisionId) {
+            subdivisionId = geocodeData.subdivisionId;
+            console.log('[BottomSheet] 🌍 Subdivisión encontrada:', {
+              subdivisionId,
+              name: geocodeData.subdivisionName,
+              level: geocodeData.subdivisionLevel,
+              method: geocodeData.method,
+              locationSource: locationMethod
+            });
+          }
+        }
+      } catch (geocodeError) {
+        console.warn('[BottomSheet] ⚠️ Error en geocoding:', geocodeError);
+      }
       
-      // Preparar datos del voto
-      // Prioridad: 1) Ubicación del globo seleccionada, 2) Geocoding de GPS, 3) Fallback
-      const voteData = {
+      // Validar que tenemos subdivisionId
+      if (!subdivisionId) {
+        console.error('[BottomSheet] ❌ No se pudo obtener subdivisionId');
+        console.error('[BottomSheet] 💡 El voto NO se puede registrar sin ubicación');
+        return;
+      }
+      
+      console.log('[BottomSheet] 📤 Enviando al servidor:', {
         optionId,
-        userId: $currentUser?.id || null,
         latitude,
         longitude,
-        countryIso3: selectedCountryIso || geoCountryIso3,
-        countryName: selectedCountryName || geoCountryName,
-        subdivisionId: selectedSubdivisionId || geoSubdivisionId || null,
-        subdivisionName: selectedSubdivisionName || geoSubdivisionName || null,
-        cityName: selectedCityName || null
-      };
-      
-      console.log('[BottomSheet sendVote] 📦 Datos completos del voto:');
-      console.log('  - optionId:', voteData.optionId, typeof voteData.optionId);
-      console.log('  - userId:', voteData.userId, typeof voteData.userId);
-      console.log('  - latitude:', voteData.latitude, typeof voteData.latitude);
-      console.log('  - longitude:', voteData.longitude, typeof voteData.longitude);
-      console.log('  - countryIso3:', voteData.countryIso3, typeof voteData.countryIso3);
-      console.log('  - countryName:', voteData.countryName);
-      console.log('  - subdivisionId:', voteData.subdivisionId, '← ⚠️', voteData.subdivisionId ? 'OK' : 'NULL - No has seleccionado región en el globo');
-      console.log('  - subdivisionName:', voteData.subdivisionName);
-      console.log('  - cityName:', voteData.cityName);
-      console.log('\n⚠️ IMPORTANTE: selectedSubdivisionId desde props:', selectedSubdivisionId);
-      console.log('⚠️ IMPORTANTE: selectedCountryIso desde props:', selectedCountryIso);
+        subdivisionId
+      });
       
       const response = await fetch(`/api/polls/${numericPollId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(voteData)
+        body: JSON.stringify({
+          optionId,
+          userId: $currentUser?.id || null,
+          latitude,
+          longitude,
+          subdivisionId
+        })
       });
       
       console.log('[BottomSheet sendVote] Respuesta recibida:', response.status);
@@ -1730,7 +1760,7 @@
   }
   
   // Función para añadir nueva opción directamente (como CreatePollModal)
-  function addNewCollaborativeOption(pollId: string) {
+  async function addNewCollaborativeOption(pollId: string, previewColor?: string) {
     // Verificar si ya hay una opción pendiente de confirmar
     if (pendingCollaborativeOption[pollId]) {
       console.log('[BottomSheet] Ya hay una opción pendiente. Confírmala primero.');
@@ -1745,12 +1775,15 @@
     // Generar un ID temporal único
     const tempId = `temp-${Date.now()}`;
     
-    // Generar un color aleatorio
-    const colors = [
-      '#ef4444', '#f97316', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
-      '#dc2626', '#ea580c', '#d97706', '#059669', '#2563eb', '#7c3aed', '#db2777', '#0d9488'
-    ];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    // Usar el color del preview si se pasa, si no generar uno aleatorio
+    let randomColor = previewColor;
+    if (!randomColor) {
+      const colors = [
+        '#ef4444', '#f97316', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
+        '#dc2626', '#ea580c', '#d97706', '#059669', '#2563eb', '#7c3aed', '#db2777', '#0d9488'
+      ];
+      randomColor = colors[Math.floor(Math.random() * colors.length)];
+    }
     
     // Crear la nueva opción vacía CON FLAG DE EDICIÓN
     const newOption = {
@@ -1779,23 +1812,46 @@
       additionalPolls = [...additionalPolls];
     }
     
-    // Ir a la última página y activar la nueva opción con un delay mayor
+    // Esperar un tick para que Svelte actualice el DOM
+    await nextTick();
+    
+    // Ir a la última página y activar la nueva opción
     const totalOptions = (poll.id === activePoll?.id ? activePoll.options.length : poll.options.length);
     const OPTIONS_PER_PAGE = 4;
-    const lastPage = Math.ceil(totalOptions / OPTIONS_PER_PAGE) - 1;
+    const lastPage = Math.max(0, Math.ceil(totalOptions / OPTIONS_PER_PAGE) - 1);
     const indexInPage = (totalOptions - 1) % OPTIONS_PER_PAGE;
     
+    console.log('[BottomSheet] Navegando a nueva opción:', {
+      totalOptions,
+      lastPage,
+      indexInPage,
+      pollId,
+      isActivePoll: poll.id === activePoll?.id,
+      currentOptions: poll.options.map((o: any) => ({ key: o.key, isEditing: o.isEditing }))
+    });
+    
     if (poll.id === activePoll?.id) {
+      // Para encuesta activa
+      activeAccordionMainIndex = null;
+      transitionDirectionMain = 'next';
       currentPageMain = lastPage;
-      // Delay más largo para asegurar que la reactividad se procese
-      setTimeout(() => {
-        activeAccordionMainIndex = indexInPage;
-      }, 100);
+      
+      await delay(100);
+      activeAccordionMainIndex = indexInPage;
+      
+      await delay(400);
+      transitionDirectionMain = null;
     } else {
+      // Para encuestas adicionales
+      activeAccordionByPoll = { ...activeAccordionByPoll, [pollId]: null };
+      transitionDirectionByPoll = { ...transitionDirectionByPoll, [pollId]: 'next' };
       currentPageByPoll = { ...currentPageByPoll, [pollId]: lastPage };
-      setTimeout(() => {
-        activeAccordionByPoll = { ...activeAccordionByPoll, [pollId]: indexInPage };
-      }, 100);
+      
+      await delay(100);
+      activeAccordionByPoll = { ...activeAccordionByPoll, [pollId]: indexInPage };
+      
+      await delay(400);
+      transitionDirectionByPoll = { ...transitionDirectionByPoll, [pollId]: null };
     }
     
     console.log('[BottomSheet] Nueva opción colaborativa creada (pendiente):', {
@@ -1968,14 +2024,21 @@
       options: (pollData.options || []).map((opt: any, idx: number) => ({
         id: opt.id || `opt-${idx}`,
         key: opt.optionKey || opt.key || `option-${idx}`,
-        label: opt.optionLabel || opt.label || `OpciÃ³n ${idx + 1}`,
+        label: opt.optionLabel || opt.label || `Opción ${idx + 1}`,
         color: opt.color || `hsl(${idx * 60}, 70%, 50%)`,
-        votes: opt.voteCount || opt.votes || 0,
-        avatarUrl: opt.avatarUrl
+        votes: opt._count?.votes || opt.votes || 0,  // Auto-calculado
+        avatarUrl: opt.createdBy?.avatarUrl || pollData.user?.avatarUrl  // Desde relación User
       })),
-      totalVotes: pollData.totalVotes || 0,
-      totalViews: pollData.totalViews || 0,
+      totalVotes: pollData._count?.votes || pollData.totalVotes || 0,  // Auto-calculado
+      totalViews: 0,  // Campo legacy - no se usa
       closedAt: pollData.closedAt,
+      user: pollData.user ? {
+        id: pollData.user.id,
+        displayName: pollData.user.displayName || pollData.user.name || 'Usuario',
+        username: pollData.user.username || pollData.user.handle || 'user',
+        avatarUrl: pollData.user.avatarUrl,
+        verified: pollData.user.verified || false
+      } : undefined,
       creator: pollData.user ? {
         id: pollData.user.id ? pollData.user.id.toString() : 'unknown',
         name: pollData.user.displayName || pollData.user.name || 'Usuario',
@@ -2494,28 +2557,39 @@
       
       <!-- PRIORIDAD 1: Si hay encuesta activa (activePoll), mostrarla PRIMERO -->
       {#if activePoll && activePoll.id && voteOptions.length > 0}
-        <ActivePollSection
-          {activePoll}
-          {voteOptions}
+        {@const mainPollId = activePoll.id.toString()}
+        <SinglePollSection
+          poll={activePoll}
+          pollIndex={-1}
           {state}
-          activeAccordionMainIndex={activeAccordionMainIndex}
-          {currentPageMain}
-          {transitionDirectionMain}
+          activeAccordionIndex={activeAccordionMainIndex}
+          currentPage={currentPageMain}
           {userVotes}
           {multipleVotes}
-          {OPTIONS_PER_PAGE}
-          on:optionClick={(e) => {
-            const { event, optionKey, pollId } = e.detail;
+          {voteEffectActive}
+          {voteEffectPollId}
+          {displayVotes}
+          {voteClickX}
+          {voteClickY}
+          {voteIconX}
+          {voteIconY}
+          {voteEffectColor}
+          pollTitleExpanded={{}}
+          pollTitleTruncated={{}}
+          pollTitleElements={{}}
+          on:optionClick={(e: any) => {
+            const { event, optionKey, pollId, optionColor } = e.detail;
             voteClickX = event.clientX;
             voteClickY = event.clientY;
+            voteEffectColor = optionColor || '#10b981';
             if (activePoll.type === 'multiple') {
               handleMultipleVote(optionKey, pollId);
             } else {
               handleVote(optionKey);
             }
           }}
-          on:setActive={(e) => activeAccordionMainIndex = e.detail.index}
-          on:pageChange={(e) => {
+          on:setActive={(e: any) => activeAccordionMainIndex = e.detail.index}
+          on:pageChange={(e: any) => {
             transitionDirectionMain = e.detail.page < currentPageMain ? 'prev' : 'next';
             currentPageMain = e.detail.page;
             (async () => {
@@ -2525,94 +2599,46 @@
               transitionDirectionMain = null;
             })();
           }}
-          on:confirmMultiple={(e) => confirmMultipleVotes(e.detail.pollId)}
-          on:confirmCollaborative={(e) => confirmCollaborativeOption(e.detail.pollId)}
-          on:cancelCollaborative={(e) => cancelCollaborativeOption(e.detail.pollId)}
-          on:addOption={(e) => addNewCollaborativeOption(e.detail.pollId)}
-          on:dragStart={(e) => handleDragStart(e.detail.event)}
+          on:confirmMultiple={(e: any) => confirmMultipleVotes(e.detail.pollId)}
+          on:addOption={(e: any) => addNewCollaborativeOption(e.detail.pollId, e.detail.previewColor)}
+          on:openColorPicker={(e: any) => {
+            colorPickerOpenFor = { pollId: e.detail.pollId, optionKey: e.detail.optionKey };
+          }}
+          on:cancelEditing={(e: any) => {
+            const { pollId, optionKey } = e.detail;
+            const poll = pollId === activePoll?.id.toString() ? activePoll : additionalPolls.find(p => p.id.toString() === pollId);
+            if (poll) {
+              poll.options = poll.options.filter((opt: any) => opt.key !== optionKey);
+              delete pendingCollaborativeOption[pollId];
+              delete editingOptionColors[optionKey];
+              if (pollId === activePoll?.id.toString()) {
+                activePoll = { ...activePoll };
+              } else {
+                additionalPolls = [...additionalPolls];
+              }
+            }
+          }}
+          on:clearVote={(e: any) => {
+            const pollId = e.detail.pollId;
+            const { [pollId]: _, ...rest } = userVotes;
+            userVotes = { ...rest };
+            displayVotes = { ...rest };
+          }}
+          on:dragStart={(e: any) => handleDragStart(e.detail.event)}
         />
         
-        <!-- Stats y acciones de la encuesta activa -->
-        {@const mainPollId = activePoll?.id ? activePoll.id.toString() : 'main'}
-        {@const userVotedOption = displayVotes[mainPollId]}
-        {@const votedOptionData = userVotedOption ? voteOptions.find(o => o.key === userVotedOption) : null}
-        {@const currentVote = userVotes[mainPollId]}
-        {@const currentVoteOptionData = currentVote ? voteOptions.find(o => o.key === currentVote) : null}
-        <div class="vote-cards-section active-poll-section">
-          <div class="vote-summary-info">
-            <div class="vote-stats">
-              <div class="stat-badge">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                  <rect x="3" y="3" width="7" height="7"/>
-                  <rect x="14" y="3" width="7" height="7"/>
-                  <rect x="3" y="14" width="7" height="7"/>
-                  <rect x="14" y="14" width="7" height="7"/>
-                </svg>
-                <span>{formatNumber(voteOptions.length)}</span>
-              </div>
-              <div class="stat-badge">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-                <span>{formatNumber(activePoll.totalViews || 0)}</span>
-              </div>
-              <button 
-                bind:this={voteIconElement}
-                class="stat-badge action-vote {userVotedOption ? 'has-voted' : 'no-vote'} {voteEffectActive && voteEffectPollId === mainPollId ? 'vote-animate' : ''}" 
-                type="button" 
-                title={userVotedOption ? `Tu voto: ${votedOptionData?.label || userVotedOption}` : "Aún no has votado"}
-                style="{userVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''} {voteEffectActive && voteEffectPollId === mainPollId && currentVoteOptionData ? `--vote-x: ${voteClickX}px; --vote-y: ${voteClickY}px; --icon-x: ${voteIconX}px; --icon-y: ${voteIconY}px; --vote-color: ${currentVoteOptionData.color};` : ''}"
-                onclick={(e) => {
-                  voteClickX = e.clientX;
-                  voteClickY = e.clientY;
-                  if (userVotedOption) {
-                    const { [mainPollId]: _, ...rest } = userVotes;
-                    userVotes = { ...rest };
-                    displayVotes = { ...rest };
-                  }
-                }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill={userVotedOption ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 11l3 3L22 4"/>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
-                <span>{formatNumber(activePoll.totalVotes || 0)}</span>
-              </button>
-            </div>
-            <div class="vote-actions">
-              <button class="action-badge" type="button" title="Guardar">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                </svg>
-                <span>{formatNumber(mainPollSaves)}</span>
-              </button>
-              <button class="action-badge action-share" type="button" title="Compartir">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <circle cx="18" cy="5" r="3"/>
-                  <circle cx="6" cy="12" r="3"/>
-                  <circle cx="18" cy="19" r="3"/>
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                </svg>
-                <span>{formatNumber(mainPollShares)}</span>
-              </button>
-            </div>
-          </div>
-          
-          <!-- Separador después de encuesta activa -->
-          <div class="more-polls-divider">
-            <div class="divider-line"></div>
-            <span class="divider-text">Trending en {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
-            <div class="divider-line"></div>
-          </div>
+        <!-- Separador después de encuesta activa -->
+        <div class="more-polls-divider">
+          <div class="divider-line"></div>
+          <span class="divider-text">Trending en {selectedSubdivisionName || selectedCountryName || 'Global'}</span>
+          <div class="divider-line"></div>
         </div>
       {/if}
       
       <!-- PRIORIDAD 2: Mostrar TRENDING (solo si NO hay encuesta activa O después de mostrarla) -->
-      {#if trendingPolls.length > 0}
+      {#if filteredTrendingPolls.length > 0}
         <TrendingPollsSection
-          {trendingPolls}
+          trendingPolls={filteredTrendingPolls}
           {selectedCountryName}
           {selectedSubdivisionName}
           {currentPageMain}
@@ -2665,12 +2691,53 @@
           {pollTitleExpanded}
           {pollTitleTruncated}
           {pollTitleElements}
-          on:optionClick={(e) => handleVote(e.detail.optionKey, e.detail.pollId)}
+          {voteEffectActive}
+          {voteEffectPollId}
+          {displayVotes}
+          {voteClickX}
+          {voteClickY}
+          {voteIconX}
+          {voteIconY}
+          {voteEffectColor}
+          on:optionClick={(e) => {
+            const { event, optionKey, pollId, optionColor } = e.detail;
+            voteClickX = event.clientX;
+            voteClickY = event.clientY;
+            voteEffectColor = optionColor || '#10b981';
+            if (poll.type === 'multiple') {
+              handleMultipleVote(optionKey, pollId);
+            } else {
+              handleVote(optionKey, pollId);
+            }
+          }}
           on:setActive={(e) => setActiveForPoll(e.detail.pollId, e.detail.index)}
           on:confirmMultiple={(e) => confirmMultipleVotes(e.detail.pollId)}
-          on:addOption={(e) => addNewCollaborativeOption(e.detail.pollId)}
+          on:addOption={(e) => addNewCollaborativeOption(e.detail.pollId, e.detail.previewColor)}
+          on:openColorPicker={(e) => {
+            colorPickerOpenFor = { pollId: e.detail.pollId, optionKey: e.detail.optionKey };
+          }}
+          on:cancelEditing={(e) => {
+            const { pollId, optionKey } = e.detail;
+            const poll = pollId === activePoll?.id.toString() ? activePoll : additionalPolls.find(p => p.id.toString() === pollId);
+            if (poll) {
+              poll.options = poll.options.filter((opt: any) => opt.key !== optionKey);
+              delete pendingCollaborativeOption[pollId];
+              delete editingOptionColors[optionKey];
+              if (pollId === activePoll?.id.toString()) {
+                activePoll = { ...activePoll };
+              } else {
+                additionalPolls = [...additionalPolls];
+              }
+            }
+          }}
           on:openInGlobe={(e) => openAdditionalPollInGlobe(e.detail.poll)}
           on:dragStart={(e) => handleDragStart(e.detail.event, e.detail.pollId)}
+          on:clearVote={(e) => {
+            const pollId = e.detail.pollId;
+            const { [pollId]: _, ...rest } = userVotes;
+            userVotes = { ...rest };
+            displayVotes = { ...rest };
+          }}
           on:pageChange={(e) => {
             const pollId = e.detail.pollId;
             const newPage = e.detail.page;
@@ -2916,6 +2983,156 @@
   {/if}
 </div>
 
-<style >
-  @import '$lib/styles/bottom-sheet.css';
-</style>
+<!-- Modal del selector de color para opciones colaborativas -->
+{#if colorPickerOpenFor}
+    {@const selectedColor = `hsl(${selectedHue}, ${selectedSaturation}%, 55%)`}
+    <div 
+      class="color-picker-overlay" 
+      onclick={() => colorPickerOpenFor = null}
+      role="presentation"
+      style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100000; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);"
+    >
+      <div 
+        class="color-picker-modal" 
+        onclick={(e) => e.stopPropagation()} 
+        role="dialog"
+        aria-labelledby="color-picker-title"
+        tabindex="-1"
+        style="background: rgba(30, 30, 30, 0.98); padding: 32px; border-radius: 20px; max-width: 400px; width: 90%;"
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+          <h3 id="color-picker-title" style="color: white; margin: 0; font-size: 20px; font-weight: 600;">Selecciona un color</h3>
+          <button onclick={() => colorPickerOpenFor = null} type="button" aria-label="Cerrar" style="background: rgba(255,255,255,0.1); border: none; border-radius: 8px; padding: 8px; color: white; cursor: pointer;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Círculo de colores -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 24px;">
+          <div 
+            style="width: 300px; height: 300px; border-radius: 50%; position: relative; cursor: pointer; box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: conic-gradient(from 0deg, hsl(0, 100%, 50%), hsl(30, 100%, 50%), hsl(60, 100%, 50%), hsl(90, 100%, 50%), hsl(120, 100%, 50%), hsl(150, 100%, 50%), hsl(180, 100%, 50%), hsl(210, 100%, 50%), hsl(240, 100%, 50%), hsl(270, 100%, 50%), hsl(300, 100%, 50%), hsl(330, 100%, 50%), hsl(360, 100%, 50%));"
+            onmousedown={(e) => {
+              isDraggingColor = true;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const centerX = rect.left + rect.width / 2;
+              const centerY = rect.top + rect.height / 2;
+              const deltaX = e.clientX - centerX;
+              const deltaY = e.clientY - centerY;
+              const angle = Math.atan2(deltaY, deltaX);
+              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+              const maxDistance = rect.width / 2;
+              selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+              selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+            }}
+            onmousemove={(e) => {
+              if (isDraggingColor) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const deltaX = e.clientX - centerX;
+                const deltaY = e.clientY - centerY;
+                const angle = Math.atan2(deltaY, deltaX);
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2;
+                selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+                selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+              }
+            }}
+            onmouseup={() => isDraggingColor = false}
+            onmouseleave={() => isDraggingColor = false}
+            ontouchstart={(e) => {
+              isDraggingColor = true;
+              const touch = e.touches[0];
+              const rect = e.currentTarget.getBoundingClientRect();
+              const centerX = rect.left + rect.width / 2;
+              const centerY = rect.top + rect.height / 2;
+              const deltaX = touch.clientX - centerX;
+              const deltaY = touch.clientY - centerY;
+              const angle = Math.atan2(deltaY, deltaX);
+              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+              const maxDistance = rect.width / 2;
+              selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+              selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+            }}
+            ontouchmove={(e) => {
+              if (isDraggingColor) {
+                const touch = e.touches[0];
+                const rect = e.currentTarget.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const deltaX = touch.clientX - centerX;
+                const deltaY = touch.clientY - centerY;
+                const angle = Math.atan2(deltaY, deltaX);
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2;
+                selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+                selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+              }
+            }}
+            ontouchend={() => isDraggingColor = false}
+          >
+            <!-- Gradiente radial para saturación -->
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle, white 0%, transparent 100%); pointer-events: none;"></div>
+            
+            <!-- Indicador de color seleccionado -->
+            <div 
+              style="position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; border-radius: 50%; background: {selectedColor}; border: 4px solid white; box-shadow: 0 4px 16px rgba(0,0,0,0.5); transform: translate(-50%, -50%) rotate({selectedHue}deg) translateY({-selectedSaturation * 1.4}px); pointer-events: none;"
+            ></div>
+          </div>
+          
+          <!-- Botón confirmar -->
+          <button
+            onclick={() => {
+              if (!colorPickerOpenFor) return;
+              const { pollId, optionKey } = colorPickerOpenFor;
+              const poll = pollId === activePoll?.id.toString() ? activePoll : additionalPolls.find(p => p.id.toString() === pollId);
+              if (poll) {
+                const option = poll.options.find((opt: any) => opt.key === optionKey);
+                if (option) {
+                  // Convertir HSL a hex
+                  const h = selectedHue;
+                  const s = selectedSaturation / 100;
+                  const l = 0.55;
+                  const c = (1 - Math.abs(2 * l - 1)) * s;
+                  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+                  const m = l - c/2;
+                  let r = 0, g = 0, b = 0;
+                  if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
+                  else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
+                  else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
+                  else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
+                  else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
+                  else { r = c; g = 0; b = x; }
+                  const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+                  const hexColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+                  
+                  option.color = hexColor;
+                  editingOptionColors[optionKey] = hexColor;
+                  
+                  if (pollId === activePoll?.id.toString()) {
+                    activePoll = { ...activePoll };
+                  } else {
+                    additionalPolls = [...additionalPolls];
+                  }
+                }
+              }
+              colorPickerOpenFor = null;
+            }}
+            type="button"
+            style="width: 100%; padding: 16px; background: {selectedColor}; color: white; border: none; border-radius: 16px; font-weight: 600; font-size: 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.2s;"
+            onmouseenter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+            onmouseleave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Seleccionar Color
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <style >
+    @import '$lib/styles/bottom-sheet.css';
+  </style>

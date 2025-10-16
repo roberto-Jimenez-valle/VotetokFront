@@ -23,7 +23,6 @@
 }
 
 :global(body) {
-  background-color: #0a0a0a; /* Casi negro */
   width: 100%;
   min-height: 100vh;
   min-height: calc(var(--vh, 1vh) * 100); /* Fix teclado móvil */
@@ -39,19 +38,17 @@
   padding-right: env(safe-area-inset-right);
 }
 
-/* Dark mode nativo (ya está en negro, pero por si acaso) */
-@media (prefers-color-scheme: dark) {
-  :global(body) {
-    background-color: #0a0a0a;
-  }
+/* Fondo oscuro solo en modo oscuro */
+:global(html.dark) :global(body) {
+  background-color: #0a0a0a;
 }
 
-/* Light mode (si se necesita en el futuro) */
-@media (prefers-color-scheme: light) {
-  :global(body) {
-    background-color: #0a0a0a; /* Mantener oscuro siempre */
-  }
+/* Fondo claro en modo claro */
+:global(html:not(.dark)) :global(body) {
+  background-color: #e8e8e8;
 }
+
+/* Eliminar media queries obsoletas - ahora usamos .dark class */
 
 /* Prevenir scroll en el contenedor principal */
 :global(#app),
@@ -70,7 +67,6 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0a0a0a; /* fondo casi negro */
   /* Configuraciones específicas para Safari y Edge */
   -webkit-transform: translateZ(0);
   -moz-transform: translateZ(0);
@@ -79,6 +75,15 @@
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
+}
+
+/* Fondo condicional según tema */
+:global(html.dark) .globe-wrap {
+  background: #0a0a0a;
+}
+
+:global(html:not(.dark)) .globe-wrap {
+  background: #e8e8e8;
 }
 
 /* Canvas WebGL - asegurar visibilidad en todos los navegadores */
@@ -124,11 +129,6 @@ header {
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
-}
-
-header h1 {
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* La apertura del panel se hace desde la barra de leyenda */
@@ -1097,7 +1097,8 @@ header h1 {
 }
 
 .vote-card:hover { 
-  /* Usar transform y opacity para GPU - mejor performance */
+  /* NO aplicar borde de color en hover */
+  /* Solo elevar y aplicar sombra */
   -webkit-transform: translateY(-2px);
   -moz-transform: translateY(-2px);
   -ms-transform: translateY(-2px);
@@ -1114,15 +1115,33 @@ header h1 {
 }
 
 /* Estilo para la opción votada - borde plano del color de la opción */
+/* SOLO después de votar, NO en hover */
+/* Este estilo debe ser PERMANENTE después de votar */
 .vote-card.voted {
   border: 3px solid var(--card-color) !important;
-  background: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.12) !important;
   position: relative;
+  /* Asegurar que el borde siempre sea visible */
+  box-shadow: 0 0 0 1px var(--card-color) !important;
 }
 
 .vote-card.voted:hover {
+  /* Mantener el borde de color cuando haces hover sobre una tarjeta votada */
   transform: translateY(-4px);
   border: 3px solid var(--card-color) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--card-color) !important;
+}
+
+/* El borde debe mantenerse incluso cuando la tarjeta está colapsada */
+.vote-card.voted.collapsed {
+  border: 3px solid var(--card-color) !important;
+  box-shadow: 0 0 0 1px var(--card-color) !important;
+}
+
+/* El borde debe mantenerse incluso cuando la tarjeta está activa */
+.vote-card.voted.is-active {
+  border: 3px solid var(--card-color) !important;
+  box-shadow: 0 0 0 1px var(--card-color) !important;
 }
 
 /* Header con avatar y título */
@@ -1242,8 +1261,25 @@ header h1 {
   opacity: 1;
 }
 
-.vote-card.is-active .card-content::before {
+/* NO mostrar gradiente de color solo por estar activa/desplegada */
+/* .vote-card.is-active .card-content::before {
   opacity: 1;
+} */
+
+/* Mostrar gradiente de color SOLO después de votar */
+/* El gradiente debe ser PERMANENTE después de votar */
+.vote-card.voted .card-content::before {
+  opacity: 1 !important;
+}
+
+/* Mantener el gradiente incluso cuando la tarjeta votada está colapsada */
+.vote-card.voted.collapsed .card-content::before {
+  opacity: 1 !important;
+}
+
+/* Mantener el gradiente incluso cuando la tarjeta votada está activa */
+.vote-card.voted.is-active .card-content::before {
+  opacity: 1 !important;
 }
 
 /* Ocultar el relleno de color en tarjetas con gráfico (una sola opción) */

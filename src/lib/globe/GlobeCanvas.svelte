@@ -8,8 +8,8 @@
   export let strokeBaseColor = '#1d1d1d'; // Bordes: Gris para que se vean
   export let strokeOpacityPct = 60;       // Opacidad moderada para visibilidad
   export let sphereOpacityPct = 100;
-  export let atmosphereColor = '#1a1a1a'; // Color de atmósfera muy sutil
-  export let atmosphereAltitude = 0.12;   // Altura de la atmósfera reducida
+  export let atmosphereColor = '#1a1a1a'; // Color de atmósfera
+  export let atmosphereAltitude = 0.12;   // Altura de la atmósfera más sutil
   export let isDarkTheme = true;          // Para controlar la textura del globo
   
   // Textura del globo (centralizada)
@@ -210,18 +210,126 @@
   let lastRefreshTime = 0;
   const MIN_REFRESH_INTERVAL = 16; // ~60fps máximo
   
+  // Función para hacer el color más brillante/saturado para la atmósfera
+  function brightenColor(hexColor: string, factor: number = 1.5): string {
+    const hex = hexColor.replace('#', '');
+    let r = parseInt(hex.substring(0, 2), 16);
+    let g = parseInt(hex.substring(2, 4), 16);
+    let b = parseInt(hex.substring(4, 6), 16);
+    
+    // Aumentar brillo multiplicando por factor y limitando a 255
+    r = Math.min(255, Math.round(r * factor));
+    g = Math.min(255, Math.round(g * factor));
+    b = Math.min(255, Math.round(b * factor));
+    
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+  
+  // Función para hacer colores más visibles en atmósfera según tema
+  function getAtmosphereColor(hexColor: string, isDark: boolean): string {
+    const hex = hexColor.replace('#', '');
+    let r = parseInt(hex.substring(0, 2), 16);
+    let g = parseInt(hex.substring(2, 4), 16);
+    let b = parseInt(hex.substring(4, 6), 16);
+    
+    if (isDark) {
+      // Modo oscuro: hacer colores MUCHO más brillantes (hacia blanco)
+      r = Math.min(255, Math.round(r * 5.0 + 120));
+      g = Math.min(255, Math.round(g * 5.0 + 120));
+      b = Math.min(255, Math.round(b * 5.0 + 120));
+    } else {
+      // Modo claro: OSCURECER los colores para que se vean contra fondo claro
+      // En lugar de aclarar, oscurecer significativamente
+      r = Math.max(0, Math.round(r * 0.5 - 20));
+      g = Math.max(0, Math.round(g * 0.5 - 20));
+      b = Math.max(0, Math.round(b * 0.5 - 20));
+    }
+    
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+  
+  // Variables para transición de colores del globo
+  let isTransitioning = false;
+  let transitionStartTime = 0;
+  const TRANSITION_DURATION = 1000; // 1 segundo
+  
+  // Función para interpolar colores hex
+  function lerpColor(color1: string, color2: string, t: number): string {
+    const hex1 = color1.replace('#', '');
+    const hex2 = color2.replace('#', '');
+    
+    const r1 = parseInt(hex1.substring(0, 2), 16);
+    const g1 = parseInt(hex1.substring(2, 4), 16);
+    const b1 = parseInt(hex1.substring(4, 6), 16);
+    
+    const r2 = parseInt(hex2.substring(0, 2), 16);
+    const g2 = parseInt(hex2.substring(2, 4), 16);
+    const b2 = parseInt(hex2.substring(4, 6), 16);
+    
+    const r = Math.round(r1 + (r2 - r1) * t);
+    const g = Math.round(g1 + (g2 - g1) * t);
+    const b = Math.round(b1 + (b2 - b1) * t);
+    
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+  
+  let prevBgColor = bgColor; // Inicializar con color actual
+  let prevSphereColor = sphereBaseColor; // Inicializar con color actual
+  
+  // Función de animación de colores
+  function animateColorTransition(timestamp: number) {
+    if (!isTransitioning) return;
+    
+    if (transitionStartTime === 0) {
+      transitionStartTime = timestamp;
+    }
+    
+    const elapsed = timestamp - transitionStartTime;
+    const progress = Math.min(elapsed / TRANSITION_DURATION, 1);
+    
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    
+    // Interpolar colores
+    const interpolatedBg = lerpColor(prevBgColor, bgColor, eased);
+    const interpolatedSphere = lerpColor(prevSphereColor, sphereBaseColor, eased);
+    
+    if (world) {
+      world.backgroundColor(interpolatedBg);
+      const mat = world.globeMaterial();
+      mat.color.set(interpolatedSphere);
+    }
+    
+    if (progress < 1) {
+      requestAnimationFrame(animateColorTransition);
+    } else {
+      isTransitioning = false;
+      transitionStartTime = 0;
+      prevBgColor = bgColor;
+      prevSphereColor = sphereBaseColor;
+    }
+  }
+  
+  // Función para iniciar transición
+  function startColorTransition() {
+    if (!world) return;
+    isTransitioning = true;
+    transitionStartTime = 0;
+    requestAnimationFrame(animateColorTransition);
+  }
+  
   // Force re-apply cap color mapping from parent (OPTIMIZADO)
-  export function refreshPolyColors() {
+  export function refreshPolyColors(animate = false) {
     try {
       if (!world) return;
       
-      // Throttle: evitar refreshes más rápidos que 60fps
       const now = performance.now();
       if (now - lastRefreshTime < MIN_REFRESH_INTERVAL) {
-        return;
+        return; // Skip if called too frequently
       }
       lastRefreshTime = now;
       
+      // Aplicar colores sin transición (la transición es solo para el globo)
       world.polygonCapColor((feat: any) => (onPolyCapColor ? onPolyCapColor(feat) : hexToRgba(capBaseColor, 0.8)));
     } catch {}
   }
@@ -230,6 +338,8 @@
   export function refreshPolyStrokes() {
     try {
       if (!world) return;
+      
+      // Aplicar colores de bordes sin transición
       world.polygonStrokeColor((feat: any) => {
         const props = feat?.properties || {};
         const cityId = props._cityId || props.ID_2;
@@ -239,8 +349,12 @@
           return '#ffffff';
         }
         
-        return 'rgba(5,5,5,0.5)'; // Seminegro con opacidad 50%
+        // Usar strokeBaseColor de la paleta con opacidad
+        return hexToRgba(strokeBaseColor, 0.5);
       });
+      
+      // También actualizar los lados
+      world.polygonSideColor(() => hexToRgba(strokeBaseColor, 0.3));
     } catch {}
   }
 
@@ -630,7 +744,10 @@
         throw new Error('Globe instance is null');
       }
       
-            world.backgroundColor(bgColor);
+      // Aplicar colores iniciales de Carbon
+      world.backgroundColor(bgColor);
+      const initialMat = world.globeMaterial();
+      initialMat.color.set(sphereBaseColor);
       
       // Verificar que el renderer se creó correctamente
       const renderer = world.renderer();
@@ -681,12 +798,14 @@
     mat.transparent = true;
     mat.opacity = clamp(sphereOpacityPct / 100, 0, 1);
     
-    // Activar atmósfera con configuración sutil
+    // Activar atmósfera con color invertido según tema
     if (world.showAtmosphere) {
       world.showAtmosphere(true);
     }
     if (world.atmosphereColor) {
-      world.atmosphereColor(atmosphereColor);
+      // Modo oscuro: colores claros/brillantes, Modo claro: colores oscuros
+      const atmColor = getAtmosphereColor(atmosphereColor, isDarkTheme);
+      world.atmosphereColor(atmColor);
     }
     if (world.atmosphereAltitude) {
       world.atmosphereAltitude(atmosphereAltitude);
@@ -712,14 +831,15 @@
         // Sin selección: elevación con variación random
         return isSelected ? POLY_ALT_SELECTED : altitude;
       })
-      .polygonSideColor(() => 'rgba(5,5,5,0.3)') // Seminegro para lados
+      .polygonSideColor(() => hexToRgba(strokeBaseColor, 0.3)) // Lados con color de paleta
       .polygonStrokeColor((feat: any) => {
         // Solo mostrar borde para el polígono seleccionado
         const cityId = feat?.properties?._cityId || feat?.properties?.ID_2;
         if (selectedCityId && cityId === selectedCityId) {
           return '#ffffff';
         }
-        return 'rgba(5,5,5,0.5)'; // Seminegro con opacidad 50%
+        // Usar strokeBaseColor de la paleta con opacidad
+        return hexToRgba(strokeBaseColor, 0.5);
       })
       .polygonLabel((feat: any) => {
         // Debug: mostrar etiquetas para cualquier polígono que tenga nombre
@@ -952,19 +1072,20 @@
       const mat = world.globeMaterial();
       mat.color.set(sphereBaseColor);
       mat.opacity = clamp(sphereOpacityPct / 100, 0, 1);
-      // Atmósfera
+      // Atmósfera con color invertido según tema
       if (world.showAtmosphere) {
         world.showAtmosphere(true);
       }
       if (world.atmosphereColor) {
-        world.atmosphereColor(atmosphereColor);
+        const atmColor = getAtmosphereColor(atmosphereColor, isDarkTheme);
+        world.atmosphereColor(atmColor);
       }
       if (world.atmosphereAltitude) {
         world.atmosphereAltitude(atmosphereAltitude);
       }
-      // Bordes seminegros
-      world.polygonStrokeColor(() => 'rgba(5,5,5,0.5)');
-      world.polygonSideColor(() => 'rgba(5,5,5,0.3)');
+      // Bordes con color de paleta
+      world.polygonStrokeColor(() => hexToRgba(strokeBaseColor, 0.5));
+      world.polygonSideColor(() => hexToRgba(strokeBaseColor, 0.3));
       // Caps
       world.polygonCapColor((feat: any) => (onPolyCapColor ? onPolyCapColor(feat) : hexToRgba(capBaseColor, 0.8)));
     } catch {}
@@ -977,14 +1098,37 @@
     } catch {}
   }
   
-  // Actualizar color del globo cuando cambie el tema
-  $: if (world && isDarkTheme !== undefined) {
+  // Actualizar bordes cuando cambie el tema o el color de stroke
+  $: if (world && (isDarkTheme !== undefined || strokeBaseColor)) {
+    try {
+      refreshPolyStrokes();
+    } catch {}
+  }
+  
+  // Actualizar color del globo cuando cambie el tema o los colores
+  $: if (world && (bgColor || sphereBaseColor)) {
     try {
       // Aplicar textura configurada
       world.globeImageUrl(globeTextureUrl);
-      const mat = world.globeMaterial();
-      mat.color.set(sphereBaseColor);
+      
+      // Iniciar transición suave de colores
+      startColorTransition();
     } catch {}
+  }
+  
+  // Actualizar atmósfera cuando cambie atmosphereColor O isDarkTheme
+  $: {
+    if (world && atmosphereColor !== undefined && isDarkTheme !== undefined) {
+      try {
+        world.showAtmosphere(true);
+        const atmColor = getAtmosphereColor(atmosphereColor, isDarkTheme);
+        console.log('[GlobeCanvas] 🌍 Actualizando atmósfera - atmosphereColor:', atmosphereColor, 'isDarkTheme:', isDarkTheme, '→ resultado:', atmColor);
+        world.atmosphereColor(atmColor);
+        world.atmosphereAltitude(atmosphereAltitude);
+      } catch (e) {
+        console.error('[GlobeCanvas] Error:', e);
+      }
+    }
   }
 </script>
 

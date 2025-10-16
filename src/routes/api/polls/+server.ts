@@ -1,7 +1,7 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
   try {
     const data = await request.json();
     const { 
@@ -14,7 +14,8 @@ export const POST: RequestHandler = async ({ request }) => {
       hashtags, 
       location, 
       options,
-      settings 
+      settings,
+      userId 
     } = data;
 
     // Validaciones
@@ -37,15 +38,25 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    // Crear la encuesta con opciones y hashtags en una transacción
-    const poll = await prisma.$transaction(async (tx) => {
-      // Obtener o crear usuario demo (para testing)
-      let user = await tx.user.findFirst({
+    // Determinar el userId a usar
+    let finalUserId = userId;
+    
+    // Si no se proporciona userId, intentar obtenerlo de locals (sesión)
+    if (!finalUserId && locals.user) {
+      finalUserId = locals.user.id;
+    }
+    
+    // Si aún no hay userId, usar usuario demo como fallback
+    if (!finalUserId) {
+      const demoUser = await prisma.user.findFirst({
         where: { username: 'demo_user' }
       });
       
-      if (!user) {
-        user = await tx.user.create({
+      if (demoUser) {
+        finalUserId = demoUser.id;
+      } else {
+        // Crear usuario demo si no existe
+        const newDemoUser = await prisma.user.create({
           data: {
             username: 'demo_user',
             email: 'demo@votetok.com',
@@ -54,12 +65,16 @@ export const POST: RequestHandler = async ({ request }) => {
             verified: false
           }
         });
+        finalUserId = newDemoUser.id;
       }
+    }
 
+    // Crear la encuesta con opciones y hashtags en una transacción
+    const poll = await prisma.$transaction(async (tx) => {
       // Crear la encuesta
       const newPoll = await tx.poll.create({
         data: {
-          userId: user.id,
+          userId: finalUserId,
           title: title.trim(),
           description: description?.trim() || null,
           category: category || 'general',
@@ -72,9 +87,8 @@ export const POST: RequestHandler = async ({ request }) => {
               optionKey: opt.optionKey,
               optionLabel: opt.optionLabel,
               color: opt.color,
-              avatarUrl: opt.avatarUrl || null,
-              displayOrder: opt.displayOrder ?? index,
-              voteCount: 0
+              createdById: opt.createdById || finalUserId,
+              displayOrder: opt.displayOrder ?? index
             }))
           }
         },
@@ -162,6 +176,20 @@ export const GET: RequestHandler = async ({ url }) => {
         },
         options: {
           orderBy: { displayOrder: 'asc' },
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                avatarUrl: true,
+                displayName: true
+              }
+            },
+            _count: {
+              select: {
+                votes: true
+              }
+            }
+          }
         },
         _count: {
           select: {
@@ -178,8 +206,19 @@ export const GET: RequestHandler = async ({ url }) => {
     prisma.poll.count({ where }),
   ]);
 
+  // Transformar datos: calcular voteCount para cada opción desde votos reales
+  const transformedPolls = polls.map(poll => ({
+    ...poll,
+    options: poll.options.map(option => ({
+      ...option,
+      voteCount: option._count.votes,
+      // Mantener avatarUrl del creador para compatibilidad con frontend
+      avatarUrl: option.createdBy?.avatarUrl || null
+    }))
+  }));
+
   return json({
-    data: polls,
+    data: transformedPolls,
     pagination: {
       page,
       limit,

@@ -37,14 +37,14 @@
       },
       
       "globe": {
-        "background": "#0c0c0c",
-        "sphere": "#1d1d1d",
-        "atmosphere": "#ccc",
+        "background": "#0a0a0a",
+        "sphere": "#1a1a1a",
+        "atmosphere": "#1a1a1a",
         "atmosphereEnabled": true,
         "atmosphereAltitude": 0.12,
-        "stroke": "#ccc",
+        "stroke": "#2e2e2e",
         "strokeOpacity": 50,
-        "polygonDefault": "#ccc",
+        "polygonDefault": "#141414",
         "polygonAltitude": 0.015,
         "polygonAltitudeSelected": 0.016,
         "polygonAltitudeCity": 0.001

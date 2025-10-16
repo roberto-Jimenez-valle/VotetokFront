@@ -21,6 +21,16 @@
   export let multipleVotes: Record<string, string[]> = {};
   export let OPTIONS_PER_PAGE: number = 4;
   
+  // Vote effect state (passed from parent)
+  export let voteEffectActive: boolean = false;
+  export let voteEffectPollId: string | null = null;
+  export let displayVotes: Record<string, string> = {};
+  export let voteClickX: number = 0;
+  export let voteClickY: number = 0;
+  export let voteIconX: number = 0;
+  export let voteIconY: number = 0;
+  export let voteEffectColor: string = '#10b981';
+  
   // Refs
   let mainGridRef: HTMLElement;
   
@@ -73,6 +83,13 @@
     return 'normal';
   }
   
+  function fontSizeForPct(pct: number): number {
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+    const bucket = Math.max(1, Math.ceil(clamped / 10));
+    const size = bucket * 10;
+    return Math.max(20, Math.min(70, size));
+  }
+  
   // Reactive data
   $: normalizedVoteOptions = (() => {
     const opts = voteOptions || [];
@@ -81,7 +98,10 @@
     return opts.map((o, i) => ({ ...o, pct: norm[i] }));
   })();
   
-  $: sortedActiveOptions = normalizedVoteOptions.sort((a, b) => b.pct - a.pct);
+  // No reordenar encuestas colaborativas para evitar confusión de colores
+  $: sortedActiveOptions = activePoll.type === 'collaborative'
+    ? normalizedVoteOptions
+    : normalizedVoteOptions.sort((a, b) => b.pct - a.pct);
   $: shouldPaginateActive = sortedActiveOptions.length > OPTIONS_PER_PAGE;
   $: paginatedActiveOptions = shouldPaginateActive 
     ? getPaginatedOptions(sortedActiveOptions, currentPageMain, OPTIONS_PER_PAGE)
@@ -125,37 +145,54 @@
   }
 </script>
 
-<div class="vote-cards-section active-poll-section">
-  <!-- Título de la encuesta activa -->
-  <div class="topic-header">
+<div class="poll-item">
+  <!-- Header de la encuesta -->
+  <div class="poll-header">
     <div class="header-with-avatar">
       <div class="header-content">
-        <div class="header-title-row">
-          <h3>{activePoll.question || activePoll.title || 'Encuesta'}</h3>
-          {#if activePoll.closedAt}
-            {@const timeColor = getTimeRemainingColor(activePoll.closedAt)}
-            {@const timeText = getTimeRemaining(activePoll.closedAt)}
-            <div class="time-remaining-badge {timeColor} {isExpired ? 'expired' : ''}">
-              {#if isExpired}
-                🔒 Cerrada
-              {:else}
-                ⏰ {timeText}
-              {/if}
-            </div>
-          {/if}
-        </div>
-        <div class="topic-meta">
-          <span class="topic-type">
-            {#if activePoll.type === 'multiple'}
-              ☑️ Votación múltiple • 
-            {:else if activePoll.type === 'collaborative'}
-              👥 Colaborativa • 
+        <div class="poll-question-wrapper">
+          <div class="poll-question-row">
+            <h3 class="poll-question">
+              {activePoll.question || activePoll.title || 'Encuesta'}
+            </h3>
+            {#if activePoll.closedAt}
+              {@const timeColor = getTimeRemainingColor(activePoll.closedAt)}
+              {@const timeText = getTimeRemaining(activePoll.closedAt)}
+              <div class="time-remaining-badge {timeColor} {isExpired ? 'expired' : ''}">
+                {#if isExpired}
+                  🔒 Cerrada
+                {:else}
+                  ⏰ {timeText}
+                {/if}
+              </div>
             {/if}
-            {activePoll.region || 'General'}
-          </span>
+          </div>
+          <div class="poll-meta">
+            <span class="topic-type">
+              {#if activePoll.type === 'multiple'}
+                Encuesta ☑️
+              {:else if activePoll.type === 'collaborative'}
+                Encuesta 👥
+              {:else}
+                Encuesta ⭕
+              {/if}
+              • {activePoll.region || 'General'}
+            </span>
+            {#if activePoll.createdAt}
+              <span class="topic-time">• hace {Math.floor((Date.now() - new Date(activePoll.createdAt).getTime()) / 60000)}min</span>
+            {/if}
+          </div>
         </div>
       </div>
-      <img class="creator-avatar" src={activePoll.creatorAvatar || DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
+      {#if activePoll.user?.avatarUrl}
+        <div class="header-avatar header-avatar-real">
+          <img src={activePoll.user.avatarUrl} alt={activePoll.user.displayName || 'Avatar'} loading="lazy" />
+        </div>
+      {:else}
+        <div class="header-avatar header-avatar-real">
+          <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
+        </div>
+      {/if}
     </div>
   </div>
   
@@ -185,45 +222,70 @@
             <button onclick={() => handleCancelCollaborative()}>Cancelar</button>
           </div>
         {:else}
-          <!-- Regular poll option -->
+          <!-- Regular poll option - Mismo diseño que SinglePollSection -->
           <button
-            class="vote-card {isVoted ? 'voted' : ''}"
-            style="--card-color: {option.color}; background: linear-gradient(135deg, {option.color}20, {option.color}10);"
+            class="vote-card {activeAccordionMainIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionMainIndex !== index) ? 'collapsed' : ''} {isVoted ? 'voted' : ''}"
+            style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, option.pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, option.pct))}; --flex: {Math.max(0.5, option.pct / 10)};"
             type="button"
             disabled={isExpired}
-            aria-label="{option.label}: {(option.pct || 0).toFixed(1)}%"
             onclick={(e) => {
-              if (activeAccordionMainIndex !== index) { 
+              // Primer click: abrir la card si está colapsada
+              if (state !== 'expanded' || activeAccordionMainIndex !== index) { 
                 handleSetActive(index);
                 return; 
               }
-              dispatch('optionClick', { event: e, optionKey: option.key, pollId: mainPollId });
+              // Segundo click: votar si ya está abierta
+              dispatch('optionClick', { event: e, optionKey: option.key, pollId: mainPollId, optionColor: option.color });
+            }}
+            onfocus={() => handleSetActive(index)}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                // Primer click: abrir la card si está colapsada
+                if (state !== 'expanded' || activeAccordionMainIndex !== index) { 
+                  handleSetActive(index); 
+                  return; 
+                }
+                // Segundo click: votar si ya está abierta
+                dispatch('optionClick', { event: e, optionKey: option.key, pollId: mainPollId, optionColor: option.color });
+              }
             }}
           >
-            <!-- Header with title and vote count -->
-            <div class="card-header-full">
-              <h2 class="option-title">{option.label}</h2>
-              <span class="vote-count-badge">{(option.votes || 0)}/{activePoll.totalVotes || 0}</span>
+            <!-- Header con avatar y título -->
+            <div class="card-header">
+              <h2 class="question-title">{option.label}</h2>
+              <img class="creator-avatar" src={option.avatarUrl || DEFAULT_AVATAR} alt={option.label} loading="lazy" />
             </div>
 
-            <!-- Large percentage display -->
-            <div class="percentage-display">
-              <span class="percentage-large" style="color: {option.color};">{(option.pct || 0).toFixed(0)}%</span>
-            </div>
-
-            <!-- Bottom bar with color -->
-            <div class="option-bar-wrapper">
-              <div class="option-bar" style="width: {option.pct || 0}%; background: {option.color};"></div>
-            </div>
-
-            <!-- Vote indicator -->
-            {#if isVoted}
-              <div class="vote-check-icon" style="background: {option.color};">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
-                  <path d="M20 6L9 17l-5-5"/>
-                </svg>
+            <!-- Contenido principal -->
+            <div class="card-content">
+              <!-- Porcentaje tradicional para múltiples opciones -->
+              <div class="percentage-display">
+                <span
+                  class="percentage-large"
+                  style="font-size: {(activeAccordionMainIndex === index && state === 'expanded'
+                    ? fontSizeForPct(option.pct)
+                    : Math.min(fontSizeForPct(option.pct), 21))}px"
+                >
+                  {Math.round(option.pct)}
+                </span>
               </div>
-            {/if}
+              
+              <!-- Avatares de amigos posicionados absolutamente (solo si hay amigos que votaron) -->
+              {#if activePoll.friendsByOption?.[option.key] && activePoll.friendsByOption[option.key].length > 0}
+                <div class="friend-avatars-absolute">
+                  {#each activePoll.friendsByOption[option.key].slice(0, 3) as friend, i}
+                    <img 
+                      class="friend-avatar-floating" 
+                      src={friend.avatarUrl || DEFAULT_AVATAR}
+                      alt={friend.name}
+                      loading="lazy"
+                      style="z-index: {10 - i};"
+                    />
+                  {/each}
+                </div>
+              {/if}
+            </div>
           </button>
         {/if}
       {/each}
@@ -314,14 +376,30 @@
   }
 
   .vote-card:hover:not(:disabled) {
-    border-color: var(--card-color);
+    /* NO colorear borde en hover, solo transformar */
     transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--card-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   }
 
   .vote-card.voted {
-    border-color: var(--card-color);
-    box-shadow: 0 0 0 2px var(--card-color);
+    /* Borde coloreado PERMANENTE después de votar */
+    border: 3px solid var(--card-color) !important;
+    border-color: var(--card-color) !important;
+    background: rgba(255,255,255,0.12) !important;
+    box-shadow: 0 0 0 2px var(--card-color) !important;
+  }
+  
+  .vote-card.voted:hover {
+    /* Mantener borde coloreado en hover cuando ya votaste */
+    border: 3px solid var(--card-color) !important;
+    border-color: var(--card-color) !important;
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--card-color) !important;
+  }
+  
+  /* Mantener el gradiente de color visible en tarjetas votadas */
+  .vote-card.voted::before {
+    opacity: 0.25 !important;
   }
 
   .vote-card:disabled {
@@ -469,5 +547,119 @@
   .editable-poll-option button:hover {
     background: linear-gradient(135deg, #059669, #047857);
     transform: translateY(-1px);
+  }
+
+  /* Botón confirmar votos múltiples - Diseño profesional */
+  .confirm-multiple-votes-btn {
+    width: calc(100% - 32px);
+    padding: 16px 24px;
+    margin: 16px 16px 12px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: not-allowed;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .confirm-multiple-votes-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.6s ease;
+  }
+
+  .confirm-multiple-votes-btn.has-selection {
+    background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4), 
+                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .confirm-multiple-votes-btn.has-selection:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.5), 
+                0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+                0 0 40px rgba(16, 185, 129, 0.3);
+  }
+
+  .confirm-multiple-votes-btn.has-selection:hover::before {
+    left: 100%;
+  }
+
+  .confirm-multiple-votes-btn.has-selection:active {
+    transform: translateY(-1px) scale(0.98);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+  }
+
+  .confirm-multiple-votes-btn.disabled,
+  .confirm-multiple-votes-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .confirm-multiple-votes-btn svg {
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  }
+
+  .confirm-multiple-votes-btn span {
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Paginación - Exacto como CreatePollModal */
+  .pagination-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0 8px;
+    margin: 0;
+  }
+  
+  .pagination-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+  }
+  
+  .pagination-dot:hover {
+    background: rgba(255, 255, 255, 0.5);
+    transform: scale(1.2);
+  }
+  
+  .pagination-dot.active {
+    background: #3b82f6;
+    width: 24px;
+    border-radius: 4px;
   }
 </style>

@@ -39,19 +39,24 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			return json({ data: {} });
 		}
 
-		// 🔥 CORREGIDO: Obtener votos por subdivisionName (no subdivisionId que está NULL)
+		// Obtener votos con subdivisión del país especificado
 		const votes = await prisma.vote.findMany({
 			where: {
 				pollId,
-				countryIso3: countryIso,
-				subdivisionName: {
-					not: null
+				subdivision: {
+					subdivisionId: {
+						startsWith: countryIso  // ESP, FRA, etc.
+					}
 				}
 			},
 			select: {
-				subdivisionId: true,
-				subdivisionName: true,
-				optionId: true
+				optionId: true,
+				subdivision: {
+					select: {
+						subdivisionId: true,  // ESP.1.2
+						level: true
+					}
+				}
 			}
 		});
 
@@ -61,23 +66,17 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			pollOptions.map(opt => [opt.id, opt.optionKey])
 		);
 
-		// Agrupar votos por subdivisión (nivel 1: ESP.1, ESP.2, etc.)
+		// Agrupar votos por subdivisión nivel 2 (comunidades/estados)
 		const subdivisionVotes: Record<string, Record<string, number>> = {};
 
 		for (const vote of votes) {
-			// 🔥 Extraer el nivel 1 del subdivisionId granular
-			// Si subdivisionId es "ESP.1.1", extraer "ESP.1"
-			let subdivisionKey = vote.subdivisionId || vote.subdivisionName;
-			if (!subdivisionKey) continue;
-
-			// Si es un ID granular (ESP.1.1), extraer el nivel 1 (ESP.1)
-			if (subdivisionKey.includes('.')) {
-				const parts = subdivisionKey.split('.');
-				if (parts.length === 3) {
-					// "ESP.1.1" → "ESP.1"
-					subdivisionKey = `${parts[0]}.${parts[1]}`;
-				}
-			}
+			// Extraer nivel 2 del subdivisionId
+			// ESP.1.2 → ESP.1 (comunidad)
+			// ESP.1 → ESP.1 (ya es comunidad)
+			const parts = vote.subdivision.subdivisionId.split('.');
+			const subdivisionKey = parts.length >= 2 
+				? `${parts[0]}.${parts[1]}`  // ESP.1
+				: vote.subdivision.subdivisionId;  // ESP (fallback a país)
 
 			const optionKey = optionIdToKey.get(vote.optionId);
 			if (!optionKey) continue;

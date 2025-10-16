@@ -34,14 +34,18 @@ export const GET: RequestHandler = async ({ params }) => {
 			return json({ data: {} });
 		}
 
-		// Obtener todos los votos agrupados por país y opción
+		// Obtener todos los votos con subdivisión
 		const votes = await prisma.vote.findMany({
 			where: {
 				pollId
 			},
 			select: {
-				countryIso3: true,
-				optionId: true
+				optionId: true,
+				subdivision: {
+					select: {
+						subdivisionId: true  // ESP.1.2 -> extraer ESP
+					}
+				}
 			}
 		});
 
@@ -51,11 +55,12 @@ export const GET: RequestHandler = async ({ params }) => {
 			pollOptions.map(opt => [opt.id, opt.optionKey])
 		);
 
-		// Agrupar votos por país
+		// Agrupar votos por país (extraer ISO3 de subdivisionId)
 		const countryVotes: Record<string, Record<string, number>> = {};
 
 		for (const vote of votes) {
-			const countryIso = vote.countryIso3;
+			// Extraer código país: ESP.1.2 -> ESP, ESP -> ESP
+			const countryIso = vote.subdivision.subdivisionId.split('.')[0];
 			const optionKey = optionIdToKey.get(vote.optionId);
 
 			if (!optionKey) continue;

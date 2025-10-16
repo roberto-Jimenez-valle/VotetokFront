@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { currentUser } from '$lib/stores';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -20,7 +21,18 @@
   export let pollTitleTruncated: Record<string, boolean> = {};
   export let pollTitleElements: Record<string, HTMLElement> = {};
   
+  // Vote effect state (passed from parent)
+  export let voteEffectActive: boolean = false;
+  export let voteEffectPollId: string | null = null;
+  export let displayVotes: Record<string, string> = {};
+  export let voteClickX: number = 0;
+  export let voteClickY: number = 0;
+  export let voteIconX: number = 0;
+  export let voteIconY: number = 0;
+  export let voteEffectColor: string = '#10b981';
+  
   let pollGridRef: HTMLElement;
+  let voteIconElement: HTMLElement | null = null;
   
   // Helper functions
   function normalizeTo100(values: number[]): number[] {
@@ -104,13 +116,17 @@
   }
   
   // Reactive data
-  $: sortedPollOptions = getNormalizedOptions(poll).sort((a: any, b: any) => b.pct - a.pct);
+  // NUNCA reordenar opciones para evitar confusión al usuario
+  // Las opciones mantienen su orden original siempre
+  $: sortedPollOptions = getNormalizedOptions(poll);
   $: shouldPaginate = sortedPollOptions.length > OPTIONS_PER_PAGE;
   $: paginatedPoll = shouldPaginate 
     ? getPaginatedOptions(sortedPollOptions, currentPage)
     : { items: sortedPollOptions, totalPages: 1, hasNext: false, hasPrev: false };
   $: isSingleOptionPoll = sortedPollOptions.length === 1;
   $: isExpired = poll.closedAt ? isPollExpired(poll.closedAt) : false;
+  $: pollVotedOption = displayVotes[poll.id] || userVotes[poll.id];
+  $: votedOptionData = pollVotedOption ? poll.options.find((o: any) => o.key === pollVotedOption) : null;
   
   // Event handlers
   function handleSetActive(index: number) {
@@ -126,7 +142,7 @@
   }
   
   function handleAddOption() {
-    dispatch('addOption', { pollId: poll.id });
+    dispatch('addOption', { pollId: poll.id, previewColor });
   }
   
   function handleOpenInGlobe() {
@@ -136,6 +152,13 @@
   function handleDragStart(e: PointerEvent | TouchEvent) {
     dispatch('dragStart', { event: e, pollId: poll.id });
   }
+  
+  // Generar color aleatorio para preview del botón
+  const previewColors = [
+    '#ef4444', '#f97316', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
+    '#dc2626', '#ea580c', '#d97706', '#059669', '#2563eb', '#7c3aed', '#db2777', '#0d9488'
+  ];
+  const previewColor = previewColors[Math.floor(Math.random() * previewColors.length)];
 </script>
 
 <div class="poll-item">
@@ -286,81 +309,257 @@
         {@const isPollVoted = poll.type === 'multiple'
           ? multipleVotes[poll.id]?.includes(option.key)
           : userVotes[poll.id] === option.key}
+        {@const isNewOption = poll.type === 'collaborative' && option.isEditing === true}
+        {@const displayPct = isNewOption ? 25 : option.pct}
         
-        <button 
-          class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionIndex !== index) ? 'collapsed' : ''}" 
-          style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, option.pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, option.pct))}; --flex: {Math.max(0.5, option.pct / 10)};" 
-          onclick={() => {
-            if (isSingleOptionPoll) { return; }
-            if (activeAccordionIndex !== index) { handleSetActive(index); return; }
-            dispatch('optionClick', { event: event, optionKey: option.key, pollId: poll.id });
-          }}
-          onfocus={() => !isSingleOptionPoll ? handleSetActive(index) : null}
-          onkeydown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
+        <svelte:element
+          this={isNewOption ? 'div' : 'button'}
+          role={isNewOption ? 'region' : undefined}
+          class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionIndex !== index) ? 'collapsed' : ''} {isPollVoted ? 'voted' : ''}" 
+          style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, displayPct))}%; --fill-pct-val: {Math.max(0, Math.min(100, displayPct))}; --flex: {Math.max(0.5, displayPct / 10)};" 
+          onclick={(e: MouseEvent) => {
+            if (isNewOption || isSingleOptionPoll) { return; }
+            
+            // Cancelar cualquier opción en edición antes de proceder
+            const editingOption = poll.options.find((opt: any) => opt.isEditing);
+            if (editingOption) {
+              dispatch('cancelEditing', { pollId: poll.id, optionKey: editingOption.key });
+              return;
+            }
+            
+            // Primer click: abrir la card si está colapsada
+            if (state !== 'expanded' || activeAccordionIndex !== index) {
               e.preventDefault();
-              if (activeAccordionIndex !== index) { handleSetActive(index); return; }
-              dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id });
+              e.stopPropagation();
+              handleSetActive(index); 
+              return; 
+            }
+            
+            // Segundo click: votar SOLO si está completamente desplegada
+            if (state === 'expanded' && activeAccordionIndex === index) {
+              dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
+            } else {
+              e.preventDefault();
+              e.stopPropagation();
             }
           }}
-          type="button"
+          onfocus={() => !isSingleOptionPoll && !isNewOption ? handleSetActive(index) : null}
+          onkeydown={(e: KeyboardEvent) => {
+            if (isNewOption) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              
+              // Cancelar cualquier opción en edición antes de proceder
+              const editingOption = poll.options.find((opt: any) => opt.isEditing);
+              if (editingOption) {
+                dispatch('cancelEditing', { pollId: poll.id, optionKey: editingOption.key });
+                return;
+              }
+              
+              // Primer toque: abrir la card si está colapsada
+              if (state !== 'expanded' || activeAccordionIndex !== index) {
+                e.stopPropagation();
+                handleSetActive(index); 
+                return; 
+              }
+              
+              // Segundo toque: votar SOLO si está completamente desplegada
+              if (state === 'expanded' && activeAccordionIndex === index) {
+                dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
+              } else {
+                e.stopPropagation();
+              }
+            }
+          }}
+          type={isNewOption ? undefined : 'button'}
         >
-          <!-- Header con avatar y título -->
-          {#if !isSingleOptionPoll}
-          <div class="card-header">
-            <h2 class="question-title">{option.label}</h2>
-            <img class="creator-avatar" src={option.avatarUrl || DEFAULT_AVATAR} alt={option.label} loading="lazy" />
-          </div>
-          {/if}
-
-          <!-- Contenido principal -->
-          <div class="card-content" class:card-content-full={isSingleOptionPoll}>
-            <!-- Porcentaje tradicional para múltiples opciones -->
-            <div class="percentage-display">
-              <span
-                class="percentage-large"
-                style="font-size: {(activeAccordionIndex === index && state === 'expanded'
-                  ? fontSizeForPct(option.pct)
-                  : Math.min(fontSizeForPct(option.pct), 21))}px"
-              >
-                {Math.round(option.pct)}
-              </span>
+          {#if isNewOption}
+            <!-- Layout para opciones nuevas: Avatar + Botón X arriba, textarea medio, porcentaje abajo -->
+            <!-- Avatar del usuario logueado arriba a la izquierda -->
+            <img 
+              class="creator-avatar-editing" 
+              src={$currentUser?.avatarUrl || DEFAULT_AVATAR} 
+              alt={$currentUser?.displayName || 'Usuario'} 
+              loading="lazy" 
+            />
+            
+            <!-- Botón X para cerrar/eliminar arriba -->
+            <button
+              class="remove-option-badge-top"
+              onclick={(e) => {
+                e.stopPropagation();
+                // Emitir evento para que el padre elimine la opción
+                dispatch('cancelEditing', { pollId: poll.id, optionKey: option.key });
+              }}
+              title="Cerrar"
+              type="button"
+              aria-label="Cerrar opción"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+            
+            <!-- Textarea en el centro -->
+            <div class="new-option-content">
+              <textarea
+                class="question-title editable new-option"
+                placeholder="Escribe tu opción..."
+                value={option.label || ''}
+                oninput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  option.label = target.value;
+                }}
+                onclick={(e) => e.stopPropagation()}
+                maxlength="200"
+              ></textarea>
             </div>
             
-            <!-- Avatares de amigos posicionados absolutamente (solo si hay amigos que votaron) -->
-            {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
-              <div class="friend-avatars-absolute">
-                {#each poll.friendsByOption[option.key].slice(0, 3) as friend, i}
-                  <img 
-                    class="friend-avatar-floating" 
-                    src={friend.avatarUrl || DEFAULT_AVATAR}
-                    alt={friend.name}
-                    loading="lazy"
-                    style="z-index: {10 - i};"
-                  />
-                {/each}
+            <!-- Contenedor con gradiente de color -->
+            <div class="card-content">
+              <div class="percentage-display">
+                <span class="percentage-large" style="font-size: {fontSizeForPct(displayPct)}px;">
+                  {Math.round(displayPct)}
+                </span>
               </div>
+            </div>
+            
+            <!-- Botones posicionados absolutamente -->
+            <!-- Botón selector de color -->
+            <button
+              class="color-picker-badge-absolute"
+              style="background-color: {option.color}"
+              onclick={(e) => {
+                e.stopPropagation();
+                dispatch('openColorPicker', { pollId: poll.id, optionKey: option.key });
+              }}
+              title="Cambiar color"
+              type="button"
+              aria-label="Cambiar color"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+              </svg>
+            </button>
+            
+            <!-- Botón publicar -->
+            <button
+              class="publish-option-btn-absolute"
+              onclick={(e) => {
+                e.stopPropagation();
+                if (option.label && option.label.trim()) {
+                  dispatch('publishOption', { pollId: poll.id, optionKey: option.key, label: option.label.trim(), color: option.color });
+                }
+              }}
+              title="Publicar opción"
+              type="button"
+              disabled={!option.label || !option.label.trim()}
+              aria-label="Publicar opción"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M20 6L9 17l-5-5"/>
+              </svg>
+            </button>
+          {:else}
+            <!-- Layout normal para opciones existentes -->
+            <!-- Header con avatar y título -->
+            {#if !isSingleOptionPoll}
+            <div class="card-header">
+              <h2 class="question-title">{option.label}</h2>
+              <img class="creator-avatar" src={option.avatarUrl || DEFAULT_AVATAR} alt={option.label} loading="lazy" />
+            </div>
             {/if}
-          </div>
-        </button>
+
+            <!-- Contenido principal -->
+            <div class="card-content" class:card-content-full={isSingleOptionPoll}>
+              <!-- Porcentaje tradicional para múltiples opciones -->
+              <div class="percentage-display">
+                <span
+                  class="percentage-large"
+                  style="font-size: {(activeAccordionIndex === index && state === 'expanded'
+                    ? fontSizeForPct(displayPct)
+                    : Math.min(fontSizeForPct(displayPct), 21))}px"
+                >
+                  {Math.round(displayPct)}
+                </span>
+              </div>
+              
+              <!-- Avatares de amigos posicionados absolutamente (solo si hay amigos que votaron) -->
+              {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
+                <div class="friend-avatars-absolute">
+                  {#each poll.friendsByOption[option.key].slice(0, 3) as friend, i}
+                    <img 
+                      class="friend-avatar-floating" 
+                      src={friend.avatarUrl || DEFAULT_AVATAR}
+                      alt={friend.name}
+                      loading="lazy"
+                      style="z-index: {10 - i};"
+                    />
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </svelte:element>
       {/each}
     </div>
+  </div>
+  
+  <!-- Paginación y botón añadir - justo debajo de las cards -->
+  <div class="pagination-container">
+    {#if shouldPaginate}
+      <div class="pagination-dots">
+        {#each Array(paginatedPoll.totalPages) as _, pageIndex}
+          <button 
+            class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
+            onclick={() => handlePageChange(pageIndex)}
+            type="button"
+            aria-label="Página {pageIndex + 1}"
+          ></button>
+        {/each}
+      </div>
+    {/if}
     
-    <!-- Botón añadir opción (colaborativas) -->
-    {#if poll.type === 'collaborative' && poll.options.length < 10}
+    <!-- Botón añadir opción pequeño (visible siempre que no haya edición) -->
+    {#if poll.type === 'collaborative' && poll.options.length < 10 && !poll.options.some((opt: any) => opt.isEditing)}
       <button
         type="button"
-        class="add-option-button-inline"
+        class="add-option-button-bottom"
+        style="--preview-color: {previewColor}"
         onclick={handleAddOption}
         title="Añadir nueva opción"
+        aria-label="Añadir nueva opción"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
       </button>
     {/if}
   </div>
+  
+  <!-- Botón confirmar votos múltiples - justo debajo de las cards -->
+  {#if poll.type === 'multiple'}
+    {@const selectedCount = multipleVotes[poll.id]?.length || 0}
+    <button
+      class="confirm-multiple-votes-btn {selectedCount > 0 ? 'has-selection' : ''} {isExpired ? 'disabled' : ''}"
+      onclick={handleConfirmMultiple}
+      disabled={selectedCount === 0 || isExpired}
+      type="button"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M20 6L9 17l-5-5"/>
+      </svg>
+      <span>
+        {#if selectedCount === 0}
+          Selecciona opciones
+        {:else}
+          Confirmar {selectedCount} {selectedCount === 1 ? 'voto' : 'votos'}
+        {/if}
+      </span>
+    </button>
+  {/if}
   
   <!-- Información de la encuesta (estadísticas y acciones) -->
   <div class="vote-summary-info">
@@ -373,13 +572,25 @@
         </svg>
         <span>{formatNumber(poll.options.length)}</span>
       </div>
-      <div class="stat-badge">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button 
+        bind:this={voteIconElement}
+        class="stat-badge action-vote {pollVotedOption ? 'has-voted' : 'no-vote'} {voteEffectActive && voteEffectPollId === poll.id ? 'vote-animate' : ''}" 
+        type="button" 
+        title={pollVotedOption ? `Tu voto: ${votedOptionData?.label || pollVotedOption}` : "Aún no has votado"}
+        style="{pollVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''} {voteEffectActive && voteEffectPollId === poll.id ? `--vote-x: ${voteClickX}px; --vote-y: ${voteClickY}px; --icon-x: ${voteIconX}px; --icon-y: ${voteIconY}px; --vote-color: ${voteEffectColor};` : ''}"
+        onclick={(e) => {
+          if (pollVotedOption) {
+            const { [poll.id]: _, ...rest } = userVotes;
+            dispatch('clearVote', { pollId: poll.id });
+          }
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill={pollVotedOption ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 11l3 3L22 4"></path>
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
         </svg>
         <span>{formatNumber(poll.totalVotes)}</span>
-      </div>
+      </button>
       <div class="stat-badge">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -429,40 +640,508 @@
       </button>
     </div>
   </div>
-  
-  <!-- Paginación -->
-  {#if shouldPaginate}
-    <div class="pagination-dots">
-      {#each Array(paginatedPoll.totalPages) as _, pageIndex}
-        <button 
-          class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
-          onclick={() => handlePageChange(pageIndex)}
-          type="button"
-          aria-label="Página {pageIndex + 1}"
-        ></button>
-      {/each}
-    </div>
-  {/if}
-  
-  <!-- Botón confirmar votos múltiples -->
-  {#if poll.type === 'multiple'}
-    {@const selectedCount = multipleVotes[poll.id]?.length || 0}
-    <button
-      class="confirm-multiple-votes-btn {selectedCount > 0 ? 'has-selection' : ''} {isExpired ? 'disabled' : ''}"
-      onclick={handleConfirmMultiple}
-      disabled={selectedCount === 0 || isExpired}
-      type="button"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M20 6L9 17l-5-5"/>
-      </svg>
-      <span>
-        {#if selectedCount === 0}
-          Selecciona opciones
-        {:else}
-          Confirmar {selectedCount} {selectedCount === 1 ? 'voto' : 'votos'}
-        {/if}
-      </span>
-    </button>
-  {/if}
 </div>
+
+<style>
+  /* Botón confirmar votos múltiples - Diseño profesional */
+  .confirm-multiple-votes-btn {
+    width: calc(100% - 32px);
+    padding: 16px 24px;
+    margin: 16px 16px 12px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: not-allowed;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .confirm-multiple-votes-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.6s ease;
+  }
+
+  .confirm-multiple-votes-btn.has-selection {
+    background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4), 
+                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .confirm-multiple-votes-btn.has-selection:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.5), 
+                0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+                0 0 40px rgba(16, 185, 129, 0.3);
+  }
+
+  .confirm-multiple-votes-btn.has-selection:hover::before {
+    left: 100%;
+  }
+
+  .confirm-multiple-votes-btn.has-selection:active {
+    transform: translateY(-1px) scale(0.98);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+  }
+
+  .confirm-multiple-votes-btn.disabled,
+  .confirm-multiple-votes-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .confirm-multiple-votes-btn svg {
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  }
+
+  .confirm-multiple-votes-btn span {
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Paginación - Exacto como CreatePollModal */
+  .pagination-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0 8px;
+    margin: 0;
+  }
+  
+  .pagination-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+  }
+  
+  .pagination-dot:hover {
+    background: rgba(255, 255, 255, 0.5);
+    transform: scale(1.2);
+  }
+  
+  .pagination-dot.active {
+    background: #3b82f6;
+    width: 24px;
+    border-radius: 4px;
+  }
+
+  /* Contenedor de paginación con botón añadir */
+  .pagination-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 2px 0;
+    margin-top: -6px;
+  }
+
+  /* Botón añadir opción pequeño debajo - estilo card con borde color */
+  .add-option-button-bottom {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: #2a2c31;
+    border: none;
+    border-bottom: 2.5px solid var(--preview-color, #8b5cf6);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .add-option-button-bottom:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    filter: brightness(1.1);
+  }
+
+  .add-option-button-bottom:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Vote cards con background sólido */
+  :global(.vote-card) {
+    background: #2a2c31 !important;
+  }
+
+  :global(.vote-card.collapsed) {
+    background: #2a2c31 !important;
+  }
+
+  /* Contenedor de tarjetas con botón añadir */
+  .vote-cards-container {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 0 -1rem;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Botón añadir opción inline a la derecha - Efecto Glass */
+  .add-option-button-inline {
+    
+    
+    flex-shrink:0;
+    min-width: 60px;
+    width: 50px;
+    height: 224px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0 16px 16px 0;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.25rem;
+    font-weight: 300;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex
+;
+    align-items: center;
+    padding-right: 7px;
+    justify-content: right;
+    margin-left: -43px;
+    margin-right: 16px;
+    z-index: 0;
+  }
+
+  .add-option-button-inline:hover {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-left-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.95);
+   
+    transform: translateX(2px);
+  }
+
+  /* Layout para opciones nuevas colaborativas */
+  .remove-option-badge-top {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 8px;
+    background: #000000;
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .remove-option-badge-top:hover {
+    background: #1a1a1a;
+    transform: scale(1.1);
+  }
+
+  .card-header {
+    background: transparent;
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .question-title {
+    background: transparent;
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .percentage-large {
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .creator-avatar-editing {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 3;
+  }
+
+  .new-option-content {
+    padding: 48px 16px 16px 16px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+  }
+
+  .question-title.editable.new-option {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+    width: 100%;
+    resize: none;
+    overflow: hidden;
+    vertical-align: top;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    min-height: 60px;
+    max-height: 120px;
+    pointer-events: auto;
+    position: relative;
+    z-index: 2;
+  }
+
+  .question-title.editable.new-option::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+    font-weight: 500;
+  }
+
+  .card-content {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: transparent;
+    z-index: 0;
+  }
+
+  .card-content::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    background: linear-gradient(0deg,
+        var(--card-color, rgba(0, 0, 0, 0.4)) 25%,
+        transparent 25%
+      );
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+  }
+
+  .card-content-bottom {
+    padding: 0 16px 16px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .bottom-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+  }
+  
+  .percentage-display {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 16px;
+    padding-bottom: 16px;
+    background: transparent;
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .color-picker-badge-bottom {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    position: relative;
+    overflow: visible;
+  }
+
+  .color-picker-badge-bottom:hover {
+    border-color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  }
+
+  .color-picker-badge-bottom svg {
+    width: 0.875rem;
+    height: 0.875rem;
+    color: rgba(255, 255, 255, 0.9);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+
+  .publish-option-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    color: white;
+  }
+
+  .publish-option-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: scale(1.1);
+    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.5);
+  }
+
+  .publish-option-btn:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  .publish-option-btn:disabled {
+    background: rgba(107, 114, 128, 0.3);
+    cursor: not-allowed;
+    opacity: 0.5;
+    box-shadow: none;
+  }
+
+  .publish-option-btn svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+
+  /* Botones posicionados absolutamente para opciones en edición */
+  .color-picker-badge-absolute {
+    position: absolute;
+    bottom: 16px;
+    right: 60px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    padding: 0;
+  }
+
+  .color-picker-badge-absolute:hover {
+    border-color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  }
+
+  .color-picker-badge-absolute svg {
+    width: 1rem;
+    height: 1rem;
+    color: rgba(255, 255, 255, 0.9);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+
+  .publish-option-btn-absolute {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    color: white;
+    z-index: 3;
+    padding: 0;
+  }
+
+  .publish-option-btn-absolute:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: scale(1.1);
+    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.5);
+  }
+
+  .publish-option-btn-absolute:disabled {
+    background: rgba(107, 114, 128, 0.3);
+    cursor: not-allowed;
+    opacity: 0.5;
+    box-shadow: none;
+  }
+
+  .publish-option-btn-absolute svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+</style>

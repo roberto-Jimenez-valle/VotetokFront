@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug Móvil - Geolocalización</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #10b981;
+    }
+    button {
+      width: 100%;
+      padding: 16px;
+      margin: 10px 0;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    button:active {
+      background: #059669;
+    }
+    .output {
+      background: #2d2d2d;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-family: monospace;
+      font-size: 13px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .success {
+      color: #10b981;
+    }
+    .error {
+      color: #ef4444;
+    }
+    .warning {
+      color: #f59e0b;
+    }
+    .info {
+      background: #1e40af;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 15px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 Debug Geolocalización Móvil</h1>
+    
+    <div class="info">
+      <strong>⚠️ Importante:</strong> Cuando pulses un botón, el navegador te pedirá permiso para acceder a tu ubicación. Debes <strong>PERMITIRLO</strong>.
+    </div>
+
+    <button onclick="testGPS()">📍 Probar GPS</button>
+    <button onclick="testGeocode()">🌐 Probar Geocoding</button>
+    <button onclick="testFullVote()">🗳️ Probar Voto Completo</button>
+    <button onclick="clearOutput()">🧹 Limpiar</button>
+
+    <div id="output" class="output"></div>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(msg, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+      output.innerHTML += `[${timestamp}] ${prefix} ${msg}\n`;
+      output.scrollTop = output.scrollHeight;
+      console.log(msg);
+    }
+
+    function clearOutput() {
+      output.innerHTML = '';
+    }
+
+    async function testGPS() {
+      clearOutput();
+      log('Iniciando prueba de GPS...', 'info');
+      
+      if (!navigator.geolocation) {
+        log('❌ navigator.geolocation NO disponible', 'error');
+        log('Tu navegador no soporta geolocalización', 'error');
+        return;
+      }
+      
+      log('✅ navigator.geolocation disponible', 'success');
+      log('Solicitando posición...', 'info');
+      log('(El navegador debería pedir permiso ahora)', 'warning');
+      
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 10000,
+            maximumAge: 0,
+            enableHighAccuracy: true
+          });
+        });
+        
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        const accuracy = position.coords.accuracy;
+        
+        log(`✅ Ubicación obtenida:`, 'success');
+        log(`   Latitud: ${lat}`, 'success');
+        log(`   Longitud: ${lon}`, 'success');
+        log(`   Precisión: ${accuracy.toFixed(0)} metros`, 'success');
+        
+        return { lat, lon };
+      } catch (error) {
+        log(`❌ Error: ${error.message}`, 'error');
+        if (error.code === 1) {
+          log('⚠️ Permiso DENEGADO', 'error');
+          log('Ve a Configuración del navegador y permite geolocalización', 'warning');
+        } else if (error.code === 2) {
+          log('⚠️ Posición NO DISPONIBLE', 'error');
+        } else if (error.code === 3) {
+          log('⚠️ TIMEOUT (tardó demasiado)', 'error');
+        }
+        return null;
+      }
+    }
+
+    async function testGeocode() {
+      clearOutput();
+      log('Probando geocoding completo...', 'info');
+      
+      const coords = await testGPS();
+      if (!coords) return;
+      
+      log('\n🌐 Llamando a API de geocoding...', 'info');
+      
+      try {
+        const url = `/api/geocode?lat=${coords.lat}&lon=${coords.lon}`;
+        log(`URL: ${url}`, 'info');
+        
+        const response = await fetch(url);
+        log(`Status: ${response.status}`, response.ok ? 'success' : 'error');
+        
+        if (response.ok) {
+          const data = await response.json();
+          log('\n✅ Respuesta del geocoding:', 'success');
+          log(JSON.stringify(data, null, 2), 'info');
+          
+          if (data.subdivisionId) {
+            log('\n🎉 ¡subdivisionId detectado!', 'success');
+            log(`   ${data.subdivisionName} (${data.subdivisionId})`, 'success');
+          } else {
+            log('\n⚠️ subdivisionId es NULL', 'warning');
+          }
+        } else {
+          log(`❌ Error del servidor: ${response.status}`, 'error');
+        }
+      } catch (error) {
+        log(`❌ Error de red: ${error.message}`, 'error');
+      }
+    }
+
+    async function testFullVote() {
+      clearOutput();
+      log('🗳️ Simulando voto completo...', 'info');
+      
+      const coords = await testGPS();
+      if (!coords) return;
+      
+      log('\n🌐 Obteniendo ubicación...', 'info');
+      
+      try {
+        const geocodeResponse = await fetch(`/api/geocode?lat=${coords.lat}&lon=${coords.lon}`);
+        const geocodeData = await geocodeResponse.json();
+        
+        log('✅ Ubicación obtenida:', 'success');
+        log(`   País: ${geocodeData.countryName}`, 'success');
+        log(`   Subdivisión: ${geocodeData.subdivisionName || 'NULL'}`, geocodeData.subdivisionId ? 'success' : 'warning');
+        
+        const voteData = {
+          optionId: 1,
+          userId: 1,
+          latitude: coords.lat,
+          longitude: coords.lon,
+          countryIso3: geocodeData.countryIso3,
+          countryName: geocodeData.countryName,
+          subdivisionId: geocodeData.subdivisionId,
+          subdivisionName: geocodeData.subdivisionName,
+          cityName: null
+        };
+        
+        log('\n📤 Enviando voto de prueba...', 'info');
+        log('Datos:', 'info');
+        log(JSON.stringify(voteData, null, 2), 'info');
+        
+        const voteResponse = await fetch('/api/polls/1/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(voteData)
+        });
+        
+        log(`\n📨 Respuesta: ${voteResponse.status}`, voteResponse.ok ? 'success' : 'error');
+        
+        if (voteResponse.ok) {
+          const result = await voteResponse.json();
+          log('✅ Voto guardado!', 'success');
+          log(JSON.stringify(result, null, 2), 'success');
+          
+          if (result.vote.subdivisionId) {
+            log('\n🎉 ¡subdivisionId guardado correctamente!', 'success');
+          } else {
+            log('\n⚠️ subdivisionId es NULL en BD', 'warning');
+          }
+        } else {
+          const error = await voteResponse.text();
+          log(`❌ Error: ${error}`, 'error');
+        }
+        
+      } catch (error) {
+        log(`❌ Error: ${error.message}`, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

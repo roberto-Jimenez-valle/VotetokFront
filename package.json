@@ -21,6 +21,11 @@
     "db:studio": "powershell -ExecutionPolicy Bypass -File scripts/start-prisma-studio.ps1",
     "db:reset": "npx prisma migrate reset",
     "db:generate": "npx prisma generate",
+    "db:verify-votes": "npx tsx scripts/verify-vote-data-source.ts",
+    "db:verify-subdivisions": "npx tsx scripts/verify-subdivision-levels.ts",
+    "db:debug-geocode": "npx tsx scripts/debug-geocode.ts",
+    "db:debug-topojson": "python scripts/debug_topojson.py",
+    "db:populate-subdivisions": "python scripts/populate_subdivisions.py",
     "cleanup": "node scripts/auto-cleanup.mjs"
   },
   "prisma": {
@@ -53,6 +58,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.16.3",
+    "@turf/boolean-point-in-polygon": "^7.2.0",
+    "@turf/helpers": "^7.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",

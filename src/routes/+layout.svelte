@@ -1,8 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-	import PaletteRandomizer from '$lib/components/PaletteRandomizer.svelte';
+	import UnifiedThemeToggle from '$lib/components/UnifiedThemeToggle.svelte';
 	import { setCurrentUser } from '$lib/stores';
 	
 	let { children } = $props();
@@ -11,6 +10,12 @@
 		const palette = event.detail;
 		// Disparar evento global para que GlobeGL lo escuche
 		window.dispatchEvent(new CustomEvent('palettechange', { detail: palette }));
+	}
+	
+	function handleThemeChange(event: CustomEvent) {
+		const { mode } = event.detail;
+		// Disparar evento global si es necesario
+		window.dispatchEvent(new CustomEvent('themechange', { detail: { mode } }));
 	}
 	
 	let showSplash = $state(true);
@@ -34,17 +39,17 @@
 	onMount(() => {
 		// 🎯 Configurar usuario de prueba para sistema de recomendaciones
 		setCurrentUser({
-			id: 15,
-			username: 'testuser',
-			displayName: 'Usuario de Prueba',
-			email: 'testuser@votetok.com',
-			avatarUrl: 'https://i.pravatar.cc/150?u=testuser',
-			verified: false,
+			id: 1, // ✅ Cambiado a ID existente (maria_gonzalez)
+			username: 'maria_gonzalez',
+			displayName: 'María González',
+			email: 'maria@votetok.com',
+			avatarUrl: 'https://i.pravatar.cc/150?u=maria',
+			verified: true,
 			countryIso3: 'ESP',
 			subdivisionId: '1',
 			role: 'user'
 		});
-		console.log('👤 Usuario de prueba configurado: testuser (ID: 15)');
+		console.log('👤 Usuario de prueba configurado: maria_gonzalez (ID: 1)');
 		
 		// Activar modo dark por defecto
 		document.documentElement.classList.add('dark');
@@ -143,11 +148,11 @@
 </div>
 {/if}
 
-<!-- Theme Toggle -->
-<ThemeToggle />
-
-<!-- Palette Randomizer -->
-<PaletteRandomizer on:palettechange={handlePaletteChange} />
+<!-- Unified Theme Toggle (renderizado en el header) -->
+<UnifiedThemeToggle 
+	on:palettechange={handlePaletteChange}
+	on:themechange={handleThemeChange}
+/>
 
 <!-- Botón de pantalla completa movido al BottomSheet -->
 

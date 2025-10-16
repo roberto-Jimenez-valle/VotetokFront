@@ -7,32 +7,45 @@ datasource db {
   url      = "file:./dev.db"
 }
 
+// ===============================================
+// USUARIOS
+// ===============================================
+
 model User {
-  id           Int       @id @default(autoincrement())
-  username     String    @unique
-  email        String    @unique
-  displayName  String    @map("display_name")
-  avatarUrl    String?   @map("avatar_url")
-  bio          String?
-  role         String    @default("user")
-  verified     Boolean   @default(false)
-  countryIso3  String?   @map("country_iso3")      // País del usuario
-  subdivisionId String?  @map("subdivision_id")    // Región/estado del usuario
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  email         String    @unique
+  displayName   String    @map("display_name")
+  avatarUrl     String?   @map("avatar_url")
+  bio           String?
+  role          String    @default("user")
+  verified      Boolean   @default(false)
+  countryIso3   String?   @map("country_iso3")
+  subdivisionId String?   @map("subdivision_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  polls              Poll[]
-  votes              Vote[]
-  interactions       PollInteraction[]
-  comments           Comment[]
-  featuredProfile    FeaturedUser?
-  followers          UserFollower[]    @relation("UserFollowers")
-  following          UserFollower[]    @relation("UserFollowing")
-  interests          UserInterest[]
-  hashtagFollows     UserHashtagFollow[]
+  // Relaciones
+  polls             Poll[]            @relation("PollCreator")
+  createdOptions    PollOption[]      @relation("OptionCreator")
+  votes             Vote[]
+  interactions      PollInteraction[]
+  comments          Comment[]
+  featuredProfile   FeaturedUser?
+  followers         UserFollower[]    @relation("UserFollowers")
+  following         UserFollower[]    @relation("UserFollowing")
+  interests         UserInterest[]
+  hashtagFollows    UserHashtagFollow[]
 
+  @@index([username])
+  @@index([countryIso3])
+  @@index([createdAt])
   @@map("users")
 }
+
+// ===============================================
+// ENCUESTAS Y OPCIONES
+// ===============================================
 
 model Poll {
   id          Int       @id @default(autoincrement())
@@ -40,16 +53,15 @@ model Poll {
   title       String
   description String?
   category    String?
-  imageUrl    String?   @map("image_url")
-  type        String    @default("poll")
+  imageUrl    String?   @map("image_url")  // Imagen de la encuesta (no avatar del usuario)
+  type        String    @default("poll")  // poll, multiple, collaborative, hashtag
   status      String    @default("active")
-  totalVotes  Int       @default(0) @map("total_votes")
-  totalViews  Int       @default(0) @map("total_views")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   closedAt    DateTime? @map("closed_at")
 
-  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Relaciones
+  user         User              @relation("PollCreator", fields: [userId], references: [id], onDelete: Cascade)
   options      PollOption[]
   votes        Vote[]
   interactions PollInteraction[]
@@ -60,7 +72,9 @@ model Poll {
   @@index([userId])
   @@index([category])
   @@index([status])
+  @@index([type])
   @@index([createdAt])
+  @@index([status, createdAt])  // Para queries ordenadas por fecha
   @@map("polls")
 }
 
@@ -70,46 +84,65 @@ model PollOption {
   optionKey    String   @map("option_key")
   optionLabel  String   @map("option_label")
   color        String
-  avatarUrl    String?  @map("avatar_url")
-  voteCount    Int      @default(0) @map("vote_count")
   displayOrder Int      @default(0) @map("display_order")
+  createdById  Int?     @map("created_by_id")  // Avatar se obtiene desde createdBy.avatarUrl
   createdAt    DateTime @default(now()) @map("created_at")
 
-  poll    Poll          @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  votes   Vote[]
-  history VoteHistory[]
+  // Relaciones
+  poll      Poll          @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  createdBy User?         @relation("OptionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  votes     Vote[]
+  history   VoteHistory[]
 
+  @@unique([pollId, optionKey])  // optionKey único por encuesta
   @@index([pollId])
+  @@index([createdById])
+  @@index([pollId, displayOrder])
   @@map("poll_options")
 }
+
+// ===============================================
+// VOTOS (Única fuente de verdad)
+// ===============================================
 
 model Vote {
   id              Int      @id @default(autoincrement())
   pollId          Int      @map("poll_id")
   optionId        Int      @map("option_id")
   userId          Int?     @map("user_id")
+  
+  // Geolocalización - FK a subdivisión más granular disponible
   latitude        Float
   longitude       Float
-  countryIso3     String   @map("country_iso3")
-  countryName     String?  @map("country_name")
-  subdivisionId   String?  @map("subdivision_id")    // ID_1 del polígono (ej: "1" = Andalucía)
-  subdivisionName String?  @map("subdivision_name")  // Nombre (ej: "Andalucía")
-  cityName        String?  @map("city_name")
+  subdivisionId   Int      @map("subdivision_id")  // FK a Subdivision (siempre el nivel más granular: 3 > 2 > 1)
+  
+  // Metadata
   ipAddress       String?  @map("ip_address")
   userAgent       String?  @map("user_agent")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  user   User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Relaciones
+  poll         Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option       PollOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  subdivision  Subdivision @relation(fields: [subdivisionId], references: [id], onDelete: Restrict)
 
-  @@index([pollId])
-  @@index([latitude, longitude])
-  @@index([countryIso3])
-  @@index([countryIso3, subdivisionId])
-  @@index([createdAt])
+  // NO usar @@unique([pollId, userId]) porque impide votos anónimos múltiples
+  // La validación de "un voto por usuario" se hace en código (por userId o IP)
+  @@index([optionId])           // Query por opción
+  @@index([userId])             // Query por usuario
+  @@index([pollId])             // Query por encuesta
+  @@index([pollId, userId])     // Query para verificar voto existente
+  @@index([pollId, ipAddress])  // Query para verificar voto anónimo
+  @@index([subdivisionId])      // Query por subdivisión
+  @@index([latitude, longitude]) // Query geoespacial
+  @@index([createdAt])          // Query temporal
   @@map("votes")
 }
+
+// ===============================================
+// INTERACCIONES
+// ===============================================
 
 model PollInteraction {
   id              Int      @id @default(autoincrement())
@@ -250,60 +283,36 @@ model UserHashtagFollow {
 }
 
 // ===============================================
-// TABLAS MAESTRAS GEOGRÁFICAS - 3 NIVELES
+// TABLA GEOGRÁFICA - SUBDIVISIONES JERÁRQUICAS
 // ===============================================
 
-// NIVEL 0: Países
-model Country {
-  id          Int            @id @default(autoincrement())
-  iso3        String         @unique                      // Código ISO3 (ESP, USA, FRA)
-  iso2        String?                                     // Código ISO2 (ES, US, FR)
-  name        String                                      // Nombre oficial
-  nameLocal   String?        @map("name_local")          // Nombre en idioma local
-  latitude    Float                                       // Latitud del centroide
-  longitude   Float                                       // Longitud del centroide
-  hasLevel1   Boolean        @default(false) @map("has_level1")  // Tiene subdivisiones nivel 1
-  hasLevel2   Boolean        @default(false) @map("has_level2")  // Tiene subdivisiones nivel 2
-  createdAt   DateTime       @default(now()) @map("created_at")
-  
-  subdivisions Subdivision[]
-  
-  @@index([iso3])
-  @@index([latitude, longitude])
-  @@map("countries")
-}
-
-// NIVEL 1, 2, 3: Subdivisiones jerárquicas
+// Subdivisiones de 3 niveles jerárquicos
 // Nivel 1: Estados/Comunidades Autónomas (ESP.1, USA.CA)
 // Nivel 2: Provincias/Condados (ESP.1.2, USA.CA.001)
 // Nivel 3: Municipios/Cities (ESP.1.2.3)
 model Subdivision {
   id              Int      @id @default(autoincrement())
   
-  // Jerarquía
-  countryId       Int      @map("country_id")
-  country         Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  
   subdivisionId   String   @unique @map("subdivision_id")  // ID jerárquico completo (ESP.1, ESP.1.2, ESP.1.2.3)
   level           Int                                      // Nivel: 1, 2, 3
-  parentId        Int?     @map("parent_id")              // ID del registro padre en esta tabla
-  parent          Subdivision? @relation("SubdivisionHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children        Subdivision[] @relation("SubdivisionHierarchy")
   
-  // Identificación del nivel actual
-  level1Id        String?  @map("level1_id")              // Número ID nivel 1 (ej: "1", "13")
-  level2Id        String?  @map("level2_id")              // Número ID nivel 2 (ej: "2", "28")
+  // Identificación del nivel actual (IDs numéricos extraídos)
+  level1Id        String?  @map("level1_id")              // Número ID nivel 1: "1", "13"
+  level2Id        String?  @map("level2_id")              // Número ID nivel 2: "2", "28"
   level3Id        String?  @map("level3_id")              // Número ID nivel 3
   
   // Nombres
-  name            String                                   // Nombre principal
-  nameLocal       String?  @map("name_local")             // Nombre local
-  nameVariant     String?  @map("name_variant")           // Nombre variante
-  nameEnglish     String?  @map("name_english")           // Nombre en inglés
+  name            String                                   // Nombre principal (name_1/2/3)
+  nameLocal       String?  @map("name_local")             // Nombre en idioma local (nl_name_1/2/3)
+  nameVariant     String?  @map("name_variant")           // Variantes del nombre (varname_1/2/3)
   
   // Tipo de subdivisión
-  type            String?                                  // Tipo (ej: "Comunidad Autónoma", "State", "Province")
-  typeLocal       String?  @map("type_local")             // Tipo en idioma local
+  typeEnglish     String?  @map("type_english")           // Tipo en inglés: "Autonomous Community" (engtype_1/2/3)
+  
+  // Códigos estándar internacionales
+  hasc            String?                                  // HASC code: ES.AN, ES.AN.AM (hasc_1/2/3)
+  iso             String?                                  // ISO code (solo nivel 1) (iso_1)
+  countryCode     String?  @map("country_code")           // Código numérico: 01, 04, 11 (cc_1/2/3)
   
   // Geolocalización
   latitude        Float                                    // Latitud del centroide
@@ -312,9 +321,10 @@ model Subdivision {
   // Metadata
   createdAt       DateTime @default(now()) @map("created_at")
   
-  @@index([countryId])
+  // Relación inversa
+  votes           Vote[]
+  
   @@index([level])
-  @@index([parentId])
   @@index([subdivisionId])
   @@index([latitude, longitude])
   @@index([level, latitude, longitude])

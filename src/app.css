@@ -119,3 +119,46 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* CRÍTICO: Estilos para modo claro - deben estar FUERA de @layer para tener máxima prioridad */
+:root {
+  --logo-color: white;
+  --color-white: white; /* Variable de Tailwind para modo oscuro */
+}
+
+html:not(.dark) {
+  --logo-color: #1a1a1a;
+  --color-white: #1a1a1a; /* Sobrescribir variable de Tailwind en modo claro */
+}
+
+html:not(.dark) header h1 {
+  color: #1a1a1a !important;
+}
+
+html:not(.dark) .tabs-trigger {
+  color: #1a1a1a !important;
+}
+
+html:not(.dark) .tabs-trigger svg {
+  color: #1a1a1a !important;
+  fill: #1a1a1a !important;
+}
+
+
+
+html.dark .logo-text {
+  color: #1a1a1a !important;
+}
+
+html:not(.dark) .logo-text {
+  color: white !important;
+}
+
+html.dark .tabs-trigger {
+  color: #1a1a1a !important;
+}
+
+html:not(.dark) .tabs-trigger {
+  color: white !important;
+}
+

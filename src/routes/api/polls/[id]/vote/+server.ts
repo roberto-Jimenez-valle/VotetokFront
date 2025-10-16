@@ -2,23 +2,24 @@ import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 export const POST: RequestHandler = async ({ params, request, getClientAddress }) => {
-  console.log('═'.repeat(60));
-  console.log('[API Vote] 🚀 ENDPOINT LLAMADO - Inicio del proceso de votación');
-  console.log('═'.repeat(60));
-  
-  const { id } = params;
-  console.log('[API Vote] 📌 Poll ID:', id);
-  
-  let body;
   try {
-    body = await request.json();
-    console.log('[API Vote] 📦 Body recibido:', JSON.stringify(body, null, 2));
-  } catch (err) {
-    console.error('[API Vote] ❌ Error parseando JSON:', err);
-    throw error(400, 'Invalid JSON in request body');
-  }
+    console.log('═'.repeat(60));
+    console.log('[API Vote] 🚀 ENDPOINT LLAMADO - Inicio del proceso de votación');
+    console.log('═'.repeat(60));
+    
+    const { id } = params;
+    console.log('[API Vote] 📌 Poll ID:', id);
+    
+    let body;
+    try {
+      body = await request.json();
+      console.log('[API Vote] 📦 Body recibido:', JSON.stringify(body, null, 2));
+    } catch (err) {
+      console.error('[API Vote] ❌ Error parseando JSON:', err);
+      throw error(400, 'Invalid JSON in request body');
+    }
   
-  const { optionId, userId, latitude, longitude, countryIso3, countryName, subdivisionId, subdivisionName, cityName } = body;
+  const { optionId, userId, latitude, longitude, subdivisionId } = body;
 
   console.log('[API Vote] 📥 Voto recibido y parseado:', {
     pollId: id,
@@ -26,10 +27,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     userId: userId || 'anónimo',
     latitude,
     longitude,
-    countryIso3,
-    countryName,
-    subdivisionId,
-    subdivisionName
+    subdivisionId
   });
 
   // Validar campos requeridos
@@ -48,9 +46,9 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     throw error(400, 'longitude es requerida y debe ser un número');
   }
 
-  if (!countryIso3 || typeof countryIso3 !== 'string') {
-    console.error('[API Vote] ❌ countryIso3 inválido:', countryIso3);
-    throw error(400, 'countryIso3 es requerido y debe ser un string');
+  if (!subdivisionId || typeof subdivisionId !== 'number') {
+    console.error('[API Vote] ❌ subdivisionId inválido:', subdivisionId);
+    throw error(400, 'subdivisionId es requerido y debe ser un número (ID de BD)');
   }
 
   // Validar que la opción pertenece a la encuesta
@@ -97,76 +95,65 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
       where: { id: existingVote.id },
       data: {
         optionId,
-        userId: userId || null,  // Actualizar userId si existe
+        userId: userId || null,
         latitude,
         longitude,
-        countryIso3,
-        countryName,
-        subdivisionId,      // Actualizar ID de subdivisión
-        subdivisionName,
-        cityName,
+        subdivisionId,
         userAgent: request.headers.get('user-agent'),
       },
+      include: {
+        subdivision: true  // Incluir datos de subdivisión en respuesta
+      }
     });
 
     console.log('[API Vote] 💾 Voto actualizado en BD...');
-
-    // Si cambió de opción, actualizar contadores
-    if (optionChanged) {
-      await Promise.all([
-        // Decrementar contador de la opción anterior
-        prisma.pollOption.update({
-          where: { id: oldOptionId },
-          data: { voteCount: { decrement: 1 } },
-        }),
-        // Incrementar contador de la nueva opción
-        prisma.pollOption.update({
-          where: { id: optionId },
-          data: { voteCount: { increment: 1 } },
-        }),
-      ]);
-      console.log('[API Vote] 📊 Contadores actualizados: -1 opción', oldOptionId, '+1 opción', optionId);
-    } else {
-      console.log('[API Vote] ℹ️ Misma opción, solo se actualizó la ubicación');
-    }
+    console.log('[API Vote] ℹ️ Los contadores se calcularán automáticamente desde los votos');
 
   } else {
     console.log('[API Vote] 🆕 Nuevo voto. Creando registro...');
     
-    // Crear nuevo voto con subdivisionId
+    // Crear nuevo voto
     vote = await prisma.vote.create({
       data: {
         pollId: Number(id),
         optionId,
-        userId: userId || null,  // Guardar userId si el usuario está autenticado
+        userId: userId || null,
         latitude,
         longitude,
-        countryIso3,
-        countryName,
-        subdivisionId,      // Guardar ID de subdivisión
-        subdivisionName,
-        cityName,
+        subdivisionId,
         ipAddress,
         userAgent: request.headers.get('user-agent'),
       },
+      include: {
+        subdivision: true  // Incluir datos de subdivisión en respuesta
+      }
     });
 
     console.log('[API Vote] 💾 Voto guardado en BD...');
-
-    // Actualizar contadores (nuevo voto)
-    await Promise.all([
-      prisma.pollOption.update({
-        where: { id: optionId },
-        data: { voteCount: { increment: 1 } },
-      }),
-      prisma.poll.update({
-        where: { id: Number(id) },
-        data: { totalVotes: { increment: 1 } },
-      }),
-    ]);
+    console.log('[API Vote] ℹ️ Los contadores se calcularán automáticamente desde los votos');
   }
 
-  console.log('[API Vote] ✅ Operación exitosa. ID:', vote.id, 'Tipo:', isUpdate ? 'Actualización' : 'Nuevo');
+    console.log('[API Vote] ✅ Operación exitosa. ID:', vote.id, 'Tipo:', isUpdate ? 'Actualización' : 'Nuevo');
 
-  return json({ success: true, vote, isUpdate });
+    return json({ success: true, vote, isUpdate });
+  } catch (err: any) {
+    console.error('[API Vote] ❌❌❌ ERROR CRÍTICO ❌❌❌');
+    console.error('[API Vote] Error message:', err.message);
+    console.error('[API Vote] Error stack:', err.stack);
+    console.error('[API Vote] Error completo:', err);
+    
+    // Si es un error de validación de Prisma
+    if (err.code === 'P2002') {
+      console.error('[API Vote] ⚠️ Violación de constraint único:', err.meta);
+      throw error(400, 'Ya existe un voto para esta combinación');
+    }
+    
+    // Si es un error conocido de SvelteKit
+    if (err.status) {
+      throw err;
+    }
+    
+    // Error genérico
+    throw error(500, `Error al procesar el voto: ${err.message}`);
+  }
 };

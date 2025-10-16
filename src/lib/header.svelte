@@ -55,10 +55,14 @@
 
 <header class="top-0 left-0 right-0 z-50" style="position: fixed;">
 	<div class="w-full flex flex-col">
-		<!-- Logo -->
+		<!-- Logo y Toggle unificado -->
 		<div class="transition-opacity duration-300 ease-in-out px-2 sm:px-4">
-			<div class="flex items-center h-8 sm:h-10 w-full">
-				<h1 class="text-xl sm:text-3xl font-extrabold tracking-tight">VoteTok</h1>
+			<div class="flex items-center justify-between h-8 sm:h-10 w-full">
+				<h1 
+					class="logo-text text-xl sm:text-3xl font-extrabold tracking-tight"
+					style="color: var(--logo-color, white);"
+				>VoteTok</h1>
+				<div id="theme-toggle-slot"></div>
 			</div>
 		</div>
 

@@ -103,7 +103,6 @@ async function main() {
       description: 'Encuesta sobre las prioridades políticas para el próximo año',
       category: 'Politics',
       type: 'poll',
-      totalViews: 15420,
       options: {
         create: [
           { 
@@ -111,28 +110,24 @@ async function main() {
             optionLabel: 'Economía', 
             color: '#3b82f6', 
             displayOrder: 0,
-            voteCount: 0
           },
           { 
             optionKey: 'sanidad', 
             optionLabel: 'Sanidad', 
             color: '#10b981', 
             displayOrder: 1,
-            voteCount: 0
           },
           { 
             optionKey: 'educacion', 
             optionLabel: 'Educación', 
             color: '#f59e0b', 
             displayOrder: 2,
-            voteCount: 0
           },
           { 
             optionKey: 'medio_ambiente', 
             optionLabel: 'Medio Ambiente', 
             color: '#22c55e', 
             displayOrder: 3,
-            voteCount: 0
           },
         ],
       },
@@ -147,7 +142,6 @@ async function main() {
       description: 'Tu opinión sobre la transición energética',
       category: 'Environment',
       type: 'poll',
-      totalViews: 8930,
       options: {
         create: [
           { 
@@ -155,21 +149,18 @@ async function main() {
             optionLabel: 'Sí, completamente', 
             color: '#10b981', 
             displayOrder: 0,
-            voteCount: 0
           },
           { 
             optionKey: 'no', 
             optionLabel: 'No', 
             color: '#ef4444', 
             displayOrder: 1,
-            voteCount: 0
           },
           { 
             optionKey: 'tal_vez', 
             optionLabel: 'Tal vez', 
             color: '#f59e0b', 
             displayOrder: 2,
-            voteCount: 0
           },
         ],
       },
@@ -184,7 +175,6 @@ async function main() {
       description: 'Debate sobre el futuro del trabajo',
       category: 'Work',
       type: 'poll',
-      totalViews: 12340,
       options: {
         create: [
           { 
@@ -192,21 +182,18 @@ async function main() {
             optionLabel: 'Sí, 100% remoto', 
             color: '#8b5cf6', 
             displayOrder: 0,
-            voteCount: 0
           },
           { 
             optionKey: 'hybrid', 
             optionLabel: 'Modelo híbrido', 
             color: '#06b6d4', 
             displayOrder: 1,
-            voteCount: 0
           },
           { 
             optionKey: 'presencial', 
             optionLabel: 'Presencial', 
             color: '#f59e0b', 
             displayOrder: 2,
-            voteCount: 0
           },
         ],
       },
@@ -216,76 +203,93 @@ async function main() {
 
   
   // Crear votos geolocalizados para la primera encuesta
-    
-  const votesData = [
-    // Madrid - Economía
-    { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.4168, lng: -3.7038, iso3: 'ESP', country: 'España', city: 'Madrid' },
-    { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.42, lng: -3.70, iso3: 'ESP', country: 'España', city: 'Madrid' },
-    { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.41, lng: -3.71, iso3: 'ESP', country: 'España', city: 'Madrid' },
-    
-    // Madrid - Sanidad
-    { pollId: poll1.id, optionId: poll1.options[1].id, lat: 40.418, lng: -3.69, iso3: 'ESP', country: 'España', city: 'Madrid' },
-    { pollId: poll1.id, optionId: poll1.options[1].id, lat: 40.425, lng: -3.695, iso3: 'ESP', country: 'España', city: 'Madrid' },
-    
-    // Barcelona - Educación
-    { pollId: poll1.id, optionId: poll1.options[2].id, lat: 41.3851, lng: 2.1734, iso3: 'ESP', country: 'España', city: 'Barcelona' },
-    { pollId: poll1.id, optionId: poll1.options[2].id, lat: 41.39, lng: 2.17, iso3: 'ESP', country: 'España', city: 'Barcelona' },
-    
-    // Barcelona - Medio Ambiente
-    { pollId: poll1.id, optionId: poll1.options[3].id, lat: 41.38, lng: 2.18, iso3: 'ESP', country: 'España', city: 'Barcelona' },
-    { pollId: poll1.id, optionId: poll1.options[3].id, lat: 41.387, lng: 2.175, iso3: 'ESP', country: 'España', city: 'Barcelona' },
-    { pollId: poll1.id, optionId: poll1.options[3].id, lat: 41.383, lng: 2.172, iso3: 'ESP', country: 'España', city: 'Barcelona' },
-    
-    // Valencia - Economía
-    { pollId: poll1.id, optionId: poll1.options[0].id, lat: 39.4699, lng: -0.3763, iso3: 'ESP', country: 'España', city: 'Valencia' },
-    
-    // Sevilla - Sanidad
-    { pollId: poll1.id, optionId: poll1.options[1].id, lat: 37.3891, lng: -5.9845, iso3: 'ESP', country: 'España', city: 'Sevilla' },
-    
-    // París - Medio Ambiente
-    { pollId: poll1.id, optionId: poll1.options[3].id, lat: 48.8566, lng: 2.3522, iso3: 'FRA', country: 'Francia', city: 'París' },
-    { pollId: poll1.id, optionId: poll1.options[3].id, lat: 48.86, lng: 2.35, iso3: 'FRA', country: 'Francia', city: 'París' },
-    
-    // Londres - Economía
-    { pollId: poll1.id, optionId: poll1.options[0].id, lat: 51.5074, lng: -0.1278, iso3: 'GBR', country: 'Reino Unido', city: 'Londres' },
-  ];
-
-  for (const voteData of votesData) {
-    await prisma.vote.create({
-      data: {
-        pollId: voteData.pollId,
-        optionId: voteData.optionId,
-        latitude: voteData.lat,
-        longitude: voteData.lng,
-        countryIso3: voteData.iso3,
-        countryName: voteData.country,
-        cityName: voteData.city,
-        ipAddress: `192.168.1.${Math.floor(Math.random() * 255)}`,
-      },
-    });
+  // Buscar subdivisiones NIVEL 3 (provincias) más cercanas a las coordenadas
+  console.log('🔍 Buscando subdivisiones nivel 3 para votos de ejemplo...');
+  
+  // Helper function para buscar subdivisión nivel 3 más cercana
+  async function findNearestLevel3(lat: number, lon: number, iso3: string) {
+    const result = await prisma.$queryRaw<Array<{
+      id: number;
+      subdivision_id: string;
+      name: string;
+      level: number;
+    }>>`
+      SELECT id, subdivision_id, name, level
+      FROM subdivisions
+      WHERE level = 3 
+        AND subdivision_id LIKE ${iso3 + '.%'}
+      ORDER BY 
+        ((latitude - ${lat}) * (latitude - ${lat}) + 
+         (longitude - ${lon}) * (longitude - ${lon}))
+      LIMIT 1
+    `;
+    return result[0];
   }
 
-  // Actualizar contadores de votos
-  for (const option of poll1.options) {
-    const count = votesData.filter(v => v.optionId === option.id).length;
-    await prisma.pollOption.update({
-      where: { id: option.id },
-      data: { voteCount: count },
-    });
+  // Buscar provincias nivel 3
+  const madridProvince = await findNearestLevel3(40.4168, -3.7038, 'ESP'); // Madrid provincia
+  const barcelonaProvince = await findNearestLevel3(41.3851, 2.1734, 'ESP'); // Barcelona provincia
+  const sevillaProvince = await findNearestLevel3(37.3891, -5.9845, 'ESP'); // Sevilla provincia
+  const parisProvince = await findNearestLevel3(48.8566, 2.3522, 'FRA'); // París provincia
+  const londonProvince = await findNearestLevel3(51.5074, -0.1278, 'GBR'); // Londres provincia
+
+  if (!madridProvince || !barcelonaProvince || !sevillaProvince || !parisProvince || !londonProvince) {
+    console.warn('⚠️ No se encontraron subdivisiones nivel 3. Ejecuta: npm run db:populate-subdivisions');
+    console.log('⏭️ Saltando creación de votos de ejemplo');
+  } else {
+    console.log(`✅ Subdivisiones nivel 3 encontradas:`);
+    console.log(`   Madrid: ${madridProvince.name} (${madridProvince.subdivision_id})`);
+    console.log(`   Barcelona: ${barcelonaProvince.name} (${barcelonaProvince.subdivision_id})`);
+    console.log(`   Sevilla: ${sevillaProvince.name} (${sevillaProvince.subdivision_id})`);
+    console.log(`   París: ${parisProvince.name} (${parisProvince.subdivision_id})`);
+    console.log(`   Londres: ${londonProvince.name} (${londonProvince.subdivision_id})`);
+
+    const votesData = [
+      // Madrid - Economía
+      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.4168, lng: -3.7038, subdivisionId: madridProvince.id },
+      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.42, lng: -3.70, subdivisionId: madridProvince.id },
+      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.41, lng: -3.71, subdivisionId: madridProvince.id },
+      
+      // Barcelona - Sanidad
+      { pollId: poll1.id, optionId: poll1.options[1].id, lat: 41.3851, lng: 2.1734, subdivisionId: barcelonaProvince.id },
+      { pollId: poll1.id, optionId: poll1.options[1].id, lat: 41.38, lng: 2.17, subdivisionId: barcelonaProvince.id },
+      
+      // Sevilla - Sanidad
+      { pollId: poll1.id, optionId: poll1.options[1].id, lat: 37.3891, lng: -5.9845, subdivisionId: sevillaProvince.id },
+      
+      // París - Medio Ambiente
+      { pollId: poll1.id, optionId: poll1.options[3].id, lat: 48.8566, lng: 2.3522, subdivisionId: parisProvince.id },
+      { pollId: poll1.id, optionId: poll1.options[3].id, lat: 48.86, lng: 2.35, subdivisionId: parisProvince.id },
+      
+      // Londres - Economía
+      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 51.5074, lng: -0.1278, subdivisionId: londonProvince.id },
+    ];
+
+    for (const voteData of votesData) {
+      await prisma.vote.create({
+        data: {
+          pollId: voteData.pollId,
+          optionId: voteData.optionId,
+          latitude: voteData.lat,
+          longitude: voteData.lng,
+          subdivisionId: voteData.subdivisionId,
+        },
+      });
+    }
+    
+    console.log('✅ Votos de ejemplo creados con subdivisiones NIVEL 3');
   }
 
-  await prisma.poll.update({
-    where: { id: poll1.id },
-    data: { totalVotes: votesData.length },
-  });
+  // Los contadores se auto-calculan desde los votos
 
+  // ...
   
   // Crear hashtags
     const hashtags = await Promise.all([
-    prisma.hashtag.create({ data: { tag: 'política', usageCount: 5 } }),
-    prisma.hashtag.create({ data: { tag: 'economía', usageCount: 3 } }),
-    prisma.hashtag.create({ data: { tag: 'medioambiente', usageCount: 4 } }),
-    prisma.hashtag.create({ data: { tag: 'trabajo', usageCount: 2 } }),
+    prisma.hashtag.create({ data: { tag: 'política' } }),
+    prisma.hashtag.create({ data: { tag: 'economía' } }),
+    prisma.hashtag.create({ data: { tag: 'medioambiente' } }),
+    prisma.hashtag.create({ data: { tag: 'trabajo' } }),
   ]);
 
   // Asociar hashtags a encuestas
@@ -332,17 +336,16 @@ async function main() {
       title: '🧪 TEST: ¿Cuál es tu lenguaje de programación favorito?',
       type: 'poll',
       userId: existingUser.id,
-      region: 'Global',
       options: {
         create: [
-          { optionKey: 'js', optionLabel: 'JavaScript', color: '#F7DF1E', voteCount: 450 },
-          { optionKey: 'py', optionLabel: 'Python', color: '#3776AB', voteCount: 380 },
-          { optionKey: 'ts', optionLabel: 'TypeScript', color: '#3178C6', voteCount: 320 },
-          { optionKey: 'java', optionLabel: 'Java', color: '#007396', voteCount: 290 },
-          { optionKey: 'go', optionLabel: 'Go', color: '#00ADD8', voteCount: 250 },
-          { optionKey: 'rust', optionLabel: 'Rust', color: '#CE422B', voteCount: 210 },
-          { optionKey: 'cpp', optionLabel: 'C++', color: '#00599C', voteCount: 180 },
-          { optionKey: 'ruby', optionLabel: 'Ruby', color: '#CC342D', voteCount: 150 },
+          { optionKey: 'js', optionLabel: 'JavaScript', color: '#F7DF1E' },
+          { optionKey: 'py', optionLabel: 'Python', color: '#3776AB' },
+          { optionKey: 'ts', optionLabel: 'TypeScript', color: '#3178C6' },
+          { optionKey: 'java', optionLabel: 'Java', color: '#007396' },
+          { optionKey: 'go', optionLabel: 'Go', color: '#00ADD8' },
+          { optionKey: 'rust', optionLabel: 'Rust', color: '#CE422B' },
+          { optionKey: 'cpp', optionLabel: 'C++', color: '#00599C' },
+          { optionKey: 'ruby', optionLabel: 'Ruby', color: '#CC342D' },
         ],
       },
     },
@@ -354,21 +357,20 @@ async function main() {
       title: '🧪 TEST: ¿Cuál es tu framework web favorito?',
       type: 'poll',
       userId: existingUser.id,
-      region: 'Global',
       options: {
         create: [
-          { optionKey: 'react', optionLabel: 'React', color: '#61DAFB', voteCount: 520 },
-          { optionKey: 'vue', optionLabel: 'Vue.js', color: '#4FC08D', voteCount: 480 },
-          { optionKey: 'angular', optionLabel: 'Angular', color: '#DD0031', voteCount: 420 },
-          { optionKey: 'svelte', optionLabel: 'Svelte', color: '#FF3E00', voteCount: 380 },
-          { optionKey: 'next', optionLabel: 'Next.js', color: '#000000', voteCount: 350 },
-          { optionKey: 'nuxt', optionLabel: 'Nuxt.js', color: '#00DC82', voteCount: 310 },
-          { optionKey: 'remix', optionLabel: 'Remix', color: '#3992FF', voteCount: 270 },
-          { optionKey: 'astro', optionLabel: 'Astro', color: '#FF5D01', voteCount: 240 },
-          { optionKey: 'solid', optionLabel: 'Solid.js', color: '#2C4F7C', voteCount: 210 },
-          { optionKey: 'qwik', optionLabel: 'Qwik', color: '#AC7EF4', voteCount: 180 },
-          { optionKey: 'lit', optionLabel: 'Lit', color: '#324FFF', voteCount: 150 },
-          { optionKey: 'alpine', optionLabel: 'Alpine.js', color: '#8BC0D0', voteCount: 120 },
+          { optionKey: 'react', optionLabel: 'React', color: '#61DAFB' },
+          { optionKey: 'vue', optionLabel: 'Vue.js', color: '#4FC08D' },
+          { optionKey: 'angular', optionLabel: 'Angular', color: '#DD0031' },
+          { optionKey: 'svelte', optionLabel: 'Svelte', color: '#FF3E00' },
+          { optionKey: 'next', optionLabel: 'Next.js', color: '#000000' },
+          { optionKey: 'nuxt', optionLabel: 'Nuxt.js', color: '#00DC82' },
+          { optionKey: 'remix', optionLabel: 'Remix', color: '#3992FF' },
+          { optionKey: 'astro', optionLabel: 'Astro', color: '#FF5D01' },
+          { optionKey: 'solid', optionLabel: 'Solid.js', color: '#2C4F7C' },
+          { optionKey: 'qwik', optionLabel: 'Qwik', color: '#AC7EF4' },
+          { optionKey: 'lit', optionLabel: 'Lit', color: '#324FFF' },
+          { optionKey: 'alpine', optionLabel: 'Alpine.js', color: '#8BC0D0' },
         ],
       },
     },

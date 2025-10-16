@@ -15,6 +15,22 @@ export const GET: RequestHandler = async ({ params }) => {
         },
       },
       options: {
+        include: {
+          createdBy: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              verified: true,
+            },
+          },
+          _count: {
+            select: {
+              votes: true
+            }
+          }
+        },
         orderBy: { displayOrder: 'asc' },
       },
       _count: {
@@ -31,7 +47,17 @@ export const GET: RequestHandler = async ({ params }) => {
     throw error(404, 'Poll not found');
   }
 
-  return json({ data: poll });
+  // Transformar opciones para incluir voteCount y avatarUrl
+  const transformedPoll = {
+    ...poll,
+    options: poll.options.map(option => ({
+      ...option,
+      voteCount: option._count.votes,
+      avatarUrl: option.createdBy?.avatarUrl || null
+    }))
+  };
+
+  return json({ data: transformedPoll });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
