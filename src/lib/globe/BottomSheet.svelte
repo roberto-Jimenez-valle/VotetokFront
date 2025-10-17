@@ -926,7 +926,18 @@
   
   // Estado del botón "volver al inicio"
   let showScrollToTop = false;
+  
+  // Auto-hide navigation bar on scroll
+  let showNavBar = true;
+  let lastScrollTop = 0;
+  let scrollThreshold = 50; // Minimum scroll distance to trigger hide/show
   let scrollContainer: HTMLElement;
+  
+  // Reset navbar visibility when state changes
+  $: if (state !== 'expanded') {
+    showNavBar = true;
+    lastScrollTop = 0;
+  }
   
   // Search props
   export let showSearch: boolean = false;
@@ -2071,14 +2082,14 @@
     openAdditionalPollInGlobe(transformedPoll as Poll);
   }
   
-  // FunciÃ³n para detectar scroll al final y cargar mÃ¡s encuestas
+  // Función para detectar scroll al final y cargar más encuestas
   function handlePollScroll(e: Event) {
     onScroll(e);
     
     // Si las opciones están expandidas y se hace scroll en el trending, colapsarlas
     if (showPollOptionsExpanded) {
       showPollOptionsExpanded = false;
-          }
+    }
     
     const target = e.target as HTMLElement;
     if (target) {
@@ -2087,6 +2098,24 @@
       
       // Mostrar el botón si ha scrolleado más de 200px
       showScrollToTop = scrollTop > 200;
+      
+      // Auto-hide navigation bar logic
+      const scrollDelta = scrollTop - lastScrollTop;
+      
+      if (Math.abs(scrollDelta) > scrollThreshold) {
+        if (scrollDelta > 0 && scrollTop > 100) {
+          // Scrolling down - hide nav bar
+          showNavBar = false;
+          lastScrollTop = scrollTop;
+        } else if (scrollDelta < -150) {
+          // Scrolling up significantly (150px) - show nav bar
+          showNavBar = true;
+          lastScrollTop = scrollTop;
+        } else if (scrollDelta < 0) {
+          // Small scroll up - just update position without showing
+          lastScrollTop = scrollTop;
+        }
+      }
       
       // Si estamos a menos de 400px del final y no estamos cargando, cargar más
       if (scrollBottom < 400 && !isLoadingPolls && hasMorePolls) {
@@ -2384,6 +2413,7 @@
   <!-- Navegación minimalista con wrapper -->
   <div 
     class="nav-wrapper"
+    class:nav-hidden={!showNavBar}
     onpointerdown={onPointerDown}
     ontouchstart={onPointerDown}
   >

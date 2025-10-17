@@ -2791,7 +2791,8 @@ header {
   align-items: center;
   width: 100%;
   padding: 8px 16px;
-    min-height: 60px;
+  min-height: 60px;
+  max-height: 200px; /* Maximum height when visible */
   /* IMPORTANTE: Permitir arrastre desde toda el área */
   cursor: grab;
   -webkit-user-select: none;
@@ -2799,8 +2800,22 @@ header {
   -ms-user-select: none;
   user-select: none;
   pointer-events: auto;
-  /* Allow expanded buttons to overflow */
+  /* Allow expanded buttons to overflow when visible */
   overflow: visible;
+  /* Smooth transition for auto-hide */
+  transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out, opacity 0.3s ease-in-out, margin 0.3s ease-in-out;
+}
+
+.nav-wrapper.nav-hidden {
+  max-height: 0;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden; /* Hide overflow when collapsed */
 }
 
 .nav-wrapper:active {
