@@ -6,7 +6,12 @@
   
   const dispatch = createEventDispatcher();
   
-  export let isOpen = false;
+  interface Props {
+    isOpen?: boolean;
+    buttonColors?: string[];
+  }
+  
+  let { isOpen = $bindable(false), buttonColors = [] }: Props = $props();
   
   // Form state
   let title = '';
@@ -53,10 +58,22 @@
   
   type PollType = 'single' | 'multiple' | 'rating' | 'reactions' | 'collaborative';
   
-  let options: PollOption[] = [
+  let options: PollOption[] = $state([
     { id: '1', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)] },
     { id: '2', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)] }
-  ];
+  ]);
+  
+  let previousIsOpen = $state(false);
+  
+  // Actualizar colores solo cuando el modal se abre por primera vez
+  $effect(() => {
+    if (isOpen && !previousIsOpen && buttonColors && buttonColors.length >= 2) {
+      // Solo actualizar colores, no recrear el array completo
+      if (options[0]) options[0].color = buttonColors[0];
+      if (options[1]) options[1].color = buttonColors[1];
+    }
+    previousIsOpen = isOpen;
+  });
   
   let pollType: PollType = 'single';
   let hashtags = '';
@@ -118,18 +135,18 @@
   let selectedSaturation = 85;
   let isDraggingColor = false;
   
-  $: selectedColor = `hsl(${selectedHue}, ${selectedSaturation}%, 55%)`;
+  let selectedColor = $derived(`hsl(${selectedHue}, ${selectedSaturation}%, 55%)`);
   
   // Paginación - máximo 4 opciones por página como en BottomSheet
   const ITEMS_PER_PAGE = 4;
   
-  $: totalPages = Math.ceil(options.length / ITEMS_PER_PAGE);
-  $: paginatedOptions = {
+  let totalPages = $derived(Math.ceil(options.length / ITEMS_PER_PAGE));
+  let paginatedOptions = $derived({
     items: options.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE),
     totalPages: totalPages,
     hasNext: currentPage < totalPages - 1,
     hasPrev: currentPage > 0
-  };
+  });
   
   // Función para cambiar acordeón activo
   function setActive(index: number) {

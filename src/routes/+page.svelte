@@ -30,8 +30,10 @@
 	
 	let selectedPoll = $state<SelectedPoll>(null);
 	let isCreatePollModalOpen = $state(false);
+	let buttonColors = $state<string[]>([]);
 	
-	function handleOpenCreatePoll() {
+	function handleOpenCreatePoll(event: CustomEvent<{ colors: string[] }>) {
+		buttonColors = event.detail.colors;
 		isCreatePollModalOpen = true;
 	}
 	
@@ -112,6 +114,7 @@
 		<CreatePollModal 
 			bind:isOpen={isCreatePollModalOpen}
 			on:created={handlePollCreated}
+			buttonColors={buttonColors}
 		/>
 	</div>
 
