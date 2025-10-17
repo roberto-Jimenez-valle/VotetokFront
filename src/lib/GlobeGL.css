@@ -2799,6 +2799,8 @@ header {
   -ms-user-select: none;
   user-select: none;
   pointer-events: auto;
+  /* Allow expanded buttons to overflow */
+  overflow: visible;
 }
 
 .nav-wrapper:active {
@@ -2812,18 +2814,22 @@ header {
   gap: 2px;
   justify-content: flex-start;
   padding: 6px 2px;
-  padding-right: 12px; /* Espacio para la lupa fija (36px botón + 16px margen) */
+  padding-right: 8px; /* Extra space to avoid clipping */
   position: relative;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  scroll-behavior: auto;
-  width: 85%;
+  scroll-behavior: smooth; /* Smooth scrolling */
+  flex: 1; /* Allow to shrink when buttons expand */
+  min-width: 0; /* Allow flex item to shrink below content size */
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
   z-index: 1; /* Bajo z-index para no interferir con otros elementos */
   min-height: 48px; /* Asegurar altura mínima para el input absoluto */
+  /* Mask gradient to indicate more content */
+  -webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
 }
 
 /* Ocultar botones cuando search está abierto - manejado por JS */
@@ -2881,31 +2887,67 @@ header {
   user-select: none;
 }
 
-/* Search button in navigation */
+/* Group for search and menu buttons */
+.nav-buttons-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto; /* Push to the right */
+  z-index: 100;
+  pointer-events: auto;
+  /* Allow overflow for expanded buttons */
+  overflow: visible;
+}
+
+/* Individual icon buttons (search and menu) */
+.nav-icon-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.nav-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 1);
+}
+
+.nav-icon-btn:active {
+  transform: scale(0.95);
+}
+
+/* Legacy support for old class name */
 .nav-search-btn {
   position: absolute;
   right: 12px;
   top: 50%;
-  -webkit-transform: translateY(-50%);
-  -moz-transform: translateY(-50%);
-  -ms-transform: translateY(-50%);
   transform: translateY(-50%);
-  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
   cursor: pointer;
-  -webkit-transition: all 0.2s ease;
-  -moz-transition: all 0.2s ease;
   transition: all 0.2s ease;
-  flex-shrink: 0;
-  z-index: 10;
-  /* El botón captura sus propios eventos (tiene stopPropagation) */
+  z-index: 100;
   pointer-events: auto;
 }
 
@@ -2915,9 +2957,6 @@ header {
 }
 
 .nav-search-btn:active {
-  -webkit-transform: translateY(-50%) scale(0.95);
-  -moz-transform: translateY(-50%) scale(0.95);
-  -ms-transform: translateY(-50%) scale(0.95);
   transform: translateY(-50%) scale(0.95);
 }
 

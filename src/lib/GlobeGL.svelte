@@ -82,7 +82,6 @@
   import { get as getStore } from 'svelte/store';
   import { clamp, hexToRgba } from './utils/colors';
   import { centroidOf, isoOf, pointInFeature } from './utils/geo';
-  import SettingsPanel from './globe/SettingsPanel.svelte';
   import SearchBar from './globe/SearchBar.svelte';
   import TagBar from './globe/TagBar.svelte';
   import BottomSheet from './globe/BottomSheet.svelte';
@@ -3202,6 +3201,11 @@
   
   // Función auxiliar para cargar tema guardado o usar Carbon por defecto
   function getInitialThemeColors() {
+    // Check if we're in the browser (not SSR)
+    if (typeof window === 'undefined') {
+      return { bg: '#0a0a0a', sphere: '#1a1a1a', stroke: '#2e2e2e', noData: '#141414', atmosphere: '#1a1a1a', isDark: true };
+    }
+    
     try {
       const saved = localStorage.getItem('votetok-theme');
       if (saved) {
@@ -3297,7 +3301,6 @@
   let sphereColor = initialColors.sphere;
   let sphereOpacityPct = 100;
   let strokeColor = initialColors.stroke;
-  let strokeOpacityPct = globeTheme.strokeOpacity; // 40 visible
   let bgColor = initialColors.bg;
   let polygonNoDataColor = initialColors.noData;
   let atmosphereColor = initialColors.atmosphere;
@@ -3308,9 +3311,6 @@
   $: capBaseColor = capColor;
   $: sphereBaseColor = sphereColor;
   $: strokeBaseColor = strokeColor;
-  let showSettings = false;
-  let panelTop = 52;
-  let panelEl: HTMLDivElement | null = null;
   
   // Flag para evitar sobrescribir tema guardado de localStorage
   let hasLoadedSavedTheme = false;
@@ -3336,7 +3336,6 @@
     bgColor = globeConfig.background;
     sphereColor = globeConfig.sphere;
     strokeColor = globeConfig.stroke;
-    strokeOpacityPct = globeConfig.strokeOpacity;
     atmosphereColor = globeConfig.atmosphere;
     atmosphereAltitude = globeConfig.atmosphereAltitude;
     capColor = theme.accent.blue;
@@ -4523,7 +4522,6 @@
   {bgColor}
   sphereBaseColor={sphereBaseColor}
   strokeBaseColor={strokeBaseColor}
-  strokeOpacityPct={strokeOpacityPct}
   {atmosphereColor}
   {atmosphereAltitude}
   {selectedCityId}
@@ -5612,8 +5610,6 @@
         } else if (newLevel === 'subdivision') {
           // Volver a subdivisión
         }
-      } else {
-        showSettings = false;
       }
     }
   }}
@@ -5653,27 +5649,6 @@
   />
 </div>
 
-<!-- Panel de ajustes (se abre desde la barra de la leyenda) -->
-{#if showSettings}
-  <div class="settings-overlay" role="presentation" on:click={() => (showSettings = false)}></div>
-  <div class="settings-panel {isZooming ? 'blocked-during-animation' : ''}" role="dialog" aria-label="Ajustes de colores" bind:this={panelEl} style={`top:${panelTop}px; left:10px;`}>
-    <SettingsPanel
-      bind:panelTop
-      bind:mode
-      bind:capColor
-      bind:capOpacityPct
-      bind:sphereColor
-      bind:sphereOpacityPct
-      bind:strokeColor
-      bind:strokeOpacityPct
-      bind:bgColor
-      {capBaseColor}
-      {sphereBaseColor}
-      {legendItems}
-    />
-  </div>
-{/if}
-
 <BottomSheet
   state={SHEET_STATE}
   y={sheetY}
@@ -5707,7 +5682,6 @@
   onNavigateToView={navigateToView}
   onLoadMorePolls={loadMorePolls}
   onLocateMe={locateMe}
-  onToggleSettings={() => { showSettings = !showSettings; }}
   on:requestExpand={() => {
     SHEET_STATE = 'expanded';
     try { sheetCtrl?.setState('expanded'); } catch {}

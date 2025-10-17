@@ -14,7 +14,7 @@
   export let currentPage: number = 0;
   export let userVotes: Record<string, string> = {};
   export let multipleVotes: Record<string, string[]> = {};
-  export let pollIndex: number = 0;
+  export const pollIndex: number = 0;
   
   // Title expansion state
   export let pollTitleExpanded: Record<string, boolean> = {};
@@ -1027,13 +1027,7 @@
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
   }
 
-  .color-picker-badge-bottom svg {
-    width: 0.875rem;
-    height: 0.875rem;
-    color: rgba(255, 255, 255, 0.9);
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
-  }
-
+  /* Note: .publish-option-btn is unused - component uses .publish-option-btn-absolute instead */
   .publish-option-btn {
     width: 32px;
     height: 32px;
@@ -1066,12 +1060,6 @@
     cursor: not-allowed;
     opacity: 0.5;
     box-shadow: none;
-  }
-
-  .publish-option-btn svg {
-    width: 1.125rem;
-    height: 1.125rem;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
   }
 
   /* Botones posicionados absolutamente para opciones en edición */

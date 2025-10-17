@@ -466,8 +466,21 @@
 
 <!-- Selector de paletas -->
 {#if showPalettePicker}
-  <div class="palette-picker-overlay" onclick={() => showPalettePicker = false}>
-    <div class="palette-picker" onclick={(e) => e.stopPropagation()}>
+  <div 
+    class="palette-picker-overlay" 
+    role="button" 
+    tabindex="0"
+    onclick={() => showPalettePicker = false}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPalettePicker = false; } }}
+  >
+    <div 
+      class="palette-picker" 
+      role="dialog"
+      aria-label="Selector de paletas"
+      tabindex="0"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
       <div class="palette-picker-header">
         <h3>Selecciona una paleta</h3>
         <button class="close-btn" onclick={() => showPalettePicker = false}>✕</button>

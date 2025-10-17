@@ -6,7 +6,6 @@
   export let sphereBaseColor = '#0a0a0a'; // Esfera: Negro #0a0a0a
   export let capBaseColor = '#ccc';    // Polígonos: Negro #0a0a0a
   export let strokeBaseColor = '#1d1d1d'; // Bordes: Gris para que se vean
-  export let strokeOpacityPct = 60;       // Opacidad moderada para visibilidad
   export let sphereOpacityPct = 100;
   export let atmosphereColor = '#1a1a1a'; // Color de atmósfera
   export let atmosphereAltitude = 0.12;   // Altura de la atmósfera más sutil

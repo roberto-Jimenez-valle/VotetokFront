@@ -844,12 +844,16 @@
   <div 
     class="color-picker-overlay" 
     onclick={() => colorPickerOpenFor = null}
-    role="presentation"
+    onkeydown={(e) => { if (e.key === 'Escape') colorPickerOpenFor = null; }}
+    role="button"
+    tabindex="0"
+    aria-label="Cerrar selector de color"
     style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100000; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);"
   >
     <div 
       class="color-picker-modal" 
-      onclick={(e) => e.stopPropagation()} 
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => { if (e.key === 'Escape') colorPickerOpenFor = null; }}
       role="dialog"
       aria-labelledby="color-picker-title"
       tabindex="-1"
@@ -865,6 +869,12 @@
       <!-- Círculo de colores -->
       <div style="display: flex; flex-direction: column; align-items: center; gap: 24px;">
         <div 
+          role="slider"
+          aria-label="Selector de color"
+          aria-valuenow={selectedHue}
+          aria-valuemin="0"
+          aria-valuemax="360"
+          tabindex="0"
           style="width: 300px; height: 300px; border-radius: 50%; position: relative; cursor: pointer; box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: conic-gradient(from 0deg, hsl(0, 100%, 50%), hsl(30, 100%, 50%), hsl(60, 100%, 50%), hsl(90, 100%, 50%), hsl(120, 100%, 50%), hsl(150, 100%, 50%), hsl(180, 100%, 50%), hsl(210, 100%, 50%), hsl(240, 100%, 50%), hsl(270, 100%, 50%), hsl(300, 100%, 50%), hsl(330, 100%, 50%), hsl(360, 100%, 50%));"
           onmousedown={(e) => {
             isDraggingColor = true;
@@ -1020,8 +1030,8 @@
           <p class="section-description">Selecciona el icono y la cantidad de niveles para tu sistema de calificación.</p>
           
           <div class="config-row">
-            <label class="config-label">Cantidad de niveles</label>
-            <select class="sheet-option-select" bind:value={ratingCount}>
+            <label class="config-label" for="rating-count-select">Cantidad de niveles</label>
+            <select id="rating-count-select" class="sheet-option-select" bind:value={ratingCount}>
               <option value={3}>3 niveles</option>
               <option value={5}>5 niveles</option>
               <option value={7}>7 niveles</option>
@@ -1030,7 +1040,7 @@
           </div>
           
           <div class="config-row">
-            <label class="config-label">Icono</label>
+            <span class="config-label" role="heading" aria-level="4">Icono</span>
             <div class="icon-grid">
               {#each RATING_ICONS as iconOption}
                 <button 
@@ -1048,7 +1058,7 @@
           </div>
           
           <div class="preview-section">
-            <label class="config-label">Vista previa</label>
+            <span class="config-label" role="heading" aria-level="4">Vista previa</span>
             <div class="rating-preview">
               {#each Array(ratingCount) as _, i}
                 <span class="preview-level">{ratingIcon.repeat(i + 1)}</span>
@@ -1068,8 +1078,8 @@
           <p class="section-description">Los usuarios podrán añadir nuevas opciones a tu encuesta.</p>
           
           <div class="config-row">
-            <label class="config-label">¿Quién puede añadir opciones?</label>
-            <div class="permission-options">
+            <span class="config-label" role="heading" aria-level="4">¿Quién puede añadir opciones?</span>
+            <div class="permission-options" role="radiogroup">
               <label class="permission-option">
                 <input type="radio" name="permission" value="anyone" bind:group={collaborativePermission} />
                 <div class="permission-content">
@@ -1098,8 +1108,9 @@
           
           {#if collaborativePermission === 'specific'}
             <div class="config-row">
-              <label class="config-label">Nombre del amigo</label>
+              <label class="config-label" for="specific-friend-input">Nombre del amigo</label>
               <input 
+                id="specific-friend-input"
                 type="text" 
                 class="sheet-text-input" 
                 placeholder="Escribe el nombre de tu amigo"

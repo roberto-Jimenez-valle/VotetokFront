@@ -248,6 +248,11 @@
 
   // Cargar trending polls para mostrar cuando NO hay encuesta activa
   async function loadMainPoll() {
+    // Check if we're in the browser (not SSR)
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
     // Si hay encuesta activa, no cargar trending (GlobeGL lo maneja)
     if (activePoll && activePoll.id) {
       trendingPollsData = [];
@@ -872,12 +877,12 @@
   export let isCameraAnimating = false; // Si hay una animación de cámara en curso
   // Props de selección manual (para UI, no para votos - ahora usamos geocoding automático)
   export let selectedCountryName: string | null = null;
-  export let selectedCountryIso: string | null = null;
+  export const selectedCountryIso: string | null = null;
   export let selectedSubdivisionName: string | null = null;
-  export let selectedSubdivisionId: string | null = null;
+  export const selectedSubdivisionId: string | null = null;
   export let selectedCityName: string | null = null;
   export let countryChartSegments: Array<{ key: string; pct: number; color: string }> = [];
-  export let subdivisionChartSegments: Array<{ key: string; pct: number; color: string }> = [];
+  export const subdivisionChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let voteOptions: Array<{ key: string; label: string; color: string; votes: number; pollData?: any; isEditing?: boolean }> = [];
@@ -885,9 +890,9 @@
   export let activePoll: any = null;
   // Estadísticas de la encuesta principal
   export let mainPollViews: number = 0;
-  export let mainPollSaves: number = 0;
-  export let mainPollShares: number = 0;
-  export let mainPollReposts: number = 0;
+  export const mainPollSaves: number = 0;
+  export const mainPollShares: number = 0;
+  export const mainPollReposts: number = 0;
   // ID del usuario actual (para cargar amigos que votaron)
   // Usuario por defecto: María González (id: 4) que sigue a 5 usuarios
   export let currentUserId: number = 4;
@@ -911,7 +916,6 @@
   // onVote eliminado - BottomSheet maneja votos internamente
   export let currentAltitude: number = 0; // Altitud actual del globo
   export let onLocateMe: () => void = () => {};
-  export let onToggleSettings: () => void = () => {};
   
   // Array de encuestas adicionales para scroll infinito
   export let additionalPolls: Poll[] = [];
@@ -1082,20 +1086,22 @@
     // Agregar la encuesta al inicio de additionalPolls si no existe ya
     if (!additionalPolls.find(p => p.id === poll.id)) {
       additionalPolls = [poll, ...additionalPolls];
-          } else {
+    } else {
       // Si ya existe, moverla al inicio
       additionalPolls = [poll, ...additionalPolls.filter(p => p.id !== poll.id)];
-          }
+    }
     
     dispatch('openPollInGlobe', { 
       poll: poll,
       options: poll.options
     });
-    
-      }
+  }
   
   // Estado de pantalla completa
   let fullscreenActive = false;
+  
+  // Estado del menú de opciones (3 puntos)
+  let showOptionsMenu = false;
   
   // Estado de expansión de la barra de opciones
   let showPollOptionsExpanded = false;
@@ -1164,10 +1170,11 @@
       fullscreenActive = !!document.fullscreenElement;
     };
     
-    // Manejar clicks globales para cerrar acordeones
+    // Manejar clicks globales para cerrar acordeones y menú
     const handleGlobalClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const clickedCard = target.closest('.vote-card');
+      const clickedButtonsGroup = target.closest('.nav-buttons-group');
       
       // Si el click no es en una vote-card, cerrar acordeones
       if (!clickedCard) {
@@ -1176,16 +1183,21 @@
           activeAccordionByPoll[key] = null;
         });
       }
-      // Si el click es en una vote-card, no hacer nada (dejar que el onclick de la card lo maneje)
+      
+      // Si el click no es en el grupo de botones, cerrar menú
+      if (!clickedButtonsGroup) {
+        showOptionsMenu = false;
+      }
     };
     
-    // Manejar tecla Escape para cerrar acordeones
+    // Manejar tecla Escape para cerrar acordeones y menú
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         activeAccordionMainIndex = null;
         Object.keys(activeAccordionByPoll).forEach(key => {
           activeAccordionByPoll[key] = null;
         });
+        showOptionsMenu = false;
       }
     };
     
@@ -2529,18 +2541,75 @@
       {/if}
     {/if}
     
-    <!-- Search button outside nav-minimal (only when search is closed) -->
+    <!-- Search button and options menu grouped (only when search is closed) -->
     {#if !showSearch}
-      <button
-        class="nav-search-btn"
-        onclick={onToggleSearch}
-        aria-label="Buscar"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-      </button>
+      <div class="nav-buttons-group">
+        <!-- Expandable icon buttons (appear to the left) -->
+        {#if showOptionsMenu}
+          <button
+            class="nav-icon-btn icon-expand"
+            onclick={() => { onLocateMe(); showOptionsMenu = false; }}
+            title="Mi ubicación"
+            aria-label="Mi ubicación"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+          </button>
+          <button
+            class="nav-icon-btn icon-expand"
+            onclick={() => { 
+              if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+              } else {
+                document.exitFullscreen();
+              }
+              showOptionsMenu = false;
+            }}
+            title={fullscreenActive ? "Salir de pantalla completa" : "Pantalla completa"}
+            aria-label={fullscreenActive ? "Salir de pantalla completa" : "Pantalla completa"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              {#if fullscreenActive}
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+              {:else}
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              {/if}
+            </svg>
+          </button>
+        {/if}
+        
+        <!-- Menu button (3 dots) - only show when menu is closed -->
+        {#if !showOptionsMenu}
+          <button
+            class="nav-icon-btn"
+            onclick={(e) => {
+              e.stopPropagation();
+              showOptionsMenu = !showOptionsMenu;
+            }}
+            aria-label="Menú de opciones"
+            aria-expanded={showOptionsMenu}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5" r="2"></circle>
+              <circle cx="12" cy="12" r="2"></circle>
+              <circle cx="12" cy="19" r="2"></circle>
+            </svg>
+          </button>
+        {/if}
+        
+        <button
+          class="nav-icon-btn"
+          onclick={onToggleSearch}
+          aria-label="Buscar"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+      </div>
     {/if}
   </div>
   
@@ -2795,68 +2864,8 @@
       onpointerdown={onPointerDown}
       ontouchstart={onPointerDown}
     >
-      <!-- Botones flotantes en el contenido -->
+      <!-- Pista de arrastre simplificada -->
       <div class="floating-indicators-content">
-        <!-- Indicador de altitud/distancia (primero a la izquierda) -->
-        <div class="altitude-indicator-floating" aria-label="Indicador de distancia aproximada" style="align-self: center; margin-right: auto;">
-          <div style="position: relative; display: inline-block;">
-            <div class="scale-bar"></div>
-            <div class="altitude-value">{numberFmt.format(scaleKm)} km</div>
-          </div>
-        </div>
-
-        <!-- Botón de ajustes (3 puntos) -->
-        <button 
-          class="nav-chip settings-btn-floating" 
-          onclick={onToggleSettings}
-          title="Ajustes de colores y visualización"
-          aria-label="Abrir ajustes"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-            <circle cx="12" cy="5" r="2"></circle>
-            <circle cx="12" cy="12" r="2"></circle>
-            <circle cx="12" cy="19" r="2"></circle>
-          </svg>
-        </button>
-
-        <!-- Botón de localización -->
-        <button 
-          class="nav-chip locate-btn-floating" 
-          onclick={onLocateMe}
-          title="Ir a mi ubicación"
-          aria-label="Ir a mi ubicación"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
-        </button>
-
-        <!-- Botón de pantalla completa -->
-        <button 
-          class="nav-chip fullscreen-btn-floating" 
-          onclick={() => {
-            if (!document.fullscreenElement) {
-              document.documentElement.requestFullscreen();
-            } else {
-              document.exitFullscreen();
-            }
-          }}
-          title={fullscreenActive ? "Salir de pantalla completa" : "Pantalla completa"}
-          aria-label={fullscreenActive ? "Salir de pantalla completa" : "Activar pantalla completa"}
-        >
-          {#if fullscreenActive}
-            <!-- Icono de minimizar/salir de fullscreen -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-            </svg>
-          {:else}
-            <!-- Icono de expandir a fullscreen -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-            </svg>
-          {/if}
-        </button>
       </div>
 
       <!-- Pista debajo: flecha hacia arriba + texto contextual -->
@@ -2989,12 +2998,16 @@
     <div 
       class="color-picker-overlay" 
       onclick={() => colorPickerOpenFor = null}
-      role="presentation"
+      onkeydown={(e) => { if (e.key === 'Escape') colorPickerOpenFor = null; }}
+      role="button"
+      tabindex="0"
+      aria-label="Cerrar selector de color"
       style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100000; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);"
     >
       <div 
         class="color-picker-modal" 
-        onclick={(e) => e.stopPropagation()} 
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => { if (e.key === 'Escape') colorPickerOpenFor = null; }}
         role="dialog"
         aria-labelledby="color-picker-title"
         tabindex="-1"
@@ -3013,6 +3026,12 @@
         <!-- Círculo de colores -->
         <div style="display: flex; flex-direction: column; align-items: center; gap: 24px;">
           <div 
+            role="slider"
+            aria-label="Selector de color"
+            aria-valuenow={selectedHue}
+            aria-valuemin="0"
+            aria-valuemax="360"
+            tabindex="0"
             style="width: 300px; height: 300px; border-radius: 50%; position: relative; cursor: pointer; box-shadow: 0 8px 32px rgba(0,0,0,0.4); background: conic-gradient(from 0deg, hsl(0, 100%, 50%), hsl(30, 100%, 50%), hsl(60, 100%, 50%), hsl(90, 100%, 50%), hsl(120, 100%, 50%), hsl(150, 100%, 50%), hsl(180, 100%, 50%), hsl(210, 100%, 50%), hsl(240, 100%, 50%), hsl(270, 100%, 50%), hsl(300, 100%, 50%), hsl(330, 100%, 50%), hsl(360, 100%, 50%));"
             onmousedown={(e) => {
               isDraggingColor = true;
@@ -3133,6 +3152,6 @@
     </div>
   {/if}
 
-  <style >
+  <style>
     @import '$lib/styles/bottom-sheet.css';
   </style>
