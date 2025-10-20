@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import SinglePollSection from './globe/cards/sections/SinglePollSection.svelte';
   import { currentUser } from '$lib/stores';
   import '$lib/styles/trending-ranking.css';
@@ -19,10 +19,27 @@
   let isLoadingPolls = $state(false);
   let currentPollIndex = $state(0);
   
-  // Estados para swipe/arrastre
+  // Estados para swipe/arrastre en navegación
   let swipeStartX = 0;
   let swipeStartY = 0;
   let isSwiping = false;
+  
+  // Estados para drag en opciones (similar a BottomSheet)
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isDragging = false;
+  let currentDragGrid: HTMLElement | null = null;
+  let currentDragPollId: string | null = null;
+  
+  // Estados para scroll manual de avatares
+  let avatarScrollRef: HTMLElement | null = null;
+  let isScrollingAvatars = false;
+  let scrollStartX = 0;
+  let scrollLeft = 0;
+  
+  // Estados para transición de encuestas
+  let transitionDirection = $state<'next' | 'prev' | null>(null);
+  
   
   // Estados para SinglePollSection
   let pollStates = $state<Record<string, 'expanded' | 'collapsed'>>({});
@@ -37,7 +54,10 @@
   let voteEffectStates = $state<Record<string, boolean>>({});
 
   onMount(async () => {
-    console.log('[Header] 🚀 Iniciando carga de usuarios...');
+    console.log('[Header] 🚀 Componente montado, cargando usuarios trending...');
+    
+    // Los listeners se agregarán solo cuando inicie un drag (ver handleCardDragStart)
+    
     try {
       // Cargar usuarios que tienen rells o saves activos
       const url = '/api/users/with-activity?limit=8';
@@ -72,6 +92,16 @@
       users = [];
     }
     console.log('[Header] 🏁 Carga finalizada. Total usuarios:', users.length);
+  });
+  
+  onDestroy(() => {
+    // Limpiar listeners si quedan activos
+    if (typeof document !== 'undefined' && currentDragGrid) {
+      document.removeEventListener('pointermove', handleCardDragMove as EventListener);
+      document.removeEventListener('pointerup', handleCardDragEnd);
+      document.removeEventListener('touchmove', handleCardDragMove as EventListener);
+      document.removeEventListener('touchend', handleCardDragEnd);
+    }
   });
 
   async function handleAvatarClick(user: TrendingUser) {
@@ -140,18 +170,31 @@
   }
   
   function nextPoll() {
+    transitionDirection = 'next';
+    setTimeout(() => transitionDirection = null, 300);
+    
     if (currentPollIndex < userPolls.length - 1) {
       currentPollIndex++;
+    } else {
+      nextUser();
     }
   }
   
   function prevPoll() {
+    transitionDirection = 'prev';
+    setTimeout(() => transitionDirection = null, 300);
+    
     if (currentPollIndex > 0) {
       currentPollIndex--;
+    } else {
+      prevUser();
     }
   }
   
   function nextUser() {
+    transitionDirection = 'next';
+    setTimeout(() => transitionDirection = null, 300);
+    
     const currentIndex = users.findIndex(u => u.id === selectedUser?.id);
     if (currentIndex !== -1 && currentIndex < users.length - 1) {
       handleAvatarClick(users[currentIndex + 1]);
@@ -159,6 +202,9 @@
   }
   
   function prevUser() {
+    transitionDirection = 'prev';
+    setTimeout(() => transitionDirection = null, 300);
+    
     const currentIndex = users.findIndex(u => u.id === selectedUser?.id);
     if (currentIndex !== -1 && currentIndex > 0) {
       handleAvatarClick(users[currentIndex - 1]);
@@ -166,12 +212,177 @@
   }
   
   function goToPoll(index: number) {
+    // Determinar dirección basada en si vas adelante o atrás
+    transitionDirection = index > currentPollIndex ? 'next' : 'prev';
+    setTimeout(() => transitionDirection = null, 300);
+    
     currentPollIndex = index;
   }
   
-  // Handlers para swipe
+  // Handlers para drag en opciones (desde SinglePollSection)
+  function handleCardDragStart(e: CustomEvent) {
+    const event = e.detail.event as PointerEvent | TouchEvent;
+    const pollId = e.detail.pollId;
+    
+    // No capturar eventos en barra de avatares
+    const target = event.target as HTMLElement;
+    if (target.closest('.modal-avatars-scroll, .avatar-small-btn')) {
+      return;
+    }
+    
+    // Solo permitir arrastre en dispositivos táctiles
+    if (event.type === 'pointerdown' && (event as PointerEvent).pointerType === 'mouse') {
+      return;
+    }
+    
+    const grid = event.currentTarget as HTMLElement;
+    if (grid && grid.classList.contains('dense')) {
+      return;
+    }
+    
+    const touch = 'touches' in event ? event.touches[0] : event;
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    isDragging = false;
+    currentDragGrid = grid;
+    currentDragPollId = pollId || null;
+    
+    // Agregar listeners globales solo cuando inicia un drag
+    document.addEventListener('pointermove', handleCardDragMove as EventListener);
+    document.addEventListener('pointerup', handleCardDragEnd);
+    document.addEventListener('touchmove', handleCardDragMove as EventListener, { passive: false });
+    document.addEventListener('touchend', handleCardDragEnd);
+  }
+  
+  function handleCardDragMove(e: PointerEvent | TouchEvent) {
+    if (!currentDragGrid) return;
+    
+    // No interferir con scroll de avatares
+    const target = e.target as HTMLElement;
+    if (target.closest('.modal-avatars-scroll, .avatar-small-btn')) {
+      return;
+    }
+    
+    try {
+      const touch = 'touches' in e ? e.touches[0] : e;
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+      
+      // Detectar movimiento horizontal
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20) {
+        isDragging = true;
+        
+        if (!currentDragGrid.classList.contains('dense')) {
+          e.preventDefault();
+        }
+        
+        let currentIndex = activeAccordions[currentDragPollId || ''] ?? null;
+        const cards = currentDragGrid.querySelectorAll('.vote-card');
+        const totalCards = cards.length;
+        
+        // Si no hay ninguna activa, activar la primera o última según dirección
+        if ((currentIndex === null || currentIndex === undefined) && totalCards > 0) {
+          currentIndex = deltaX < 0 ? 0 : totalCards - 1;
+          if (currentDragPollId) {
+            activeAccordions[currentDragPollId] = currentIndex;
+          }
+          touchStartX = touch.clientX;
+          return;
+        }
+        
+        // Cambiar a siguiente/anterior opción
+        if (currentIndex !== null && currentIndex !== undefined) {
+          if (deltaX < -50) {
+            if (currentIndex < totalCards - 1) {
+              // Hay más opciones en esta página
+              activeAccordions[currentDragPollId || ''] = currentIndex + 1;
+              touchStartX = touch.clientX;
+            } else if (currentDragPollId) {
+              // Es la última opción, cambiar de página
+              const currentPoll = userPolls.find(p => p.id.toString() === currentDragPollId);
+              if (currentPoll && currentPoll.options) {
+                const currentPage = currentPages[currentDragPollId] || 0;
+                const totalPages = Math.ceil(currentPoll.options.length / 4);
+                
+                if (currentPage < totalPages - 1) {
+                  // Hay más páginas, cambiar a la siguiente
+                  currentPages[currentDragPollId] = currentPage + 1;
+                  activeAccordions[currentDragPollId] = 0;
+                  touchStartX = touch.clientX;
+                }
+              }
+            }
+          } else if (deltaX > 50) {
+            if (currentIndex > 0) {
+              // Hay opciones anteriores en esta página
+              activeAccordions[currentDragPollId || ''] = currentIndex - 1;
+              touchStartX = touch.clientX;
+            } else if (currentDragPollId) {
+              // Es la primera opción, cambiar a página anterior
+              const currentPage = currentPages[currentDragPollId] || 0;
+              
+              if (currentPage > 0) {
+                // Hay página anterior
+                currentPages[currentDragPollId] = currentPage - 1;
+                activeAccordions[currentDragPollId] = 3;
+                touchStartX = touch.clientX;
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Header] Error en drag:', error);
+      isDragging = false;
+      currentDragGrid = null;
+    }
+  }
+  
+  function handleCardDragEnd() {
+    isDragging = false;
+    currentDragGrid = null;
+    currentDragPollId = null;
+    
+    // Remover listeners globales cuando termina el drag
+    document.removeEventListener('pointermove', handleCardDragMove as EventListener);
+    document.removeEventListener('pointerup', handleCardDragEnd);
+    document.removeEventListener('touchmove', handleCardDragMove as EventListener);
+    document.removeEventListener('touchend', handleCardDragEnd);
+  }
+  
+  // Handlers para scroll manual de avatares
+  function handleAvatarScrollStart(e: MouseEvent | TouchEvent) {
+    const target = e.currentTarget as HTMLElement;
+    avatarScrollRef = target;
+    isScrollingAvatars = true;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    scrollStartX = clientX;
+    scrollLeft = target.scrollLeft;
+  }
+  
+  function handleAvatarScrollMove(e: MouseEvent | TouchEvent) {
+    if (!isScrollingAvatars || !avatarScrollRef) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const deltaX = scrollStartX - clientX;
+    avatarScrollRef.scrollLeft = scrollLeft + deltaX;
+  }
+  
+  function handleAvatarScrollEnd() {
+    isScrollingAvatars = false;
+    avatarScrollRef = null;
+  }
+  
+  // Handlers para swipe en barra de navegación
   function handleSwipeStart(e: MouseEvent | TouchEvent) {
     const target = e.target as HTMLElement;
+    
+    // No capturar swipe en barra de avatares
+    if (target.closest('.modal-avatars-scroll, .top-avatars-bar, .avatar-small-btn')) {
+      isSwiping = false;
+      return;
+    }
     
     // Si es un botón u otro control, no iniciar swipe
     if (target.closest('button:not(.progress-bar), input, textarea, select, a')) {
@@ -188,6 +399,13 @@
   
   function handleSwipeMove(e: MouseEvent | TouchEvent) {
     if (!isSwiping) return;
+    
+    // No interferir con scroll de avatares
+    const target = e.target as HTMLElement;
+    if (target.closest('.modal-avatars-scroll, .top-avatars-bar, .avatar-small-btn')) {
+      isSwiping = false;
+      return;
+    }
     
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -421,20 +639,33 @@
 	<div class="polls-fullscreen-container">
 		<!-- Barra de avatares superior con scroll horizontal -->
 		<div class="top-avatars-bar">
-			<div class="avatars-scroll-horizontal">
-				{#each users as user (user.id)}
-					<button
-						class="avatar-small-btn {selectedUser?.id === user.id ? 'active' : ''}"
-						onclick={() => handleAvatarClick(user)}
-						aria-label={user.name}
-					>
-						<img 
-							src={user.avatar} 
-							alt={user.name}
-							style="width: 100%; height: 100%; object-fit: cover; border-radius: 999px;"
-						/>
-					</button>
-				{/each}
+			<div 
+				class="modal-avatars-scroll"
+				onmousedown={handleAvatarScrollStart}
+				onmousemove={handleAvatarScrollMove}
+				onmouseup={handleAvatarScrollEnd}
+				onmouseleave={handleAvatarScrollEnd}
+				ontouchstart={handleAvatarScrollStart}
+				ontouchmove={handleAvatarScrollMove}
+				ontouchend={handleAvatarScrollEnd}
+				role="region"
+				aria-label="Usuarios con actividad"
+			>
+				<div class="modal-avatars-inner">
+					{#each users as user (user.id)}
+						<button
+							class="avatar-small-btn {selectedUser?.id === user.id ? 'active' : ''}"
+							onclick={() => handleAvatarClick(user)}
+							aria-label={user.name}
+						>
+							<img 
+								src={user.avatar} 
+								alt={user.name}
+								style="width: 100%; height: 100%; object-fit: cover; border-radius: 999px;"
+							/>
+						</button>
+					{/each}
+				</div>
 			</div>
 		</div>
 		
@@ -465,7 +696,7 @@
 			<div class="polls-carousel">
 				{#if userPolls[currentPollIndex]}
 					{@const currentPoll = userPolls[currentPollIndex]}
-					<div class="poll-card-wrapper active">
+					<div class="poll-card-wrapper active {transitionDirection === 'next' ? 'slide-next' : transitionDirection === 'prev' ? 'slide-prev' : ''}">
 						<!-- Indicador de usuario (rell o publicación normal) -->
 						{#if currentPoll.isRell && currentPoll.originalPoll}
 							<!-- Rell: mostrar "X republicó de Y" -->
@@ -534,6 +765,7 @@
 							on:publishOption={handlePublishOption}
 							on:cancelEditing={handleCancelEditing}
 							on:openColorPicker={handleOpenColorPicker}
+							on:dragStart={handleCardDragStart}
 						/>
 					</div>
 				{/if}
@@ -710,20 +942,31 @@
 		align-items: center;
 		padding: 10px 0 10px 16px;
 		pointer-events: auto;
+		touch-action: pan-x pan-y;
 	}
 	
-	.avatars-scroll-horizontal {
-		display: flex;
-		gap: 12px;
+	.modal-avatars-scroll {
 		overflow-x: auto;
 		overflow-y: hidden;
-		padding: 5px 0;
-		scrollbar-width: none; /* Firefox */
-		-ms-overflow-style: none; /* IE/Edge */
+		padding: 10px 0;
+		scrollbar-width: none;
+		-ms-overflow-style: none;
+		-webkit-overflow-scrolling: touch;
+		cursor: grab;
 	}
 	
-	.avatars-scroll-horizontal::-webkit-scrollbar {
-		display: none; /* Chrome, Safari, Opera */
+	.modal-avatars-scroll:active {
+		cursor: grabbing;
+	}
+	
+	.modal-avatars-scroll::-webkit-scrollbar {
+		display: none;
+	}
+	
+	.modal-avatars-inner {
+		display: flex;
+		gap: 12px;
+		width: max-content;
 	}
 	
 	.avatar-small-btn {
@@ -739,6 +982,9 @@
 		transition: all 0.3s ease;
 		position: relative;
 		overflow: hidden;
+		touch-action: none;
+		flex-shrink: 0;
+		pointer-events: auto;
 	}
 	
 	.avatar-small-btn:hover {
@@ -1104,5 +1350,40 @@
 			opacity: 1;
 			transform: scale(1);
 		}
+	}
+	
+	@keyframes slideInNext {
+		from {
+			opacity: 0;
+			transform: translateX(100px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+	
+	@keyframes slideInPrev {
+		from {
+			opacity: 0;
+			transform: translateX(-100px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+	
+	.poll-card-wrapper.slide-next {
+		animation: slideInNext 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	
+	.poll-card-wrapper.slide-prev {
+		animation: slideInPrev 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	
+	.poll-card-wrapper.active {
+		opacity: 1;
+		transform: scale(1);
 	}
 </style>
