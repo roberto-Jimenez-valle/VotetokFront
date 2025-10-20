@@ -251,6 +251,13 @@
     z-index: 30000;
     backdrop-filter: blur(8px);
   }
+  
+  @media (min-width: 768px) {
+    .modal-overlay {
+      right: auto;
+      width: 700px;
+    }
+  }
 
   .modal-container {
     position: fixed;
@@ -258,10 +265,21 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: #0a0a0a;
+    background: #181a20;
     z-index: 30001;
     display: flex;
     flex-direction: column;
+  }
+
+  @media (min-width: 768px) {
+    .modal-container {
+      left: 0;
+      right: auto;
+      width: 100%;
+      max-width: 700px;
+      border-radius: 0 1.25rem 0 0;
+      box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+    }
   }
 
   .modal-header {
@@ -275,7 +293,7 @@
     flex-shrink: 0;
     position: sticky;
     top: 0;
-    background: #0a0a0a;
+    background: #181a20;
     z-index: 10;
   }
 

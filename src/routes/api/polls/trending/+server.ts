@@ -15,10 +15,11 @@ export const GET: RequestHandler = async ({ url }) => {
     const dateLimit = new Date();
     dateLimit.setHours(dateLimit.getHours() - hoursAgo);
 
-    // Obtener todas las encuestas activas
+    // Obtener todas las encuestas activas (excluyendo rells)
     const polls = await prisma.poll.findMany({
       where: {
         status: 'active',
+        isRell: false, // Excluir rells del trending
         createdAt: {
           gte: dateLimit, // Solo encuestas recientes
         },

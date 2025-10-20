@@ -934,14 +934,14 @@
   let scrollThreshold = 50; // Minimum scroll distance to trigger hide/show
   let scrollContainer: HTMLElement;
   
-  // Control de visibilidad del nav según estado y desplegable
+  // Control de visibilidad del nav según estado y desplegables
   $: {
     if (state === 'expanded') {
       // Cuando está expandido, el nav sigue su lógica normal de scroll
       // No forzar ningún valor aquí
     } else if (showPollOptionsExpanded) {
-      // Si el desplegable está abierto y NO está expandido, ocultar nav
-      console.log('[BottomSheet] Ocultando nav - desplegable abierto');
+      // Si el desplegable de poll options está abierto y NO está expandido, ocultar nav
+      console.log('[BottomSheet] Ocultando nav - desplegable de poll abierto');
       showNavBar = false;
     } else {
       // Si el desplegable está cerrado y NO está expandido, mostrar nav
@@ -1089,6 +1089,7 @@
     openPollInGlobe: { poll: Poll | null; options: Array<{ key: string; label: string; color: string; votes: number }> };
     vote: { option: string; pollId?: string };
     requestExpand: void;
+    polldropdownstatechange: { open: boolean };
   }>();
   
   // Función para abrir la encuesta principal en el globo
@@ -2192,6 +2193,9 @@
     // Si las opciones están expandidas y se hace scroll en el trending, colapsarlas
     if (showPollOptionsExpanded) {
       showPollOptionsExpanded = false;
+      // Notificar al padre
+      dispatch('polldropdownstatechange', { open: false });
+      console.log('[BottomSheet] Poll dropdown cerrado por scroll');
     }
     
     const target = e.target as HTMLElement;
@@ -2349,7 +2353,22 @@
       <div class="poll-options-bar-container">
         <!-- Título de la encuesta o trending -->
         <div class="poll-bar-title">
+          <!-- Avatar del creador (si existe) -->
+          {#if activePoll && (activePoll.user?.avatarUrl || activePoll.creator?.avatarUrl)}
+            <div class="poll-creator-avatar">
+              <img 
+                src={activePoll.user?.avatarUrl || activePoll.creator?.avatarUrl || DEFAULT_AVATAR} 
+                alt={activePoll.user?.displayName || activePoll.creator?.name || 'Creator'} 
+                onerror={(e) => ((e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR)}
+              />
+              {#if activePoll.user?.verified || activePoll.creator?.verified}
+                <span class="verified-badge" title="Verificado">✓</span>
+              {/if}
+            </div>
+          {/if}
+          
           <h3>{pollTitle}</h3>
+          
           {#if activePoll}
             <button 
               class="poll-close-btn" 
@@ -2371,6 +2390,9 @@
           onclick={(e) => {
             e.stopPropagation();
             showPollOptionsExpanded = !showPollOptionsExpanded;
+            // Notificar al padre para ocultar/mostrar el nav
+            dispatch('polldropdownstatechange', { open: showPollOptionsExpanded });
+            console.log(`[BottomSheet] Poll dropdown ${showPollOptionsExpanded ? 'abierto' : 'cerrado'}`);
           }}
           aria-expanded={showPollOptionsExpanded}
           aria-label="Ver opciones de la encuesta"
@@ -2425,6 +2447,9 @@
               if (deltaY < -50) {
                 // Swipe fuerte hacia arriba → Colapsar opciones
                 showPollOptionsExpanded = false;
+                // Notificar al padre
+                dispatch('polldropdownstatechange', { open: false });
+                console.log('[BottomSheet] Poll dropdown cerrado con swipe');
               }
               
               // SIEMPRE detener propagación completamente - NO permitir arrastrar BottomSheet

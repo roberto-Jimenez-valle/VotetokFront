@@ -19,6 +19,7 @@ export const GET: RequestHandler = async ({ url }) => {
     const polls = await prisma.poll.findMany({
       where: {
         status: 'active',
+        isRell: false, // Excluir rells del trending
         createdAt: {
           gte: dateLimit,
         },

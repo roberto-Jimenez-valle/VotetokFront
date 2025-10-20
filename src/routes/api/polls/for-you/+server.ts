@@ -88,10 +88,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const dateLimit = new Date();
     dateLimit.setDate(dateLimit.getDate() - 30); // Últimos 30 días
 
-    // Obtener encuestas candidatas
+    // Obtener encuestas candidatas (excluyendo rells)
     const candidatePolls = await prisma.poll.findMany({
       where: {
         status: 'active',
+        isRell: false, // Excluir rells del feed
         createdAt: { gte: dateLimit },
         // Excluir encuestas ya votadas por el usuario
         votes: {
@@ -207,6 +208,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       const trendingPolls = await prisma.poll.findMany({
         where: {
           status: 'active',
+          isRell: false, // Excluir rells del trending fallback
           createdAt: { gte: dateLimit },
           id: {
             notIn: recommendedPolls.map(p => p.id)

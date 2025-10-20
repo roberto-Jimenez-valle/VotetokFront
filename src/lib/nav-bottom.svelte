@@ -61,6 +61,10 @@
 		notificationsModalOpen = false;
 		profileModalOpen = false;
 		searchModalOpen = true;
+		// Cerrar modal de crear encuesta si está abierta
+		if (modalOpen) {
+			dispatch('closeCreatePoll');
+		}
 	}
 	
 	function openNotifications() {
@@ -69,6 +73,10 @@
 		searchModalOpen = false;
 		profileModalOpen = false;
 		notificationsModalOpen = true;
+		// Cerrar modal de crear encuesta si está abierta
+		if (modalOpen) {
+			dispatch('closeCreatePoll');
+		}
 	}
 	
 	function openProfile() {
@@ -77,6 +85,22 @@
 		searchModalOpen = false;
 		notificationsModalOpen = false;
 		profileModalOpen = true;
+		// Cerrar modal de crear encuesta si está abierta
+		if (modalOpen) {
+			dispatch('closeCreatePoll');
+		}
+	}
+	
+	function goHome() {
+		activeItem = 'home';
+		// Cerrar todas las modales
+		searchModalOpen = false;
+		notificationsModalOpen = false;
+		profileModalOpen = false;
+		// Cerrar modal de crear encuesta si está abierta
+		if (modalOpen) {
+			dispatch('closeCreatePoll');
+		}
 	}
 </script>
 
@@ -87,7 +111,7 @@
 >
 	<div class="nav-bottom-container">
 			<button
-				onclick={() => (activeItem = 'home')}
+				onclick={goHome}
 				class="nav-btn"
 				class:nav-btn-active={activeItem === 'home'}
 				aria-label="Inicio"
@@ -139,6 +163,7 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
+		max-width: 700px;
 		width: 100%;
 		background-color: #000000 !important;
 		display: flex;

@@ -48,20 +48,24 @@ model User {
 // ===============================================
 
 model Poll {
-  id          Int       @id @default(autoincrement())
-  userId      Int       @map("user_id")
-  title       String
-  description String?
-  category    String?
-  imageUrl    String?   @map("image_url")  // Imagen de la encuesta (no avatar del usuario)
-  type        String    @default("poll")  // poll, multiple, collaborative, hashtag
-  status      String    @default("active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  closedAt    DateTime? @map("closed_at")
+  id             Int       @id @default(autoincrement())
+  userId         Int       @map("user_id")
+  title          String
+  description    String?
+  category       String?
+  imageUrl       String?   @map("image_url")  // Imagen de la encuesta (no avatar del usuario)
+  type           String    @default("poll")  // poll, multiple, collaborative, hashtag
+  status         String    @default("active")
+  isRell         Boolean   @default(false) @map("is_rell")  // Si es una republicación
+  originalPollId Int?      @map("original_poll_id")  // ID del poll original (si es rell)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  closedAt       DateTime? @map("closed_at")
 
   // Relaciones
   user         User              @relation("PollCreator", fields: [userId], references: [id], onDelete: Cascade)
+  originalPoll Poll?             @relation("PollRells", fields: [originalPollId], references: [id], onDelete: SetNull)
+  rells        Poll[]            @relation("PollRells")  // Rells de este poll
   options      PollOption[]
   votes        Vote[]
   interactions PollInteraction[]
@@ -73,6 +77,8 @@ model Poll {
   @@index([category])
   @@index([status])
   @@index([type])
+  @@index([isRell])
+  @@index([originalPollId])
   @@index([createdAt])
   @@index([status, createdAt])  // Para queries ordenadas por fecha
   @@map("polls")

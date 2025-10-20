@@ -54,7 +54,7 @@ export class BottomSheetController {
       this.y = containerH - this.bottomBarPx - 100; // 100px arriba del nav
     }
     else if (state === 'collapsed') this.y = containerH * (1 - this.collapsedVisibleRatio);
-    else this.y = 55; // expanded top offset
+    else this.y = 0; // expanded: completamente hasta arriba
     this.onChange(this.state, this.y, isTransitioning);
   }
 
@@ -304,7 +304,7 @@ export class BottomSheetController {
       else this.setState('hidden', true); // Desde peek baja a hidden (detrás del nav)
     } else {
       // Snap al ancla más cercana
-      const expandedY = 0;
+      const expandedY = 0; // Completamente hasta arriba
       const collapsedY = containerH * (1 - this.collapsedVisibleRatio);
       const peekY = containerH * (1 - this.peekVisibleRatio);
       const anchors = [

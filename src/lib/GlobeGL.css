@@ -38,17 +38,38 @@
   padding-right: env(safe-area-inset-right);
 }
 
-/* Fondo oscuro solo en modo oscuro */
+/* Fondos por defecto para SSR y fallback */
 :global(html.dark) :global(body) {
   background-color: #0a0a0a;
 }
 
-/* Fondo claro en modo claro */
 :global(html:not(.dark)) :global(body) {
   background-color: #e8e8e8;
 }
 
+:global(html.dark) {
+  background-color: #0a0a0a;
+}
+
+:global(html:not(.dark)) {
+  background-color: #e8e8e8;
+}
+
 /* Eliminar media queries obsoletas - ahora usamos .dark class */
+
+/* Fondo dinámico que se actualiza con el color del tema actual */
+.dynamic-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* Sobre el fondo del body pero debajo del globe-wrap */
+  transition: background-color 300ms ease;
+  pointer-events: none; /* No bloquear eventos */
+}
 
 /* Prevenir scroll en el contenedor principal */
 :global(#app),
@@ -67,6 +88,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+  z-index: 1; /* Sobre el dynamic-background */
   /* Configuraciones específicas para Safari y Edge */
   -webkit-transform: translateZ(0);
   -moz-transform: translateZ(0);
@@ -75,6 +97,16 @@
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
+  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Mover globo a la derecha cuando hay modal activa en desktop */
+@media (min-width: 768px) {
+  body:has(.modal-overlay) .globe-wrap,
+  body:has(.bottom-sheet.solid) .globe-wrap {
+    transform: translateX(350px) translateZ(0);
+    -webkit-transform: translateX(350px) translateZ(0);
+  }
 }
 
 /* Fondo condicional según tema */
@@ -129,6 +161,29 @@ header {
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
+  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Mover header a la derecha cuando hay modal activa o BottomSheet expandido en desktop */
+@media (min-width: 768px) {
+  /* NO mover el header cuando hay modal o BottomSheet */
+  /* Solo queremos mover los avatares para que se centren sobre el globo */
+  
+  /* Mover y centrar los avatares sobre el globo (350px a la derecha) */
+  body:has(.modal-overlay) .avatars-scroll-wrapper,
+  body:has(.bottom-sheet.solid) .avatars-scroll-wrapper {
+    transform: translateX(350px);
+    -webkit-transform: translateX(350px);
+    transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+  
+  /* Centrar los avatares en su contenedor */
+  body:has(.modal-overlay) .avatars-scroll-container,
+  body:has(.bottom-sheet.solid) .avatars-scroll-container {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
 }
 
 /* La apertura del panel se hace desde la barra de leyenda */
@@ -585,9 +640,10 @@ header {
 /* Bottom sheet estilo Google Maps */
 .bottom-sheet {
   position: fixed;
+  top: 0; /* Extender hasta arriba */
   left: 0;
   right: 0;
-  bottom: 0; /* Cambio: ahora va hasta el fondo para integrarse con el nav */
+  bottom: 0; /* Extender hasta abajo */
   max-height: 100vh; /* Prevenir que se expanda más allá del viewport */
   height: 100vh; /* Altura completa */
   -webkit-transform: translateY(100vh);
@@ -599,8 +655,8 @@ header {
   transition: transform 0ms linear;
   z-index: 20000; /* por encima de la barra inferior y cualquier overlay */
   color: #e5e7eb;
-  border-top-left-radius: 14px;
-  border-top-right-radius: 14px;
+  border-top-left-radius: 0; /* Sin redondeo arriba cuando está expandido */
+  border-top-right-radius: 0; /* Sin redondeo arriba cuando está expandido */
   -webkit-backdrop-filter: blur(0px);
   backdrop-filter: blur(0px);
   display: flex;
@@ -613,8 +669,28 @@ header {
   user-select: none; /* Evitar selección de texto al arrastrar */
   /* Padding inferior para el menú de navegación */
   padding-bottom: 60px;
-  padding-bottom: calc(60px + env(safe-area-inset-bottom));
-  overflow: hidden; /* Evitar scroll en el sheet principal, solo en contenedores internos */
+}
+
+/* Desktop: Alinear a la izquierda y limitar ancho del bottom-sheet */
+@media (min-width: 768px) {
+  .bottom-sheet {
+    left: 0;
+    right: auto;
+    width: 100%;
+    max-width: 700px;
+    transform: translateY(100vh);
+    -webkit-transform: translateY(100vh);
+    -moz-transform: translateY(100vh);
+    -ms-transform: translateY(100vh);
+    border-top-left-radius: 0;
+    border-top-right-radius: 1.25rem; /* Esquina superior derecha redondeada */
+  }
+  
+  .bottom-sheet.transitioning {
+    transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
+    -webkit-transition: -webkit-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), -webkit-backdrop-filter 450ms ease 150ms;
+    -moz-transition: -moz-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
+  }
 }
 
 /* Los hijos del bottom-sheet SÍ capturan eventos */
@@ -693,10 +769,10 @@ header {
 /* Scroll manejado por el navegador para poll-items */
 
 .bottom-sheet.solid {
-  background: #181a20;
-  border-top: 1px solid #23272f;
-  -webkit-backdrop-filter: blur(0px);
-  backdrop-filter: blur(0px);
+  background: rgba(24, 26, 32, 0.85); /* Semi-transparente con glass effect */
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   /* Asegurar que el scroll funciona cuando está expandido */
   overflow: hidden; /* Ocultar overflow del sheet, el scroll está en main-scroll-container */
 }
@@ -2854,6 +2930,16 @@ header {
   cursor: grabbing;
 }
 
+/* Limitar ancho del nav en desktop para alinearlo con las modales */
+@media (min-width: 768px) {
+  .nav-wrapper {
+    width: 100%; /* Mantener width 100% pero limitado por max-width */
+    max-width: 700px !important; /* Forzar el max-width */
+    margin-left: 0; /* Alinear a la izquierda */
+    margin-right: auto; /* Dejar espacio a la derecha */
+  }
+}
+
 /* Navegación minimalista */
 .nav-minimal {
   display: flex;
@@ -3373,9 +3459,11 @@ header {
 }
 
 .dropdown-options {
-  overflow-y: auto;
-  overflow-x: hidden;
-  max-height: 320px;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: none !important; /* Quitar max-height fijo */
+  flex: 1 !important; /* Ocupar TODO el espacio disponible del dropdown */
+  min-height: 0 !important; /* Permitir que se encoja */
   padding: 4px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -3441,42 +3529,72 @@ header {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
-  z-index: 100000;
+  z-index: 200000; /* MUY por encima del BottomSheet (20000) */
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Alinear al inicio en lugar del centro */
   justify-content: center;
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
-  overflow: hidden;
+  overflow-y: auto; /* Permitir scroll si es necesario */
+  padding: 80px 12px 120px; /* Más padding inferior en móvil */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* CSS ya no necesario - el nav se controla vía bind:hidden en Svelte */
+
+/* En desktop, menos padding inferior */
+@media (min-width: 768px) {
+  .global-dropdown-overlay {
+    padding: 70px 20px 70px;
+    align-items: center;
+  }
 }
 
 .global-dropdown {
-  min-width: 320px;
-  max-width: 90vw;
-  max-height: 70vh;
+  position: fixed !important; /* Posición fija FORZADA */
+  top: 80px !important; /* Desde arriba */
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  min-width: 300px;
+  max-width: 85vw;
+  width: calc(100% - 30px);
+  /* CRÍTICO: altura calculada para NUNCA tocar el nav */
+  height: calc(100vh - 80px - 140px) !important; /* viewport - top - espacio para nav */
+  max-height: 450px !important; /* Máximo absoluto */
   background: rgba(0, 0, 0, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-radius: 16px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
-  overflow: hidden;
+  overflow: hidden !important; /* NUNCA permitir overflow */
   display: flex;
   flex-direction: column;
   animation: dropdownFadeIn 0.2s ease-out;
   touch-action: auto;
   pointer-events: auto;
-  position: relative;
+  z-index: 200001 !important; /* Por encima de TODO */
+}
+
+/* En desktop, más espacio disponible */
+@media (min-width: 768px) {
+  .global-dropdown {
+    top: 80px !important;
+    height: auto !important;
+    max-height: 600px !important;
+    width: auto;
+    max-width: 500px;
+  }
 }
 
 @keyframes dropdownFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(-10px);
+    transform: translateX(-50%) scale(0.95) translateY(-10px);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateX(-50%) scale(1) translateY(0);
   }
 }
 

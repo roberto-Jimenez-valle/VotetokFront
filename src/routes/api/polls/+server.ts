@@ -149,10 +149,15 @@ export const GET: RequestHandler = async ({ url }) => {
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? '20')));
   const category = url.searchParams.get('category');
   const search = url.searchParams.get('search');
+  const userId = url.searchParams.get('userId');
 
   const where = {
     status: 'active',
+    // Excluir rells del listado general, a menos que se filtre por userId
+    // (en ese caso se incluyen los rells de ese usuario)
+    ...(!userId && { isRell: false }),
     ...(category && { category }),
+    ...(userId && { userId: Number(userId) }),
     ...(search && {
       OR: [
         { title: { contains: search } },
@@ -172,6 +177,29 @@ export const GET: RequestHandler = async ({ url }) => {
             displayName: true,
             avatarUrl: true,
             verified: true,
+          },
+        },
+        originalPoll: {
+          select: {
+            id: true,
+            title: true,
+            options: {
+              orderBy: { displayOrder: 'asc' },
+              include: {
+                createdBy: {
+                  select: {
+                    id: true,
+                    avatarUrl: true,
+                    displayName: true
+                  }
+                },
+                _count: {
+                  select: {
+                    votes: true
+                  }
+                }
+              }
+            }
           },
         },
         options: {
@@ -207,15 +235,25 @@ export const GET: RequestHandler = async ({ url }) => {
   ]);
 
   // Transformar datos: calcular voteCount para cada opción desde votos reales
-  const transformedPolls = polls.map(poll => ({
-    ...poll,
-    options: poll.options.map(option => ({
-      ...option,
-      voteCount: option._count.votes,
-      // Mantener avatarUrl del creador para compatibilidad con frontend
-      avatarUrl: option.createdBy?.avatarUrl || null
-    }))
-  }));
+  const transformedPolls = polls.map(poll => {
+    // Si es un rell sin opciones propias, usar las opciones del poll original
+    let pollOptions = poll.options;
+    
+    if (poll.isRell && poll.originalPoll && poll.options.length === 0 && poll.originalPoll.options) {
+      console.log('[API polls] ✅ Rell sin opciones, usando las del original. Rell ID:', poll.id, 'Original:', poll.originalPollId);
+      pollOptions = poll.originalPoll.options;
+    }
+    
+    return {
+      ...poll,
+      options: pollOptions.map((option: any) => ({
+        ...option,
+        voteCount: option._count?.votes || 0,
+        // Mantener avatarUrl del creador para compatibilidad con frontend
+        avatarUrl: option.createdBy?.avatarUrl || null
+      }))
+    };
+  });
 
   return json({
     data: transformedPolls,

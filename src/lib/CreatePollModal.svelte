@@ -1185,13 +1185,20 @@
     backdrop-filter: blur(8px);
   }
   
+  @media (min-width: 768px) {
+    .modal-overlay {
+      right: auto;
+      width: 700px;
+    }
+  }
+  
   .modal-container {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: #0a0a0a;
+    background: #181a20;
     z-index: 30001;
     display: flex;
     flex-direction: column;
@@ -1204,7 +1211,7 @@
     justify-content: space-between;
     padding: 1rem 1.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background: #0a0a0a;
+    background: #181a20;
     flex-shrink: 0;
   }
   
@@ -2341,12 +2348,11 @@
   /* Responsive */
   @media (min-width: 768px) {
     .modal-container {
-      left: 50%;
+      left: 0;
       right: auto;
-      transform: translateX(-50%);
       width: 100%;
-      max-width: 540px;
-      border-radius: 1.25rem 1.25rem 0 0;
+      max-width: 700px;
+      border-radius: 0 1.25rem 0 0;
       box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
     }
     

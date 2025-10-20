@@ -13,14 +13,23 @@
 	let hideNav = $state(false);
 	let currentAltitude = $state(0);
 	let bottomSheetVisible = $state(false);
+	let dropdownOpen = $state(false); // Track dropdown state
+	let forceHideNav = $state(false); // Forzar ocultación del nav
 	
 	// Estado de poll eliminado - ya no se necesita PollOptionsBar
 	let isCreatePollModalOpen = $state(false);
 	let buttonColors = $state<string[]>([]);
 	
+	// Referencia al componente GlobeGL
+	let globeGLComponent: any;
+	
 	function handleOpenCreatePoll(event: CustomEvent<{ colors: string[] }>) {
 		buttonColors = event.detail.colors;
 		isCreatePollModalOpen = true;
+	}
+	
+	function handleCloseCreatePoll() {
+		isCreatePollModalOpen = false;
 	}
 	
 	function handlePollCreated(event: CustomEvent<any>) {
@@ -32,17 +41,71 @@
 	
 	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {
 		const state = event.detail.state;
-				// Ocultar nav cuando está en peek, mostrar en otros estados
-		hideNav = state === 'peek';
+		console.log(`[+page] BottomSheet estado: ${state}, dropdownOpen: ${dropdownOpen}, forceHideNav: ${forceHideNav}`);
+		// Si forceHideNav está activo, no cambiar nada
+		if (forceHideNav) {
+			console.log(`[+page] forceHideNav activo, ignorando cambio de BottomSheet`);
+			return;
+		}
+		// Si el dropdown está abierto, no cambiar el estado del nav
+		if (!dropdownOpen) {
+			// Ocultar nav cuando está en peek, mostrar en otros estados
+			hideNav = state === 'peek';
+			console.log(`[+page] BottomSheet cambia hideNav a ${hideNav}`);
+		} else {
+			console.log(`[+page] Dropdown abierto, ignorando cambio de BottomSheet`);
+		}
 		// BottomSheet visible cuando NO está en estado "hidden"
 		bottomSheetVisible = state !== 'hidden';
-			}
+	}
 	
 	function handleAltitudeChange(event: CustomEvent<{ altitude: number }>) {
 		currentAltitude = event.detail.altitude;
 	}
 	
+	function handleDropdownStateChange(event: CustomEvent<{ open: boolean }>) {
+		console.log('[+page] 🎯 handleDropdownStateChange EJECUTADO:', event.detail);
+		// Actualizar estado del dropdown
+		dropdownOpen = event.detail.open;
+		forceHideNav = event.detail.open;
+		// Ocultar/mostrar nav según el estado del dropdown
+		hideNav = event.detail.open;
+		console.log(`[+page] ✅ Estado actualizado - dropdownOpen=${dropdownOpen}, forceHideNav=${forceHideNav}, hideNav=${hideNav}`);
+	}
+	
+	function handleOpenPollInGlobeFromHeader(event: CustomEvent<{ poll: any }>) {
+		const { poll } = event.detail;
+		console.log('[+page] 🌍 Abrir encuesta en globo desde header:', poll);
+		
+		// Llamar directamente a la función exportada de GlobeGL
+		if (globeGLComponent && globeGLComponent.openPollInGlobe) {
+			globeGLComponent.openPollInGlobe(poll);
+			console.log('[+page] ✅ Función openPollInGlobe llamada en GlobeGL');
+		} else {
+			console.error('[+page] ❌ globeGLComponent o su método openPollInGlobe no disponible');
+		}
+	}
+	
 	// handlePollSelected eliminado - ya no se necesita
+	
+	// Escuchar cambios en la variable global
+	$effect(() => {
+		const checkGlobalState = () => {
+			if (typeof window !== 'undefined') {
+				const globalState = (window as any).globalNavDropdownOpen;
+				if (globalState !== undefined && globalState !== forceHideNav) {
+					console.log(`[+page] 🌐 Variable global cambió a: ${globalState}`);
+					forceHideNav = globalState;
+					hideNav = globalState;
+					dropdownOpen = globalState;
+				}
+			}
+		};
+		
+		// Verificar cada 100ms (rápido pero no excesivo)
+		const interval = setInterval(checkGlobalState, 100);
+		return () => clearInterval(interval);
+	});
 
 </script>
 
@@ -50,13 +113,15 @@
 <div class="min-h-screen text-white font-sans">
 	<!-- Globo de fondo a pantalla completa -->
 	<GlobeGL 
+		bind:this={globeGLComponent}
 		on:sheetstatechange={handleSheetStateChange} 
 		on:altitudechange={handleAltitudeChange}
+		on:dropdownstatechange={handleDropdownStateChange}
 	/>
 
 	<!-- Contenido por encima del globo -->
 	<div class="relative">
-		<Header />
+		<Header on:openPollInGlobe={handleOpenPollInGlobeFromHeader} />
 		<div class="w-full flex flex-col">
 			
 		</div>
@@ -69,7 +134,12 @@
 
 		<!-- Barra inferior sobre el globo -->
 		<div class="relative ">
-			<NavBottom bind:hidden={hideNav} modalOpen={isCreatePollModalOpen} on:openCreatePoll={handleOpenCreatePoll} />
+			<NavBottom 
+				bind:hidden={hideNav} 
+				modalOpen={isCreatePollModalOpen} 
+				on:openCreatePoll={handleOpenCreatePoll}
+				on:closeCreatePoll={handleCloseCreatePoll}
+			/>
 		</div>
 		
 		<!-- Modal para crear encuestas -->

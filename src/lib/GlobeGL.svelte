@@ -142,6 +142,8 @@
   let showDropdown = false;
   let dropdownOptions: Array<{ id: string; name: string; iso?: string }> = [];
   let dropdownSearchQuery = '';
+  let originalSheetY: number | null = null; // Para guardar la posición original del sheet
+  let originalSheetState: SheetState | null = null; // Para guardar el estado original del sheet
   
   // Filtered dropdown options based on search
   $: filteredDropdownOptions = dropdownOptions.filter(option => 
@@ -2062,6 +2064,7 @@
   
   // Function to toggle dropdown and load options
   async function toggleDropdown(event?: Event) {
+    console.log('[toggleDropdown] INICIO - showDropdown:', showDropdown);
     if (event) {
       event.stopPropagation();
     }
@@ -2070,14 +2073,46 @@
     }
     
     if (showDropdown) {
+            console.log('[toggleDropdown] Cerrando dropdown...');
             showDropdown = false;
       dropdownOptions = [];
       dropdownSearchQuery = '';
+      
+      // Restaurar estado original del sheet
+      if (originalSheetState !== null && sheetCtrl) {
+        try {
+          sheetCtrl.setState(originalSheetState);
+          SHEET_STATE = originalSheetState;
+          originalSheetState = null;
+          originalSheetY = null;
+          console.log(`[toggleDropdown] BottomSheet restaurado a estado: ${originalSheetState}`);
+        } catch (e) {
+          console.warn('[toggleDropdown] Error restaurando estado del sheet:', e);
+        }
+      }
     } else {
+            console.log('[toggleDropdown] Abriendo dropdown...');
             showDropdown = true;
       dropdownSearchQuery = '';
       const options = await navigationManager!.getAvailableOptions();
       dropdownOptions = options;
+      console.log('[toggleDropdown] Opciones cargadas:', options.length);
+      
+      // Guardar estado actual y ocultar el BottomSheet para liberar espacio
+      // Hacerlo en nextTick para que el evento del dropdown se procese primero
+      setTimeout(() => {
+        if (sheetCtrl && SHEET_STATE !== 'hidden') {
+          try {
+            originalSheetState = SHEET_STATE;
+            originalSheetY = sheetY;
+            sheetCtrl.setState('hidden');
+            SHEET_STATE = 'hidden';
+            console.log(`[toggleDropdown] BottomSheet ocultado (era: ${originalSheetState})`);
+          } catch (e) {
+            console.warn('[toggleDropdown] Error ocultando sheet:', e);
+          }
+        }
+      }, 0);
                 }
   }
   
@@ -2090,6 +2125,21 @@
         showDropdown = false;
         dropdownOptions = [];
         dropdownSearchQuery = '';
+        
+        // Dispatch evento para mostrar el nav
+        dispatch('dropdownStateChange', { open: false });
+        
+        // Restaurar estado original del sheet
+        if (originalSheetState !== null && sheetCtrl) {
+          try {
+            sheetCtrl.setState(originalSheetState);
+            SHEET_STATE = originalSheetState;
+            originalSheetState = null;
+            originalSheetY = null;
+          } catch (e) {
+            console.warn('[handleClickOutside] Error restaurando estado del sheet:', e);
+          }
+        }
       }
     }
   }
@@ -2109,6 +2159,20 @@
     dropdownOptions = [];
     dropdownSearchQuery = '';
     
+    // Dispatch evento para mostrar el nav
+    dispatch('dropdownStateChange', { open: false });
+    
+    // Restaurar estado original del sheet
+    if (originalSheetState !== null && sheetCtrl) {
+      try {
+        sheetCtrl.setState(originalSheetState);
+        SHEET_STATE = originalSheetState;
+        originalSheetState = null;
+        originalSheetY = null;
+      } catch (e) {
+        console.warn('[selectDropdownOption] Error restaurando estado del sheet:', e);
+      }
+    }
     
     // Show bottom sheet
     setSheetState('collapsed');
@@ -3027,6 +3091,21 @@
   
   // NOTA: Votación se maneja completamente en BottomSheet.svelte
   // No hay funciones de voto aquí - solo visualización del globo
+  
+  // Función pública exportable para abrir una encuesta programáticamente
+  export function openPollInGlobe(poll: any, options?: Array<{ key: string; label: string; color: string; votes: number }>) {
+    console.log('[GlobeGL] 🌍 openPollInGlobe llamado directamente:', { poll, options });
+    const formattedOptions = options || poll.options?.map((opt: any) => ({
+      key: opt.key || opt.optionKey,
+      label: opt.label || opt.optionLabel,
+      color: opt.color || '#10b981',
+      votes: opt.votes || opt.voteCount || 0
+    })) || [];
+    
+    handleOpenPollInGlobe({
+      detail: { poll, options: formattedOptions }
+    } as CustomEvent);
+  }
   
   // Función para abrir una encuesta en el globo con sus opciones visualizadas
   async function handleOpenPollInGlobe(event: CustomEvent<{ poll: any; options: Array<{ key: string; label: string; color: string; votes: number }> }>) {
@@ -4517,6 +4596,9 @@
 
 </script>
 
+<!-- Fondo dinámico que cubre toda la pantalla con el color actual del tema -->
+<div class="dynamic-background" style="background-color: {bgColor};"></div>
+
 <GlobeCanvas
   bind:this={globe}
   {bgColor}
@@ -5412,7 +5494,7 @@
       {#if isLastItem && navigationManager!.getCurrentLevel() === 'world'}
         <!-- World level with dropdown to select countries -->
         <div class="breadcrumb-dropdown-wrapper">
-          <button on:click={toggleDropdown} 
+          <button on:click={(e) => { console.log('[BREADCRUMB] Click detectado!'); toggleDropdown(e); }} 
                   class="breadcrumb-item active dropdown-trigger">
             🌍 {item.name}
             <span style="margin-left: 6px; display: inline-block; transition: transform 0.2s; {showDropdown ? 'transform: rotate(180deg);' : ''}">
@@ -5585,6 +5667,21 @@
         showDropdown = false;
         dropdownOptions = [];
         dropdownSearchQuery = '';
+        
+        // Dispatch evento para mostrar el nav
+        dispatch('dropdownStateChange', { open: false });
+        
+        // Restaurar estado original del sheet
+        if (originalSheetState !== null && sheetCtrl) {
+          try {
+            sheetCtrl.setState(originalSheetState);
+            SHEET_STATE = originalSheetState;
+            originalSheetState = null;
+            originalSheetY = null;
+          } catch (e) {
+            console.warn('[Escape] Error restaurando estado del sheet:', e);
+          }
+        }
         return;
       }
       
@@ -5691,6 +5788,16 @@
   }}
   on:vote={(e) => {
       }}
+  on:polldropdownstatechange={(e) => {
+    console.log('[GlobeGL] Poll dropdown state change:', e.detail);
+    // Establecer variable global
+    if (typeof window !== 'undefined') {
+      (window as any).globalNavDropdownOpen = e.detail.open;
+      console.log(`[GlobeGL] 🔵 window.globalNavDropdownOpen = ${e.detail.open}`);
+    }
+    // También dispatch al padre
+    dispatch('dropdownstatechange', { open: e.detail.open });
+  }}
   on:openPollInGlobe={handleOpenPollInGlobe}
 />
 
@@ -5704,12 +5811,40 @@
       showDropdown = false;
       dropdownOptions = [];
       dropdownSearchQuery = '';
+      
+      
+      // Restaurar estado original del sheet
+      if (originalSheetState !== null && sheetCtrl) {
+        try {
+          sheetCtrl.setState(originalSheetState);
+          SHEET_STATE = originalSheetState;
+          originalSheetState = null;
+          originalSheetY = null;
+        } catch (e) {
+          console.warn('[Overlay click] Error restaurando estado del sheet:', e);
+        }
+      }
     }}
     on:keydown={(e) => {
       if (e.key === 'Escape' || e.key === 'Enter') {
         showDropdown = false;
         dropdownOptions = [];
         dropdownSearchQuery = '';
+        
+        // Dispatch evento para mostrar el nav
+        dispatch('dropdownStateChange', { open: false });
+        
+        // Restaurar estado original del sheet
+        if (originalSheetState !== null && sheetCtrl) {
+          try {
+            sheetCtrl.setState(originalSheetState);
+            SHEET_STATE = originalSheetState;
+            originalSheetState = null;
+            originalSheetY = null;
+          } catch (e) {
+            console.warn('[Overlay keydown] Error restaurando estado del sheet:', e);
+          }
+        }
       }
     }}
     on:touchstart|capture={(e) => {
