@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import '$lib/styles/trending-ranking.css';
+  import '$lib/styles/bottom-sheet.css'; // ✅ Ya está importado aquí globalmente
   import type { Poll } from './types';
   import { currentUser } from '$lib/stores';
   
@@ -933,10 +934,21 @@
   let scrollThreshold = 50; // Minimum scroll distance to trigger hide/show
   let scrollContainer: HTMLElement;
   
-  // Reset navbar visibility when state changes
-  $: if (state !== 'expanded') {
-    showNavBar = true;
-    lastScrollTop = 0;
+  // Control de visibilidad del nav según estado y desplegable
+  $: {
+    if (state === 'expanded') {
+      // Cuando está expandido, el nav sigue su lógica normal de scroll
+      // No forzar ningún valor aquí
+    } else if (showPollOptionsExpanded) {
+      // Si el desplegable está abierto y NO está expandido, ocultar nav
+      console.log('[BottomSheet] Ocultando nav - desplegable abierto');
+      showNavBar = false;
+    } else {
+      // Si el desplegable está cerrado y NO está expandido, mostrar nav
+      console.log('[BottomSheet] Mostrando nav - desplegable cerrado');
+      showNavBar = true;
+      lastScrollTop = 0;
+    }
   }
   
   // Search props
@@ -1716,19 +1728,25 @@
         const result = await response.json();
         console.log('[BottomSheet sendVote] ✅ Voto guardado exitosamente:', result);
         
-        // Actualizar contadores localmente (forzar reactividad)
-        if (poll.totalVotes !== undefined) {
-          poll.totalVotes++;
-          console.log('[BottomSheet sendVote] Contador actualizado:', poll.totalVotes);
-        }
-        if (option.votes !== undefined) {
-          option.votes++;
+        // Solo incrementar contador si es un voto NUEVO, no si es actualización
+        if (!result.isUpdate) {
+          if (poll.totalVotes !== undefined) {
+            poll.totalVotes++;
+            console.log('[BottomSheet sendVote] Contador incrementado (voto nuevo):', poll.totalVotes);
+          }
+          if (option.votes !== undefined) {
+            option.votes++;
+            console.log('[BottomSheet sendVote] Votos de opción incrementados:', option.votes);
+          }
+        } else {
+          console.log('[BottomSheet sendVote] ℹ️ Actualización de voto - contador no cambia');
         }
         
-        // Forzar actualización de la UI
-        additionalPolls = [...additionalPolls];
-        if (activePoll) {
+        // Forzar reactividad para encuesta activa vs. adicionales
+        if (poll === activePoll) {
           activePoll = { ...activePoll };
+        } else {
+          additionalPolls = [...additionalPolls];
         }
       } else {
         const error = await response.json();
@@ -1784,6 +1802,8 @@
   
   // Función para añadir nueva opción directamente (como CreatePollModal)
   async function addNewCollaborativeOption(pollId: string, previewColor?: string) {
+    console.log('[BottomSheet] addNewCollaborativeOption called:', { pollId, previewColor });
+    
     // Verificar si ya hay una opción pendiente de confirmar
     if (pendingCollaborativeOption[pollId]) {
       console.log('[BottomSheet] Ya hay una opción pendiente. Confírmala primero.');
@@ -1793,7 +1813,22 @@
     const poll = additionalPolls.find(p => p.id.toString() === pollId) || 
                  (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
     
-    if (!poll || poll.type !== 'collaborative' || poll.options.length >= 10) return;
+    if (!poll) {
+      console.error('[BottomSheet] Poll not found:', pollId);
+      return;
+    }
+    
+    if (poll.type !== 'collaborative') {
+      console.error('[BottomSheet] Poll is not collaborative:', poll.type);
+      return;
+    }
+    
+    if (poll.options.length >= 10) {
+      console.error('[BottomSheet] Poll already has max options:', poll.options.length);
+      return;
+    }
+    
+    console.log('[BottomSheet] All checks passed, creating new option...');
     
     // Generar un ID temporal único
     const tempId = `temp-${Date.now()}`;
@@ -1883,6 +1918,74 @@
       tempId,
       pendingState: pendingCollaborativeOption
     });
+  }
+  
+  // Función para publicar una nueva opción colaborativa desde SinglePollSection
+  async function handlePublishOption(pollId: string, optionKey: string, label: string, color: string) {
+    console.log('[BottomSheet] handlePublishOption called:', { pollId, optionKey, label, color });
+    
+    const poll = additionalPolls.find(p => p.id.toString() === pollId) || 
+                 (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
+    
+    if (!poll) {
+      console.error('[BottomSheet] Poll not found:', pollId);
+      return;
+    }
+    
+    const option = poll.options.find((o:any) => o.key === optionKey);
+    if (!option) {
+      console.error('[BottomSheet] Option not found:', optionKey, 'in poll:', pollId);
+      return;
+    }
+    
+    console.log('[BottomSheet] Found poll and option, proceeding to save...');
+    
+    try {
+      const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+      
+      const response = await fetch(`/api/polls/${numericPollId}/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: label,
+          color: color,
+          userId: $currentUser?.id || null
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Actualizar la opción temporal con los datos del servidor
+        option.id = result.data.id;
+        option.key = result.data.optionKey;
+        option.label = label;
+        option.color = color;
+        delete option.isEditing;
+        
+        // Actualizar la encuesta
+        if (poll.id === activePoll?.id) {
+          activePoll = { ...activePoll };
+        } else {
+          additionalPolls = [...additionalPolls];
+        }
+        
+        // Limpiar el estado de edición
+        delete pendingCollaborativeOption[pollId];
+        delete editingOptionColors[optionKey];
+        pendingCollaborativeOption = { ...pendingCollaborativeOption };
+        editingOptionColors = { ...editingOptionColors };
+        
+        console.log('[BottomSheet] Opción publicada exitosamente:', result.data);
+      } else {
+        const error = await response.json();
+        console.error('[BottomSheet] Error publicando opción:', error);
+        alert('Error al guardar la opción. Inténtalo de nuevo.');
+      }
+    } catch (error) {
+      console.error('[BottomSheet] Error de red:', error);
+      alert('Error de conexión. Inténtalo de nuevo.');
+    }
   }
   
   // Función para confirmar y guardar la nueva opción colaborativa
@@ -2100,27 +2203,64 @@
       showScrollToTop = scrollTop > 200;
       
       // Auto-hide navigation bar logic
-      const scrollDelta = scrollTop - lastScrollTop;
-      
-      if (Math.abs(scrollDelta) > scrollThreshold) {
-        if (scrollDelta > 0 && scrollTop > 100) {
-          // Scrolling down - hide nav bar
-          showNavBar = false;
-          lastScrollTop = scrollTop;
-        } else if (scrollDelta < -150) {
-          // Scrolling up significantly (150px) - show nav bar
+      // Solo aplicar esta lógica si el desplegable NO está abierto
+      if (!showPollOptionsExpanded) {
+        // Solo mostrar la barra cuando estés en la parte superior (scrollTop < 50px)
+        if (scrollTop < 50) {
+          // Estás en la parte superior - mostrar barra
           showNavBar = true;
-          lastScrollTop = scrollTop;
-        } else if (scrollDelta < 0) {
-          // Small scroll up - just update position without showing
-          lastScrollTop = scrollTop;
+        } else if (scrollTop > 100) {
+          // Has scrolleado hacia abajo - ocultar barra
+          showNavBar = false;
         }
       }
+      
+      lastScrollTop = scrollTop;
       
       // Si estamos a menos de 400px del final y no estamos cargando, cargar más
       if (scrollBottom < 400 && !isLoadingPolls && hasMorePolls) {
         loadAdditionalPolls(currentPollsPage + 1);
       }
+    }
+  }
+  
+  // Función para quitar voto (actualiza en BD)
+  async function clearUserVote(pollId: string) {
+    try {
+      const numericPollId = typeof pollId === 'string' ? parseInt(pollId) : pollId;
+      
+      const response = await fetch(`/api/polls/${numericPollId}/vote`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: $currentUser?.id || null
+        })
+      });
+      
+      if (response.ok) {
+        // Actualizar estado local
+        const { [pollId]: _, ...rest } = userVotes;
+        userVotes = { ...rest };
+        displayVotes = { ...rest };
+        
+        // Actualizar el contador de votos de la encuesta
+        if (activePoll && activePoll.id.toString() === pollId) {
+          activePoll.totalVotes = Math.max(0, (activePoll.totalVotes || 0) - 1);
+          activePoll = { ...activePoll };
+        }
+        
+        const pollToUpdate = additionalPolls.find(p => p.id.toString() === pollId);
+        if (pollToUpdate) {
+          pollToUpdate.totalVotes = Math.max(0, (pollToUpdate.totalVotes || 0) - 1);
+          additionalPolls = [...additionalPolls];
+        }
+        
+        console.log('[BottomSheet] Voto eliminado correctamente');
+      } else {
+        console.error('[BottomSheet] Error al eliminar voto');
+      }
+    } catch (error) {
+      console.error('[BottomSheet] Error de red al eliminar voto:', error);
     }
   }
   
@@ -2199,7 +2339,7 @@
           color: opt.color,
           votes: count,
           pct: pct,
-          displayText: count > 0 ? `${count} ${count === 1 ? 'región' : 'regiones'}` : '0 regiones',
+          displayText: count > 0 ? `${count} ${count === 1 ? 'voto' : 'votos'}` : '0 votos',
           pollData: (opt as any).pollData,
           avatarUrl: (opt as any).avatarUrl
         };
@@ -2260,7 +2400,7 @@
             ontouchstart={(e) => {
               const target = e.currentTarget as HTMLElement;
               optionsTouchStartY = e.touches[0].clientY;
-              optionsScrollTop = target.scrollTop;
+              optionsScrollTop = target.scrollLeft; // Cambio: scrollLeft en lugar de scrollTop
               isScrollingOptions = false;
               optionsTouchMoved = false;
               
@@ -2275,18 +2415,17 @@
               const target = e.currentTarget as HTMLElement;
               const currentY = e.touches[0].clientY;
               const deltaY = currentY - optionsTouchStartY;
-              const isAtTop = target.scrollTop <= 0;
               
               optionsTouchMoved = true;
               
-              // Lógica simplificada:
-              // 1. Si está en el top y swipe fuerte hacia arriba (>50px) → Colapsar opciones
-              // 2. Cualquier otro caso → Scroll interno (SIEMPRE detener propagación)
+              // Lógica simplificada para scroll horizontal:
+              // Swipe vertical hacia arriba (>50px) → Colapsar opciones
+              // El scroll horizontal se maneja automáticamente por el navegador
               
-              if (isAtTop && deltaY < -50) {
-                // En top, swipe fuerte hacia arriba → Colapsar opciones
+              if (deltaY < -50) {
+                // Swipe fuerte hacia arriba → Colapsar opciones
                 showPollOptionsExpanded = false;
-                              }
+              }
               
               // SIEMPRE detener propagación completamente - NO permitir arrastrar BottomSheet
               e.stopPropagation();
@@ -2302,7 +2441,7 @@
               e.stopImmediatePropagation();
             }}
           >
-            {#each optionsWithPct.sort((a, b) => b.pct - a.pct) as option}
+            {#each optionsWithPct.sort((a, b) => b.pct - a.pct) as option, index}
               <button 
                 class="poll-bar-option-item" 
                 class:is-trending-poll={!activePoll && option.pollData}
@@ -2313,58 +2452,55 @@
                     openTrendingPoll(option.pollData);
                   }
                 }}
+                style="border: 2px solid {option.color};"
               >
-                <div class="poll-bar-option-info">
-                  <!-- Avatar con borde de color que coincide con trending -->
+                <!-- Avatar en esquina superior derecha como badge -->
+                <div class="poll-bar-option-avatar-badge">
                   {#if !activePoll && option.pollData}
-                    <!-- Modo trending: mostrar avatar del creador de la encuesta con el color de la opción más votada -->
+                    <!-- Modo trending: avatar del creador -->
                     {#if option.pollData.user?.avatarUrl}
                       <img 
                         src={option.pollData.user.avatarUrl} 
                         alt={option.pollData.user.displayName || option.label} 
-                        class="poll-bar-option-avatar" 
-                        style="border: 3px solid {option.color};"
+                        class="poll-bar-option-avatar-small"
                       />
                     {:else if option.pollData.creator?.avatarUrl}
                       <img 
                         src={option.pollData.creator.avatarUrl} 
                         alt={option.pollData.creator.name || option.label} 
-                        class="poll-bar-option-avatar" 
-                        style="border: 3px solid {option.color};"
+                        class="poll-bar-option-avatar-small"
                       />
                     {:else}
-                      <div class="poll-bar-option-avatar-placeholder" style="background-color: {option.color}; border: 3px solid {option.color};">
+                      <div class="poll-bar-option-avatar-placeholder-small" style="background-color: {option.color};">
                         {option.label.charAt(0)}
                       </div>
                     {/if}
                   {:else}
-                    <!-- Modo encuesta específica: mostrar avatar de la opción -->
+                    <!-- Modo encuesta: avatar de la opción -->
                     {#if option.avatarUrl}
                       <img 
                         src={option.avatarUrl} 
                         alt={option.label} 
-                        class="poll-bar-option-avatar" 
-                        style="border: 3px solid {option.color};"
+                        class="poll-bar-option-avatar-small"
                       />
                     {:else}
-                      <div class="poll-bar-option-avatar-placeholder" style="background-color: {option.color}; border: 3px solid {option.color};">
+                      <div class="poll-bar-option-avatar-placeholder-small" style="background-color: {option.color};">
                         {option.label.charAt(0)}
                       </div>
                     {/if}
                   {/if}
-                  <span class="poll-bar-option-label">{option.label}</span>
-                  {#if !activePoll && option.pollData}
-                    <span class="poll-bar-option-hint">👁️ Ver</span>
-                  {/if}
                 </div>
-                <div class="poll-bar-option-stats">
-                  <div class="poll-bar-option-progress-bg">
-                    <div 
-                      class="poll-bar-option-progress-fill" 
-                      style="width: {option.pct}%; background-color: {option.color};"
-                    ></div>
+                
+                <div class="poll-bar-option-info">
+                  <span class="poll-bar-option-label">{option.label}</span>
+                </div>
+                
+                <!-- Barra de progreso abajo con votos al lado -->
+                <div class="poll-bar-option-progress-container">
+                  <div class="poll-bar-option-progress-bar">
+                    <div class="poll-bar-option-progress-fill" style="width: {option.pct}%; background-color: {option.color};"></div>
                   </div>
-                  <span class="poll-bar-option-pct">{option.pct.toFixed(1)}%</span>
+                  <span class="poll-bar-option-votes-count">{option.displayText || '0'}</span>
                 </div>
               </button>
             {/each}
@@ -2718,12 +2854,10 @@
             }
           }}
           on:clearVote={(e: any) => {
-            const pollId = e.detail.pollId;
-            const { [pollId]: _, ...rest } = userVotes;
-            userVotes = { ...rest };
-            displayVotes = { ...rest };
+            clearUserVote(e.detail.pollId);
           }}
           on:dragStart={(e: any) => handleDragStart(e.detail.event)}
+          on:publishOption={(e: any) => handlePublishOption(e.detail.pollId, e.detail.optionKey, e.detail.label, e.detail.color)}
         />
         
         <!-- Separador después de encuesta activa -->
@@ -2832,10 +2966,7 @@
           on:openInGlobe={(e) => openAdditionalPollInGlobe(e.detail.poll)}
           on:dragStart={(e) => handleDragStart(e.detail.event, e.detail.pollId)}
           on:clearVote={(e) => {
-            const pollId = e.detail.pollId;
-            const { [pollId]: _, ...rest } = userVotes;
-            userVotes = { ...rest };
-            displayVotes = { ...rest };
+            clearUserVote(e.detail.pollId);
           }}
           on:pageChange={(e) => {
             const pollId = e.detail.pollId;
@@ -2849,6 +2980,7 @@
               activeAccordionByPoll[pollId] = 0;
             }
           }}
+          on:publishOption={(e: any) => handlePublishOption(e.detail.pollId, e.detail.optionKey, e.detail.label, e.detail.color)}
         />
       {/each} 
 
@@ -3183,5 +3315,5 @@
   {/if}
 
   <style>
-    @import '$lib/styles/bottom-sheet.css';
+    /* Los estilos ya están importados globalmente en el <script> */
   </style>

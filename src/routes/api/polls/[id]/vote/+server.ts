@@ -157,3 +157,49 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     throw error(500, `Error al procesar el voto: ${err.message}`);
   }
 };
+
+export const DELETE: RequestHandler = async ({ params, request, getClientAddress }) => {
+  try {
+    console.log('[API Vote DELETE] 🗑️ Iniciando eliminación de voto');
+    
+    const { id } = params;
+    const body = await request.json();
+    const { userId } = body;
+    
+    const ipAddress = getClientAddress();
+    console.log('[API Vote DELETE] Buscando voto para pollId:', id, 'userId:', userId, 'IP:', ipAddress);
+    
+    // Buscar el voto existente
+    const existingVote = await prisma.vote.findFirst({
+      where: {
+        pollId: Number(id),
+        OR: [
+          userId ? { userId: Number(userId) } : { ipAddress },
+          { ipAddress },
+        ],
+      },
+    });
+    
+    if (!existingVote) {
+      console.log('[API Vote DELETE] ⚠️ No se encontró voto para eliminar');
+      throw error(404, 'No se encontró el voto');
+    }
+    
+    // Eliminar el voto
+    await prisma.vote.delete({
+      where: { id: existingVote.id },
+    });
+    
+    console.log('[API Vote DELETE] ✅ Voto eliminado correctamente:', existingVote.id);
+    
+    return json({ success: true, message: 'Voto eliminado correctamente' });
+  } catch (err: any) {
+    console.error('[API Vote DELETE] ❌ Error:', err);
+    
+    if (err.status) {
+      throw err;
+    }
+    
+    throw error(500, `Error al eliminar el voto: ${err.message}`);
+  }
+};

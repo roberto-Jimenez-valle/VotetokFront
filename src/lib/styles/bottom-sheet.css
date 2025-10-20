@@ -171,141 +171,6 @@
     color: #ffffff;
   }
   
-  .poll-bar-options-expanded {
-    margin-top: 12px;
-    padding: 0 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    animation: expandDown 0.3s ease;
-    max-height: 300px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    width: 100%;
-    /* CRÃTICO para mÃ³vil: permitir scroll vertical */
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-  }
-  
-  @keyframes expandDown {
-    from {
-      opacity: 0;
-      max-height: 0;
-    }
-    to {
-      opacity: 1;
-      max-height: 300px;
-    }
-  }
-  
-  .poll-bar-option-item {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 10px;
-    transition: background 0.2s ease, transform 0.2s ease;
-    width: 100%;
-    border: none;
-    text-align: left;
-    cursor: default;
-  }
-  
-  .poll-bar-option-item.is-trending-poll {
-    cursor: pointer;
-  }
-  
-  .poll-bar-option-item.is-trending-poll:hover {
-    background: rgba(255,255,255,0.15);
-    transform: translateX(2px);
-  }
-  
-  .poll-bar-option-item:hover {
-    background: rgba(255,255,255,0.12);
-  }
-  
-  .poll-bar-option-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-  }
-  
-  .poll-bar-option-hint {
-    margin-left: auto;
-    font-size: 11px;
-    color: rgba(255,255,255,0.6);
-    font-weight: 500;
-  }
-  
-  .poll-bar-option-avatar,
-  .poll-bar-option-avatar-placeholder {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    box-sizing: border-box; /* Para que el borde no agrande el avatar */
-  }
-  
-  .poll-bar-option-avatar-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 700;
-    font-size: 16px;
-    text-transform: uppercase;
-    box-sizing: border-box; /* Para que el borde no agrande el avatar */
-  }
-  
-  .poll-bar-option-label {
-    color: white;
-    font-size: 14px;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-  }
-  
-  .poll-bar-option-stats {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-    min-width: 0;
-    width: 100%;
-  }
-  
-  .poll-bar-option-progress-bg {
-    flex: 1;
-    height: 8px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 4px;
-    overflow: hidden;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
-  }
-  
-  .poll-bar-option-progress-fill {
-    height: 100%;
-    transition: width 0.5s ease;
-    border-radius: 4px;
-    box-shadow: 0 0 10px rgba(255,255,255,0.3);
-  }
-  
-  .poll-bar-option-pct {
-    color: #e5e7eb;
-    font-size: 13px;
-    font-weight: 700;
-    min-width: 50px;
-    text-align: right;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  }
-  
   /* Mensaje cuando no hay trending */
   .no-trending-message {
     display: flex;
@@ -874,6 +739,7 @@
     width: 100%;
     animation: slideInFromTop 0.3s ease;
     position: relative;
+    overflow: visible;
   }
 
   @keyframes slideInFromTop {
@@ -978,29 +844,36 @@
 
   .poll-bar-options-expanded {
     margin-top: 12px;
-    padding: 0 12px;
+    padding: 8px 12px 12px 16px;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    animation: expandDown 0.3s ease;
-    max-height: 300px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    flex-direction: row;
+    gap: 12px;
+    animation: expandSlide 0.3s ease;
+    max-height: 220px;
+    overflow-x: auto;
+    overflow-y: visible;
     width: 100%;
-    /* CRÍTICO para móvil: permitir scroll vertical */
-    touch-action: pan-y;
+    /* CRÍTICO para móvil: permitir scroll horizontal */
+    touch-action: pan-x;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    /* Ocultar scrollbar */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .poll-bar-options-expanded::-webkit-scrollbar {
+    display: none;
   }
 
-  @keyframes expandDown {
+  @keyframes expandSlide {
     from {
       opacity: 0;
-      max-height: 0;
+      transform: translateY(-10px);
     }
     to {
       opacity: 1;
-      max-height: 300px;
+      transform: translateY(0);
     }
   }
 
@@ -1008,14 +881,20 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 10px 12px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 10px;
-    transition: background 0.2s ease, transform 0.2s ease;
-    width: 100%;
-    border: none;
-    text-align: left;
+    padding: 28px 10px 10px 10px;
+    background: linear-gradient(145deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 130px;
+    max-width: 130px;
+    height: 90px;
     cursor: default;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: visible;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   }
 
   .poll-bar-option-item.is-trending-poll {
@@ -1023,36 +902,111 @@
   }
 
   .poll-bar-option-item.is-trending-poll:hover {
-    background: rgba(255,255,255,0.15);
-    transform: translateX(2px);
+    background: linear-gradient(145deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.12) 100%);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
   }
 
   .poll-bar-option-item:hover {
-    background: rgba(255,255,255,0.12);
+    background: linear-gradient(145deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.09) 100%);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
   }
 
   .poll-bar-option-info {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
     width: 100%;
+    flex: 1;
+    position: relative;
   }
 
-  .poll-bar-option-hint {
-    margin-left: auto;
-    font-size: 11px;
-    color: rgba(255,255,255,0.6);
-    font-weight: 500;
+  /* Avatar como badge en esquina superior izquierda (FUERA de la card) */
+  .poll-bar-option-avatar-badge {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    z-index: 20;
+  }
+  
+  .poll-bar-option-avatar-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 0, 0, 0.8);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4), 
+                0 0 0 2px rgba(255,255,255,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  
+  .poll-bar-option-avatar-placeholder-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.8);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4), 
+                0 0 0 2px rgba(255,255,255,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  
+  /* Barra de progreso abajo con votos */
+  .poll-bar-option-progress-container {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  
+  .poll-bar-option-progress-bar {
+    flex: 1;
+    height: 7px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+  }
+  
+  .poll-bar-option-progress-fill {
+    height: 100%;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 4px;
+    box-shadow: 0 0 8px currentColor;
+    opacity: 0.9;
+  }
+  
+  .poll-bar-option-votes-count {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    white-space: nowrap;
+    min-width: 40px;
+    text-align: right;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   }
 
+  .poll-bar-option-avatar-container {
+    position: relative;
+    flex-shrink: 0;
+  }
+  
   .poll-bar-option-avatar,
   .poll-bar-option-avatar-placeholder {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
     box-sizing: border-box;
   }
 
@@ -1062,53 +1016,29 @@
     justify-content: center;
     color: white;
     font-weight: 700;
-    font-size: 16px;
+    font-size: 15px;
     text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
   }
 
   .poll-bar-option-label {
     color: white;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.35;
+    max-width: 100%;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    padding: 0 4px;
   }
 
-  .poll-bar-option-stats {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-    min-width: 0;
-    width: 100%;
-  }
-
-  .poll-bar-option-progress-bg {
-    flex: 1;
-    height: 8px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 4px;
-    overflow: hidden;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
-  }
-
-  .poll-bar-option-progress-fill {
-    height: 100%;
-    transition: width 0.5s ease;
-    border-radius: 4px;
-    box-shadow: 0 0 10px rgba(255,255,255,0.3);
-  }
-
-  .poll-bar-option-pct {
-    color: #e5e7eb;
-    font-size: 13px;
-    font-weight: 700;
-    min-width: 50px;
-    text-align: right;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  }
 
   /* Botón confirmar votos múltiples */
   .confirm-multiple-votes-btn {

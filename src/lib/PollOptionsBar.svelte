@@ -19,29 +19,64 @@
   let { poll = null } = $props<{ poll: Poll | null }>();
   
   let expanded = $state(false);
+  
+  // Reset cuando poll cambia
+  $effect(() => {
+    if (!poll) {
+      expanded = false;
+      document.body.classList.remove('poll-options-open');
+    }
+  });
 
   function toggleExpanded() {
     expanded = !expanded;
+    console.log('[PollOptionsBar] Expanded:', expanded);
+    
+    // Ocultar BottomSheet solo cuando está expandido
+    if (expanded) {
+      document.body.classList.add('poll-options-open');
+      
+      // Forzar repaint en Chrome - técnica de scroll
+      setTimeout(() => {
+        const overlay = document.querySelector('.options-overlay') as HTMLElement;
+        if (overlay) {
+          // Forzar reflow con scroll
+          overlay.scrollTop = 0;
+          // Forzar otro reflow
+          void overlay.offsetHeight;
+        }
+      }, 0);
+    } else {
+      document.body.classList.remove('poll-options-open');
+    }
+  }
+
+  function handleBarClick(e: MouseEvent) {
+    e.stopPropagation();
+    toggleExpanded();
+  }
+
+  function handleOverlayClick(e: MouseEvent) {
+    e.stopPropagation();
+    toggleExpanded();
+  }
+
+  function handlePopupClick(e: MouseEvent) {
+    e.stopPropagation();
   }
   
   function addNewOption() {
-    console.log('Añadiendo nueva opción a la encuesta colaborativa');
-    // TODO: Implementar lógica para añadir nueva opción
-    // Esto podría emitir un evento o hacer una llamada API
+    console.log('Añadiendo nueva opción');
   }
   
-  // Debug: Log cuando cambia poll
-  $effect(() => {
-        if (poll) {
-                }
-  });
-
-  // Calcular porcentajes usando $derived
-  let totalVotes = $derived(poll?.options.reduce((sum: number, opt: PollOption) => sum + opt.votes, 0) || 0);
-  let optionsWithPct = $derived(poll?.options.map((opt: PollOption) => ({
-    ...opt,
-    pct: totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0
-  })) || []);
+  // Función pura para calcular porcentajes (sin reactividad)
+  function getOptionsWithPct(options: PollOption[]) {
+    const total = options.reduce((sum, opt) => sum + opt.votes, 0);
+    return options.map(opt => ({
+      ...opt,
+      pct: total > 0 ? (opt.votes / total) * 100 : 0
+    }));
+  }
 </script>
 
 {#if poll}
@@ -54,12 +89,12 @@
   <!-- Barra horizontal de colores -->
   <button 
     class="options-bar-container" 
-    onclick={toggleExpanded}
+    onclick={handleBarClick}
     aria-expanded={expanded}
     aria-label="Ver opciones de la encuesta"
   >
     <div class="options-bar">
-      {#each optionsWithPct as option}
+      {#each getOptionsWithPct(poll.options) as option (option.key)}
         <div 
           class="option-segment" 
           style="width: {option.pct}%; background-color: {option.color};"
@@ -72,50 +107,80 @@
     </div>
   </button>
 
-  <!-- Opciones expandidas -->
-  {#if expanded}
-  <div class="options-expanded-wrapper">
-    <div class="options-expanded-container">
-      <div class="options-expanded">
-        {#each optionsWithPct.sort((a: any, b: any) => b.pct - a.pct) as option}
-          <div class="option-item">
-            <div class="option-info">
-              {#if option.avatarUrl}
-                <img src={option.avatarUrl} alt={option.label} class="option-avatar" />
-              {:else}
-                <div class="option-avatar-placeholder" style="background-color: {option.color};">
-                  {option.label.charAt(0)}
-                </div>
-              {/if}
-              <span class="option-label">{option.label}</span>
-            </div>
-            <div class="option-stats">
-              <div class="option-bar-bg">
-                <div 
-                  class="option-bar-fill" 
-                  style="width: {option.pct}%; background-color: {option.color};"
-                ></div>
+</div>
+{/if}
+
+<!-- Overlay independiente para opciones expandidas (fuera del BottomSheet DOM) -->
+{#if poll && expanded}
+<div 
+  class="options-overlay" 
+  onclick={handleOverlayClick}
+  role="button"
+  tabindex="0"
+  onkeydown={(e) => { if (e.key === 'Escape') toggleExpanded(); }}
+  aria-label="Cerrar opciones"
+>
+  <div 
+    class="options-popup" 
+    onclick={handlePopupClick}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+  >
+    <div class="popup-header">
+      <h3 class="popup-title">{poll.title}</h3>
+      <button 
+        class="close-button" 
+        onclick={(e) => {
+          e.stopPropagation();
+          toggleExpanded();
+        }}
+        aria-label="Cerrar"
+      >
+        ✕
+      </button>
+    </div>
+    
+    <div class="options-list">
+      {#each getOptionsWithPct(poll.options).sort((a: any, b: any) => b.pct - a.pct) as option}
+        <div class="option-item">
+          <div class="option-info">
+            {#if option.avatarUrl}
+              <img src={option.avatarUrl} alt={option.label} class="option-avatar" />
+            {:else}
+              <div class="option-avatar-placeholder" style="background-color: {option.color};">
+                {option.label.charAt(0)}
               </div>
-              <span class="option-pct">{option.pct.toFixed(1)}%</span>
-            </div>
+            {/if}
+            <span class="option-label">{option.label}</span>
           </div>
-        {/each}
-      </div>
+          <div class="option-stats">
+            <div class="option-bar-bg">
+              <div 
+                class="option-bar-fill" 
+                style="width: {option.pct}%; background-color: {option.color};"
+              ></div>
+            </div>
+            <span class="option-pct">{option.pct.toFixed(1)}%</span>
+          </div>
+        </div>
+      {/each}
       
       <!-- Botón añadir opción (solo para encuestas colaborativas) -->
       {#if poll?.isCollaborative}
         <button
           type="button"
-          class="add-option-button-inline"
+          class="add-option-button"
           onclick={addNewOption}
           title="Añadir nueva opción"
         >
           <Plus class="w-5 h-5" />
+          <span>Añadir opción</span>
         </button>
       {/if}
     </div>
   </div>
-  {/if}
 </div>
 {/if}
 
@@ -125,25 +190,10 @@
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 45; /* Por encima del BottomSheet pero debajo del header */
-    background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.85) 100%);
-    backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(255,255,255,0.1);
+    z-index: 20050;
+    background: #000000;
+    border-top: 1px solid rgba(255,255,255,0.12);
     padding: 12px 16px;
-    animation: slideUp 0.3s ease;
-    transform: translateY(0);
-    transition: transform 0.3s ease;
-  }
-
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(100%);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 
   .poll-title-section {
@@ -168,6 +218,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    user-select: none;
   }
 
   .options-bar {
@@ -181,7 +232,7 @@
 
   .option-segment {
     height: 100%;
-    transition: opacity 0.2s ease;
+    flex-shrink: 0;
   }
 
   .options-bar-container:hover .option-segment {
@@ -194,38 +245,84 @@
     transition: transform 0.3s ease;
   }
 
-  .options-expanded-wrapper {
-    margin-top: 12px;
-    animation: expandDown 0.3s ease;
+  .options-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000000;
+    z-index: 9999;
+    display: flex;
+    align-items: flex-end;
+    /* Forzar repaint en Chrome con animación mínima */
+    animation: forceRepaint 0.01s;
   }
   
-  .options-expanded-container {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    margin: 0 -16px;
-    padding: 0.75rem 0;
-  }
-  
-  .options-expanded {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 0 16px;
-    overflow-y: auto;
-    max-height: 300px;
+  @keyframes forceRepaint {
+    from { opacity: 0.99; }
+    to { opacity: 1; }
   }
 
-  @keyframes expandDown {
-    from {
-      opacity: 0;
-      max-height: 0;
-    }
-    to {
-      opacity: 1;
-      max-height: 500px;
-    }
+  .options-popup {
+    width: 100%;
+    max-height: 70vh;
+    background: #1a1a1f;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    /* Forzar repaint */
+    animation: forceRepaint 0.01s;
+    /* Ayudar con painting en Chrome */
+    contain: paint;
+  }
+
+  .popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+
+  .popup-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+    flex: 1;
+    line-height: 1.3;
+  }
+
+  .close-button {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    border-radius: 50%;
+    color: rgba(255,255,255,0.7);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+
+  .close-button:hover {
+    background: rgba(255,255,255,0.15);
+    color: white;
+  }
+
+  .options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
   }
 
   .option-item {
@@ -233,9 +330,17 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 8px;
-    background: rgba(255,255,255,0.05);
+    padding: 12px;
+    background: #2d2e33;
+    border: 1px solid rgba(255,255,255,0.1);
     border-radius: 8px;
+    /* Forzar repaint de cada item */
+    animation: forceRepaint 0.01s;
+  }
+
+  .option-item:hover {
+    background: #34353a;
+    border-color: rgba(255,255,255,0.2);
   }
 
   .option-info {
@@ -297,35 +402,36 @@
     text-align: right;
   }
   
-  /* Botón añadir opción - exacto como CreatePollModal */
-  .add-option-button-inline {
-    flex-shrink: 0;
-    min-width: 50px;
-    width: 50px;
-    align-self: stretch;
-    background: rgba(255, 255, 255, 0.03);
-    border: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0 12px 12px 0;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 1.25rem;
-    font-weight: 300;
+  /* Botón añadir opción */
+  .add-option-button {
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px dashed rgba(59, 130, 246, 0.4);
+    border-radius: 12px;
+    color: rgba(59, 130, 246, 1);
+    font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 16px;
-    z-index: 0;
+    gap: 8px;
+    margin-top: 6px;
   }
   
-  .add-option-button-inline:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-left-color: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.7);
+  .add-option-button:hover {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.6);
+    transform: translateY(-1px);
   }
   
-  .add-option-button-inline:active {
-    transform: scale(0.95);
+  .add-option-button:active {
+    transform: scale(0.98);
+  }
+  /* Deshabilitar BottomSheet cuando el popup está abierto - usando clase global */
+  :global(body.poll-options-open .bottom-sheet) {
+    display: none !important;
   }
 </style>

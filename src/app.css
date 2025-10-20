@@ -148,18 +148,18 @@ html:not(.dark) .tabs-trigger svg {
 
 
 html.dark .logo-text {
-  color: #1a1a1a !important;
+  color: #ffffff !important;
 }
 
 html:not(.dark) .logo-text {
-  color: white !important;
-}
-
-html.dark .tabs-trigger {
   color: #1a1a1a !important;
 }
 
+html.dark .tabs-trigger {
+  color: #ffffff !important;
+}
+
 html:not(.dark) .tabs-trigger {
-  color: white !important;
+  color: #1a1a1a !important;
 }
 

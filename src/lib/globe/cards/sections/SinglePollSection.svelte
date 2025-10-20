@@ -34,6 +34,9 @@
   let pollGridRef: HTMLElement;
   let voteIconElement: HTMLElement | null = null;
   
+  // Trackear el texto de las opciones en edición para reactividad
+  let editingOptionLabels: Record<string, string> = {};
+  
   // Helper functions
   function normalizeTo100(values: number[]): number[] {
     const total = values.reduce((sum, v) => sum + v, 0);
@@ -142,6 +145,7 @@
   }
   
   function handleAddOption() {
+    console.log('[SinglePollSection] handleAddOption called:', { pollId: poll.id, previewColor });
     dispatch('addOption', { pollId: poll.id, previewColor });
   }
   
@@ -406,10 +410,11 @@
               <textarea
                 class="question-title editable new-option"
                 placeholder="Escribe tu opción..."
-                value={option.label || ''}
+                value={editingOptionLabels[option.key] || option.label || ''}
                 oninput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
                   option.label = target.value;
+                  editingOptionLabels = { ...editingOptionLabels, [option.key]: target.value };
                 }}
                 onclick={(e) => e.stopPropagation()}
                 maxlength="200"
@@ -448,13 +453,21 @@
               class="publish-option-btn-absolute"
               onclick={(e) => {
                 e.stopPropagation();
-                if (option.label && option.label.trim()) {
-                  dispatch('publishOption', { pollId: poll.id, optionKey: option.key, label: option.label.trim(), color: option.color });
+                const currentLabel = editingOptionLabels[option.key] || option.label || '';
+                if (currentLabel && currentLabel.trim()) {
+                  const pollIdStr = poll.id.toString();
+                  console.log('[SinglePollSection] Dispatching publishOption:', { 
+                    pollId: pollIdStr, 
+                    optionKey: option.key, 
+                    label: currentLabel.trim(), 
+                    color: option.color 
+                  });
+                  dispatch('publishOption', { pollId: pollIdStr, optionKey: option.key, label: currentLabel.trim(), color: option.color });
                 }
               }}
               title="Publicar opción"
               type="button"
-              disabled={!option.label || !option.label.trim()}
+              disabled={!editingOptionLabels[option.key] || !editingOptionLabels[option.key].trim()}
               aria-label="Publicar opción"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -506,223 +519,268 @@
     </div>
   </div>
   
-  <!-- Paginación y botón añadir - justo debajo de las cards -->
-  <div class="pagination-container">
-    {#if shouldPaginate}
-      <div class="pagination-dots">
-        {#each Array(paginatedPoll.totalPages) as _, pageIndex}
-          <button 
-            class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
-            onclick={() => handlePageChange(pageIndex)}
-            type="button"
-            aria-label="Página {pageIndex + 1}"
-          ></button>
-        {/each}
-      </div>
-    {/if}
-    
-    <!-- Botón añadir opción pequeño (visible siempre que no haya edición) -->
-    {#if poll.type === 'collaborative' && poll.options.length < 10 && !poll.options.some((opt: any) => opt.isEditing)}
+  <!-- Controles inferiores: izquierda (estadísticas), centro (paginación), derecha (acciones) -->
+  <div class="bottom-controls-container">
+    <!-- Lado izquierdo: Icono de estadísticas -->
+    <div class="bottom-controls-left">
       <button
+        class="stats-icon-btn"
         type="button"
-        class="add-option-button-bottom"
-        style="--preview-color: {previewColor}"
-        onclick={handleAddOption}
-        title="Añadir nueva opción"
-        aria-label="Añadir nueva opción"
+        title="Ver estadísticas"
+        aria-label="Ver estadísticas"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </button>
-    {/if}
-  </div>
-  
-  <!-- Botón confirmar votos múltiples - justo debajo de las cards -->
-  {#if poll.type === 'multiple'}
-    {@const selectedCount = multipleVotes[poll.id]?.length || 0}
-    <button
-      class="confirm-multiple-votes-btn {selectedCount > 0 ? 'has-selection' : ''} {isExpired ? 'disabled' : ''}"
-      onclick={handleConfirmMultiple}
-      disabled={selectedCount === 0 || isExpired}
-      type="button"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M20 6L9 17l-5-5"/>
-      </svg>
-      <span>
-        {#if selectedCount === 0}
-          Selecciona opciones
-        {:else}
-          Confirmar {selectedCount} {selectedCount === 1 ? 'voto' : 'votos'}
-        {/if}
-      </span>
-    </button>
-  {/if}
-  
-  <!-- Información de la encuesta (estadísticas y acciones) -->
-  <div class="vote-summary-info">
-    <div class="vote-stats">
-      <div class="stat-badge">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="20" x2="12" y2="10"></line>
           <line x1="18" y1="20" x2="18" y2="4"></line>
           <line x1="6" y1="20" x2="6" y2="16"></line>
         </svg>
-        <span>{formatNumber(poll.options.length)}</span>
-      </div>
-      <button 
-        bind:this={voteIconElement}
-        class="stat-badge action-vote {pollVotedOption ? 'has-voted' : 'no-vote'} {voteEffectActive && voteEffectPollId === poll.id ? 'vote-animate' : ''}" 
-        type="button" 
-        title={pollVotedOption ? `Tu voto: ${votedOptionData?.label || pollVotedOption}` : "Aún no has votado"}
-        style="{pollVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''} {voteEffectActive && voteEffectPollId === poll.id ? `--vote-x: ${voteClickX}px; --vote-y: ${voteClickY}px; --icon-x: ${voteIconX}px; --icon-y: ${voteIconY}px; --vote-color: ${voteEffectColor};` : ''}"
-        onclick={(e) => {
-          if (pollVotedOption) {
-            const { [poll.id]: _, ...rest } = userVotes;
-            dispatch('clearVote', { pollId: poll.id });
-          }
-        }}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill={pollVotedOption ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 11l3 3L22 4"></path>
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-        </svg>
-        <span>{formatNumber(poll.totalVotes)}</span>
       </button>
-      <div class="stat-badge">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-        <span>{formatNumber(poll.totalViews || 0)}</span>
-      </div>
     </div>
+    
+    <!-- Centro: Paginación -->
+    <div class="bottom-controls-center">
+      {#if shouldPaginate}
+        <div class="pagination-dots">
+          {#each Array(paginatedPoll.totalPages) as _, pageIndex}
+            <button 
+              class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
+              onclick={() => handlePageChange(pageIndex)}
+              type="button"
+              aria-label="Página {pageIndex + 1}"
+            ></button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+    
+    <!-- Lado derecho: Botones de acción -->
+    <div class="bottom-controls-right">
+      <!-- Botón confirmar votos múltiples -->
+      {#if poll.type === 'multiple'}
+        {@const selectedCount = multipleVotes[poll.id]?.length || 0}
+        {@const hasVoted = !!userVotes[poll.id]}
+        {@const hasNewSelections = selectedCount > 0}
+        {@const shouldActivate = hasNewSelections && (!hasVoted || selectedCount > 0)}
+        <button
+          class="confirm-multiple-btn-compact {shouldActivate ? 'has-selection' : ''} {hasVoted && !hasNewSelections ? 'voted-state' : ''} {isExpired ? 'disabled' : ''}"
+          onclick={handleConfirmMultiple}
+          disabled={selectedCount === 0 || isExpired}
+          type="button"
+          title="{selectedCount === 0 ? 'Selecciona opciones' : `Confirmar ${selectedCount} ${selectedCount === 1 ? 'voto' : 'votos'}`}"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          {#if selectedCount > 0}
+            <span class="count-badge">{selectedCount}</span>
+          {/if}
+        </button>
+      {/if}
+      
+      <!-- Botón añadir opción (colaborativas) -->
+      {#if poll.type === 'collaborative' && poll.options.length < 10 && !poll.options.some((opt: any) => opt.isEditing)}
+        <button
+          type="button"
+          class="add-option-button-bottom"
+          style="--preview-color: {previewColor}"
+          onclick={handleAddOption}
+          title="Añadir nueva opción"
+          aria-label="Añadir nueva opción"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      {/if}
+    </div>
+  </div>
+  
+  <!-- Botones de acción -->
+  <div class="vote-summary-info">
     <div class="vote-actions">
-      <button class="action-badge" type="button" title="Guardar">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span>{formatNumber(0)}</span>
-      </button>
-      <button class="action-badge" type="button" title="Republicar">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M17 1l4 4-4 4"/>
-          <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-          <path d="M7 23l-4-4 4-4"/>
-          <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-        </svg>
-        <span>{formatNumber(0)}</span>
-      </button>
-      <button class="action-badge action-share" type="button" title="Compartir">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <circle cx="18" cy="5" r="3"/>
-          <circle cx="6" cy="12" r="3"/>
-          <circle cx="18" cy="19" r="3"/>
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-        </svg>
-        <span>{formatNumber(0)}</span>
-      </button>
-      <button 
-        class="action-badge action-globe" 
-        type="button" 
-        title="Ver en el globo"
-        aria-label="Ver en el globo"
-        onclick={handleOpenInGlobe}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="2" y1="12" x2="22" y2="12"/>
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-        </svg>
-      </button>
+      <!-- Lado izquierdo: Votos, Vistas y Globo -->
+      <div class="action-group-left">
+        <button 
+          bind:this={voteIconElement}
+          class="action-badge action-vote {pollVotedOption ? 'has-voted' : 'no-vote'}" 
+          type="button" 
+          title={pollVotedOption ? `Tu voto: ${votedOptionData?.label || pollVotedOption} (Click para quitar)` : "Aún no has votado"}
+          style="{pollVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''}"
+          onclick={(e) => {
+            e.stopPropagation();
+            if (pollVotedOption) {
+              dispatch('clearVote', { pollId: poll.id });
+            }
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill={pollVotedOption ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          {#if pollVotedOption}
+            <span>{formatNumber(poll.totalVotes)}</span>
+          {:else}
+            <span style="opacity: 0;">-</span>
+          {/if}
+        </button>
+        <button class="action-badge" type="button" title="Vistas">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>{formatNumber(poll.totalViews || 0)}</span>
+        </button>
+        <button 
+          class="action-badge action-globe" 
+          type="button" 
+          title="Ver en el globo"
+          aria-label="Ver en el globo"
+          onclick={handleOpenInGlobe}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Lado derecho: Guardar, Republicar, Compartir -->
+      <div class="action-group-right">
+        <button class="action-badge" type="button" title="Guardar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>{formatNumber(0)}</span>
+        </button>
+        <button class="action-badge" type="button" title="Republicar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M17 1l4 4-4 4"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <path d="M7 23l-4-4 4-4"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+          <span>{formatNumber(0)}</span>
+        </button>
+        <button class="action-badge action-share" type="button" title="Compartir">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="18" cy="5" r="3"/>
+            <circle cx="6" cy="12" r="3"/>
+            <circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          <span>{formatNumber(0)}</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
 
 <style>
-  /* Botón confirmar votos múltiples - Diseño profesional */
-  .confirm-multiple-votes-btn {
-    width: calc(100% - 32px);
-    padding: 16px 24px;
-    margin: 16px 16px 12px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  /* Botón confirmar votos múltiples - Versión compacta */
+  .confirm-multiple-btn-compact {
+    width: 36px;
+    height: 36px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.12);
-    border-radius: 16px;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    cursor: not-allowed;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
     position: relative;
-    overflow: hidden;
-    text-transform: uppercase;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow: visible;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  .confirm-multiple-votes-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-    transition: left 0.6s ease;
-  }
-
-  .confirm-multiple-votes-btn.has-selection {
-    background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
-    border-color: rgba(255, 255, 255, 0.2);
+  .confirm-multiple-btn-compact.has-selection {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: rgba(255, 255, 255, 0.3);
     color: white;
-    cursor: pointer;
-    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4), 
-                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4), 
+                0 2px 8px rgba(16, 185, 129, 0.3);
   }
 
-  .confirm-multiple-votes-btn.has-selection:hover {
-    background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%);
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.5), 
-                0 0 0 1px rgba(255, 255, 255, 0.2) inset,
-                0 0 40px rgba(16, 185, 129, 0.3);
+  .confirm-multiple-btn-compact.has-selection:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.5);
   }
 
-  .confirm-multiple-votes-btn.has-selection:hover::before {
-    left: 100%;
+  .confirm-multiple-btn-compact.has-selection:active {
+    transform: scale(0.92);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   }
 
-  .confirm-multiple-votes-btn.has-selection:active {
-    transform: translateY(-1px) scale(0.98);
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
-  }
-
-  .confirm-multiple-votes-btn.disabled,
-  .confirm-multiple-votes-btn:disabled {
+  .confirm-multiple-btn-compact.disabled,
+  .confirm-multiple-btn-compact:disabled {
     opacity: 0.4;
     cursor: not-allowed;
     transform: none !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
 
-  .confirm-multiple-votes-btn svg {
+  .confirm-multiple-btn-compact svg {
     flex-shrink: 0;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
   }
-
-  .confirm-multiple-votes-btn span {
+  
+  .count-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
     font-weight: 700;
-    position: relative;
-    z-index: 1;
+    padding: 2px 5px;
+    border-radius: 10px;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Badge apagado cuando ya has votado */
+  .count-badge-voted {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: rgba(107, 114, 128, 0.4);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 10px;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Estado apagado cuando ya has votado */
+  .confirm-multiple-btn-compact.voted-state {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.4);
+    cursor: default;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .confirm-multiple-btn-compact.voted-state:hover {
+    background: rgba(255, 255, 255, 0.03);
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
   /* Paginación - Exacto como CreatePollModal */
@@ -731,7 +789,7 @@
     justify-content: center;
     align-items: center;
     gap: 8px;
-    padding: 12px 0 8px;
+    padding: 2px 0 0px;
     margin: 0;
   }
   
@@ -757,14 +815,64 @@
     border-radius: 4px;
   }
 
-  /* Contenedor de paginación con botón añadir */
-  .pagination-container {
+  /* Contenedor de controles inferiores */
+  .bottom-controls-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    margin: 0 16px;
+    gap: 8px;
+  }
+  
+  .bottom-controls-left,
+  .bottom-controls-right {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 36px;
+  }
+  
+  /* Botón de estadísticas */
+  .stats-icon-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 2px 0;
-    margin-top: -6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .stats-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    transform: scale(1.05);
+  }
+  
+  .stats-icon-btn:active {
+    transform: scale(0.95);
+  }
+  
+  .stats-icon-btn svg {
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  }
+  
+  .bottom-controls-center {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   /* Botón añadir opción pequeño debajo - estilo card con borde color */
@@ -785,17 +893,6 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
-  .add-option-button-bottom:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    filter: brightness(1.1);
-  }
-
-  .add-option-button-bottom:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  }
-
   /* Vote cards con background sólido */
   :global(.vote-card) {
     background: #2a2c31 !important;
@@ -811,7 +908,7 @@
     align-items: stretch;
     gap: 0;
     margin: 0 -1rem;
-    padding: 0.75rem 1rem;
+    padding: 0 1rem;
   }
 
   /* Botón añadir opción inline a la derecha - Efecto Glass */
@@ -995,9 +1092,8 @@
     flex: 1;
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    padding-left: 16px;
-    padding-bottom: 16px;
+    justify-content: center;
+    padding: 0 16px;
     background: transparent;
     position: relative;
     z-index: 0;
@@ -1132,4 +1228,120 @@
     height: 1.125rem;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
   }
+  
+  /* Contenedor de información de votos */
+  .vote-summary-info {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  /* Grupos de acciones */
+  .vote-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    margin: 0 16px 0;
+    gap: 8px;
+    width: calc(100% - 32px);
+  }
+  
+  .action-group-left,
+  .action-group-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  /* Botones de acción - estilo sutil sin bordes */
+  .action-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .action-badge:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+    transform: translateY(-1px);
+  }
+  
+  .action-badge:active {
+    transform: translateY(0);
+  }
+  
+  .action-badge svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+  }
+  
+  .action-badge:hover svg {
+    opacity: 1;
+  }
+  
+  .action-badge span {
+    font-weight: 500;
+    font-size: 12px;
+  }
+  
+  .action-globe {
+    color: rgba(59, 130, 246, 0.8);
+  }
+  
+  .action-globe:hover {
+    color: rgb(59, 130, 246);
+  }
+  
+  .action-share:hover {
+    color: rgba(16, 185, 129, 0.9);
+  }
+  
+  /* Reducir espaciado del header y meta */
+  .poll-header {
+    margin-bottom: 0;
+    padding-bottom: 4px;
+  }
+  
+  .poll-meta {
+    margin-top: 4px;
+    margin-bottom: 0;
+  }
+  
+  .header-with-avatar {
+    margin-bottom: 0;
+  }
+  
+  .poll-item {
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+  
+  /* Reducir padding de botones individuales */
+  .action-badge {
+    padding: 2px 4px !important;
+  }
+  
+  /* Botón de votos con estados */
+  .action-vote.has-voted {
+    color: var(--vote-color, #10b981);
+  }
+  
+  .action-vote.has-voted svg {
+    opacity: 1;
+  }
+  
+  .action-vote:hover {
+    color: rgba(16, 185, 129, 0.9);
+  }
+  
 </style>

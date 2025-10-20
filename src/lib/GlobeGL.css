@@ -601,8 +601,8 @@ header {
   color: #e5e7eb;
   border-top-left-radius: 14px;
   border-top-right-radius: 14px;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
   display: flex;
   flex-direction: column;
   pointer-events: none; /* NO capturar eventos, los hijos decidirán */
@@ -627,9 +627,9 @@ header {
 
 /* Transición suave solo cuando NO se está arrastrando */
 .bottom-sheet.transitioning {
-  -webkit-transition: -webkit-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
-  -moz-transition: -moz-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
-  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  -webkit-transition: -webkit-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), -webkit-backdrop-filter 450ms ease 150ms;
+  -moz-transition: -moz-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
+  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
 }
 
 /* Elementos interactivos dentro del sheet mantienen su cursor apropiado */
@@ -695,6 +695,8 @@ header {
 .bottom-sheet.solid {
   background: #181a20;
   border-top: 1px solid #23272f;
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
   /* Asegurar que el scroll funciona cuando está expandido */
   overflow: hidden; /* Ocultar overflow del sheet, el scroll está en main-scroll-container */
 }
@@ -705,6 +707,8 @@ header {
     rgba(0, 0, 0, 0.7) 100%
   );
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   /* Asegurar que el scroll funciona cuando está en peek/collapsed */
   overflow: hidden;
 }
@@ -2172,6 +2176,34 @@ header {
 
 .action-badge:hover svg {
   opacity: 0.8;
+}
+
+/* FIX CHROME MÓVIL: Ajustes para dispositivos táctiles */
+@media (hover: none) and (pointer: coarse) {
+  /* Mantener backdrop-filter solo para el bottom-sheet */
+  *:not(.bottom-sheet) {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  
+  /* Fondos sólidos de reemplazo para elementos que tenían blur */
+  .top-search-btn,
+  .nav-chip,
+  .action-btn,
+  :global(.vote-cluster) {
+    background: rgba(0, 0, 0, 0.9) !important;
+  }
+  
+  /* Mantener efecto glass en el bottom-sheet para móviles */
+  .bottom-sheet.glass {
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.45) 0%,
+      rgba(0, 0, 0, 0.7) 100%
+    ) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: blur(10px) !important;
+  }
 }
 
 /* Estilos para el botón de voto */
@@ -3964,6 +3996,7 @@ header {
 
 /* Contenedor principal con scroll que incluye TODO */
 .main-scroll-container {
+
   flex: 1;
   overflow-y: auto; /* Auto en lugar de scroll para mejorar compatibilidad */
   overflow-x: hidden;
@@ -3973,15 +4006,11 @@ header {
   /* Asegurar que el scroll funciona */
   position: relative;
   /* Altura calculada dinámicamente */
-  max-height: calc(100vh - 180px);
-  max-height: calc(var(--vh, 1vh) * 100 - 180px); /* Fix teclado móvil */
+  /*max-height: calc(100vh - 120px) !important;*/
+  max-height: calc(var(--vh, 1vh) * 100 - 120px) !important;  /* Fix teclado móvil */
   /* Padding para el contenido */
   padding: 0 0 20px 0;
-  /* Asegurar que el contenedor tiene altura */
-  min-height: 200px;
-  /* Asegurar que captura eventos */
   pointer-events: auto;
-  /* Asegurar que el scroll es visible */
   display: flex;
   flex-direction: column;
   gap: 0;

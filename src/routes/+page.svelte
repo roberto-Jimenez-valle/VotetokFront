@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Header from '$lib/header.svelte';
-	import PollOptionsBar from '$lib/PollOptionsBar.svelte';
 	// Usamos un componente dedicado GlobeGL basado en Globe.gl
 	import GlobeGL from '$lib/GlobeGL.svelte';
 	import NavBottom from '$lib/nav-bottom.svelte';
@@ -15,20 +14,7 @@
 	let currentAltitude = $state(0);
 	let bottomSheetVisible = $state(false);
 	
-	// Poll seleccionada para mostrar en la barra de opciones
-	type SelectedPoll = {
-		id: number;
-		title: string;
-		options: Array<{
-			key: string;
-			label: string;
-			color: string;
-			votes: number;
-			avatarUrl?: string;
-		}>;
-	} | null;
-	
-	let selectedPoll = $state<SelectedPoll>(null);
+	// Estado de poll eliminado - ya no se necesita PollOptionsBar
 	let isCreatePollModalOpen = $state(false);
 	let buttonColors = $state<string[]>([]);
 	
@@ -56,30 +42,7 @@
 		currentAltitude = event.detail.altitude;
 	}
 	
-	function handlePollSelected(event: CustomEvent<{ poll: any; options: any[] }>) {
-		const { poll, options } = event.detail;
-				
-		if (poll === null) {
-			// Vista global - ocultar barra
-						selectedPoll = null;
-		} else {
-			// Encuesta seleccionada - mostrar barra
-			const pollTitle = poll.title || poll.question || 'Encuesta';
-						
-			selectedPoll = {
-				id: typeof poll.id === 'string' ? parseInt(poll.id) : poll.id,
-				title: pollTitle,
-				options: options.map((opt: any) => ({
-					key: opt.key || opt.optionKey,
-					label: opt.label || opt.optionLabel || opt.key,
-					color: opt.color,
-					votes: opt.votes || opt.voteCount || 0,
-					avatarUrl: opt.avatarUrl
-				}))
-			};
-			
-					}
-	}
+	// handlePollSelected eliminado - ya no se necesita
 
 </script>
 
@@ -89,7 +52,6 @@
 	<GlobeGL 
 		on:sheetstatechange={handleSheetStateChange} 
 		on:altitudechange={handleAltitudeChange}
-		on:pollselected={handlePollSelected}
 	/>
 
 	<!-- Contenido por encima del globo -->
@@ -107,7 +69,7 @@
 
 		<!-- Barra inferior sobre el globo -->
 		<div class="relative ">
-			<NavBottom bind:hidden={hideNav} on:openCreatePoll={handleOpenCreatePoll} />
+			<NavBottom bind:hidden={hideNav} modalOpen={isCreatePollModalOpen} on:openCreatePoll={handleOpenCreatePoll} />
 		</div>
 		
 		<!-- Modal para crear encuestas -->
@@ -116,6 +78,8 @@
 			on:created={handlePollCreated}
 			buttonColors={buttonColors}
 		/>
+		
+		<!-- Barra de opciones eliminada: ya se muestra en BottomSheet -->
 	</div>
 
 

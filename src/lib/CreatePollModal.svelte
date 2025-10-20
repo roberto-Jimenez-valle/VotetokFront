@@ -116,7 +116,7 @@
   
   let errors: Record<string, string> = {};
   let isSubmitting = false;
-  let showTypeOptionsModal = false;
+  let showTypeOptionsModal = $state(false);
   let activeAccordionIndex: number | null = 0;
   let currentPage = 0;
   
@@ -130,10 +130,10 @@
   let optionInputs: Record<string, HTMLTextAreaElement> = {};
   
   // Estado del color picker
-  let colorPickerOpenFor: string | null = null;
-  let selectedHue = 0;
-  let selectedSaturation = 85;
-  let isDraggingColor = false;
+  let colorPickerOpenFor = $state<string | null>(null);
+  let selectedHue = $state(0);
+  let selectedSaturation = $state(85);
+  let isDraggingColor = $state(false);
   
   let selectedColor = $derived(`hsl(${selectedHue}, ${selectedSaturation}%, 55%)`);
   
@@ -444,6 +444,9 @@
   // Cerrar modal
   function close() {
     if (isSubmitting) return;
+    // Limpiar estados de modales secundarios
+    colorPickerOpenFor = null;
+    showTypeOptionsModal = false;
     isOpen = false;
   }
   
@@ -464,6 +467,9 @@
       { id: '2', label: '', color: COLORS[1] }
     ];
     errors = {};
+    // Limpiar estados de modales secundarios
+    colorPickerOpenFor = null;
+    showTypeOptionsModal = false;
   }
   
   // Cerrar al presionar Escape
@@ -475,9 +481,9 @@
   
   // Funciones para manejo de swipe táctil
   function handleTouchStart(e: TouchEvent) {
-    // No procesar si el touch empieza en un textarea o input
+    // No procesar si el touch empieza en un textarea, input o botón
     const target = e.target as HTMLElement;
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) {
       isDragging = false;
       return;
     }
@@ -490,9 +496,9 @@
   function handleTouchMove(e: TouchEvent) {
     if (!gridRef) return;
     
-    // No procesar si el touch está en un textarea o input
+    // No procesar si el touch está en un textarea, input o botón
     const target = e.target as HTMLElement;
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) {
       return;
     }
     
@@ -590,6 +596,22 @@
   function handleTouchEnd() {
     isDragging = false;
   }
+  
+  // Swipe handlers para cerrar modales secundarios
+  let modalTouchStartY = 0;
+  
+  function handleModalSwipeStart(e: TouchEvent) {
+    modalTouchStartY = e.touches[0].clientY;
+  }
+  
+  function handleModalSwipeMove(e: TouchEvent, closeCallback: () => void) {
+    const deltaY = e.touches[0].clientY - modalTouchStartY;
+    
+    // Swipe hacia abajo > 100px para cerrar
+    if (deltaY > 100) {
+      closeCallback();
+    }
+  }
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -610,6 +632,8 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="modal-title"
+    ontouchstart={handleModalSwipeStart}
+    ontouchmove={(e) => handleModalSwipeMove(e, close)}
   >
     <!-- Header -->
     <div class="modal-header">
@@ -728,7 +752,6 @@
                   onclick={(e) => {
                     e.stopPropagation();
                     colorPickerOpenFor = option.id;
-                    console.log('Color picker opened for:', option.id);
                   }}
                   title="Cambiar color"
                   aria-label="Cambiar color"
@@ -809,8 +832,6 @@
                 class:active={pollType === type.id}
                 onclick={() => {
                   pollType = type.id;
-                  console.log('Poll type changed to:', type.id);
-                  // Mostrar modal de opciones para todos los tipos
                   showTypeOptionsModal = true;
                 }}
                 aria-label="Seleccionar tipo de encuesta: {type.label}"
@@ -862,10 +883,12 @@
     class="color-picker-overlay" 
     onclick={() => colorPickerOpenFor = null}
     onkeydown={(e) => { if (e.key === 'Escape') colorPickerOpenFor = null; }}
+    ontouchstart={handleModalSwipeStart}
+    ontouchmove={(e) => handleModalSwipeMove(e, () => colorPickerOpenFor = null)}
     role="button"
     tabindex="0"
     aria-label="Cerrar selector de color"
-    style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100000; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);"
+    style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 150000; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);"
   >
     <div 
       class="color-picker-modal" 
@@ -1014,6 +1037,8 @@
     transition:fly={{ y: '100%', duration: 300 }}
     role="dialog"
     aria-modal="true"
+    ontouchstart={handleModalSwipeStart}
+    ontouchmove={(e) => handleModalSwipeMove(e, () => showTypeOptionsModal = false)}
   >
     <div class="sheet-handle"></div>
     
@@ -1156,7 +1181,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
-    z-index: 50000;
+    z-index: 30000;
     backdrop-filter: blur(8px);
   }
   
@@ -1167,11 +1192,10 @@
     right: 0;
     bottom: 0;
     background: #0a0a0a;
-    z-index: 50001;
+    z-index: 30001;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    touch-action: pan-y;
   }
   
   .modal-header {
@@ -1733,7 +1757,7 @@
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
-    z-index: 100000;
+    z-index: 150000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1986,7 +2010,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
-    z-index: 60000;
+    z-index: 70000;
     backdrop-filter: blur(8px);
   }
   
@@ -1997,7 +2021,7 @@
     right: 0;
     background: #0a0a0a;
     border-radius: 16px 16px 0 0;
-    z-index: 60001;
+    z-index: 70001;
     max-height: 70vh;
     display: flex;
     flex-direction: column;

@@ -143,8 +143,8 @@
 
 {#if showSplash}
 <div class="splash-screen">
-	<!-- Logo VoteTok -->
-	<div class="logo-text">VoteTok</div>
+	<!-- Logo VouTop -->
+	<div class="logo-text">VouTop</div>
 </div>
 {/if}
 
@@ -171,7 +171,7 @@
 		animation: fadeOut 1s ease 1.5s forwards;
 	}
 	
-	/* Logo VoteTok */
+	/* Logo VouTop */
 	.logo-text {
 		font-size: 32px;
 		font-weight: 700;

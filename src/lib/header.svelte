@@ -61,7 +61,7 @@
 				<h1 
 					class="logo-text text-xl sm:text-3xl font-extrabold tracking-tight"
 					style="color: var(--logo-color, white);"
-				>VoteTok</h1>
+				>VouTop</h1>
 				<div id="theme-toggle-slot"></div>
 			</div>
 		</div>
