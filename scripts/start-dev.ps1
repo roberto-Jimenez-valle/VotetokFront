@@ -46,7 +46,12 @@ npx prisma generate 2>$null | Out-Null
 Write-Host ""
 Write-Host "Iniciando servicios..." -ForegroundColor Cyan
 Write-Host "   - Web App:       http://localhost:$WEB_PORT" -ForegroundColor Green
+Write-Host "   - API Docs:      http://localhost:$WEB_PORT/api-docs" -ForegroundColor Magenta
 Write-Host "   - Prisma Studio: http://localhost:$DB_PORT" -ForegroundColor Green
+Write-Host ""
+Write-Host "Se abriran automaticamente:" -ForegroundColor Yellow
+Write-Host "   1. Swagger UI (Documentacion API)" -ForegroundColor Cyan
+Write-Host "   2. Prisma Studio (Base de Datos)" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Presiona Ctrl+C para detener todos los servicios" -ForegroundColor Gray
 Write-Host ""
@@ -61,10 +66,49 @@ $studioJob = Start-Job -ScriptBlock {
 # Esperar un momento para que Prisma Studio inicie
 Start-Sleep -Seconds 2
 
+# Función para abrir el navegador cuando el servidor esté listo
+$browserJob = Start-Job -ScriptBlock {
+    param($webPort, $dbPort)
+    
+    # Esperar a que el servidor web esté listo
+    $maxAttempts = 30
+    $attempt = 0
+    $serverReady = $false
+    
+    while ($attempt -lt $maxAttempts -and -not $serverReady) {
+        try {
+            $response = Invoke-WebRequest -Uri "http://localhost:$webPort" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
+            if ($response.StatusCode -eq 200) {
+                $serverReady = $true
+            }
+        } catch {
+            # Servidor aún no está listo
+        }
+        
+        if (-not $serverReady) {
+            Start-Sleep -Seconds 1
+            $attempt++
+        }
+    }
+    
+    if ($serverReady) {
+        # Servidor listo, abrir Swagger UI
+        Start-Sleep -Seconds 1
+        Start-Process "http://localhost:$webPort/api-docs"
+        
+        # Esperar medio segundo y abrir Prisma Studio
+        Start-Sleep -Milliseconds 500
+        Start-Process "http://localhost:$dbPort"
+    }
+} -ArgumentList $WEB_PORT, $DB_PORT
+
 # Iniciar Vite Dev (esto bloqueara hasta que se presione Ctrl+C)
 try {
     npm run dev
 } finally {
+    # Detener el job del navegador
+    Stop-Job -Job $browserJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $browserJob -ErrorAction SilentlyContinue
     # Cuando se presiona Ctrl+C, detener Prisma Studio
     Write-Host ""
     Write-Host "Deteniendo servicios..." -ForegroundColor Yellow

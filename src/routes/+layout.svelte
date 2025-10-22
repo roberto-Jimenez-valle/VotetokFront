@@ -102,26 +102,14 @@
 			showSplash = false;
 		}
 		
-		// Prevenir scroll en toda la página excepto en áreas permitidas
-		const preventScroll = (e: TouchEvent) => {
-			if (showSplash) return; // Permitir scroll en splash
-			
-			const target = e.target as HTMLElement;
-			const isScrollable = target.closest('.sheet-content, .vote-cards-grid, .nav-minimal, .avatars-scroll-container, .avatars-scroll-wrapper');
-			
-			if (!isScrollable) {
-				e.preventDefault();
-			}
-		};
-
-		// Prevenir zoom con pinch
+		// DESHABILITADO: Este código estaba bloqueando el scroll vertical
+		// Prevenir zoom con pinch (mantener solo esto)
 		const preventZoom = (e: TouchEvent) => {
 			if (e.touches.length > 1) {
 				e.preventDefault();
 			}
 		};
 
-		document.addEventListener('touchmove', preventScroll, { passive: false });
 		document.addEventListener('touchstart', preventZoom, { passive: false });
 		
 		// Prevenir double-tap zoom
@@ -135,7 +123,6 @@
 		}, false);
 
 		return () => {
-			document.removeEventListener('touchmove', preventScroll);
 			document.removeEventListener('touchstart', preventZoom);
 		};
 	});
@@ -143,8 +130,16 @@
 
 {#if showSplash}
 <div class="splash-screen">
-	<!-- Logo VouTop -->
-	<div class="logo-text">VouTop</div>
+	<div class="splash-content">
+		<!-- Logo VouTop -->
+		<div class="logo-text">VouTop</div>
+		<!-- Imagen debajo del logo -->
+		<img 
+			src="/textures/image.png" 
+			alt="VouTop" 
+			class="splash-image"
+		/>
+	</div>
 </div>
 {/if}
 
@@ -171,6 +166,13 @@
 		animation: fadeOut 1s ease 1.5s forwards;
 	}
 	
+	.splash-content {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 16px;
+	}
+	
 	/* Logo VouTop */
 	.logo-text {
 		font-size: 32px;
@@ -178,6 +180,15 @@
 		color: #c9d1d9;
 		letter-spacing: 1px;
 		animation: fadeInUp 1s ease-out;
+	}
+	
+	/* Imagen del splash */
+	.splash-image {
+		max-width: 400px;
+		width: 90%;
+		height: auto;
+		object-fit: contain;
+		animation: fadeInUp 1s ease-out 0.2s backwards;
 	}
 	
 	/* Animaciones */

@@ -95,12 +95,17 @@
   });
   
   onDestroy(() => {
-    // Limpiar listeners si quedan activos
-    if (typeof document !== 'undefined' && currentDragGrid) {
+    // Limpiar listeners SIEMPRE, no solo si hay currentDragGrid
+    if (typeof document !== 'undefined') {
       document.removeEventListener('pointermove', handleCardDragMove as EventListener);
       document.removeEventListener('pointerup', handleCardDragEnd);
       document.removeEventListener('touchmove', handleCardDragMove as EventListener);
       document.removeEventListener('touchend', handleCardDragEnd);
+      
+      // Limpiar estado
+      currentDragGrid = null;
+      isDragging = false;
+      currentDragPollId = null;
     }
   });
 
@@ -128,6 +133,7 @@
           id: poll.id?.toString() || poll.id,
           question: poll.title || poll.question,
           region: 'Global',
+          type: poll.type || 'single', // Preservar tipo de encuesta
           options: (poll.options || []).map((opt: any) => ({
             ...opt,
             key: opt.optionKey || opt.key,
@@ -140,6 +146,7 @@
         }));
         
         console.log('[Header] Transformed polls:', transformedPolls);
+        console.log('[Header] Poll types:', transformedPolls.map((p: any) => ({ id: p.id, type: p.type, question: p.question })));
         userPolls = transformedPolls;
         
         // Inicializar todos los polls como expandidos para permitir votación directa
@@ -164,6 +171,18 @@
   }
 
   function closeModal() {
+    // Limpiar event listeners cuando se cierra el modal
+    document.removeEventListener('pointermove', handleCardDragMove as EventListener);
+    document.removeEventListener('pointerup', handleCardDragEnd);
+    document.removeEventListener('touchmove', handleCardDragMove as EventListener);
+    document.removeEventListener('touchend', handleCardDragEnd);
+    
+    // Limpiar estado de drag
+    currentDragGrid = null;
+    isDragging = false;
+    currentDragPollId = null;
+    
+    // Limpiar datos del modal
     selectedUser = null;
     userPolls = [];
     currentPollIndex = 0;
@@ -247,10 +266,22 @@
     currentDragGrid = grid;
     currentDragPollId = pollId || null;
     
-    // Agregar listeners globales solo cuando inicia un drag
-    document.addEventListener('pointermove', handleCardDragMove as EventListener);
+    // Solo agregar listeners si el drag inició en una vote-card
+    const startTarget = event.target as HTMLElement;
+    if (!startTarget.closest('.vote-card')) {
+      return; // No capturar eventos si no es en una tarjeta
+    }
+    
+    // PRIMERO remover listeners existentes para evitar duplicados
+    document.removeEventListener('pointermove', handleCardDragMove as EventListener);
+    document.removeEventListener('pointerup', handleCardDragEnd);
+    document.removeEventListener('touchmove', handleCardDragMove as EventListener);
+    document.removeEventListener('touchend', handleCardDragEnd);
+    
+    // LUEGO agregar listeners globales
+    document.addEventListener('pointermove', handleCardDragMove as EventListener, { passive: true });
     document.addEventListener('pointerup', handleCardDragEnd);
-    document.addEventListener('touchmove', handleCardDragMove as EventListener, { passive: false });
+    document.addEventListener('touchmove', handleCardDragMove as EventListener, { passive: true });
     document.addEventListener('touchend', handleCardDragEnd);
   }
   
@@ -272,9 +303,7 @@
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20) {
         isDragging = true;
         
-        if (!currentDragGrid.classList.contains('dense')) {
-          e.preventDefault();
-        }
+        // NO usar preventDefault, confiar en touch-action CSS
         
         let currentIndex = activeAccordions[currentDragPollId || ''] ?? null;
         const cards = currentDragGrid.querySelectorAll('.vote-card');
@@ -473,10 +502,188 @@
     activeAccordions[pollId] = index;
   }
   
+  async function sendVoteToServer(pollId: string, optionKey: string) {
+    console.log('[Header sendVote] 🎯 Enviando voto:', { pollId, optionKey });
+    
+    // Buscar la encuesta
+    const poll = userPolls.find(p => p.id == pollId);
+    if (!poll) {
+      console.error('[Header sendVote] ❌ Encuesta no encontrada');
+      return;
+    }
+    
+    // Buscar la opción
+    const option = poll.options?.find((o: any) => o.key === optionKey);
+    if (!option) {
+      console.error('[Header sendVote] ❌ Opción no encontrada');
+      return;
+    }
+    
+    // Obtener IDs numéricos
+    console.log('[Header sendVote] 🔍 Opción completa:', option);
+    console.log('[Header sendVote] 🔍 Campos disponibles:', Object.keys(option));
+    
+    const rawOptionId = option.id || option.optionId;
+    if (!rawOptionId && rawOptionId !== 0) {
+      console.error('[Header sendVote] ❌ Opción sin ID');
+      console.error('[Header sendVote] option.id:', option.id);
+      console.error('[Header sendVote] option.optionId:', option.optionId);
+      console.error('[Header sendVote] option completa:', JSON.stringify(option, null, 2));
+      return;
+    }
+    
+    const optionId = typeof rawOptionId === 'string' ? parseInt(rawOptionId) : rawOptionId;
+    const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+    
+    console.log('[Header sendVote] 📤 IDs a enviar:', {
+      optionId,
+      optionIdType: typeof optionId,
+      pollId: numericPollId,
+      pollIdType: typeof numericPollId
+    });
+    
+    console.log('[Header sendVote] 🔍 DEBUG - Poll completo:', JSON.stringify(poll, null, 2));
+    console.log('[Header sendVote] 🔍 DEBUG - Opción completa:', JSON.stringify(option, null, 2));
+    console.log('[Header sendVote] 🔍 DEBUG - Todas las opciones del poll:', JSON.stringify(poll.options, null, 2));
+    
+    try {
+      // Sistema híbrido de geolocalización
+      let latitude = 40.4168;  // Madrid por defecto
+      let longitude = -3.7038;
+      let subdivisionId: number | null = null;
+      
+      // PASO 1: Intentar GPS
+      try {
+        if (navigator.geolocation) {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 5000,
+              maximumAge: 300000,
+              enableHighAccuracy: true
+            });
+          });
+          latitude = position.coords.latitude;
+          longitude = position.coords.longitude;
+          console.log('[Header sendVote] 📍 GPS obtenido:', { latitude, longitude });
+        }
+      } catch (gpsError) {
+        console.warn('[Header sendVote] ⚠️ GPS no disponible');
+        
+        // PASO 2: Fallback a IP Geolocation
+        try {
+          const ipResponse = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3000) });
+          if (ipResponse.ok) {
+            const ipData = await ipResponse.json();
+            if (ipData.latitude && ipData.longitude) {
+              latitude = ipData.latitude;
+              longitude = ipData.longitude;
+              console.log('[Header sendVote] ✅ IP Geolocation:', { latitude, longitude });
+            }
+          }
+        } catch (ipError) {
+          console.log('[Header sendVote] 📍 Usando Madrid por defecto');
+        }
+      }
+      
+      // PASO 3: Geocodificar a subdivisión
+      try {
+        const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
+        if (geocodeResponse.ok) {
+          const geocodeData = await geocodeResponse.json();
+          if (geocodeData.found && geocodeData.subdivisionId) {
+            subdivisionId = geocodeData.subdivisionId;
+            console.log('[Header sendVote] 🌍 Subdivisión:', geocodeData.name);
+          }
+        }
+      } catch (geocodeError) {
+        console.warn('[Header sendVote] ⚠️ Geocoding falló');
+      }
+      
+      // Si no hay subdivisionId, se enviará como null (ubicación sin identificar)
+      if (!subdivisionId) {
+        console.warn('[Header sendVote] ⚠️ subdivisionId es null - voto sin ubicación identificada');
+      }
+      
+      const votePayload = {
+        optionId,
+        userId: $currentUser?.id || null,
+        latitude,
+        longitude,
+        subdivisionId
+      };
+      
+      console.log('[Header sendVote] 📤 Payload completo a enviar:', JSON.stringify(votePayload, null, 2));
+      console.log('[Header sendVote] 📤 URL:', `/api/polls/${numericPollId}/vote`);
+      
+      const response = await fetch(`/api/polls/${numericPollId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(votePayload)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[Header sendVote] ✅ Voto guardado:', result);
+        
+        // Actualizar contadores si es voto nuevo
+        if (!result.isUpdate) {
+          if (poll.totalVotes !== undefined) poll.totalVotes++;
+          if (option.votes !== undefined) option.votes++;
+        }
+      } else {
+        const error = await response.json();
+        console.error('[Header sendVote] ❌ Error:', error);
+      }
+    } catch (error) {
+      console.error('[Header sendVote] ❌ Error de red:', error);
+    }
+  }
+  
+  // Función para manejar votación múltiple
+  function handleMultipleVote(optionKey: string, pollId: string) {
+    const poll = userPolls.find(p => p.id == pollId);
+    if (!poll || poll.type !== 'multiple') return;
+    
+    // Inicializar array si no existe
+    if (!multipleVotes[pollId]) {
+      multipleVotes[pollId] = [];
+    }
+    
+    // Alternar selección
+    const currentVotes = multipleVotes[pollId];
+    const index = currentVotes.indexOf(optionKey);
+    
+    if (index > -1) {
+      // Quitar voto
+      multipleVotes[pollId] = currentVotes.filter(k => k !== optionKey);
+    } else {
+      // Añadir voto
+      multipleVotes[pollId] = [...currentVotes, optionKey];
+    }
+    
+    // Forzar reactividad
+    multipleVotes = { ...multipleVotes };
+    console.log('[Header] 🗳️ Voto múltiple actualizado:', { pollId, optionKey, selected: multipleVotes[pollId] });
+  }
+  
   function handleOptionClick(event: CustomEvent) {
     const { pollId, optionKey, optionColor } = event.detail;
     console.log('[Header] 🗳️ Click en opción:', { pollId, optionKey, optionColor });
     
+    // Buscar el poll para verificar su tipo
+    const poll = userPolls.find(p => p.id == pollId);
+    console.log('[Header] 🔍 Poll encontrado:', { pollId, type: poll?.type, poll });
+    
+    // Si es encuesta múltiple, usar lógica de selección múltiple
+    if (poll?.type === 'multiple') {
+      console.log('[Header] 📊 Encuesta MÚLTIPLE detectada, usando handleMultipleVote');
+      handleMultipleVote(optionKey, pollId);
+      return;
+    }
+    
+    console.log('[Header] 📊 Encuesta ÚNICA detectada, votando directamente');
+    
+    // Votación única
     // Actualizar voto local mutando directamente
     userVotes[pollId] = optionKey;
     displayVotes[pollId] = optionKey;
@@ -489,8 +696,8 @@
     
     console.log('[Header] ✅ Voto registrado:', { pollId, optionKey, userVotes: {...userVotes} });
     
-    // TODO: Enviar voto al servidor
-    // En un rell, el voto debería ir al poll original
+    // Enviar voto al servidor
+    sendVoteToServer(pollId, optionKey);
   }
   
   function handleOpenInGlobe(event: CustomEvent) {
@@ -532,18 +739,30 @@
     }
   }
   
-  function handleConfirmMultiple(event: CustomEvent) {
+  async function handleConfirmMultiple(event: CustomEvent) {
     const { pollId } = event.detail;
     console.log('[Header] ✓ Confirmar múltiple:', { pollId, selected: multipleVotes[pollId] });
     
     // Marcar como votado
     if (multipleVotes[pollId] && multipleVotes[pollId].length > 0) {
-      // Guardar el primer voto seleccionado como voto principal
-      userVotes[pollId] = multipleVotes[pollId][0];
-      displayVotes[pollId] = multipleVotes[pollId][0];
+      const votes = multipleVotes[pollId];
       
-      console.log('[Header] ✅ Votos múltiples confirmados:', multipleVotes[pollId]);
-      // TODO: Enviar votos múltiples al servidor
+      // Guardar el primer voto seleccionado como voto principal
+      userVotes[pollId] = votes[0];
+      displayVotes[pollId] = votes[0];
+      
+      // Mostrar efecto visual
+      voteEffectStates[pollId] = true;
+      setTimeout(() => {
+        voteEffectStates[pollId] = false;
+      }, 1000);
+      
+      console.log('[Header] ✅ Votos múltiples confirmados:', votes);
+      
+      // Enviar cada voto al servidor
+      for (const optionKey of votes) {
+        await sendVoteToServer(pollId, optionKey);
+      }
     }
   }
   
@@ -933,16 +1152,45 @@
 		position: fixed;
 		top: 0;
 		left: 0;
-		right: 80px; /* Espacio para el botón X */
+		right: 53px;
 		height: 70px;
-		background: linear-gradient(180deg, rgba(10, 10, 15, 0.98) 0%, rgba(10, 10, 15, 0) 100%);
+		background: linear-gradient(280deg, rgba(10, 10, 15, 0.98) 0%, rgba(10, 10, 15, 0) 100%);
 		backdrop-filter: blur(10px);
-		z-index: 1000000;
-		display: flex;
+		z-index: 1000002;
+		display: flex
+	;
 		align-items: center;
-		padding: 10px 0 10px 16px;
+		justify-content: flex-end;
+		padding: 0px 6px 1px 4px;
 		pointer-events: auto;
+		padding-right: 11px;
 		touch-action: pan-x pan-y;
+	}
+	
+	/* Gradiente de difuminado izquierdo */
+	.top-avatars-bar::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 30px;
+		height: 100%;
+		background: linear-gradient(90deg, rgba(10, 10, 15, 0.98) 0%, transparent 100%);
+		pointer-events: none;
+		z-index: 1;
+	}
+	
+	/* Gradiente de difuminado derecho (entre avatares y X) */
+	.top-avatars-bar::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		right: 0;
+		width: 40px;
+		height: 100%;
+		background: linear-gradient(90deg, transparent 0%, rgba(10, 10, 15, 0.98) 100%);
+		pointer-events: none;
+		z-index: 1;
 	}
 	
 	.modal-avatars-scroll {
@@ -953,6 +1201,10 @@
 		-ms-overflow-style: none;
 		-webkit-overflow-scrolling: touch;
 		cursor: grab;
+		position: relative;
+		z-index: 0;
+		display: flex;
+		justify-content: center;
 	}
 	
 	.modal-avatars-scroll:active {
@@ -982,7 +1234,7 @@
 		transition: all 0.3s ease;
 		position: relative;
 		overflow: hidden;
-		touch-action: none;
+		touch-action: auto;
 		flex-shrink: 0;
 		pointer-events: auto;
 	}
@@ -1004,8 +1256,8 @@
 	
 	.close-polls-btn {
 		position: fixed;
-		top: 12px;
-		right: 12px;
+		top: 19px;
+		right: 20px;
 		width: 32px;
 		height: 32px;
 		border-radius: 50%;
@@ -1018,7 +1270,7 @@
 		justify-content: center;
 		cursor: pointer;
 		transition: all 0.2s ease;
-		z-index: 1000000;
+		z-index: 1000003;
 	}
 	
 	.close-polls-btn svg {
@@ -1043,7 +1295,7 @@
 		transform: translateX(-50%);
 		display: flex;
 		gap: 4px;
-		z-index: 1000001;
+		z-index: 999999;
 		max-width: 700px;
 		width: calc(100% - 40px);
 		padding: 0 20px;
@@ -1102,7 +1354,7 @@
 		z-index: 1000001;
 		cursor: grab;
 		user-select: none;
-		touch-action: none;
+		touch-action: pan-x;
 		pointer-events: auto;
 	}
 	
@@ -1182,25 +1434,25 @@
 	.post-indicator-instagram {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 12px 16px;
+		gap: 12px;
+		padding: 16px 20px;
 		background: transparent;
 		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 	}
 	
 	.post-avatar-container {
 		position: relative;
-		width: 24px;
-		height: 24px;
+		width: 32px;
+		height: 32px;
 		flex-shrink: 0;
 	}
 	
 	.post-small-avatar {
-		width: 24px;
-		height: 24px;
+		width: 32px;
+		height: 32px;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 1.5px solid rgba(255, 255, 255, 0.2);
+		border: 2px solid rgba(255, 255, 255, 0.2);
 	}
 	
 	.rell-icon-badge {
@@ -1228,7 +1480,7 @@
 		align-items: center;
 		gap: 4px;
 		flex: 1;
-		font-size: 13px;
+		font-size: 15px;
 		line-height: 1.3;
 		overflow: hidden;
 	}

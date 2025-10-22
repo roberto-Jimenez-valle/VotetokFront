@@ -16,20 +16,20 @@
   export let state: string = 'collapsed';
   export let activeAccordionMainIndex: number | null = null;
   export let currentPageMain: number = 0;
-  export let transitionDirectionMain: 'next' | 'prev' | null = null;
+  export const transitionDirectionMain: 'next' | 'prev' | null = null;
   export let userVotes: Record<string, string> = {};
   export let multipleVotes: Record<string, string[]> = {};
   export let OPTIONS_PER_PAGE: number = 4;
   
   // Vote effect state (passed from parent)
-  export let voteEffectActive: boolean = false;
-  export let voteEffectPollId: string | null = null;
-  export let displayVotes: Record<string, string> = {};
-  export let voteClickX: number = 0;
-  export let voteClickY: number = 0;
-  export let voteIconX: number = 0;
-  export let voteIconY: number = 0;
-  export let voteEffectColor: string = '#10b981';
+  export const voteEffectActive: boolean = false;
+  export const voteEffectPollId: string | null = null;
+  export const displayVotes: Record<string, string> = {};
+  export const voteClickX: number = 0;
+  export const voteClickY: number = 0;
+  export const voteIconX: number = 0;
+  export const voteIconY: number = 0;
+  export const voteEffectColor: string = '#10b981';
   
   // Refs
   let mainGridRef: HTMLElement;
@@ -298,6 +298,7 @@
         class="add-option-button-inline"
         onclick={handleAddOption}
         title="Añadir nueva opción"
+        aria-label="Añadir nueva opción"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19"/>
@@ -428,6 +429,7 @@
     text-overflow: ellipsis;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
   }
 

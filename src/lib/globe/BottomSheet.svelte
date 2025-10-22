@@ -710,14 +710,19 @@
     const deltaX = touch.clientX - touchStartX;
     const deltaY = touch.clientY - touchStartY;
     
+    const absDeltaX = Math.abs(deltaX);
+    const absDeltaY = Math.abs(deltaY);
+    
+    // SI el movimiento es más VERTICAL que horizontal, NO interferir (permitir scroll)
+    if (absDeltaY > absDeltaX) {
+      return; // Es scroll vertical, no drag horizontal
+    }
+    
     // Detectar si es un movimiento horizontal (más horizontal que vertical)
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20) {
+    if (absDeltaX > absDeltaY && absDeltaX > 20) {
       isDragging = true;
       
-      // No prevenir el scroll en grids con clase 'dense' (muchas opciones)
-      if (!currentDragGrid.classList.contains('dense')) {
-        e.preventDefault();
-      }
+      // NO prevenir default, confiar en touch-action CSS
       
       // Determinar dirección y expandir siguiente/anterior card
       let currentIndex: number | null = null;
@@ -1239,8 +1244,8 @@
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('click', handleGlobalClick);
     document.addEventListener('keydown', handleKeydown);
-    document.addEventListener('pointermove', handleGlobalMove);
-    document.addEventListener('touchmove', handleGlobalMove);
+    document.addEventListener('pointermove', handleGlobalMove, { passive: true });
+    document.addEventListener('touchmove', handleGlobalMove, { passive: true });
     document.addEventListener('pointerup', handleGlobalEnd);
     document.addEventListener('touchend', handleGlobalEnd);
     

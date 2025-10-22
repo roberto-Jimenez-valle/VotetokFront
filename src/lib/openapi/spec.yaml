@@ -1,0 +1,796 @@
+openapi: 3.0.3
+info:
+  title: VouTop API
+  description: |
+    API para la plataforma de encuestas geolocalizadas VouTop.
+    
+    ## Características principales:
+    - 🗳️ Crear y gestionar encuestas (polls)
+    - 📍 Votación con geolocalización precisa
+    - 🌍 Visualización de datos en globo 3D
+    - 👥 Sistema de usuarios y trending
+    - 📊 Estadísticas por país y región
+    
+  version: 1.0.0
+  contact:
+    name: VouTop Team
+    email: support@voutop.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5173/api
+    description: Servidor de desarrollo
+  - url: https://voutop.com/api
+    description: Servidor de producción
+
+tags:
+  - name: Polls
+    description: Gestión de encuestas
+  - name: Votes
+    description: Sistema de votación
+  - name: Users
+    description: Gestión de usuarios
+  - name: Geocoding
+    description: Conversión de coordenadas a ubicaciones
+  - name: Data
+    description: Datos agregados y estadísticas
+  - name: Maps
+    description: Mapas y visualizaciones
+
+components:
+  schemas:
+    Poll:
+      type: object
+      required:
+        - id
+        - title
+        - type
+        - status
+      properties:
+        id:
+          type: integer
+          description: ID único de la encuesta
+          example: 123
+        title:
+          type: string
+          description: Título de la encuesta
+          example: "¿Cuál es tu lenguaje de programación favorito?"
+        description:
+          type: string
+          nullable: true
+          description: Descripción detallada
+          example: "Queremos conocer las preferencias de la comunidad"
+        category:
+          type: string
+          default: "general"
+          example: "tech"
+        type:
+          type: string
+          enum: [single, multiple, poll]
+          description: Tipo de encuesta
+          example: "single"
+        status:
+          type: string
+          enum: [active, closed, draft]
+          default: "active"
+        imageUrl:
+          type: string
+          nullable: true
+          example: "https://example.com/image.jpg"
+        isRell:
+          type: boolean
+          default: false
+          description: Si es un repost de otra encuesta
+        originalPollId:
+          type: integer
+          nullable: true
+          description: ID de la encuesta original si es un rell
+        userId:
+          type: integer
+          description: ID del usuario creador
+        user:
+          $ref: '#/components/schemas/UserBasic'
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/PollOption'
+        createdAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        _count:
+          type: object
+          properties:
+            votes:
+              type: integer
+              example: 1234
+            comments:
+              type: integer
+              example: 56
+            interactions:
+              type: integer
+              example: 789
+
+    PollOption:
+      type: object
+      required:
+        - id
+        - optionKey
+        - optionLabel
+      properties:
+        id:
+          type: integer
+          example: 456
+        optionKey:
+          type: string
+          example: "option_1"
+        optionLabel:
+          type: string
+          example: "JavaScript"
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#10b981"
+        displayOrder:
+          type: integer
+          example: 0
+        voteCount:
+          type: integer
+          description: Número de votos (calculado)
+          example: 432
+        createdBy:
+          $ref: '#/components/schemas/UserBasic'
+
+    PollCreate:
+      type: object
+      required:
+        - title
+        - options
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: "¿Cuál es tu lenguaje favorito?"
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+        category:
+          type: string
+          default: "general"
+        type:
+          type: string
+          enum: [single, multiple, poll]
+          default: "single"
+        imageUrl:
+          type: string
+          nullable: true
+        duration:
+          type: string
+          enum: [1d, 3d, 7d, 30d, never]
+          default: "never"
+          description: Duración de la encuesta
+        hashtags:
+          type: array
+          items:
+            type: string
+          example: ["tecnologia", "programacion"]
+        options:
+          type: array
+          minItems: 2
+          maxItems: 20
+          items:
+            type: object
+            required:
+              - optionKey
+              - optionLabel
+            properties:
+              optionKey:
+                type: string
+                example: "option_1"
+              optionLabel:
+                type: string
+                example: "JavaScript"
+              color:
+                type: string
+                default: "#10b981"
+              displayOrder:
+                type: integer
+
+    Vote:
+      type: object
+      required:
+        - id
+        - pollId
+        - optionId
+        - latitude
+        - longitude
+      properties:
+        id:
+          type: integer
+          example: 789
+        pollId:
+          type: integer
+          example: 123
+        optionId:
+          type: integer
+          example: 456
+        userId:
+          type: integer
+          nullable: true
+          description: ID del usuario (null si es anónimo)
+        latitude:
+          type: number
+          format: float
+          minimum: -90
+          maximum: 90
+          example: 40.4168
+        longitude:
+          type: number
+          format: float
+          minimum: -180
+          maximum: 180
+          example: -3.7038
+        subdivisionId:
+          type: integer
+          nullable: true
+          description: ID de la subdivisión geográfica
+        subdivision:
+          $ref: '#/components/schemas/Subdivision'
+        ipAddress:
+          type: string
+          example: "192.168.1.1"
+        createdAt:
+          type: string
+          format: date-time
+
+    VoteCreate:
+      type: object
+      required:
+        - optionId
+        - latitude
+        - longitude
+      properties:
+        optionId:
+          type: integer
+          description: ID de la opción votada
+          example: 456
+        userId:
+          type: integer
+          nullable: true
+          description: ID del usuario (opcional)
+        latitude:
+          type: number
+          format: float
+          minimum: -90
+          maximum: 90
+          example: 40.4168
+        longitude:
+          type: number
+          format: float
+          minimum: -180
+          maximum: 180
+          example: -3.7038
+        subdivisionId:
+          type: integer
+          nullable: true
+          description: ID de la subdivisión (opcional, se calcula automáticamente)
+
+    UserBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: "johndoe"
+        displayName:
+          type: string
+          example: "John Doe"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://example.com/avatar.jpg"
+        verified:
+          type: boolean
+          default: false
+
+    Subdivision:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 65101
+        subdivisionId:
+          type: string
+          example: "ESP.8"
+        name:
+          type: string
+          example: "Comunidad de Madrid"
+        level:
+          type: integer
+          enum: [1, 2, 3]
+          description: 1=País, 2=Región/Estado, 3=Provincia
+        latitude:
+          type: number
+          format: float
+          nullable: true
+        longitude:
+          type: number
+          format: float
+          nullable: true
+
+    GeocodeResult:
+      type: object
+      properties:
+        found:
+          type: boolean
+          example: true
+        subdivisionId:
+          type: integer
+          nullable: true
+          example: 65101
+        subdivisionName:
+          type: string
+          nullable: true
+          example: "Comunidad de Madrid"
+        level:
+          type: integer
+          nullable: true
+          example: 2
+        method:
+          type: string
+          enum: [point-in-polygon, centroid-fallback]
+          example: "point-in-polygon"
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Error message"
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 150
+        totalPages:
+          type: integer
+          example: 8
+
+  responses:
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Error interno del servidor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /polls:
+    get:
+      tags:
+        - Polls
+      summary: Listar encuestas
+      description: Obtiene una lista paginada de encuestas activas
+      parameters:
+        - name: page
+          in: query
+          description: Número de página
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Elementos por página
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: category
+          in: query
+          description: Filtrar por categoría
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Buscar en título y descripción
+          schema:
+            type: string
+        - name: userId
+          in: query
+          description: Filtrar por usuario creador
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de encuestas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poll'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags:
+        - Polls
+      summary: Crear encuesta
+      description: Crea una nueva encuesta con opciones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PollCreate'
+            example:
+              title: "¿Cuál es tu lenguaje de programación favorito?"
+              description: "Queremos conocer las preferencias de la comunidad"
+              category: "tech"
+              type: "single"
+              duration: "7d"
+              hashtags: ["tecnologia", "programacion"]
+              options:
+                - optionKey: "js"
+                  optionLabel: "JavaScript"
+                  color: "#f7df1e"
+                  displayOrder: 0
+                - optionKey: "python"
+                  optionLabel: "Python"
+                  color: "#3776ab"
+                  displayOrder: 1
+                - optionKey: "typescript"
+                  optionLabel: "TypeScript"
+                  color: "#3178c6"
+                  displayOrder: 2
+      responses:
+        '201':
+          description: Encuesta creada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Poll'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /polls/{id}:
+    get:
+      tags:
+        - Polls
+      summary: Obtener encuesta por ID
+      description: Obtiene los detalles completos de una encuesta
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID de la encuesta
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalles de la encuesta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Poll'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /polls/{id}/vote:
+    post:
+      tags:
+        - Votes
+      summary: Votar en una encuesta
+      description: |
+        Registra un voto en una encuesta con geolocalización.
+        
+        **Sistema de votación:**
+        - Los usuarios autenticados pueden votar una vez por encuesta
+        - Los usuarios anónimos se identifican por IP
+        - Si ya existe un voto, se actualiza en lugar de crear uno nuevo
+        - La ubicación se geocodifica automáticamente a subdivisión
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID de la encuesta
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoteCreate'
+            example:
+              optionId: 456
+              userId: null
+              latitude: 40.4168
+              longitude: -3.7038
+              subdivisionId: null
+      responses:
+        '200':
+          description: Voto registrado o actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vote:
+                    $ref: '#/components/schemas/Vote'
+                  isUpdate:
+                    type: boolean
+                    description: True si se actualizó un voto existente
+                    example: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Encuesta u opción no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags:
+        - Votes
+      summary: Eliminar voto
+      description: Elimina el voto del usuario en una encuesta
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID de la encuesta
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: Voto eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Voto eliminado correctamente"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /polls/trending:
+    get:
+      tags:
+        - Polls
+      summary: Encuestas en tendencia
+      description: Obtiene las encuestas más populares
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: Lista de encuestas trending
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poll'
+
+  /polls/for-you:
+    get:
+      tags:
+        - Polls
+      summary: Encuestas recomendadas
+      description: Obtiene encuestas personalizadas para el usuario
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Lista de encuestas recomendadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poll'
+
+  /geocode:
+    get:
+      tags:
+        - Geocoding
+      summary: Geocodificar coordenadas
+      description: |
+        Convierte coordenadas GPS a subdivisión geográfica.
+        
+        **Sistema híbrido:**
+        1. **Point-in-polygon**: Usa archivos TopoJSON para determinar con precisión la subdivisión
+        2. **Centroid-fallback**: Si falla, busca la subdivisión más cercana por centroide
+        
+        **Precisión:**
+        - Nivel 1: País
+        - Nivel 2: Región/Estado/Comunidad
+        - Nivel 3: Provincia/Condado
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Latitud
+          schema:
+            type: number
+            format: float
+            minimum: -90
+            maximum: 90
+          example: 40.4168
+        - name: lon
+          in: query
+          required: true
+          description: Longitud
+          schema:
+            type: number
+            format: float
+            minimum: -180
+            maximum: 180
+          example: -3.7038
+      responses:
+        '200':
+          description: Resultado del geocoding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeocodeResult'
+              examples:
+                found:
+                  value:
+                    found: true
+                    subdivisionId: 65101
+                    subdivisionName: "Comunidad de Madrid"
+                    level: 2
+                    method: "point-in-polygon"
+                notFound:
+                  value:
+                    found: false
+                    subdivisionId: null
+                    subdivisionName: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /users/trending:
+    get:
+      tags:
+        - Users
+      summary: Usuarios en tendencia
+      description: Obtiene los usuarios más activos
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: Lista de usuarios trending
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserBasic'
+
+  /users/with-activity:
+    get:
+      tags:
+        - Users
+      summary: Usuarios con actividad
+      description: Obtiene usuarios que han guardado o reposteado encuestas
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 8
+            maximum: 50
+      responses:
+        '200':
+          description: Lista de usuarios con actividad
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserBasic'

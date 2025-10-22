@@ -46,9 +46,9 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     throw error(400, 'longitude es requerida y debe ser un número');
   }
 
-  if (!subdivisionId || typeof subdivisionId !== 'number') {
+  if (subdivisionId !== null && subdivisionId !== undefined && typeof subdivisionId !== 'number') {
     console.error('[API Vote] ❌ subdivisionId inválido:', subdivisionId);
-    throw error(400, 'subdivisionId es requerido y debe ser un número (ID de BD)');
+    throw error(400, 'subdivisionId debe ser un número (ID de BD) o null');
   }
 
   // Validar que la opción pertenece a la encuesta
