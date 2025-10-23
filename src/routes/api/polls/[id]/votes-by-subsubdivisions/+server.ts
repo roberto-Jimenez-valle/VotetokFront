@@ -6,6 +6,7 @@ import { prisma } from '$lib/server/prisma';
  * GET /api/polls/{id}/votes-by-subsubdivisions?country={iso}&subdivision={id}
  * 
  * Retorna votos REALES agrupados por sub-subdivisión (nivel 2) para una subdivisión específica
+ * Endpoint de solo lectura sin rate limiting (datos públicos)
  * 
  * Ejemplo: /api/polls/1/votes-by-subsubdivisions?country=ESP&subdivision=1
  * (Retorna votos de Sevilla, Jaén, etc. dentro de Andalucía)

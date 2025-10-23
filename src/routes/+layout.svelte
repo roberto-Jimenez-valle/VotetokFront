@@ -37,7 +37,9 @@
 	}
 	
 	onMount(() => {
-		// 🎯 Configurar usuario de prueba para sistema de recomendaciones
+		// 🎯 DESHABILITADO: Usuario de prueba para testing de autenticación
+		// Para habilitar el usuario hardcodeado, descomenta el siguiente bloque:
+		/*
 		setCurrentUser({
 			id: 1, // ✅ Cambiado a ID existente (maria_gonzalez)
 			username: 'maria_gonzalez',
@@ -50,6 +52,8 @@
 			role: 'user'
 		});
 		console.log('👤 Usuario de prueba configurado: maria_gonzalez (ID: 1)');
+		*/
+		console.log('👤 Iniciando sin usuario (modo autenticación)');
 		
 		// Activar modo dark por defecto
 		document.documentElement.classList.add('dark');

@@ -2,6 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import SinglePollSection from './globe/cards/sections/SinglePollSection.svelte';
   import { currentUser } from '$lib/stores';
+  import { apiCall, apiPost } from '$lib/api/client';
   import '$lib/styles/trending-ranking.css';
   
   const dispatch = createEventDispatcher();
@@ -63,7 +64,7 @@
       const url = '/api/users/with-activity?limit=8';
       console.log('[Header] Fetching:', url);
       
-      const res = await fetch(url);
+      const res = await apiCall(url);
       console.log('[Header] Response status:', res.status, res.ok);
       
       if (res.ok) {
@@ -119,7 +120,7 @@
     
     try {
       // Cargar encuestas con interacciones del usuario (guardadas o reposteadas)
-      const response = await fetch(`/api/polls/user-interactions?userId=${user.id}&types=save,repost&limit=20`);
+      const response = await apiCall(`/api/polls/user-interactions?userId=${user.id}&types=save,repost&limit=20`);
       console.log('[Header] Response status:', response.status, response.ok);
       
       if (response.ok) {
@@ -587,7 +588,7 @@
       
       // PASO 3: Geocodificar a subdivisión
       try {
-        const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
+        const geocodeResponse = await apiCall(`/api/geocode?lat=${latitude}&lon=${longitude}`);
         if (geocodeResponse.ok) {
           const geocodeData = await geocodeResponse.json();
           if (geocodeData.found && geocodeData.subdivisionId) {
@@ -615,28 +616,21 @@
       console.log('[Header sendVote] 📤 Payload completo a enviar:', JSON.stringify(votePayload, null, 2));
       console.log('[Header sendVote] 📤 URL:', `/api/polls/${numericPollId}/vote`);
       
-      const response = await fetch(`/api/polls/${numericPollId}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(votePayload)
-      });
+      const result = await apiPost(`/api/polls/${numericPollId}/vote`, votePayload);
+      console.log('[Header sendVote] ✅ Voto guardado:', result);
       
-      if (response.ok) {
-        const result = await response.json();
-        console.log('[Header sendVote] ✅ Voto guardado:', result);
-        
-        // Actualizar contadores si es voto nuevo
-        if (!result.isUpdate) {
-          if (poll.totalVotes !== undefined) poll.totalVotes++;
-          if (option.votes !== undefined) option.votes++;
-        }
-      } else {
-        const error = await response.json();
-        console.error('[Header sendVote] ❌ Error:', error);
+      // Actualizar contadores si es voto nuevo
+      if (!result.isUpdate) {
+        if (poll.totalVotes !== undefined) poll.totalVotes++;
+        if (option.votes !== undefined) option.votes++;
       }
+      
+      return true;
     } catch (error) {
-      console.error('[Header sendVote] ❌ Error de red:', error);
-    }
+      console.error('[Header sendVote] ❌ Error al enviar voto:', error);
+      // El cliente API ya maneja los errores y lanza excepciones
+      return false;
+    } 
   }
   
   // Función para manejar votación múltiple

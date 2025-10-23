@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test API Security</title>
+</head>
+<body>
+  <h1>🧪 Test de Seguridad API</h1>
+  <button onclick="testDirectFetch()">Test 1: Fetch Directo (Debe Fallar)</button>
+  <button onclick="testWithClient()">Test 2: Con Cliente API (Debe Funcionar)</button>
+  <pre id="output" style="background: #f0f0f0; padding: 20px; margin-top: 20px;"></pre>
+
+  <script type="module">
+    window.testDirectFetch = async function() {
+      const output = document.getElementById('output');
+      output.textContent = '⏳ Probando fetch directo...\n';
+      
+      try {
+        const response = await fetch('/api/polls/trending');
+        const data = await response.json();
+        output.textContent += `\n✅ Status: ${response.status}\n`;
+        output.textContent += `📦 Response: ${JSON.stringify(data, null, 2)}`;
+      } catch (error) {
+        output.textContent += `\n❌ Error: ${error.message}`;
+      }
+    }
+
+    window.testWithClient = async function() {
+      const output = document.getElementById('output');
+      output.textContent = '⏳ Probando con cliente API...\n';
+      
+      try {
+        // Importar el cliente API
+        const { apiGet } = await import('/src/lib/api/client.ts');
+        
+        output.textContent += '📝 Cliente API importado\n';
+        
+        const data = await apiGet('/api/polls/trending');
+        output.textContent += `\n✅ Success!\n`;
+        output.textContent += `📦 Response: ${JSON.stringify(data, null, 2)}`;
+      } catch (error) {
+        output.textContent += `\n❌ Error: ${error.message}`;
+        console.error('Full error:', error);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -4,6 +4,7 @@
   import '$lib/styles/bottom-sheet.css'; // ✅ Ya está importado aquí globalmente
   import type { Poll } from './types';
   import { currentUser } from '$lib/stores';
+  import { apiGet, apiCall, apiPost, apiDelete } from '$lib/api/client';
   
   
   // Componentes de sección completos
@@ -186,9 +187,7 @@
   // Helper para cargar datos históricos desde API
   async function loadHistoricalData(pollId: number, days: number) {
     try {
-      const response = await fetch('/api/polls/' + pollId + '/history?days=' + days);
-      if (!response.ok) throw new Error('Failed to load history');
-      const { data } = await response.json();
+      const { data } = await apiGet('/api/polls/' + pollId + '/history?days=' + days);
       return data.map((item: any) => ({
         x: new Date(item.recordedAt).getTime(),
         y: item.percentage,
@@ -229,9 +228,7 @@
 
   async function loadUserSuggestions() {
     try {
-      const response = await fetch('/api/users/suggestions?limit=8');
-      if (!response.ok) throw new Error('Failed to load suggestions');
-      const { data } = await response.json();
+      const { data } = await apiGet('/api/users/suggestions?limit=8');
       userSuggestions = data;
     } catch (error) {
       console.error('Error loading user suggestions:', error);
@@ -264,9 +261,7 @@
       const currentRegion = selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global';
       
       // Limitar a 12 encuestas trending (3 páginas de 4)
-      const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(currentRegion)}&limit=12&hours=168`);
-      if (!response.ok) throw new Error('Failed to load trending polls');
-      const { data } = await response.json();
+      const { data } = await apiGet(`/api/polls/trending-by-region?region=${encodeURIComponent(currentRegion)}&limit=12&hours=168`);
       
       if (data && Array.isArray(data) && data.length > 0) {
         // Contar duplicados ANTES de filtrar
@@ -304,9 +299,7 @@
     isLoadingPolls = true;
     
     try {
-      const response = await fetch('/api/polls?page=' + page + '&limit=10');
-      if (!response.ok) throw new Error('Failed to load polls');
-      const { data, pagination } = await response.json();
+      const { data, pagination } = await apiGet('/api/polls?page=' + page + '&limit=10');
       
       // Verificar si hay más páginas
       hasMorePolls = pagination.page < pagination.totalPages;
@@ -317,11 +310,8 @@
         // Cargar amigos que votaron en esta encuesta
         let friendsByOption = {};
         try {
-          const friendsResponse = await fetch('/api/polls/' + poll.id + '/friends-votes?userId=' + currentUserId);
-          if (friendsResponse.ok) {
-            const friendsData = await friendsResponse.json();
-            friendsByOption = friendsData.data || {};
-                      }
+          const friendsData = await apiGet('/api/polls/' + poll.id + '/friends-votes?userId=' + currentUserId);
+          friendsByOption = friendsData.data || {};
         } catch (e) {
           console.error('Error loading friends votes:', e);
         }
@@ -1684,7 +1674,7 @@
       
       // PASO 3: Geocodificar a subdivisión con point-in-polygon
       try {
-        const geocodeResponse = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
+        const geocodeResponse = await apiCall(`/api/geocode?lat=${latitude}&lon=${longitude}`);
         if (geocodeResponse.ok) {
           const geocodeData = await geocodeResponse.json();
           if (geocodeData.found && geocodeData.subdivisionId) {
@@ -1716,26 +1706,18 @@
         subdivisionId
       });
       
-      const response = await fetch(`/api/polls/${numericPollId}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          optionId,
-          userId: $currentUser?.id || null,
-          latitude,
-          longitude,
-          subdivisionId
-        })
+      const result = await apiPost(`/api/polls/${numericPollId}/vote`, {
+        optionId,
+        userId: $currentUser?.id || null,
+        latitude,
+        longitude,
+        subdivisionId
       });
       
-      console.log('[BottomSheet sendVote] Respuesta recibida:', response.status);
+      console.log('[BottomSheet sendVote] ✅ Voto guardado exitosamente:', result);
       
-      if (response.ok) {
-        const result = await response.json();
-        console.log('[BottomSheet sendVote] ✅ Voto guardado exitosamente:', result);
-        
-        // Solo incrementar contador si es un voto NUEVO, no si es actualización
-        if (!result.isUpdate) {
+      // Solo incrementar contador si es un voto NUEVO, no si es actualización
+      if (!result.isUpdate) {
           if (poll.totalVotes !== undefined) {
             poll.totalVotes++;
             console.log('[BottomSheet sendVote] Contador incrementado (voto nuevo):', poll.totalVotes);
@@ -1744,19 +1726,15 @@
             option.votes++;
             console.log('[BottomSheet sendVote] Votos de opción incrementados:', option.votes);
           }
-        } else {
-          console.log('[BottomSheet sendVote] ℹ️ Actualización de voto - contador no cambia');
-        }
-        
-        // Forzar reactividad para encuesta activa vs. adicionales
-        if (poll === activePoll) {
-          activePoll = { ...activePoll };
-        } else {
-          additionalPolls = [...additionalPolls];
-        }
       } else {
-        const error = await response.json();
-        console.error('[BottomSheet sendVote] ❌ Error del servidor:', error);
+        console.log('[BottomSheet sendVote] ℹ️ Actualización de voto - contador no cambia');
+      }
+      
+      // Forzar reactividad para encuesta activa vs. adicionales
+      if (poll === activePoll) {
+        activePoll = { ...activePoll };
+      } else {
+        additionalPolls = [...additionalPolls];
       }
     } catch (error) {
       console.error('[BottomSheet sendVote] ❌ Error de red:', error);
@@ -1949,45 +1927,33 @@
     try {
       const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
       
-      const response = await fetch(`/api/polls/${numericPollId}/options`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: label,
-          color: color,
-          userId: $currentUser?.id || null
-        })
+      const result = await apiPost(`/api/polls/${numericPollId}/options`, {
+        label: label,
+        color: color,
+        userId: $currentUser?.id || null
       });
+        
+      // Actualizar la opción temporal con los datos del servidor
+      option.id = result.data.id;
+      option.key = result.data.optionKey;
+      option.label = label;
+      option.color = color;
+      delete option.isEditing;
       
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Actualizar la opción temporal con los datos del servidor
-        option.id = result.data.id;
-        option.key = result.data.optionKey;
-        option.label = label;
-        option.color = color;
-        delete option.isEditing;
-        
-        // Actualizar la encuesta
-        if (poll.id === activePoll?.id) {
-          activePoll = { ...activePoll };
-        } else {
-          additionalPolls = [...additionalPolls];
-        }
-        
-        // Limpiar el estado de edición
-        delete pendingCollaborativeOption[pollId];
-        delete editingOptionColors[optionKey];
-        pendingCollaborativeOption = { ...pendingCollaborativeOption };
-        editingOptionColors = { ...editingOptionColors };
-        
-        console.log('[BottomSheet] Opción publicada exitosamente:', result.data);
+      // Actualizar la encuesta
+      if (poll.id === activePoll?.id) {
+        activePoll = { ...activePoll };
       } else {
-        const error = await response.json();
-        console.error('[BottomSheet] Error publicando opción:', error);
-        alert('Error al guardar la opción. Inténtalo de nuevo.');
+        additionalPolls = [...additionalPolls];
       }
+      
+      // Limpiar el estado de edición
+      delete pendingCollaborativeOption[pollId];
+      delete editingOptionColors[optionKey];
+      pendingCollaborativeOption = { ...pendingCollaborativeOption };
+      editingOptionColors = { ...editingOptionColors };
+      
+      console.log('[BottomSheet] Opción publicada exitosamente:', result.data);
     } catch (error) {
       console.error('[BottomSheet] Error de red:', error);
       alert('Error de conexión. Inténtalo de nuevo.');
@@ -2012,43 +1978,31 @@
     try {
       const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
       
-      const response = await fetch(`/api/polls/${numericPollId}/options`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: option.label.trim(),
-          color: option.color,
-          userId: $currentUser?.id || null
-        })
+      const result = await apiPost(`/api/polls/${numericPollId}/options`, {
+        label: option.label.trim(),
+        color: option.color,
+        userId: $currentUser?.id || null
       });
+        
+      // Actualizar la opción temporal con los datos del servidor
+      option.id = result.data.id;
+      option.key = result.data.optionKey;
+      delete option.isEditing; // ← Quitar flag de edición
       
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Actualizar la opción temporal con los datos del servidor
-        option.id = result.data.id;
-        option.key = result.data.optionKey;
-        delete option.isEditing; // ← Quitar flag de edición
-        
-        // Actualizar la encuesta
-        if (poll.id === activePoll?.id) {
-          activePoll = { ...activePoll };
-        } else {
-          additionalPolls = [...additionalPolls];
-        }
-        
-        // Limpiar el estado de edición
-        delete pendingCollaborativeOption[pollId];
-        delete editingOptionColors[tempId];
-        pendingCollaborativeOption = { ...pendingCollaborativeOption };
-        editingOptionColors = { ...editingOptionColors };
-        
-        console.log('[BottomSheet] Opción colaborativa confirmada:', result.data);
+      // Actualizar la encuesta
+      if (poll.id === activePoll?.id) {
+        activePoll = { ...activePoll };
       } else {
-        const error = await response.json();
-        console.error('[BottomSheet] Error confirmando opción:', error);
-        alert('Error al guardar la opción. Inténtalo de nuevo.');
+        additionalPolls = [...additionalPolls];
       }
+      
+      // Limpiar el estado de edición
+      delete pendingCollaborativeOption[pollId];
+      delete editingOptionColors[tempId];
+      pendingCollaborativeOption = { ...pendingCollaborativeOption };
+      editingOptionColors = { ...editingOptionColors };
+      
+      console.log('[BottomSheet] Opción colaborativa confirmada:', result.data);
     } catch (error) {
       console.error('[BottomSheet] Error de red:', error);
       alert('Error de conexión. Inténtalo de nuevo.');
@@ -2094,44 +2048,33 @@
     try {
       const numericPollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
       
-      const response = await fetch(`/api/polls/${numericPollId}/options`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label,
-          userId: $currentUser?.id || null
-        })
+      const result = await apiPost(`/api/polls/${numericPollId}/options`, {
+        label: newOptionLabel[pollId],
+        userId: $currentUser?.id || null
       });
+      console.log('[BottomSheet] Nueva opción añadida:', result);
       
-      if (response.ok) {
-        const result = await response.json();
-        console.log('[BottomSheet] Nueva opción añadida:', result);
-        
-        // Actualizar la encuesta localmente
-        const newOption = {
-          id: result.data.id,
-          key: result.data.optionKey,
-          label: result.data.optionLabel,
-          color: result.data.color,
-          votes: 0
-        };
-        
-        poll.options = [...poll.options, newOption];
-        
-        // Forzar actualización
-        additionalPolls = [...additionalPolls];
-        if (activePoll?.id === pollId) {
-          activePoll = { ...activePoll };
-        }
-        
-        // Limpiar y cerrar modal
-        newOptionLabel[pollId] = '';
-        showAddOptionModal[pollId] = false;
-        showAddOptionModal = { ...showAddOptionModal };
-      } else {
-        const error = await response.json();
-        console.error('[BottomSheet] Error añadiendo opción:', error);
+      // Actualizar la encuesta localmente
+      const newOption = {
+        id: result.data.id,
+        key: result.data.optionKey,
+        label: result.data.optionLabel,
+        color: result.data.color,
+        votes: 0
+      };
+      
+      poll.options = [...poll.options, newOption];
+      
+      // Forzar actualización
+      additionalPolls = [...additionalPolls];
+      if (activePoll?.id === pollId) {
+        activePoll = { ...activePoll };
       }
+      
+      // Limpiar y cerrar modal
+      newOptionLabel[pollId] = '';
+      showAddOptionModal[pollId] = false;
+      showAddOptionModal = { ...showAddOptionModal };
     } catch (error) {
       console.error('[BottomSheet] Error de red:', error);
     }
@@ -2238,36 +2181,26 @@
     try {
       const numericPollId = typeof pollId === 'string' ? parseInt(pollId) : pollId;
       
-      const response = await fetch(`/api/polls/${numericPollId}/vote`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: $currentUser?.id || null
-        })
-      });
+      await apiDelete(`/api/polls/${numericPollId}/vote`);
       
-      if (response.ok) {
-        // Actualizar estado local
-        const { [pollId]: _, ...rest } = userVotes;
-        userVotes = { ...rest };
-        displayVotes = { ...rest };
-        
-        // Actualizar el contador de votos de la encuesta
-        if (activePoll && activePoll.id.toString() === pollId) {
-          activePoll.totalVotes = Math.max(0, (activePoll.totalVotes || 0) - 1);
-          activePoll = { ...activePoll };
-        }
-        
-        const pollToUpdate = additionalPolls.find(p => p.id.toString() === pollId);
-        if (pollToUpdate) {
-          pollToUpdate.totalVotes = Math.max(0, (pollToUpdate.totalVotes || 0) - 1);
-          additionalPolls = [...additionalPolls];
-        }
-        
-        console.log('[BottomSheet] Voto eliminado correctamente');
-      } else {
-        console.error('[BottomSheet] Error al eliminar voto');
+      // Actualizar estado local
+      const { [pollId]: _, ...rest } = userVotes;
+      userVotes = { ...rest };
+      displayVotes = { ...rest };
+      
+      // Actualizar el contador de votos de la encuesta
+      if (activePoll && activePoll.id.toString() === pollId) {
+        activePoll.totalVotes = Math.max(0, (activePoll.totalVotes || 0) - 1);
+        activePoll = { ...activePoll };
       }
+      
+      const pollToUpdate = additionalPolls.find(p => p.id.toString() === pollId);
+      if (pollToUpdate) {
+        pollToUpdate.totalVotes = Math.max(0, (pollToUpdate.totalVotes || 0) - 1);
+        additionalPolls = [...additionalPolls];
+      }
+      
+      console.log('[BottomSheet] Voto eliminado correctamente');
     } catch (error) {
       console.error('[BottomSheet] Error de red al eliminar voto:', error);
     }

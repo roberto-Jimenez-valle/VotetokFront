@@ -1,4 +1,5 @@
 // Servicio para interactuar con la API de usuarios
+import { apiGet, apiPost, apiDelete } from '$lib/api/client';
 
 export interface User {
   id: number;
@@ -32,11 +33,7 @@ export interface UsersResponse {
  * Obtener usuarios destacados
  */
 export async function getFeaturedUsers(): Promise<FeaturedUser[]> {
-  const response = await fetch('/api/featured');
-  if (!response.ok) {
-    throw new Error(`Failed to fetch featured users: ${response.statusText}`);
-  }
-  const data = await response.json();
+  const data = await apiGet('/api/featured');
   return data.data;
 }
 
@@ -44,11 +41,7 @@ export async function getFeaturedUsers(): Promise<FeaturedUser[]> {
  * Obtener un usuario por ID
  */
 export async function getUser(id: number): Promise<User> {
-  const response = await fetch(`/api/users/${id}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch user: ${response.statusText}`);
-  }
-  const data = await response.json();
+  const data = await apiGet(`/api/users/${id}`);
   return data.data;
 }
 
@@ -56,62 +49,33 @@ export async function getUser(id: number): Promise<User> {
  * Obtener encuestas de un usuario
  */
 export async function getUserPolls(userId: number, page: number = 1, limit: number = 20) {
-  const response = await fetch(`/api/users/${userId}/polls?page=${page}&limit=${limit}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch user polls: ${response.statusText}`);
-  }
-  return response.json();
+  return apiGet(`/api/users/${userId}/polls?page=${page}&limit=${limit}`);
 }
 
 /**
  * Seguir a un usuario
  */
 export async function followUser(userId: number): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/users/${userId}/follow`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to follow user');
-  }
-  
-  return response.json();
+  return apiPost(`/api/users/${userId}/follow`, {});
 }
 
 /**
  * Dejar de seguir a un usuario
  */
 export async function unfollowUser(userId: number): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/users/${userId}/follow`, {
-    method: 'DELETE',
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to unfollow user');
-  }
-  
-  return response.json();
+  return apiDelete(`/api/users/${userId}/follow`);
 }
 
 /**
  * Obtener seguidores de un usuario
  */
 export async function getUserFollowers(userId: number) {
-  const response = await fetch(`/api/users/${userId}/followers`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch followers: ${response.statusText}`);
-  }
-  return response.json();
+  return apiGet(`/api/users/${userId}/followers`);
 }
 
 /**
  * Obtener usuarios que sigue un usuario
  */
 export async function getUserFollowing(userId: number) {
-  const response = await fetch(`/api/users/${userId}/following`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch following: ${response.statusText}`);
-  }
-  return response.json();
+  return apiGet(`/api/users/${userId}/following`);
 }

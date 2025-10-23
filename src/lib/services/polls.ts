@@ -1,5 +1,7 @@
 // Servicio para interactuar con la API de encuestas
 
+import { apiCall, apiPost, apiGet } from '$lib/api/client';
+
 export interface PollOption {
   id: number;
   optionKey: string;
@@ -98,53 +100,28 @@ export async function getPolls(params?: {
   if (params?.category) searchParams.set('category', params.category);
   if (params?.search) searchParams.set('search', params.search);
 
-  const response = await fetch(`/api/polls?${searchParams}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch polls: ${response.statusText}`);
-  }
-  return response.json();
+  return await apiGet(`/api/polls?${searchParams}`);
 }
 
 /**
  * Obtener una encuesta por ID
  */
 export async function getPoll(id: number): Promise<Poll> {
-  const response = await fetch(`/api/polls/${id}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch poll: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.data;
+  return await apiGet(`/api/polls/${id}`);
 }
 
 /**
  * Votar en una encuesta
  */
 export async function votePoll(pollId: number, data: VoteData): Promise<VoteResponse> {
-  const response = await fetch(`/api/polls/${pollId}/vote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || 'Failed to vote');
-  }
-  
-  return response.json();
+  return await apiPost(`/api/polls/${pollId}/vote`, data);
 }
 
 /**
  * Obtener estadísticas de una encuesta
  */
 export async function getPollStats(pollId: number): Promise<VoteStats> {
-  const response = await fetch(`/api/polls/${pollId}/stats`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch poll stats: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.data;
+  return await apiGet(`/api/polls/${pollId}/stats`);
 }
 
 /**
@@ -158,68 +135,33 @@ export async function getGeoVotes(params: GeoVotesParams) {
   if (params.subdivision) searchParams.set('subdivision', params.subdivision);
   if (params.city) searchParams.set('city', params.city);
 
-  const response = await fetch(`/api/votes/geo?${searchParams}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch geo votes: ${response.statusText}`);
-  }
-  return response.json();
+  return await apiGet(`/api/votes/geo?${searchParams}`);
 }
 
 /**
  * Obtener historial de votos para gráficos
  */
 export async function getPollHistory(pollId: number, days: number = 30) {
-  const response = await fetch(`/api/polls/${pollId}/history?days=${days}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch poll history: ${response.statusText}`);
-  }
-  return response.json();
+  return await apiGet(`/api/polls/${pollId}/history?days=${days}`);
 }
 
 /**
  * Dar like a una encuesta
  */
 export async function likePoll(pollId: number): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/polls/${pollId}/like`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to like poll');
-  }
-  
-  return response.json();
+  return await apiPost(`/api/polls/${pollId}/like`, {});
 }
 
 /**
  * Guardar una encuesta
  */
 export async function savePoll(pollId: number): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/polls/${pollId}/save`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to save poll');
-  }
-  
-  return response.json();
+  return await apiPost(`/api/polls/${pollId}/save`, {});
 }
 
 /**
  * Compartir una encuesta
  */
 export async function sharePoll(pollId: number): Promise<{ success: boolean; shareUrl: string }> {
-  const response = await fetch(`/api/polls/${pollId}/share`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to share poll');
-  }
-  
-  return response.json();
+  return await apiPost(`/api/polls/${pollId}/share`, {});
 }

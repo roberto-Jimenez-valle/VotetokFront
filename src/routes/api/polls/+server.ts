@@ -1,9 +1,39 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { requireAuth } from '$lib/server/middleware/auth';
+import { rateLimitByUser } from '$lib/server/middleware/rateLimit';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async (event) => {
   try {
-    const data = await request.json();
+    // DESARROLLO: Permitir crear encuestas sin autenticación en localhost e IPs locales
+    const isDevelopment = process.env.NODE_ENV === 'development' ||
+                         event.url.hostname === 'localhost' ||
+                         event.url.hostname === '127.0.0.1' ||
+                         event.url.hostname.startsWith('192.168.') ||
+                         event.url.hostname.startsWith('172.') ||
+                         event.url.hostname.startsWith('10.');
+    
+    let user: any = null;
+    
+    if (!isDevelopment) {
+      // REQUERIR AUTENTICACIÓN - Solo usuarios logueados pueden crear encuestas
+      user = await requireAuth(event);
+      
+      // RATE LIMITING - Máximo 20 encuestas por día
+      await rateLimitByUser(user.userId, user.role, 'poll_create');
+    } else {
+      // En desarrollo, usar un usuario por defecto si no está autenticado
+      const authUser = event.locals.user;
+      if (authUser) {
+        user = authUser;
+      } else {
+        // Usuario de prueba para desarrollo
+        user = { userId: 1, role: 'user' };
+        console.log('[DEV] Creando encuesta sin autenticación - usando userId:', user.userId);
+      }
+    }
+    
+    const data = await event.request.json();
     const { 
       title, 
       description, 
@@ -14,17 +44,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       hashtags, 
       location, 
       options,
-      settings,
-      userId 
+      settings
     } = data;
 
     // Validaciones
     if (!title || title.trim().length === 0) {
-      return error(400, { message: 'El título es requerido' });
+      throw error(400, { message: 'El título es requerido', code: 'MISSING_TITLE' });
     }
     
     if (!options || options.length < 2) {
-      return error(400, { message: 'Se requieren al menos 2 opciones' });
+      throw error(400, { message: 'Se requieren al menos 2 opciones', code: 'INVALID_OPTIONS' });
     }
 
     // Calcular closedAt basado en duration
@@ -38,36 +67,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       }
     }
 
-    // Determinar el userId a usar
-    let finalUserId = userId;
-    
-    // Si no se proporciona userId, intentar obtenerlo de locals (sesión)
-    if (!finalUserId && locals.user) {
-      finalUserId = locals.user.id;
-    }
-    
-    // Si aún no hay userId, usar usuario demo como fallback
-    if (!finalUserId) {
-      const demoUser = await prisma.user.findFirst({
-        where: { username: 'demo_user' }
-      });
-      
-      if (demoUser) {
-        finalUserId = demoUser.id;
-      } else {
-        // Crear usuario demo si no existe
-        const newDemoUser = await prisma.user.create({
-          data: {
-            username: 'demo_user',
-            email: 'demo@votetok.com',
-            displayName: 'Usuario Demo',
-            role: 'user',
-            verified: false
-          }
-        });
-        finalUserId = newDemoUser.id;
-      }
-    }
+    // Usar el userId del usuario autenticado
+    const finalUserId = user.userId;
 
     // Crear la encuesta con opciones y hashtags en una transacción
     const poll = await prisma.$transaction(async (tx) => {

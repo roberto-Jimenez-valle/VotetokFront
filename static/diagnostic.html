@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>🔍 Diagnóstico de Seguridad API</title>
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, sans-serif; 
+      max-width: 900px; 
+      margin: 40px auto; 
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    .test { 
+      background: #2a2a2a; 
+      padding: 20px; 
+      margin: 15px 0; 
+      border-radius: 8px;
+      border-left: 4px solid #666;
+    }
+    .test.success { border-color: #22c55e; }
+    .test.error { border-color: #ef4444; }
+    .test.warning { border-color: #f59e0b; }
+    h1 { color: #60a5fa; }
+    h2 { color: #a78bfa; margin-top: 0; }
+    pre { 
+      background: #1a1a1a; 
+      padding: 15px; 
+      border-radius: 4px; 
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .status { 
+      display: inline-block; 
+      padding: 4px 12px; 
+      border-radius: 4px; 
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .status.ok { background: #22c55e; color: white; }
+    .status.fail { background: #ef4444; color: white; }
+    .status.pending { background: #f59e0b; color: white; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover { background: #2563eb; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Diagnóstico de Seguridad API - VoteTok</h1>
+  
+  <button onclick="runDiagnostics()">▶️ Ejecutar Diagnóstico Completo</button>
+  <button onclick="location.reload()">🔄 Reiniciar</button>
+  
+  <div id="results"></div>
+
+  <script type="module">
+    window.runDiagnostics = async function() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '<div class="test"><h2>⏳ Ejecutando pruebas...</h2></div>';
+      
+      const results = [];
+      
+      // TEST 1: Variables de entorno del cliente
+      results.push(await testClientEnv());
+      
+      // TEST 2: Endpoint de prueba
+      results.push(await testSecurityEndpoint());
+      
+      // TEST 3: API de encuestas (sin autenticación)
+      results.push(await testPollsEndpointDirect());
+      
+      // TEST 4: API de encuestas (con cliente API)
+      results.push(await testPollsEndpointWithClient());
+      
+      // TEST 5: Verificar imports
+      results.push(await testImports());
+      
+      // Mostrar resultados
+      resultsDiv.innerHTML = results.join('\n');
+    }
+    
+    async function testClientEnv() {
+      const hasAppId = !!import.meta.env.VITE_APP_ID;
+      const hasAppSecret = !!import.meta.env.VITE_APP_SECRET;
+      const appId = import.meta.env.VITE_APP_ID || 'undefined';
+      const secretLength = import.meta.env.VITE_APP_SECRET?.length || 0;
+      
+      const status = hasAppId && hasAppSecret ? 'success' : 'error';
+      const statusText = hasAppId && hasAppSecret ? 'ok' : 'fail';
+      
+      return `
+        <div class="test ${status}">
+          <h2>1️⃣ Variables de Entorno del Cliente</h2>
+          <span class="status ${statusText}">${statusText.toUpperCase()}</span>
+          <pre>VITE_APP_ID: ${appId}
+VITE_APP_SECRET: ${hasAppSecret ? '✅ Presente (' + secretLength + ' chars)' : '❌ NO ENCONTRADO'}
+Secret Preview: ${import.meta.env.VITE_APP_SECRET?.substring(0, 20) || 'undefined'}...</pre>
+          ${!hasAppSecret ? '<p>⚠️ <strong>PROBLEMA:</strong> VITE_APP_SECRET no está cargado. Reinicia el servidor completamente.</p>' : ''}
+        </div>
+      `;
+    }
+    
+    async function testSecurityEndpoint() {
+      try {
+        const response = await fetch('/api/test-security');
+        const data = await response.json();
+        
+        const hasSecrets = data.environment?.hasAppSecret && data.environment?.hasJwtSecret;
+        const status = hasSecrets ? 'success' : 'error';
+        const statusText = hasSecrets ? 'ok' : 'fail';
+        
+        return `
+          <div class="test ${status}">
+            <h2>2️⃣ Variables del Servidor</h2>
+            <span class="status ${statusText}">${statusText.toUpperCase()}</span>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+            ${!hasSecrets ? '<p>⚠️ <strong>PROBLEMA:</strong> El servidor no tiene los secrets. Verifica el archivo .env</p>' : ''}
+          </div>
+        `;
+      } catch (error) {
+        return `
+          <div class="test error">
+            <h2>2️⃣ Variables del Servidor</h2>
+            <span class="status fail">FAIL</span>
+            <pre>Error: ${error.message}</pre>
+          </div>
+        `;
+      }
+    }
+    
+    async function testPollsEndpointDirect() {
+      try {
+        const response = await fetch('/api/polls/trending');
+        const data = await response.json();
+        
+        const status = response.ok ? 'warning' : 'success';
+        const statusText = response.ok ? 'warning' : 'ok';
+        
+        return `
+          <div class="test ${status}">
+            <h2>3️⃣ API Encuestas (Fetch Directo)</h2>
+            <span class="status ${statusText}">${response.status} ${response.statusText}</span>
+            <pre>${JSON.stringify(data, null, 2).substring(0, 500)}...</pre>
+            ${response.ok ? '<p>⚠️ La seguridad NO está bloqueando requests directos (esto es un problema)</p>' : '<p>✅ La seguridad está funcionando correctamente (bloquea requests sin autenticación)</p>'}
+          </div>
+        `;
+      } catch (error) {
+        return `
+          <div class="test error">
+            <h2>3️⃣ API Encuestas (Fetch Directo)</h2>
+            <span class="status fail">ERROR</span>
+            <pre>Error: ${error.message}</pre>
+          </div>
+        `;
+      }
+    }
+    
+    async function testPollsEndpointWithClient() {
+      try {
+        const { apiGet } = await import('/src/lib/api/client.ts');
+        const data = await apiGet('/api/polls/trending');
+        
+        return `
+          <div class="test success">
+            <h2>4️⃣ API Encuestas (Con Cliente API)</h2>
+            <span class="status ok">OK</span>
+            <pre>${JSON.stringify(data, null, 2).substring(0, 500)}...</pre>
+            <p>✅ El cliente API funciona correctamente</p>
+          </div>
+        `;
+      } catch (error) {
+        return `
+          <div class="test error">
+            <h2>4️⃣ API Encuestas (Con Cliente API)</h2>
+            <span class="status fail">FAIL</span>
+            <pre>Error: ${error.message}
+Stack: ${error.stack}</pre>
+            <p>❌ El cliente API no funciona. Verifica que los archivos estén correctos.</p>
+          </div>
+        `;
+      }
+    }
+    
+    async function testImports() {
+      const tests = [];
+      
+      try {
+        await import('/src/lib/api/client.ts');
+        tests.push('✅ client.ts');
+      } catch (e) {
+        tests.push('❌ client.ts: ' + e.message);
+      }
+      
+      try {
+        await import('/src/lib/api/signature.ts');
+        tests.push('✅ signature.ts');
+      } catch (e) {
+        tests.push('❌ signature.ts: ' + e.message);
+      }
+      
+      const allOk = tests.every(t => t.startsWith('✅'));
+      const status = allOk ? 'success' : 'error';
+      const statusText = allOk ? 'ok' : 'fail';
+      
+      return `
+        <div class="test ${status}">
+          <h2>5️⃣ Verificación de Imports</h2>
+          <span class="status ${statusText}">${statusText.toUpperCase()}</span>
+          <pre>${tests.join('\n')}</pre>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import { prisma } from '$lib/server/prisma';
  * GET /api/polls/{id}/votes-by-subdivisions?country={iso}
  * 
  * Retorna votos REALES agrupados por subdivisión para un país específico
+ * Endpoint de solo lectura sin rate limiting (datos públicos)
  * 
  * Response:
  * {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { apiGet, apiCall } from '$lib/api/client';
   
   const dispatch = createEventDispatcher();
   
@@ -361,10 +362,14 @@
     }
   }
 
+  // Flag global para indicar si estamos navegando desde popstate
+  let isNavigatingFromHistory = false;
+  
   // Función para navegar directamente a una vista específica
-  async function navigateToView(targetLevel: 'world' | 'country' | 'subdivision' | 'city') {
+  async function navigateToView(targetLevel: 'world' | 'country' | 'subdivision' | 'city', fromHistory = false) {
     if (!navigationManager) return;
     
+    isNavigatingFromHistory = fromHistory;
     const currentLevel = navigationManager!.getCurrentLevel();
     
     if (targetLevel === 'world') {
@@ -426,6 +431,7 @@
             // No hacer navegación del mapa, solo actualizar los datos del gráfico
     }
     
+    isNavigatingFromHistory = false;
       }
 
   // Polígonos locales por país (zoom cercano)
@@ -875,7 +881,7 @@
                 
     try {
       // Cargar votos reales por subdivisión desde la API
-      const response = await fetch(`/api/polls/${activePoll.id}/votes-by-subdivisions?country=${countryIso}`);
+      const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-subdivisions?country=${countryIso}`);
       
       if (!response.ok) {
         return byId;
@@ -1103,7 +1109,7 @@
     }
 
     // Public API
-    async navigateToCountry(iso: string, countryName: string) {
+    async navigateToCountry(iso: string, countryName: string, skipHistoryPush = false) {
       
       try {
         // Load country data
@@ -1136,6 +1142,30 @@
           { level: 'world', name: 'World' },
           { level: 'country', name: countryName, iso }
         ];
+        
+        // HISTORY API: Guardar estado en el historial del navegador (solo si no viene de popstate)
+        if (!skipHistoryPush && !isNavigatingFromHistory) {
+          const historyState: any = {
+            level: 'country',
+            countryIso: iso,
+            countryName: countryName,
+            timestamp: Date.now()
+          };
+          
+          // Si hay una encuesta activa, incluirla en el estado
+          if (activePoll) {
+            historyState.pollId = activePoll.id;
+            historyState.pollMode = 'specific';
+          }
+          
+          const url = activePoll 
+            ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(iso)}`
+            : `/?country=${encodeURIComponent(iso)}`;
+          history.pushState(historyState, '', url);
+          console.log('[History] 📍 Navegando a país:', countryName, url);
+        } else {
+          console.log('[History] 🔄 Restaurando país desde historial:', countryName);
+        }
 
         // Render country view PRIMERO
         await this.renderCountryView(iso, countryPolygons);
@@ -1147,7 +1177,7 @@
         if (activePoll && activePoll.id) {
           // MODO ENCUESTA ESPECÍFICA: Cargar datos de esa encuesta
           try {
-            const response = await fetch(`/api/polls/${activePoll.id}/votes-by-subdivisions?country=${iso}`);
+            const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-subdivisions?country=${iso}`);
             if (response.ok) {
               const { data } = await response.json();
                             
@@ -1208,7 +1238,7 @@
         } else if (!activePoll) {
           // MODO TRENDING: Cargar datos de trending para este país
           try {
-            const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(selectedCountryName || iso)}&limit=20`);
+            const response = await apiCall(`/api/polls/trending-by-region?region=${encodeURIComponent(selectedCountryName || iso)}&limit=20`);
             if (response.ok) {
               const { data: trendingPolls } = await response.json();
               
@@ -1239,7 +1269,7 @@
                 
                 // Cargar datos de votos por subdivisión para cada encuesta trending
                 try {
-                  const pollResponse = await fetch(`/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`);
+                  const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`);
                   if (pollResponse.ok) {
                     const { data: pollData } = await pollResponse.json() as { data: Record<string, Record<string, number>> };
                     
@@ -1381,7 +1411,7 @@
       }
     }
 
-    async navigateToSubdivision(countryIso: string, subdivisionId: string, subdivisionName: string) {
+    async navigateToSubdivision(countryIso: string, subdivisionId: string, subdivisionName: string, skipHistoryPush = false) {
       try {
         // Ensure we're in country context
         if (this.state.countryIso !== countryIso) {
@@ -1417,6 +1447,32 @@
           { level: 'country', name: this.history[1]?.name || countryIso, iso: countryIso },
           { level: 'subdivision', name: subdivisionName, iso: countryIso, id: subdivisionId }
         ];
+        
+        // HISTORY API: Guardar estado en el historial del navegador (solo si no viene de popstate)
+        if (!skipHistoryPush && !isNavigatingFromHistory) {
+          const historyState: any = {
+            level: 'subdivision',
+            countryIso: countryIso,
+            countryName: this.history[1]?.name || countryIso,
+            subdivisionId: subdivisionId,
+            subdivisionName: subdivisionName,
+            timestamp: Date.now()
+          };
+          
+          // Si hay una encuesta activa, incluirla en el estado
+          if (activePoll) {
+            historyState.pollId = activePoll.id;
+            historyState.pollMode = 'specific';
+          }
+          
+          const url = activePoll
+            ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`
+            : `/?country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`;
+          history.pushState(historyState, '', url);
+          console.log('[History] 📍 Navegando a subdivisión:', subdivisionName, url);
+        } else {
+          console.log('[History] 🔄 Restaurando subdivisión desde historial:', subdivisionName);
+        }
 
         // Render subdivision view PRIMERO
         await this.renderSubdivisionView(countryIso, subdivisionId, subdivisionPolygons);
@@ -1425,7 +1481,7 @@
         if (activePoll && activePoll.id) {
           try {
             const cleanSubdivisionId = subdivisionId.includes('.') ? subdivisionId.split('.').pop() : subdivisionId;
-            const response = await fetch(`/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`);
+            const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`);
             if (response.ok) {
               const { data } = await response.json();
                             
@@ -1470,7 +1526,7 @@
         } else if (!activePoll) {
           // MODO TRENDING: Cargar datos de trending para esta subdivisión
           try {
-            const response = await fetch(`/api/polls/trending-by-region?region=${encodeURIComponent(subdivisionName)}&limit=20`);
+            const response = await apiCall(`/api/polls/trending-by-region?region=${encodeURIComponent(subdivisionName)}&limit=20`);
             if (response.ok) {
               const { data: trendingPolls } = await response.json();
               
@@ -1502,7 +1558,7 @@
                 // Cargar datos de votos por sub-subdivisión para cada encuesta trending
                 try {
                   const cleanSubdivisionId = subdivisionId.includes('.') ? subdivisionId.split('.').pop() : subdivisionId;
-                  const pollResponse = await fetch(`/api/polls/${poll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`);
+                  const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`);
                   if (pollResponse.ok) {
                     const { data: pollData } = await pollResponse.json();
                     
@@ -1613,6 +1669,22 @@
       removeCenterPolygonLabel();
 
       this.history = [{ level: 'world', name: 'World' }];
+      
+      // HISTORY API: Volver al estado mundial (solo si no viene de popstate)
+      // IMPORTANTE: Si hay una encuesta activa, NO sobrescribir el estado
+      if (!isNavigatingFromHistory && !activePoll) {
+        const historyState = {
+          level: 'world',
+          pollMode: 'trending',
+          timestamp: Date.now()
+        };
+        history.pushState(historyState, '', '/');
+        console.log('[History] 📍 Navegando al mundo (trending)');
+      } else if (activePoll) {
+        console.log('[History] 📊 Navegando al mundo pero manteniendo estado de encuesta activa');
+      } else {
+        console.log('[History] 🔄 Restaurando mundo desde historial');
+      }
 
       // Restaurar datos mundiales desde cache
       if (activePoll && activePoll.id) {
@@ -1623,7 +1695,7 @@
             console.log('[Navigation] 📦 Datos mundiales restaurados desde cache:', Object.keys(worldLevelAnswers).length);
           } else {
             // Si no hay cache, cargar desde API
-            const response = await fetch(`/api/polls/${activePoll.id}/votes-by-country`);
+            const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-country`);
             if (response.ok) {
               const { data } = await response.json();
               
@@ -2749,6 +2821,17 @@
   
   // Función para cerrar la encuesta activa y volver a modo trending
   async function closePoll() {
+    // HISTORY API: Volver a modo trending (solo si no viene de popstate)
+    if (!isNavigatingFromHistory) {
+      const historyState = {
+        level: 'world',
+        pollMode: 'trending',
+        timestamp: Date.now()
+      };
+      history.pushState(historyState, '', '/');
+      console.log('[History] 🔄 Volviendo a modo trending');
+    }
+    
     // Limpiar contexto de encuesta
     activePoll = null;
     activePollOptions = [];
@@ -2832,32 +2915,30 @@
       
       console.log('[loadTrendingData] 📡 Llamando a API:', apiUrl);
       
-      // Cargar encuestas desde la API correspondiente
-      const response = await fetch(apiUrl);
-      if (!response.ok) {
-        console.error('[GlobeGL] ❌ Error en API:', response.status, response.statusText);
+      // Cargar encuestas desde la API correspondiente usando cliente seguro
+      try {
+        const { data: trendingPolls } = await apiGet(apiUrl);
+        console.log('[loadTrendingData] ✅ Respuesta recibida:', trendingPolls?.length, 'encuestas');
+        await processTrendingPolls(trendingPolls);
+        return;
+      } catch (error: any) {
+        console.error('[GlobeGL] ❌ Error en API:', error.message);
         
         // Si falla "Para ti", hacer fallback automático a trending
         if (activeTopTab === 'Para ti') {
           console.log('[GlobeGL] 🔄 Fallback automático: usando Tendencias');
-          const fallbackResponse = await fetch('/api/polls/trending-by-region?region=Global&limit=20');
-          if (!fallbackResponse.ok) {
-            console.error('[GlobeGL] ❌ Fallback también falló');
+          try {
+            const fallbackData = await apiGet('/api/polls/trending-by-region?region=Global&limit=20');
+            const { data: trendingPolls } = fallbackData;
+            await processTrendingPolls(trendingPolls);
+            return;
+          } catch (fallbackError) {
+            console.error('[GlobeGL] ❌ Fallback también falló:', fallbackError);
             return;
           }
-          const fallbackData = await fallbackResponse.json();
-          const { data: trendingPolls } = fallbackData;
-          // Continuar con los datos de fallback
-          await processTrendingPolls(trendingPolls);
-          return;
         }
         return;
       }
-      
-      const { data: trendingPolls } = await response.json();
-      console.log('[loadTrendingData] ✅ Respuesta recibida:', trendingPolls?.length, 'encuestas');
-      await processTrendingPolls(trendingPolls);
-      console.log('[loadTrendingData] ✅ Datos procesados correctamente');
     } catch (error) {
       console.error('[GlobeGL] ❌ Error cargando datos:', error);
     }
@@ -2896,7 +2977,7 @@
         
         // Cargar datos de votos por país para cada encuesta trending
         try {
-          const pollResponse = await fetch(`/api/polls/${poll.id}/votes-by-country`);
+          const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-country`);
           if (pollResponse.ok) {
             const { data: pollData } = await pollResponse.json();
             
@@ -3122,7 +3203,8 @@
       pollId: poll?.id || 'null',
       currentActivePoll: activePoll?.id || 'none',
       optionsCount: options.length,
-      modoActual: activePoll ? 'ENCUESTA_ESPECÍFICA' : 'TRENDING'
+      modoActual: activePoll ? 'ENCUESTA_ESPECÍFICA' : 'TRENDING',
+      fromHistory: isNavigatingFromHistory
     });
     
     // Si poll es null (trending/main poll), cerrar encuesta activa
@@ -3136,10 +3218,16 @@
       return;
     }
     
-    // Si es la misma encuesta, no hacer nada
-    if (activePoll && activePoll.id === poll.id) {
+    // Si es la misma encuesta Y NO viene del historial, no hacer nada
+    if (activePoll && activePoll.id === poll.id && !isNavigatingFromHistory) {
       console.log('[HandleOpenPoll] ⏭️ Misma encuesta ya abierta, saltando');
       return;
+    }
+    
+    // Si viene del historial con la misma encuesta, forzar recarga
+    if (activePoll && activePoll.id === poll.id && isNavigatingFromHistory) {
+      console.log('[HandleOpenPoll] 🔄 Recargando encuesta desde historial:', poll.id);
+      // Continuar con la recarga completa
     }
     
     // Si hay una encuesta diferente abierta, cerrarla primero
@@ -3156,6 +3244,19 @@
     activePoll = poll;
     activePollOptions = options;
     
+    // HISTORY API: Guardar estado de encuesta en el historial
+    if (!isNavigatingFromHistory) {
+      const historyState = {
+        level: 'world',
+        pollId: poll.id,
+        pollMode: 'specific',
+        timestamp: Date.now()
+      };
+      const url = `/?poll=${encodeURIComponent(poll.id)}`;
+      history.pushState(historyState, '', url);
+      console.log('[History] 📊 Abriendo encuesta:', poll.id, url);
+    }
+    
     // Actualizar colorMap con los colores de las opciones DE LA ENCUESTA
     const newColorMap: Record<string, string> = {};
     options.forEach(option => {
@@ -3170,7 +3271,7 @@
     const newAnswersData: Record<string, Record<string, number>> = {};
     
     try {
-      const response = await fetch(`/api/polls/${poll.id}/votes-by-country`);
+      const response = await apiCall(`/api/polls/${poll.id}/votes-by-country`);
       if (response.ok) {
         const { data } = await response.json();
         Object.assign(newAnswersData, data);
@@ -3232,6 +3333,22 @@
     
     // El zoom ya se inició al principio, ahora solo actualizamos colores
     await updateGlobeColors();
+    
+    // Si viene del historial, forzar refresh completo del globo
+    if (isNavigatingFromHistory) {
+      console.log('[OpenPoll] 🔄 Forzando refresh del globo desde historial');
+      await tick();
+      
+      // Asegurar que los polígonos mundiales están cargados
+      if (worldPolygons && worldPolygons.length > 0) {
+        globe?.setPolygonsData?.(worldPolygons);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+      
+      // Forzar actualización de colores
+      globe?.refreshPolyColors?.();
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
     
     // Emit poll data to update header with poll-specific information
     const pollOptions = options.map(option => ({
@@ -4314,6 +4431,101 @@
   // }
 
   onMount(async () => {
+    // ============================================
+    // HISTORY API - Navegación SPA con botón atrás
+    // ============================================
+    popstateHandler = async (event: PopStateEvent) => {
+      console.log('[History] 🔙 Botón atrás presionado, state:', event.state);
+      
+      if (!navigationManager) return;
+      
+      const state = event.state;
+      
+      // PRIORIDAD 1: Detectar si hay encuesta específica en el estado
+      if (state?.pollId && state?.pollMode === 'specific') {
+        // Restaurar encuesta específica
+        console.log('[History] 🔄 Restaurando encuesta:', state.pollId);
+        
+        // CRÍTICO: Establecer el flag ANTES de cualquier verificación
+        isNavigatingFromHistory = true;
+        
+        try {
+          // Cargar datos de la encuesta
+          const response = await apiCall(`/api/polls/${state.pollId}`);
+          if (response.ok) {
+            const pollData = await response.json();
+            const poll = pollData.data || pollData;
+            
+            // Recrear formato de opciones
+            const options = poll.options?.map((opt: any, idx: number) => ({
+              key: opt.optionKey || opt.key,
+              label: opt.optionText || opt.label,
+              color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][idx % 4],
+              votes: 0
+            })) || [];
+            
+            // Crear evento sintético para handleOpenPollInGlobe
+            const syntheticEvent = new CustomEvent('openpoll', {
+              detail: { poll, options }
+            }) as CustomEvent<{ poll: any; options: Array<{ key: string; label: string; color: string; votes: number }> }>;
+            
+            // handleOpenPollInGlobe ya maneja el caso de misma encuesta con flag isNavigatingFromHistory
+            await handleOpenPollInGlobe(syntheticEvent);
+          }
+        } catch (error) {
+          console.error('[History] Error restaurando encuesta:', error);
+        } finally {
+          isNavigatingFromHistory = false;
+        }
+        return;
+      }
+      
+      // PRIORIDAD 2: Detectar si volvemos a modo trending
+      if (state?.pollMode === 'trending') {
+        // Volver a modo trending
+        if (activePoll) {
+          console.log('[History] 🔄 Volviendo a modo trending desde encuesta');
+          isNavigatingFromHistory = true;
+          await closePoll();
+          isNavigatingFromHistory = false;
+        }
+        return;
+      }
+      
+      // PRIORIDAD 3: Navegación geográfica
+      // Puede tener pollMode + navegación geográfica simultáneas
+      if (state.level === 'country' && state.countryIso) {
+        // Volver al país (con o sin encuesta)
+        selectedCountryIso = state.countryIso;
+        selectedCountryName = state.countryName || state.countryIso;
+        await navigateToView('country', true); // true = fromHistory
+      } else if (state.level === 'subdivision' && state.countryIso && state.subdivisionId) {
+        // Volver a la subdivisión (con o sin encuesta)
+        selectedCountryIso = state.countryIso;
+        selectedCountryName = state.countryName || state.countryIso;
+        selectedSubdivisionId = state.subdivisionId;
+        selectedSubdivisionName = state.subdivisionName || state.subdivisionId;
+        await navigateToView('subdivision', true); // true = fromHistory
+      } else if (!state || state.level === 'world') {
+        // Volver al mundo (solo si no tiene navegación geográfica)
+        if (!state?.countryIso && !state?.subdivisionId) {
+          await navigateToView('world', true); // true = fromHistory
+        }
+      }
+    };
+    
+    window.addEventListener('popstate', popstateHandler as any);
+    
+    // Establecer estado inicial en el historial si no existe
+    if (!history.state) {
+      const initialState = {
+        level: 'world',
+        pollMode: 'trending',
+        timestamp: Date.now()
+      };
+      history.replaceState(initialState, '', '/');
+    }
+    
     // Inicializar controlador de bottom sheet
     sheetCtrl = new BottomSheetController({
       bottomBarPx: BOTTOM_BAR_PX,
@@ -4577,6 +4789,9 @@
     }
   }
 
+  // Store popstate handler reference for cleanup
+  let popstateHandler: ((event: PopStateEvent) => Promise<void>) | null = null;
+  
   onDestroy(() => {
     try {
       window.removeEventListener('resize', resize);
@@ -4591,6 +4806,10 @@
     // Remove palette change listener
     if (paletteChangeHandler) {
       window.removeEventListener('palettechange', paletteChangeHandler);
+    }
+    // Remove popstate listener
+    if (popstateHandler) {
+      window.removeEventListener('popstate', popstateHandler as any);
     }
   });
 

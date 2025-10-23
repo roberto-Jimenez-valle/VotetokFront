@@ -3,6 +3,8 @@
   import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
   import { currentUser } from '$lib/stores';
+  import { apiPost } from '$lib/api/client';
+  import AuthModal from '$lib/AuthModal.svelte';
   
   const dispatch = createEventDispatcher();
   
@@ -79,6 +81,15 @@
   let hashtags = '';
   let location = '';
   let duration = '7d'; // 1d, 3d, 7d, 30d, never
+  
+  // Estado del modal de autenticación
+  let showAuthModal = $state(false);
+  
+  // DEBUG: Monitorear el estado de currentUser
+  $effect(() => {
+    console.log('[CreatePollModal] currentUser cambió:', $currentUser);
+    console.log('[CreatePollModal] showAuthModal:', showAuthModal);
+  });
   
   // Opciones específicas por tipo
   let ratingCount = 5; // Para tipo 'rating'
@@ -349,6 +360,18 @@
     console.log('🚀 Intentando crear encuesta...');
     console.log('Título:', title);
     console.log('Opciones:', options);
+    console.log('👤 CurrentUser:', $currentUser);
+    console.log('🔒 showAuthModal actual:', showAuthModal);
+    
+    // Verificar si el usuario está autenticado
+    if (!$currentUser) {
+      console.log('⚠️ Usuario no autenticado, mostrando modal de autenticación');
+      showAuthModal = true;
+      console.log('🔒 showAuthModal después de setear:', showAuthModal);
+      return;
+    }
+    
+    console.log('✅ Usuario autenticado, continuando con publicación');
     
     if (!validate()) {
       console.error('❌ Validación fallida:', errors);
@@ -407,23 +430,8 @@
       // Crear la encuesta
       console.log('📤 Enviando datos al servidor:', pollData);
       
-      const response = await fetch('/api/polls', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(pollData)
-      });
+      const result = await apiPost('/api/polls', pollData);
       
-      console.log('📥 Respuesta del servidor:', response.status);
-      
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('❌ Error del servidor:', error);
-        throw new Error(error.message || 'Error al crear la encuesta');
-      }
-      
-      const result = await response.json();
       console.log('✅ Encuesta creada exitosamente:', result);
       
       // Emitir evento de éxito
@@ -448,6 +456,15 @@
     colorPickerOpenFor = null;
     showTypeOptionsModal = false;
     isOpen = false;
+  }
+  
+  // Handler cuando el usuario se autentica
+  function handleAuthComplete(event: CustomEvent) {
+    const { provider } = event.detail;
+    console.log('✅ Usuario autenticado con:', provider);
+    showAuthModal = false;
+    // Después de autenticar, intentar publicar nuevamente
+    handleSubmit();
   }
   
   // Reset del formulario
@@ -1172,6 +1189,9 @@
     </div>
   </div>
 {/if}
+
+<!-- Modal de Autenticación -->
+<AuthModal bind:isOpen={showAuthModal} on:login={handleAuthComplete} />
 
 <style>
   .modal-overlay {
