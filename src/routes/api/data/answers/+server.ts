@@ -1,4 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { FILE_MAP } from '$lib/config/file-map';
 import { isoOf, centroidOf } from '$lib/utils/geo';
 
 // Helper: parse number or fallback
@@ -31,8 +32,8 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
 
     // Load base world map and data
     const [mapRes, dataRes] = await Promise.all([
-      fetch('/maps/world.topojson.json'),
-      fetch('/data/WORLD.json')
+      fetch(FILE_MAP.getPath('maps', 'world.topojson')),
+      fetch(FILE_MAP.getPath('data', 'WORLD.json'))
     ]);
     if (!mapRes.ok) return json({ error: 'Map not found' }, { status: 404 });
     if (!dataRes.ok) return json({ error: 'Data not found' }, { status: 404 });

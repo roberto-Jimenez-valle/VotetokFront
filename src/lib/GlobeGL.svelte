@@ -91,6 +91,7 @@
   import { BottomSheetController, type SheetState } from './globe/bottomSheet';
   import { computeGlobeViewModel, getFeatureId } from './utils/globeDataProc';
   import themeConfig from './config/theme.json';
+  import { getCountryPath } from './config/file-map';
 
   // Permitir modo "data-in": el padre pasa datos directamente y GlobeGL se auto-configura
   export let geo: any = null;
@@ -615,7 +616,7 @@
   }
 
   async function loadSubregionTopoAsGeoFeatures(iso: string, id1: string): Promise<any[]> {
-    const path = `/geojson/${iso}/${id1}.topojson`;
+    const path = getCountryPath(iso, id1);
     const resp = await fetch(path);
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status} al cargar ${path}`);
@@ -2405,7 +2406,7 @@
     
     for (const pattern of patterns) {
       try {
-        const path = `/geojson/${iso}/${pattern}.topojson`;
+        const path = getCountryPath(iso, pattern);
         const resp = await fetch(path, { method: 'HEAD' });
         if (resp.ok) {
           return pattern;
@@ -2644,7 +2645,7 @@
             
       try {
         // Check if the subdivision file exists
-        const path = `/geojson/${countryIso}/${subdivisionFile}.topojson`;
+        const path = getCountryPath(countryIso, subdivisionFile);
         const resp = await fetch(path, { method: 'HEAD' });
         
         if (resp.ok) {
@@ -4302,8 +4303,8 @@
   
 
   async function loadCountryTopoAsGeoFeatures(iso: string): Promise<any[]> {
-    const path = '/geojson/' + iso + '/' + iso + '.topojson';
-    console.log(`[LoadTopo] Cargando ${path}...`);
+    const path = getCountryPath(iso);
+    console.log(`[LoadTopo] Cargando ${iso}...`);
     
     const resp = await fetch(path);
     if (!resp.ok) {
@@ -5324,7 +5325,7 @@
         // Intentar cargar el archivo de subdivisión para ver si existe
         const hasSubdivisions = await (async () => {
           try {
-            const resp = await fetch(`/geojson/${iso}/${subdivisionId}.topojson`, { method: 'HEAD' });
+            const resp = await fetch(getCountryPath(iso, subdivisionId), { method: 'HEAD' });
             return resp.ok;
           } catch {
             return false;
@@ -5684,7 +5685,7 @@
         
         const hasSubdivisions = await (async () => {
           try {
-            const resp = await fetch(`/geojson/${iso}/${subdivisionId}.topojson`, { method: 'HEAD' });
+            const resp = await fetch(getCountryPath(iso, subdivisionId), { method: 'HEAD' });
             return resp.ok;
           } catch { return false; }
         })();
