@@ -1,8 +1,11 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { APP_SECRET, JWT_SECRET } from '$env/static/private'
+import { env } from '$env/dynamic/private'
 
 export const GET: RequestHandler = async () => {
+  const APP_SECRET = env.APP_SECRET
+  const JWT_SECRET = env.JWT_SECRET
+  
   return json({
     message: 'Security Test Endpoint',
     environment: {

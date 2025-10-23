@@ -4,10 +4,10 @@
  */
 
 import { SignJWT, jwtVerify } from 'jose'
-import { JWT_SECRET as ENV_JWT_SECRET } from '$env/static/private'
+import { env } from '$env/dynamic/private'
 
 const JWT_SECRET = new TextEncoder().encode(
-  ENV_JWT_SECRET || 'change-this-secret-in-production-use-random-32-chars'
+  env.JWT_SECRET || 'change-this-secret-in-production-use-random-32-chars-minimum'
 )
 
 export interface JWTPayload {

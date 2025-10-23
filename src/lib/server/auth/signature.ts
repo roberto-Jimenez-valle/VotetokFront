@@ -4,9 +4,9 @@
  */
 
 import { createHmac, timingSafeEqual } from 'crypto'
-import { APP_SECRET as ENV_APP_SECRET, JWT_SECRET } from '$env/static/private'
+import { env } from '$env/dynamic/private'
 
-const APP_SECRET = ENV_APP_SECRET || 'change-this-app-secret-in-production-random-64-chars'
+const APP_SECRET = env.APP_SECRET || 'change-this-app-secret-in-production-random-64-chars'
 const TIMESTAMP_TOLERANCE = 5 * 60 * 1000 // 5 minutos
 
 // App IDs válidos
