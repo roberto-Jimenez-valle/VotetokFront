@@ -216,12 +216,11 @@ async function main() {
   });
 
   
-  // Crear votos geolocalizados para la primera encuesta
-  // Buscar subdivisiones NIVEL 3 (provincias) más cercanas a las coordenadas
-  console.log('🔍 Buscando subdivisiones nivel 3 para votos de ejemplo...');
+  // Crear votos geolocalizados REALISTAS
+  console.log('🔍 Generando votos con subdivisiones...');
   
-  // Helper function para buscar subdivisión nivel 3 más cercana
-  async function findNearestLevel3(lat: number, lon: number, iso3: string) {
+  // Helper para buscar subdivisión más cercana (nivel 2 o 3)
+  async function findNearestSubdivision(lat: number, lon: number, iso3: string, level: number = 2) {
     const result = await prisma.$queryRaw<Array<{
       id: number;
       subdivision_id: string;
@@ -230,8 +229,10 @@ async function main() {
     }>>`
       SELECT id, subdivision_id, name, level
       FROM subdivisions
-      WHERE level = 3 
+      WHERE level = ${level}
         AND subdivision_id LIKE ${iso3 + '.%'}
+        AND latitude IS NOT NULL
+        AND longitude IS NOT NULL
       ORDER BY 
         ((latitude - ${lat}) * (latitude - ${lat}) + 
          (longitude - ${lon}) * (longitude - ${lon}))
@@ -240,49 +241,145 @@ async function main() {
     return result[0];
   }
 
-  // Buscar provincias nivel 3
-  const madridProvince = await findNearestLevel3(40.4168, -3.7038, 'ESP'); // Madrid provincia
-  const barcelonaProvince = await findNearestLevel3(41.3851, 2.1734, 'ESP'); // Barcelona provincia
-  const sevillaProvince = await findNearestLevel3(37.3891, -5.9845, 'ESP'); // Sevilla provincia
-  const parisProvince = await findNearestLevel3(48.8566, 2.3522, 'FRA'); // París provincia
-  const londonProvince = await findNearestLevel3(51.5074, -0.1278, 'GBR'); // Londres provincia
+  // Buscar subdivisiones nivel 2 (comunidades/estados)
+  const madrid = await findNearestSubdivision(40.4168, -3.7038, 'ESP', 2);
+  const cataluna = await findNearestSubdivision(41.3851, 2.1734, 'ESP', 2);
+  const andalucia = await findNearestSubdivision(37.3891, -5.9845, 'ESP', 2);
+  const california = await findNearestSubdivision(36.7783, -119.4179, 'USA', 2);
+  const texas = await findNearestSubdivision(31.9686, -99.9018, 'USA', 2);
+  const ileDeFrance = await findNearestSubdivision(48.8566, 2.3522, 'FRA', 2);
+  const england = await findNearestSubdivision(52.3555, -1.1743, 'GBR', 2);
 
-  if (!madridProvince || !barcelonaProvince || !sevillaProvince || !parisProvince || !londonProvince) {
-    console.warn('⚠️ No se encontraron subdivisiones nivel 3. Ejecuta: npm run db:populate-subdivisions');
+  if (!madrid || !cataluna || !andalucia) {
+    console.warn('⚠️ No se encontraron subdivisiones nivel 2.');
     console.log('⏭️ Saltando creación de votos de ejemplo');
   } else {
-    console.log(`✅ Subdivisiones nivel 3 encontradas:`);
-    console.log(`   Madrid: ${madridProvince.name} (${madridProvince.subdivision_id})`);
-    console.log(`   Barcelona: ${barcelonaProvince.name} (${barcelonaProvince.subdivision_id})`);
-    console.log(`   Sevilla: ${sevillaProvince.name} (${sevillaProvince.subdivision_id})`);
-    console.log(`   París: ${parisProvince.name} (${parisProvince.subdivision_id})`);
-    console.log(`   Londres: ${londonProvince.name} (${londonProvince.subdivision_id})`);
+    console.log(`✅ Subdivisiones encontradas:`);
+    console.log(`   ${madrid.name} (${madrid.subdivision_id})`);
+    console.log(`   ${cataluna.name} (${cataluna.subdivision_id})`);
+    console.log(`   ${andalucia.name} (${andalucia.subdivision_id})`);
+    if (california) console.log(`   ${california.name} (${california.subdivision_id})`);
+    if (texas) console.log(`   ${texas.name} (${texas.subdivision_id})`);
+    if (ileDeFrance) console.log(`   ${ileDeFrance.name} (${ileDeFrance.subdivision_id})`);
+    if (england) console.log(`   ${england.name} (${england.subdivision_id})`);
 
+    // Generar votos REALISTAS distribuidos geográficamente
     const votesData = [
-      // Madrid - Economía
-      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.4168, lng: -3.7038, subdivisionId: madridProvince.id },
-      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.42, lng: -3.70, subdivisionId: madridProvince.id },
-      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 40.41, lng: -3.71, subdivisionId: madridProvince.id },
+      // POLL 1: Prioridades del gobierno
+      // Madrid - Economía (60 votos)
+      ...Array(60).fill(null).map(() => ({
+        pollId: poll1.id,
+        userId: users[Math.floor(Math.random() * users.length)].id,
+        optionId: poll1.options[0].id,
+        lat: 40.4168 + (Math.random() - 0.5) * 0.5,
+        lng: -3.7038 + (Math.random() - 0.5) * 0.5,
+        subdivisionId: madrid.id,
+      })),
       
-      // Barcelona - Sanidad
-      { pollId: poll1.id, optionId: poll1.options[1].id, lat: 41.3851, lng: 2.1734, subdivisionId: barcelonaProvince.id },
-      { pollId: poll1.id, optionId: poll1.options[1].id, lat: 41.38, lng: 2.17, subdivisionId: barcelonaProvince.id },
+      // Cataluña - Sanidad (80 votos)
+      ...Array(80).fill(null).map(() => ({
+        pollId: poll1.id,
+        userId: Math.random() > 0.3 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll1.options[1].id,
+        lat: 41.3851 + (Math.random() - 0.5) * 0.8,
+        lng: 2.1734 + (Math.random() - 0.5) * 0.8,
+        subdivisionId: cataluna.id,
+      })),
       
-      // Sevilla - Sanidad
-      { pollId: poll1.id, optionId: poll1.options[1].id, lat: 37.3891, lng: -5.9845, subdivisionId: sevillaProvince.id },
+      // Andalucía - Educación (45 votos)
+      ...Array(45).fill(null).map(() => ({
+        pollId: poll1.id,
+        userId: Math.random() > 0.4 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll1.options[2].id,
+        lat: 37.3891 + (Math.random() - 0.5) * 1.0,
+        lng: -5.9845 + (Math.random() - 0.5) * 1.0,
+        subdivisionId: andalucia.id,
+      })),
       
-      // París - Medio Ambiente
-      { pollId: poll1.id, optionId: poll1.options[3].id, lat: 48.8566, lng: 2.3522, subdivisionId: parisProvince.id },
-      { pollId: poll1.id, optionId: poll1.options[3].id, lat: 48.86, lng: 2.35, subdivisionId: parisProvince.id },
+      // Madrid - Medio Ambiente (25 votos)
+      ...Array(25).fill(null).map(() => ({
+        pollId: poll1.id,
+        userId: Math.random() > 0.5 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll1.options[3].id,
+        lat: 40.4168 + (Math.random() - 0.5) * 0.5,
+        lng: -3.7038 + (Math.random() - 0.5) * 0.5,
+        subdivisionId: madrid.id,
+      })),
       
-      // Londres - Economía
-      { pollId: poll1.id, optionId: poll1.options[0].id, lat: 51.5074, lng: -0.1278, subdivisionId: londonProvince.id },
+      // POLL 2: Energías renovables
+      // Cataluña - Sí (120 votos)
+      ...Array(120).fill(null).map(() => ({
+        pollId: poll2.id,
+        userId: Math.random() > 0.3 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll2.options[0].id,
+        lat: 41.3851 + (Math.random() - 0.5) * 0.8,
+        lng: 2.1734 + (Math.random() - 0.5) * 0.8,
+        subdivisionId: cataluna.id,
+      })),
+      
+      // Madrid - Sí (90 votos)
+      ...Array(90).fill(null).map(() => ({
+        pollId: poll2.id,
+        userId: Math.random() > 0.4 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll2.options[0].id,
+        lat: 40.4168 + (Math.random() - 0.5) * 0.5,
+        lng: -3.7038 + (Math.random() - 0.5) * 0.5,
+        subdivisionId: madrid.id,
+      })),
+      
+      // Andalucía - Tal vez (35 votos)
+      ...Array(35).fill(null).map(() => ({
+        pollId: poll2.id,
+        userId: Math.random() > 0.5 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll2.options[2].id,
+        lat: 37.3891 + (Math.random() - 0.5) * 1.0,
+        lng: -5.9845 + (Math.random() - 0.5) * 1.0,
+        subdivisionId: andalucia.id,
+      })),
+      
+      // POLL 3: Trabajo remoto
+      // Madrid - Híbrido (75 votos)
+      ...Array(75).fill(null).map(() => ({
+        pollId: poll3.id,
+        userId: Math.random() > 0.2 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll3.options[1].id,
+        lat: 40.4168 + (Math.random() - 0.5) * 0.5,
+        lng: -3.7038 + (Math.random() - 0.5) * 0.5,
+        subdivisionId: madrid.id,
+      })),
+      
+      // Cataluña - 100% remoto (55 votos)
+      ...Array(55).fill(null).map(() => ({
+        pollId: poll3.id,
+        userId: Math.random() > 0.3 ? users[Math.floor(Math.random() * users.length)].id : null,
+        optionId: poll3.options[0].id,
+        lat: 41.3851 + (Math.random() - 0.5) * 0.8,
+        lng: 2.1734 + (Math.random() - 0.5) * 0.8,
+        subdivisionId: cataluna.id,
+      })),
     ];
 
+    // Si hay subdivisiones internacionales, agregar votos
+    if (california) {
+      votesData.push(
+        ...Array(40).fill(null).map(() => ({
+          pollId: poll1.id,
+          userId: null,
+          optionId: poll1.options[0].id,
+          lat: 36.7783 + (Math.random() - 0.5) * 2.0,
+          lng: -119.4179 + (Math.random() - 0.5) * 2.0,
+          subdivisionId: california.id,
+        }))
+      );
+    }
+
+    console.log(`📊 Generando ${votesData.length} votos...`);
+    
     for (const voteData of votesData) {
       await prisma.vote.create({
         data: {
           pollId: voteData.pollId,
+          userId: voteData.userId,
           optionId: voteData.optionId,
           latitude: voteData.lat,
           longitude: voteData.lng,
@@ -291,7 +388,7 @@ async function main() {
       });
     }
     
-    console.log('✅ Votos de ejemplo creados con subdivisiones NIVEL 3');
+    console.log(`✅ ${votesData.length} votos creados con subdivisiones reales`);
   }
 
   // Los contadores se auto-calculan desde los votos
@@ -317,24 +414,47 @@ async function main() {
   });
 
   
-  // Crear historial de votos para gráficos
-    const now = new Date();
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    for (const option of poll1.options) {
-      const baseVotes = Math.floor(Math.random() * 100) + 50;
-      const totalVotes = poll1.options.reduce((sum, opt) => sum + baseVotes, 0);
-      await prisma.voteHistory.create({
-        data: {
-          pollId: poll1.id,
-          optionId: option.id,
-          voteCount: baseVotes,
-          percentage: (baseVotes / totalVotes) * 100,
-          recordedAt: date,
-        },
-      });
+  // Crear historial de votos REALISTA (últimos 30 días)
+  console.log('📈 Generando historial de votos...');
+  const now = new Date();
+  const polls = [poll1, poll2, poll3];
+  
+  for (const poll of polls) {
+    for (let day = 0; day < 30; day++) {
+      const date = new Date(now.getTime() - day * 24 * 60 * 60 * 1000);
+      
+      // Simular crecimiento orgánico (más votos recientes)
+      const growthFactor = 1 + (30 - day) / 30;
+      
+      for (let hour = 0; hour < 24; hour += 6) {
+        const recordDate = new Date(date);
+        recordDate.setHours(hour);
+        
+        const optionVotes = poll.options.map((option, idx) => {
+          // Variar votos por opción con tendencia
+          const base = 10 + idx * 5;
+          const variance = Math.floor(Math.random() * 20);
+          return Math.floor((base + variance) * growthFactor);
+        });
+        
+        const totalVotes = optionVotes.reduce((sum, v) => sum + v, 0);
+        
+        for (let i = 0; i < poll.options.length; i++) {
+          await prisma.voteHistory.create({
+            data: {
+              pollId: poll.id,
+              optionId: poll.options[i].id,
+              voteCount: optionVotes[i],
+              percentage: (optionVotes[i] / totalVotes) * 100,
+              recordedAt: recordDate,
+            },
+          });
+        }
+      }
     }
   }
+  
+  console.log('✅ Historial de votos generado (30 días, 4 registros/día)');
 
   
   // Crear encuestas de prueba con 8 y 12 opciones
