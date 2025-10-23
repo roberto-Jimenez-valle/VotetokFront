@@ -8,6 +8,7 @@ async function main() {
   // Eliminar datos existentes en orden (respetando foreign keys)
   await prisma.pollHashtag.deleteMany({});
   await prisma.hashtag.deleteMany({});
+  await prisma.voteHistory.deleteMany({});
   await prisma.vote.deleteMany({});
   await prisma.pollOption.deleteMany({});
   await prisma.poll.deleteMany({});
