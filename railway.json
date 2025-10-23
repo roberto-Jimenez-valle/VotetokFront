@@ -5,7 +5,7 @@
     "buildCommand": "npm install && npx prisma generate && npm run build"
   },
   "deploy": {
-    "startCommand": "rm -rf prisma/migrations && npx prisma db push --accept-data-loss --skip-generate && npx prisma generate && npx tsx prisma/seed.ts && node build/index.js",
+    "startCommand": "node build/index.js",
     "healthcheckPath": "/",
     "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",

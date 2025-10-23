@@ -1,6 +1,88 @@
 # 🚂 Deployment en Railway
 
-## Pasos para desplegar VoteTok en Railway
+## 🚨 TROUBLESHOOTING: Errores 500 después del deploy
+
+### Problema: Todos los APIs retornan 500 Internal Server Error
+
+**Causa:** El `startCommand` anterior era demasiado complejo y estaba fallando.
+
+**Solución:**
+
+#### 1. Verificar Variables de Entorno en Railway
+
+Ve a tu proyecto Railway → tu servicio → **Variables** y verifica que existan:
+
+```env
+DATABASE_URL=postgresql://postgres:xxxxx@xxxxx.railway.app:5432/railway
+JWT_SECRET=tu-secret-jwt-minimo-32-caracteres-aleatorios
+APP_SECRET=tu-app-secret-minimo-64-caracteres-aleatorios
+NODE_ENV=production
+PORT=3000
+```
+
+**Generar secrets seguros:**
+```bash
+# JWT_SECRET (32 caracteres)
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# APP_SECRET (64 caracteres)  
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
+#### 2. Configurar Base de Datos (Primera vez)
+
+En Railway CLI o desde el dashboard:
+
+```bash
+# Conectar a Railway CLI
+railway login
+railway link
+
+# Ejecutar setup de base de datos (SOLO LA PRIMERA VEZ)
+railway run bash scripts/railway-db-setup.sh
+```
+
+O manualmente desde Railway dashboard → tu servicio → "Console":
+
+```bash
+npx prisma generate
+npx prisma db push --skip-generate
+npx tsx prisma/seed.ts
+```
+
+#### 3. Re-desplegar
+
+He simplificado el `railway.json` para que sea más robusto:
+
+```bash
+git add .
+git commit -m "Fix Railway deployment configuration"
+git push
+```
+
+Railway automáticamente re-desplegará con la configuración corregida.
+
+#### 4. Verificar Logs
+
+En Railway dashboard → tu servicio → "Deployments" → "View Logs"
+
+Busca errores como:
+- ❌ `Error: Invalid DATABASE_URL`
+- ❌ `PrismaClientInitializationError`
+- ❌ `ENOENT: no such file or directory`
+
+#### 5. Verificar que el Build Copie Archivos Estáticos
+
+El script `postbuild` debe ejecutarse. Verifica en los logs de build:
+
+```
+📦 Copiando archivos estáticos...
+✅ Archivos estáticos copiados correctamente
+```
+
+---
+
+## Pasos para desplegar VoteTok en Railway (Desde Cero)
 
 ### 1. Crear cuenta en Railway
 1. Ve a https://railway.app
