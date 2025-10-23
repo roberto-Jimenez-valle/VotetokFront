@@ -2,9 +2,11 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import UnifiedThemeToggle from '$lib/components/UnifiedThemeToggle.svelte';
+	import UnderConstruction from '$lib/UnderConstruction.svelte';
 	import { setCurrentUser } from '$lib/stores';
 	
 	let { children } = $props();
+	let hasAccess = $state(false);
 	
 	function handlePaletteChange(event: CustomEvent) {
 		const palette = event.detail;
@@ -37,23 +39,39 @@
 	}
 	
 	onMount(() => {
-		// 🎯 DESHABILITADO: Usuario de prueba para testing de autenticación
-		// Para habilitar el usuario hardcodeado, descomenta el siguiente bloque:
-		/*
-		setCurrentUser({
-			id: 1, // ✅ Cambiado a ID existente (maria_gonzalez)
-			username: 'maria_gonzalez',
-			displayName: 'María González',
-			email: 'maria@votetok.com',
-			avatarUrl: 'https://i.pravatar.cc/150?u=maria',
-			verified: true,
-			countryIso3: 'ESP',
-			subdivisionId: '1',
-			role: 'user'
-		});
-		console.log('👤 Usuario de prueba configurado: maria_gonzalez (ID: 1)');
-		*/
-		console.log('👤 Iniciando sin usuario (modo autenticación)');
+		// 🔐 Verificar acceso
+		const access = localStorage.getItem('votetok-access');
+		hasAccess = access === 'granted';
+		
+		// Si no tiene acceso, no continuar con el resto de la inicialización
+		if (!hasAccess) {
+			console.log('🔒 Acceso restringido - mostrando página en construcción');
+			return;
+		}
+		
+		// 👤 Cargar usuario seleccionado desde localStorage
+		const savedUser = localStorage.getItem('votetok-test-user');
+		if (savedUser) {
+			try {
+				const user = JSON.parse(savedUser);
+				setCurrentUser({
+					id: user.id,
+					username: user.username,
+					displayName: user.displayName,
+					email: user.email,
+					avatarUrl: user.avatarUrl,
+					verified: user.verified,
+					countryIso3: user.countryIso3,
+					subdivisionId: user.subdivisionId,
+					role: user.role
+				});
+				console.log('👤 Usuario cargado:', user.username, '(ID:', user.id + ')');
+			} catch (error) {
+				console.error('❌ Error al cargar usuario guardado:', error);
+			}
+		} else {
+			console.log('👤 Iniciando sin usuario (modo autenticación)');
+		}
 		
 		// Activar modo dark por defecto
 		document.documentElement.classList.add('dark');
@@ -132,25 +150,30 @@
 	});
 </script>
 
-{#if showSplash}
-<div class="splash-screen">
-	<div class="splash-content">
-		<!-- Logo VouTop -->
-		<div class="logo-text">VouTop</div>
-		<!-- Imagen debajo del logo -->
+{#if !hasAccess}
+	<!-- Página en construcción -->
+	<UnderConstruction />
+{:else}
+	{#if showSplash}
+	<div class="splash-screen">
+		<div class="splash-content">
+			<!-- Logo VouTop -->
+			<div class="logo-text">VouTop</div>
+			<!-- Imagen debajo del logo -->
+		</div>
 	</div>
-</div>
+	{/if}
+
+	<!-- Unified Theme Toggle (renderizado en el header) -->
+	<UnifiedThemeToggle 
+		on:palettechange={handlePaletteChange}
+		on:themechange={handleThemeChange}
+	/>
+
+	<!-- Botón de pantalla completa movido al BottomSheet -->
+
+	{@render children()}
 {/if}
-
-<!-- Unified Theme Toggle (renderizado en el header) -->
-<UnifiedThemeToggle 
-	on:palettechange={handlePaletteChange}
-	on:themechange={handleThemeChange}
-/>
-
-<!-- Botón de pantalla completa movido al BottomSheet -->
-
-{@render children()}
 
 <style>
 	.splash-screen {
