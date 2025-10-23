@@ -1,6 +1,8 @@
-# 🔐 Sistema de Ofuscación de Archivos TopoJSON
+# ⚠️ DEPRECATED - Sistema de Ofuscación REMOVIDO
 
-Este sistema dificulta el acceso directo a archivos TopoJSON reemplazando nombres predecibles con hashes **solo en producción**.
+**Este sistema fue eliminado.** Ahora todos los archivos TopoJSON se sirven **únicamente a través de APIs del servidor**.
+
+Los usuarios NO tienen acceso directo a archivos estáticos - todo pasa por endpoints protegidos.
 
 ## 📝 ¿Qué hace?
 

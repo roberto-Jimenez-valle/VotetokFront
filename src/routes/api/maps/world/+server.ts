@@ -1,9 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { FILE_MAP } from '$lib/config/file-map';
 
-export const GET: RequestHandler = async ({ fetch, url }) => {
-  const filePath = FILE_MAP.getPath('maps', 'world.topojson');
-  const res = await fetch(filePath);
+export const GET: RequestHandler = async ({ fetch }) => {
+  const res = await fetch('/maps/world.topojson.json');
   if (!res.ok) {
     return json({ error: 'Map not found' }, { status: 404 });
   }
