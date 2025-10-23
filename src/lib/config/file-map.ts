@@ -3,11 +3,11 @@
 // En producción: usa nombres hash ofuscados
 
 // Detectar si estamos en producción
-// En cliente: import.meta.env.PROD
-// En servidor: process.env.NODE_ENV === 'production'
+// En cliente: import.meta.env.PROD (true en preview y build)
+// En servidor: process.env.NODE_ENV !== 'development'
 const isProduction = typeof import.meta !== 'undefined' 
   ? import.meta.env.PROD 
-  : process.env.NODE_ENV === 'production';
+  : process.env.NODE_ENV !== 'development';
 
 export const FILE_MAP = {
   // Mapeo: nombre lógico → nombre real en desarrollo → nombre hash en producción
