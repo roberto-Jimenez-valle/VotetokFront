@@ -1,11 +1,16 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import SinglePollSection from './globe/cards/sections/SinglePollSection.svelte';
+  import UserProfileModal from '$lib/UserProfileModal.svelte';
   import { currentUser } from '$lib/stores';
   import { apiCall, apiPost } from '$lib/api/client';
   import '$lib/styles/trending-ranking.css';
   
   const dispatch = createEventDispatcher();
+  
+  // Estado para modal de perfil
+  let isProfileModalOpen = $state(false);
+  let selectedProfileUserId = $state<number | null>(null);
 
   type TrendingUser = {
     id: number;
@@ -760,12 +765,33 @@
     }
   }
   
-  function handleClearVote(event: CustomEvent) {
+  async function handleClearVote(event: CustomEvent) {
     const { pollId } = event.detail;
     console.log('[Header] 🗑️ Limpiar voto:', { pollId });
-    delete userVotes[pollId];
-    delete displayVotes[pollId];
-    delete multipleVotes[pollId];
+    
+    try {
+      const numericPollId = typeof pollId === 'string' ? parseInt(pollId) : pollId;
+      
+      // Llamar a la API para eliminar el voto
+      await fetch(`/api/polls/${numericPollId}/vote`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: $currentUser?.id || null
+        })
+      });
+      
+      // Actualizar estado local
+      delete userVotes[pollId];
+      delete displayVotes[pollId];
+      delete multipleVotes[pollId];
+      
+      console.log('[Header] ✅ Voto eliminado correctamente');
+    } catch (error) {
+      console.error('[Header] Error al eliminar voto:', error);
+    }
   }
   
   function handlePublishOption(event: CustomEvent) {
@@ -804,6 +830,22 @@
   function handleOpenColorPicker(event: CustomEvent) {
     console.log('[Header] 🎨 Abrir selector de color:', event.detail);
     // TODO: Implementar selector de color
+  }
+  
+  function openUserProfile(userId: number, event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    selectedProfileUserId = userId;
+    isProfileModalOpen = true;
+  }
+  
+  function handlePollClickFromProfile(event: CustomEvent) {
+    const { pollId } = event.detail;
+    // Cerrar modal de perfil y abrir encuesta en el globo
+    isProfileModalOpen = false;
+    dispatch('openpoll', { pollId });
   }
 
 </script>
@@ -1633,3 +1675,10 @@
 		transform: scale(1);
 	}
 </style>
+
+<!-- Modal de perfil de usuario -->
+<UserProfileModal 
+	bind:isOpen={isProfileModalOpen} 
+	bind:userId={selectedProfileUserId}
+	on:pollClick={handlePollClickFromProfile}
+/>

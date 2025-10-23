@@ -2,6 +2,7 @@
   import { fade, fly } from 'svelte/transition';
   import { X, Bell, Heart, MessageCircle, UserPlus, TrendingUp, Check } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
+  import UserProfileModal from '$lib/UserProfileModal.svelte';
   
   const dispatch = createEventDispatcher();
   
@@ -11,14 +12,22 @@
   
   let { isOpen = $bindable(false) }: Props = $props();
   
-  // Swipe handlers para cerrar modal (como type-options-sheet)
+  // Estado para modal de perfil
+  let isProfileModalOpen = $state(false);
+  let selectedUserId = $state<number | null>(null);
+  
+  // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
+  let scrollContainer: HTMLElement | null = null;
   
   function handleModalSwipeStart(e: TouchEvent) {
     modalTouchStartY = e.touches[0].clientY;
   }
   
   function handleModalSwipeMove(e: TouchEvent) {
+    // Solo cerrar si el scroll está en la parte superior
+    if (!scrollContainer || scrollContainer.scrollTop > 0) return;
+    
     const deltaY = e.touches[0].clientY - modalTouchStartY;
     if (deltaY > 100) {
       closeModal();
@@ -123,6 +132,14 @@
     console.log('Abrir notificación:', notificationId);
     dispatch('notificationClick', { notificationId });
   }
+  
+  function handleAvatarClick(userId: number, event: Event) {
+    event.stopPropagation();
+    selectedUserId = userId;
+    isProfileModalOpen = true;
+    // Cerrar el modal de notificaciones cuando se abre el perfil
+    isOpen = false;
+  }
 </script>
 
 {#if isOpen}
@@ -198,21 +215,33 @@
       </div>
 
       <!-- Lista de notificaciones -->
-      <div class="notifications-list">
+      <div class="notifications-list" bind:this={scrollContainer}>
         {#each notifications as notification (notification.id)}
-          <button
+          <div
             class="notification-item"
             class:unread={!notification.read}
-            onclick={() => handleNotificationClick(notification.id)}
           >
-            <div class="notification-avatar">
+            <div 
+              class="notification-avatar" 
+              onclick={(e) => handleAvatarClick(notification.id, e)}
+              role="button"
+              tabindex="0"
+              aria-label="Ver perfil de {notification.user.name}"
+              onkeydown={(e) => e.key === 'Enter' && handleAvatarClick(notification.id, e)}
+            >
               <img src={notification.user.avatar} alt={notification.user.name} />
               <div class="notification-icon" class:vote={notification.type === 'vote'} class:like={notification.type === 'like'} class:follow={notification.type === 'follow'} class:comment={notification.type === 'comment'}>
                 <svelte:component this={notification.icon} size={14} />
               </div>
             </div>
             
-            <div class="notification-content">
+            <div 
+              class="notification-content"
+              onclick={() => handleNotificationClick(notification.id)}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => e.key === 'Enter' && handleNotificationClick(notification.id)}
+            >
               <div class="notification-text">
                 <strong>{notification.user.name}</strong>
                 {notification.message}
@@ -226,7 +255,7 @@
             {#if !notification.read}
               <div class="unread-dot"></div>
             {/if}
-          </button>
+          </div>
         {/each}
       </div>
 
@@ -238,6 +267,9 @@
       {/if}
     </div>
   </div>
+  
+  <!-- Modal de perfil de usuario -->
+  <UserProfileModal bind:isOpen={isProfileModalOpen} bind:userId={selectedUserId} />
 {/if}
 
 <style>
@@ -421,9 +453,7 @@
     gap: 12px;
     padding: 14px;
     background: rgba(255, 255, 255, 0.03);
-    border: none;
     border-radius: 12px;
-    cursor: pointer;
     transition: all 0.2s;
     text-align: left;
     width: 100%;
@@ -441,6 +471,15 @@
   .notification-avatar {
     position: relative;
     flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  
+  .notification-avatar:hover {
+    transform: scale(1.1);
   }
 
   .notification-avatar img {
@@ -485,6 +524,7 @@
 
   .notification-content {
     flex: 1;
+    cursor: pointer;
   }
 
   .notification-text {

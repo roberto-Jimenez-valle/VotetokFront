@@ -522,8 +522,8 @@
     pointer-events: none;
   }
   
-  /* Indicador de selecciÃ³n mÃºltiple */
-  .vote-card.voted::after {
+  /* Indicador de selecciÃ³n mÃºltiple - DESACTIVADO */
+  /* .vote-card.voted::after {
     content: 'âœ“';
     position: absolute;
     top: 8px;
@@ -540,7 +540,7 @@
     font-weight: 700;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     z-index: 10;
-  }
+  } */
   
   /* Estilos para modo ediciÃ³n de opciones colaborativas */
   .vote-card.editing {
@@ -1171,4 +1171,69 @@
       opacity: 1;
       transform: translateX(0) scale(1);
     }
+  }
+
+  /* Mensaje final de encuestas */
+  .no-more-polls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 60px 24px;
+    text-align: center;
+    margin: 20px 0 40px 0;
+  }
+
+  .no-more-polls h4 {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .no-more-polls p {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.65);
+    margin: 0;
+    max-width: 280px;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+
+  .refresh-btn {
+    margin-top: 8px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3),
+                0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .refresh-btn svg {
+    flex-shrink: 0;
+  }
+
+  .refresh-btn:hover {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 1), rgba(29, 78, 216, 1));
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4),
+                0 3px 12px rgba(0, 0, 0, 0.25);
+  }
+
+  .refresh-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
   }

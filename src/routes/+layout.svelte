@@ -138,11 +138,6 @@
 		<!-- Logo VouTop -->
 		<div class="logo-text">VouTop</div>
 		<!-- Imagen debajo del logo -->
-		<img 
-			src="/textures/image.png" 
-			alt="VouTop" 
-			class="splash-image"
-		/>
 	</div>
 </div>
 {/if}

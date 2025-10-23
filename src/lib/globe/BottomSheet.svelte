@@ -307,13 +307,17 @@
       // Transformar datos de la API al formato esperado
       const transformedPolls: Poll[] = await Promise.all(data.map(async (poll: any) => {
                 
-        // Cargar amigos que votaron en esta encuesta
+        // Cargar amigos que votaron en esta encuesta (opcional)
         let friendsByOption = {};
         try {
-          const friendsData = await apiGet('/api/polls/' + poll.id + '/friends-votes?userId=' + currentUserId);
-          friendsByOption = friendsData.data || {};
+          // Solo intentar cargar si el usuario está autenticado
+          if (currentUserId) {
+            const friendsData = await apiGet('/api/polls/' + poll.id + '/friends-votes?userId=' + currentUserId);
+            friendsByOption = friendsData.data || {};
+          }
         } catch (e) {
-          console.error('Error loading friends votes:', e);
+          // Silenciar error - no es crítico si falla
+          console.debug('Friends votes not available for poll', poll.id);
         }
 
         const transformed = {
@@ -321,11 +325,11 @@
           question: poll.title,
           type: poll.type || 'poll',
           region: selectedCountryName || selectedSubdivisionName || selectedCityName || 'Global',
-          options: poll.options.map((opt: any) => ({
+          options: poll.options.map((opt: any, optIdx: number) => ({
             id: opt.id,
-            key: opt.optionKey,
-            label: opt.optionLabel,
-            color: opt.color,
+            key: opt.optionKey || opt.id?.toString() || `opt-${poll.id}-${optIdx}`,
+            label: opt.optionLabel || opt.label || `Opción ${optIdx + 1}`,
+            color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][optIdx % 4],
             votes: opt._count?.votes || 0,  // Auto-calculado desde votos
             avatarUrl: opt.createdBy?.avatarUrl || poll.user?.avatarUrl  // Desde relación User
           })),
@@ -1133,6 +1137,12 @@
   let optionsTouchMoved = false;
   let optionsSwipeThreshold = 30; // Umbral para considerar un swipe deliberado
   
+  // Variables para detectar doble click en opciones del desplegable
+  let optionClickCount = 0;
+  let optionClickTimer: number | null = null;
+  let lastClickedOption: string | null = null;
+  const DOUBLE_CLICK_DELAY = 300; // ms
+  
   // Debug logs para móvil
  
   
@@ -1503,14 +1513,10 @@
     
     // Si ya votó por esta misma opción, desmarcar el voto
     if (userVotes[votePollId] === optionKey) {
-      // Crear nuevo objeto sin esta propiedad para reactividad
-      const { [votePollId]: _, ...rest } = userVotes;
-      Object.assign(userVotes, rest);
-      // Forzar actualización
-      userVotes = { ...rest };
-      // Actualizar display inmediatamente al desmarcar
-      displayVotes = { ...rest };
-      console.log('Voto desmarcado');
+      console.log('[BottomSheet handleVote] 🗑️ Desvotando - mismo voto detectado');
+      console.log('[BottomSheet handleVote] Llamando a clearUserVote para:', votePollId);
+      // Llamar a clearUserVote que elimina del servidor Y del estado
+      await clearUserVote(votePollId);
       return;
     }
     
@@ -1743,34 +1749,68 @@
   
   // Función para manejar votación múltiple
   async function handleMultipleVote(optionKey: string, pollId: string) {
-    const poll = additionalPolls.find(p => p.id === pollId) || activePoll;
-    if (!poll || poll.type !== 'multiple') return;
+    const poll = additionalPolls.find(p => p.id.toString() === pollId) || 
+                 (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
     
-    // Inicializar array si no existe
+    if (!poll || poll.type !== 'multiple') {
+      console.warn('[BottomSheet] No es encuesta múltiple o no encontrada');
+      return;
+    }
+    
+    console.log('[BottomSheet] 🗳️ handleMultipleVote:', { pollId, optionKey });
+    
+    // Verificar si ya se confirmaron votos anteriormente
+    const hasConfirmedVotes = userVotes[pollId];
+    
+    if (hasConfirmedVotes) {
+      // Si ya hay votos confirmados, desvotar del servidor
+      console.log('[BottomSheet] Ya hay votos confirmados, desvotando del servidor...');
+      await clearUserVote(pollId);
+      
+      // Limpiar también las selecciones pendientes
+      multipleVotes = { ...multipleVotes, [pollId]: [] };
+      
+      // Forzar reactividad
+      if (poll === activePoll) {
+        activePoll = { ...activePoll };
+      } else {
+        additionalPolls = [...additionalPolls];
+      }
+      
+      console.log('[BottomSheet] ✅ Votos múltiples eliminados');
+      return;
+    }
+    
+    // Si no hay votos confirmados, alternar selección local
     if (!multipleVotes[pollId]) {
       multipleVotes[pollId] = [];
     }
     
-    // Alternar selección
     const currentVotes = multipleVotes[pollId];
     const index = currentVotes.indexOf(optionKey);
     
     if (index > -1) {
-      // Quitar voto
+      // Quitar de selección pendiente
       multipleVotes[pollId] = currentVotes.filter(k => k !== optionKey);
+      console.log('[BottomSheet] ➖ Opción removida de selección');
     } else {
-      // Añadir voto
+      // Añadir a selección pendiente
       multipleVotes[pollId] = [...currentVotes, optionKey];
+      console.log('[BottomSheet] ➕ Opción añadida a selección');
     }
     
     // Forzar reactividad
     multipleVotes = { ...multipleVotes };
+    
+    console.log('[BottomSheet] Selecciones actuales:', multipleVotes[pollId]);
   }
   
   // Función para confirmar votos múltiples
   async function confirmMultipleVotes(pollId: string) {
     const votes = multipleVotes[pollId];
     if (!votes || votes.length === 0) return;
+    
+    console.log('[BottomSheet] 📊 Confirmando votos múltiples:', votes);
     
     // Enviar cada voto al backend
     for (const optionKey of votes) {
@@ -1781,7 +1821,22 @@
     userVotes = { ...userVotes, [pollId]: votes.join(',') };
     displayVotes = { ...userVotes };
     
-    console.log('[BottomSheet] Votos múltiples confirmados:', votes);
+    // Limpiar selecciones múltiples después de confirmar
+    multipleVotes = { ...multipleVotes, [pollId]: [] };
+    
+    // Forzar reactividad de la encuesta para actualizar UI
+    const poll = additionalPolls.find(p => p.id.toString() === pollId);
+    if (poll) {
+      // Encontrada en additionalPolls
+      additionalPolls = [...additionalPolls];
+      console.log('[BottomSheet] ✅ Encuesta actualizada (additionalPolls)');
+    } else if (activePoll && activePoll.id.toString() === pollId) {
+      // Es la encuesta activa
+      activePoll = { ...activePoll };
+      console.log('[BottomSheet] ✅ Encuesta actualizada (activePoll)');
+    }
+    
+    console.log('[BottomSheet] ✅ Votos múltiples confirmados y UI refrescada');
   }
   
   // Función para añadir nueva opción directamente (como CreatePollModal)
@@ -2170,7 +2225,9 @@
       lastScrollTop = scrollTop;
       
       // Si estamos a menos de 400px del final y no estamos cargando, cargar más
-      if (scrollBottom < 400 && !isLoadingPolls && hasMorePolls) {
+      // IMPORTANTE: Solo cargar más encuestas si NO hay una encuesta específica abierta (modo trending)
+      if (scrollBottom < 400 && !isLoadingPolls && hasMorePolls && !activePoll) {
+        console.log('[BottomSheet] 📥 Cargando más encuestas trending...');
         loadAdditionalPolls(currentPollsPage + 1);
       }
     }
@@ -2178,29 +2235,78 @@
   
   // Función para quitar voto (actualiza en BD)
   async function clearUserVote(pollId: string) {
+    console.log('[BottomSheet clearUserVote] 🗑️ ELIMINANDO VOTO');
+    console.log('[BottomSheet clearUserVote] pollId recibido:', pollId);
+    console.log('[BottomSheet clearUserVote] userVotes antes:', { ...userVotes });
+    
     try {
       const numericPollId = typeof pollId === 'string' ? parseInt(pollId) : pollId;
       
-      await apiDelete(`/api/polls/${numericPollId}/vote`);
+      // Encontrar la encuesta antes de borrar
+      const poll = additionalPolls.find(p => p.id.toString() === pollId) || 
+                   (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
       
-      // Actualizar estado local
-      const { [pollId]: _, ...rest } = userVotes;
-      userVotes = { ...rest };
-      displayVotes = { ...rest };
+      // Guardar las opciones votadas antes de borrar (para encuestas múltiples)
+      const votedOptions = userVotes[pollId];
+      console.log('[BottomSheet clearUserVote] Opciones a desvotar:', votedOptions);
       
-      // Actualizar el contador de votos de la encuesta
+      // DELETE no debe enviar body (el servidor usa currentUser del contexto)
+      await apiCall(`/api/polls/${numericPollId}/vote`, {
+        method: 'DELETE'
+      });
+      
+      // Actualizar estado local - eliminar voto de ambos registros
+      const { [pollId]: _, ...restUserVotes } = userVotes;
+      const { [pollId]: __, ...restDisplayVotes } = displayVotes;
+      userVotes = { ...restUserVotes };
+      displayVotes = { ...restDisplayVotes };
+      
+      console.log('[BottomSheet clearUserVote] ✅ Estados limpiados:');
+      console.log('[BottomSheet clearUserVote] userVotes:', { ...userVotes });
+      console.log('[BottomSheet clearUserVote] displayVotes:', { ...displayVotes });
+      
+      // Para encuestas múltiples, decrementar contadores de cada opción votada
+      if (poll && poll.type === 'multiple' && votedOptions) {
+        const optionKeys = votedOptions.split(',');
+        console.log('[BottomSheet clearUserVote] Decrementando contadores de opciones múltiples:', optionKeys);
+        
+        optionKeys.forEach(optionKey => {
+          const option = poll.options?.find((opt: any) => 
+            opt.key === optionKey || opt.optionKey === optionKey
+          );
+          if (option && option.votes !== undefined) {
+            option.votes = Math.max(0, option.votes - 1);
+            console.log(`[BottomSheet clearUserVote] Opción ${optionKey}: ${option.votes} votos`);
+          }
+        });
+        
+        // Decrementar total de votos de la encuesta (por cada opción)
+        if (poll.totalVotes !== undefined) {
+          poll.totalVotes = Math.max(0, poll.totalVotes - optionKeys.length);
+          console.log('[BottomSheet clearUserVote] Total de votos:', poll.totalVotes);
+        }
+      } else {
+        // Para encuestas simples, decrementar solo 1 voto total
+        if (poll && poll.totalVotes !== undefined) {
+          poll.totalVotes = Math.max(0, poll.totalVotes - 1);
+        }
+      }
+      
+      // Forzar reactividad según dónde esté la encuesta
       if (activePoll && activePoll.id.toString() === pollId) {
-        activePoll.totalVotes = Math.max(0, (activePoll.totalVotes || 0) - 1);
         activePoll = { ...activePoll };
+        console.log('[BottomSheet clearUserVote] ✅ activePoll actualizada');
       }
       
       const pollToUpdate = additionalPolls.find(p => p.id.toString() === pollId);
       if (pollToUpdate) {
-        pollToUpdate.totalVotes = Math.max(0, (pollToUpdate.totalVotes || 0) - 1);
         additionalPolls = [...additionalPolls];
+        console.log('[BottomSheet clearUserVote] ✅ additionalPolls actualizada');
       }
       
-      console.log('[BottomSheet] Voto eliminado correctamente');
+      console.log('[BottomSheet clearUserVote] ✅ Voto eliminado correctamente del servidor');
+      console.log('[BottomSheet clearUserVote] Estado final - userVotes:', { ...userVotes });
+      console.log('[BottomSheet clearUserVote] Estado final - displayVotes:', { ...displayVotes });
     } catch (error) {
       console.error('[BottomSheet] Error de red al eliminar voto:', error);
     }
@@ -2395,7 +2501,10 @@
               e.stopImmediatePropagation();
             }}
             onpointerup={(e) => {
+              isScrollingOptions = false;
+              optionsTouchMoved = false;
               e.stopPropagation();
+              e.stopImmediatePropagation();
             }}
             ontouchend={(e) => {
               isScrollingOptions = false;
@@ -2410,9 +2519,38 @@
                 class:is-trending-poll={!activePoll && option.pollData}
                 onclick={(e) => {
                   e.stopPropagation();
-                  // Si es modo trending y tiene pollData, abrir esa encuesta
-                  if (!activePoll && option.pollData) {
-                    openTrendingPoll(option.pollData);
+                  
+                  // Detectar doble click
+                  const optionKey = option.key;
+                  
+                  if (lastClickedOption === optionKey) {
+                    optionClickCount++;
+                  } else {
+                    optionClickCount = 1;
+                    lastClickedOption = optionKey;
+                  }
+                  
+                  if (optionClickTimer) {
+                    clearTimeout(optionClickTimer);
+                    optionClickTimer = null;
+                  }
+                  
+                  if (optionClickCount === 2) {
+                    // Doble click detectado - expandir BottomSheet
+                    console.log('[BottomSheet] Doble click en opción del desplegable - expandiendo BottomSheet');
+                    dispatch('requestExpand');
+                    optionClickCount = 0;
+                    lastClickedOption = null;
+                  } else {
+                    // Primer click - esperar por segundo click
+                    optionClickTimer = window.setTimeout(() => {
+                      // Click simple - abrir trending poll si aplica
+                      if (!activePoll && option.pollData) {
+                        openTrendingPoll(option.pollData);
+                      }
+                      optionClickCount = 0;
+                      lastClickedOption = null;
+                    }, DOUBLE_CLICK_DELAY);
                   }
                 }}
                 style="border: 2px solid {option.color};"
@@ -2958,18 +3096,10 @@
       <!-- Mensaje cuando no hay más encuestas -->
       {#if !hasMorePolls && additionalPolls.length > 0}
         <div class="no-more-polls">
-          <div class="no-more-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M16 16s-1.5-2-4-2-4 2-4 2"/>
-              <line x1="9" y1="9" x2="9.01" y2="9"/>
-              <line x1="15" y1="9" x2="15.01" y2="9"/>
-            </svg>
-          </div>
           <h4>¡Has llegado al final!</h4>
           <p>Ya has visto todas las encuestas disponibles</p>
           <button class="refresh-btn" onclick={() => window.location.reload()}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"/>
               <polyline points="1 20 1 14 7 14"/>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -2978,6 +3108,7 @@
           </button>
         </div>
       {/if}
+      
     </div> <!-- Cierre de main-scroll-container -->
   {/if}
   

@@ -4,6 +4,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { apiCall } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
+  import UserProfileModal from '$lib/UserProfileModal.svelte';
   
   const dispatch = createEventDispatcher();
   
@@ -15,14 +16,22 @@
   let { isOpen = $bindable(false), isAuthenticated = false }: Props = $props();
   let showAuthModal = $state(false);
   
-  // Swipe handlers para cerrar modal (como type-options-sheet)
+  // Estado para modal de perfil
+  let isProfileModalOpen = $state(false);
+  let selectedProfileUserId = $state<number | null>(null);
+  
+  // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
+  let scrollContainer: HTMLElement | null = null;
   
   function handleModalSwipeStart(e: TouchEvent) {
     modalTouchStartY = e.touches[0].clientY;
   }
   
   function handleModalSwipeMove(e: TouchEvent) {
+    // Solo cerrar si el scroll está en la parte superior
+    if (!scrollContainer || scrollContainer.scrollTop > 0) return;
+    
     const deltaY = e.touches[0].clientY - modalTouchStartY;
     if (deltaY > 100) {
       closeModal();
@@ -222,20 +231,50 @@
   }
   
   function selectTrendingPoll(poll: any) {
+    // Formatear opciones correctamente antes de enviar
+    const formattedOptions = poll.options?.map((opt: any, idx: number) => ({
+      key: opt.optionKey || opt.key || opt.id?.toString() || `opt-${idx}`,
+      label: opt.optionLabel || opt.label || opt.optionText || `Opción ${idx + 1}`,
+      color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#f4a261', '#e76f51'][idx % 6],
+      votes: opt.votes || opt._count?.votes || 0
+    })) || [];
+    
     // Disparar evento para abrir en el globo
-    dispatch('openPollInGlobe', { poll });
+    dispatch('openPollInGlobe', { poll, options: formattedOptions });
     closeModal();
   }
   
   function selectSearchResult(type: 'poll' | 'user' | 'place', item: any) {
     if (type === 'poll') {
+      // Formatear opciones correctamente antes de enviar
+      const formattedOptions = item.options?.map((opt: any, idx: number) => ({
+        key: opt.optionKey || opt.key || opt.id?.toString() || `opt-${idx}`,
+        label: opt.optionLabel || opt.label || opt.optionText || `Opción ${idx + 1}`,
+        color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#f4a261', '#e76f51'][idx % 6],
+        votes: opt.votes || opt._count?.votes || 0
+      })) || [];
+      
       // Disparar evento para abrir encuesta en el globo
-      dispatch('openPollInGlobe', { poll: item });
+      dispatch('openPollInGlobe', { poll: item, options: formattedOptions });
       closeModal();
+    } else if (type === 'user') {
+      // Abrir perfil del usuario
+      selectedProfileUserId = item.id;
+      isProfileModalOpen = true;
+      // Cerrar el modal de búsqueda cuando se abre el perfil
+      isOpen = false;
     } else {
-      // Para usuarios y lugares, disparar evento genérico
+      // Para lugares, disparar evento genérico
       dispatch('select', { type, item });
     }
+  }
+  
+  function handlePollClickFromProfile(event: CustomEvent) {
+    const { pollId } = event.detail;
+    // Cerrar modal de perfil y abrir encuesta en el globo
+    isProfileModalOpen = false;
+    // Aquí podrías disparar evento para abrir la encuesta
+    dispatch('openPollById', { pollId });
   }
   
   async function handleFollowToggle(user: any) {
@@ -297,6 +336,7 @@
   <!-- Modal -->
   <div
     class="modal-container"
+    bind:this={scrollContainer}
     transition:fly={{ y: '100%', duration: 300 }}
     role="dialog"
     aria-modal="true"
@@ -613,6 +653,13 @@
 
 <!-- Modal de autenticación -->
 <AuthModal bind:isOpen={showAuthModal} />
+
+<!-- Modal de perfil de usuario -->
+<UserProfileModal 
+  bind:isOpen={isProfileModalOpen} 
+  bind:userId={selectedProfileUserId}
+  on:pollClick={handlePollClickFromProfile}
+/>
 
 <style>
   .modal-overlay {

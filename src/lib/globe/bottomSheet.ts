@@ -127,11 +127,11 @@ export class BottomSheetController {
           }
         }
         
-        // Caso especial: .vote-cards-grid y .vote-cards-section (solo la principal, no las de polls)
-        // Permitir arrastre, pero la detección de dirección decidirá si procesar
+        // Caso especial: .vote-cards-grid y .vote-cards-section
+        // Permitir arrastre, la detección de dirección decidirá si procesar
         const voteCardsArea = (t as any).closest('.vote-cards-grid, .vote-cards-section');
-        if (voteCardsArea && !voteCardInPolls) {
-                    // No retornar aquí, permitir que continúe y la detección de dirección decida
+        if (voteCardsArea) {
+          // No retornar aquí, permitir que continúe y la detección de dirección decida
         }
       }
     } catch {}
@@ -327,10 +327,24 @@ export class BottomSheetController {
     return this.hasMoved && this.isVerticalGesture;
   }
 
-  destroy() {
+  resetDragState() {
+    // Resetear completamente el estado de drag
+    this.isDragging = false;
+    this.hasMoved = false;
+    this.gestureDirectionLocked = false;
+    this.isVerticalGesture = false;
+    this.scrollContainerAtStart = null;
+    this.wasAtTopAtStart = false;
+    this.velocityY = 0;
+    this.lastMoveTime = 0;
+    // Limpiar listeners globales por si quedaron activos
     window.removeEventListener('pointermove', this._onMove as any);
     window.removeEventListener('pointerup', this._onUp as any);
     window.removeEventListener('touchmove', this._onMove as any);
     window.removeEventListener('touchend', this._onUp as any);
+  }
+
+  destroy() {
+    this.resetDragState();
   }
 }

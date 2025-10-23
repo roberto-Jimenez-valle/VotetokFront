@@ -1,9 +1,28 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { currentUser } from '$lib/stores';
+  import UserProfileModal from '$lib/UserProfileModal.svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
+  
+  // Estado para modal de perfil
+  let isProfileModalOpen: boolean = false;
+  let selectedProfileUserId: number | null = null;
+  let showDoubleClickTooltip: boolean = false;
+  let showVoteConfirmation: boolean = false;
+  let showVoteRemoval: boolean = false;
+  let voteConfirmationColor: string = '#10b981';
+  let voteRemovalColor: string = '#ef4444';
+  let tooltipTimeout: any = null;
+  let clickTimeout: any = null;
+  let voteConfirmationTimeout: any = null;
+  let voteRemovalTimeout: any = null;
+  let clickCount = 0;
+  let pendingOptionKey: string | null = null;
+  let touchStartPosition: { x: number, y: number } | null = null;
+  const DOUBLE_CLICK_DELAY = 500; // ms
+  const TOUCH_MOVE_THRESHOLD = 10; // px
   
   const OPTIONS_PER_PAGE = 4;
   
@@ -44,7 +63,8 @@
     return values.map(v => (v / total) * 100);
   }
   
-  function formatNumber(num: number): string {
+  function formatNumber(num: number | undefined | null): string {
+    if (num === undefined || num === null || isNaN(num)) return '0';
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
     return num.toString();
@@ -59,9 +79,16 @@
   
   function fontSizeForPct(pct: number): number {
     const clamped = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
-    const bucket = Math.max(1, Math.ceil(clamped / 10));
-    const size = bucket * 10;
-    return Math.max(20, Math.min(70, size));
+    
+    // Escala gradual más suave
+    // 0-20%: 20-25px
+    // 21-40%: 26-35px
+    // 41-60%: 36-42px
+    // 61-80%: 43-47px
+    // 81-100%: 48-50px
+    const size = 20 + (clamped * 0.3);  // De 20px a 50px de forma lineal
+    
+    return Math.max(20, Math.min(50, Math.round(size)));
   }
   
   function getNormalizedOptions(poll: any) {
@@ -287,9 +314,19 @@
         {/if}
       </div>
       {#if poll.user?.avatarUrl}
-        <div class="header-avatar header-avatar-real">
+        <button 
+          class="header-avatar header-avatar-real" 
+          onclick={(e) => {
+            e.stopPropagation();
+            if (poll.user?.id) {
+              selectedProfileUserId = poll.user.id;
+              isProfileModalOpen = true;
+            }
+          }}
+          aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
+        >
           <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
-        </div>
+        </button>
       {:else}
         <div class="header-avatar header-avatar-real">
           <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
@@ -307,12 +344,17 @@
       aria-label="Opciones de {poll.question || poll.title}"
       bind:this={pollGridRef}
       onpointerdown={handleDragStart}
-      ontouchstart={handleDragStart}
+      ontouchstart={(e) => {
+        const touch = e.touches[0];
+        touchStartPosition = { x: touch.clientX, y: touch.clientY };
+        handleDragStart(e);
+      }}
     >
-      {#each paginatedPoll.items as option, index (option.key)}
+      {#each paginatedPoll.items as option, index (option.key || option.id || `option-${index}`)}
         {@const isPollVoted = poll.type === 'multiple'
-          ? multipleVotes[poll.id]?.includes(option.key)
-          : userVotes[poll.id] === option.key}
+          ? (multipleVotes[poll.id]?.includes(option.key) || 
+             (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(option.key))
+          : (displayVotes[poll.id] || userVotes[poll.id]) === option.key}
         {@const isNewOption = poll.type === 'collaborative' && option.isEditing === true}
         {@const displayPct = isNewOption ? 25 : option.pct}
         
@@ -320,7 +362,101 @@
           this={isNewOption ? 'div' : 'button'}
           role={isNewOption ? 'region' : undefined}
           class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionIndex !== index) ? 'collapsed' : ''} {isPollVoted ? 'voted' : ''}" 
-          style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, displayPct))}%; --fill-pct-val: {Math.max(0, Math.min(100, displayPct))}; --flex: {Math.max(0.5, displayPct / 10)};" 
+          style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, displayPct))}%; --fill-pct-val: {Math.max(0, Math.min(100, displayPct))}; --fill-window: 120px; --flex: {Math.max(0.5, displayPct / 10)};" 
+          ontouchend={(e: TouchEvent) => {
+            // Manejar touch para móvil (igual que onclick)
+            if (isNewOption || isSingleOptionPoll) { return; }
+            
+            // Verificar si hubo movimiento (drag) vs tap estático
+            if (touchStartPosition && e.changedTouches[0]) {
+              const touch = e.changedTouches[0];
+              const deltaX = Math.abs(touch.clientX - touchStartPosition.x);
+              const deltaY = Math.abs(touch.clientY - touchStartPosition.y);
+              
+              // Si hubo movimiento significativo, es un drag, no un tap
+              if (deltaX > TOUCH_MOVE_THRESHOLD || deltaY > TOUCH_MOVE_THRESHOLD) {
+                console.log('[SinglePoll] Movimiento detectado, ignorando tap:', { deltaX, deltaY });
+                return;
+              }
+            }
+            
+            const editingOption = poll.options.find((opt: any) => opt.isEditing);
+            if (editingOption) {
+              dispatch('cancelEditing', { pollId: poll.id, optionKey: editingOption.key });
+              return;
+            }
+            
+            if (state !== 'expanded' || activeAccordionIndex !== index) {
+              e.preventDefault();
+              e.stopPropagation();
+              handleSetActive(index);
+              return;
+            }
+            
+            if (state === 'expanded' && activeAccordionIndex === index) {
+              if (poll.type === 'multiple' || poll.type === 'collaborative') {
+                dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
+              } else {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                clickCount++;
+                pendingOptionKey = option.key;
+                
+                console.log('[SinglePoll] Touch #' + clickCount, option.key);
+                
+                if (clickTimeout) clearTimeout(clickTimeout);
+                
+                clickTimeout = setTimeout(() => {
+                  console.log('[SinglePoll] ⏰ Touch timeout ejecutado! clickCount:', clickCount);
+                  if (clickCount === 1) {
+                    console.log('[SinglePoll] Touch simple - Mostrando tooltip');
+                    showDoubleClickTooltip = true;
+                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                    tooltipTimeout = setTimeout(() => {
+                      showDoubleClickTooltip = false;
+                    }, 2000);
+                  } else if (clickCount >= 2) {
+                    console.log('[SinglePoll] ✅ DOBLE TOUCH confirmado - Votando:', pendingOptionKey);
+                    showDoubleClickTooltip = false;
+                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                    
+                    // Verificar si ya votó esta opción (desvoto)
+                    const isUnvoting = isPollVoted;
+                    
+                    if (isUnvoting) {
+                      // Mostrar X de eliminación
+                      voteRemovalColor = option.color;
+                      showVoteRemoval = true;
+                      if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+                      voteRemovalTimeout = setTimeout(() => {
+                        showVoteRemoval = false;
+                      }, 800);
+                    } else {
+                      // Mostrar check de confirmación
+                      voteConfirmationColor = option.color;
+                      showVoteConfirmation = true;
+                      if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+                      voteConfirmationTimeout = setTimeout(() => {
+                        showVoteConfirmation = false;
+                      }, 800);
+                    }
+                    
+                    dispatch('optionClick', { 
+                      event: e, 
+                      optionKey: pendingOptionKey, 
+                      pollId: poll.id, 
+                      optionColor: option.color 
+                    });
+                    console.log('[SinglePoll] Evento optionClick despachado desde touch');
+                  }
+                  
+                  clickCount = 0;
+                  pendingOptionKey = null;
+                }, DOUBLE_CLICK_DELAY);
+              }
+            }
+          }}
           onclick={(e: MouseEvent) => {
             if (isNewOption || isSingleOptionPoll) { return; }
             
@@ -339,9 +475,89 @@
               return; 
             }
             
-            // Segundo click: votar SOLO si está completamente desplegada
+            // Click: abrir si está colapsada, o detectar simple/doble click si está desplegada
             if (state === 'expanded' && activeAccordionIndex === index) {
-              dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
+              if (poll.type === 'multiple' || poll.type === 'collaborative') {
+                // Múltiples o colaborativas: votar con un click
+                dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
+              } else {
+                // Encuestas normales: detectar si es click simple o doble
+                e.preventDefault();
+                e.stopPropagation();
+                
+                clickCount++;
+                pendingOptionKey = option.key;
+                
+                console.log('[SinglePoll] Click #' + clickCount, option.key);
+                console.log('[SinglePoll] clickCount actual:', clickCount, 'pendingOptionKey:', option.key);
+                
+                // Cancelar timeout anterior
+                if (clickTimeout) {
+                  console.log('[SinglePoll] Cancelando timeout anterior');
+                  clearTimeout(clickTimeout);
+                }
+                
+                // Esperar medio segundo para ver si es doble click
+                console.log('[SinglePoll] Programando timeout de 500ms...');
+                clickTimeout = setTimeout(() => {
+                  console.log('[SinglePoll] ⏰ Timeout ejecutado! clickCount:', clickCount);
+                  if (clickCount === 1) {
+                    // Es click simple - Mostrar tooltip
+                    console.log('[SinglePoll] Click simple confirmado - Mostrando tooltip');
+                    showDoubleClickTooltip = true;
+                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                    tooltipTimeout = setTimeout(() => {
+                      showDoubleClickTooltip = false;
+                    }, 2000);
+                  } else if (clickCount >= 2) {
+                    // Es doble click - VOTAR o DESVOTAR
+                    console.log('[SinglePoll] ✅ DOBLE CLICK confirmado - Votando:', pendingOptionKey);
+                    console.log('[SinglePoll] Despachando evento optionClick:', {
+                      optionKey: pendingOptionKey,
+                      pollId: poll.id,
+                      pollType: poll.type,
+                      color: option.color
+                    });
+                    showDoubleClickTooltip = false;
+                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                    
+                    // Verificar si ya votó esta opción (desvoto)
+                    const isUnvoting = isPollVoted;
+                    
+                    if (isUnvoting) {
+                      // Mostrar X de eliminación
+                      voteRemovalColor = option.color;
+                      showVoteRemoval = true;
+                      if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+                      voteRemovalTimeout = setTimeout(() => {
+                        showVoteRemoval = false;
+                      }, 800);
+                    } else {
+                      // Mostrar check de confirmación
+                      voteConfirmationColor = option.color;
+                      showVoteConfirmation = true;
+                      if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+                      voteConfirmationTimeout = setTimeout(() => {
+                        showVoteConfirmation = false;
+                      }, 800);
+                    }
+                    
+                    // Despachar el evento
+                    dispatch('optionClick', { 
+                      event: e, 
+                      optionKey: pendingOptionKey, 
+                      pollId: poll.id, 
+                      optionColor: option.color 
+                    });
+                    
+                    console.log('[SinglePoll] Evento optionClick despachado');
+                  }
+                  
+                  // Reset
+                  clickCount = 0;
+                  pendingOptionKey = null;
+                }, DOUBLE_CLICK_DELAY);
+              }
             } else {
               e.preventDefault();
               e.stopPropagation();
@@ -519,6 +735,32 @@
     </div>
   </div>
   
+  <!-- Tooltip de doble click -->
+  {#if showDoubleClickTooltip && poll.type !== 'multiple' && poll.type !== 'collaborative'}
+    <div class="double-click-tooltip">
+      Doble click para votar
+    </div>
+  {/if}
+  
+  <!-- Tooltip de confirmación de voto -->
+  {#if showVoteConfirmation}
+    <div class="vote-confirmation-tooltip" style="--vote-color: {voteConfirmationColor}">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+  {/if}
+  
+  <!-- Tooltip de eliminación de voto -->
+  {#if showVoteRemoval}
+    <div class="vote-removal-tooltip" style="--vote-color: {voteRemovalColor}">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </div>
+  {/if}
+  
   <!-- Controles inferiores: izquierda (estadísticas), centro (paginación), derecha (acciones) -->
   <div class="bottom-controls-container">
     <!-- Lado izquierdo: Icono de estadísticas -->
@@ -607,9 +849,35 @@
           type="button" 
           title={pollVotedOption ? `Tu voto: ${votedOptionData?.label || pollVotedOption} (Click para quitar)` : "Aún no has votado"}
           style="{pollVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''}"
+          ontouchend={(e) => {
+            e.stopPropagation();
+            console.log('[SinglePoll] 🗑️ Touch en botón de voto');
+            console.log('[SinglePoll] pollVotedOption:', pollVotedOption);
+            if (pollVotedOption) {
+              console.log('[SinglePoll] Despachando clearVote para:', poll.id);
+              voteRemovalColor = votedOptionData?.color || '#ef4444';
+              showVoteRemoval = true;
+              if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+              voteRemovalTimeout = setTimeout(() => {
+                showVoteRemoval = false;
+              }, 800);
+              
+              dispatch('clearVote', { pollId: poll.id });
+            }
+          }}
           onclick={(e) => {
             e.stopPropagation();
+            console.log('[SinglePoll] 👁️ Click en botón de voto');
+            console.log('[SinglePoll] pollVotedOption:', pollVotedOption);
             if (pollVotedOption) {
+              console.log('[SinglePoll] Despachando clearVote para:', poll.id);
+              voteRemovalColor = votedOptionData?.color || '#ef4444';
+              showVoteRemoval = true;
+              if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+              voteRemovalTimeout = setTimeout(() => {
+                showVoteRemoval = false;
+              }, 800);
+              
               dispatch('clearVote', { pollId: poll.id });
             }
           }}
@@ -619,7 +887,7 @@
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
           {#if pollVotedOption}
-            <span>{formatNumber(poll.totalVotes)}</span>
+            <span>{formatNumber(poll.stats?.totalVotes || poll.totalVotes || 0)}</span>
           {:else}
             <span style="opacity: 0;">-</span>
           {/if}
@@ -629,7 +897,7 @@
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
             <circle cx="12" cy="12" r="3"/>
           </svg>
-          <span>{formatNumber(poll.totalViews || 0)}</span>
+          <span>{formatNumber(poll.stats?.totalViews || poll.totalViews || 0)}</span>
         </button>
         <button 
           class="action-badge action-globe" 
@@ -1061,15 +1329,13 @@
     left: 0;
     right: 0;
     bottom: 0;
-    height: 100%;
-    background: linear-gradient(0deg,
-        var(--card-color, rgba(0, 0, 0, 0.4)) 25%,
-        transparent 25%
-      );
+    height: calc(var(--fill-window, 120px) * (var(--fill-pct-val, 0) / 100));
+    max-height: var(--fill-window, 120px);
+    background: var(--card-color, rgba(0, 0, 0, 0.4));
     pointer-events: none;
     z-index: 0;
     opacity: 0.8;
-    transition: opacity 0.2s ease;
+    transition: height 0.3s ease, opacity 0.2s ease;
   }
 
   .card-content-bottom {
@@ -1093,11 +1359,126 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 16px;
+    padding: 0;
     background: transparent;
     position: relative;
     z-index: 0;
     pointer-events: none;
+  }
+  
+  /* Cuando está desplegada, mover a la izquierda */
+  .vote-card.is-active .percentage-display {
+    justify-content: flex-start;
+    padding-left: 20px;
+  }
+  
+  /* Tooltip de doble click */
+  .double-click-tooltip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    pointer-events: none;
+    z-index: 1000;
+    animation: tooltipFadeIn 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  @keyframes tooltipFadeIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  
+  /* Tooltip de confirmación de voto */
+  .vote-confirmation-tooltip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--vote-color, #10b981);
+    color: white;
+    padding: 12px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1000;
+    animation: voteConfirmFlyUp 0.8s ease-out forwards;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .vote-confirmation-tooltip svg {
+    flex-shrink: 0;
+  }
+  
+  @keyframes voteConfirmFlyUp {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.8);
+    }
+    20% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -150%) scale(0.8);
+    }
+  }
+  
+  /* Tooltip de eliminación de voto */
+  .vote-removal-tooltip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--vote-color, #ef4444);
+    color: white;
+    padding: 12px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1000;
+    animation: voteRemovalFlyUp 0.8s ease-out forwards;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .vote-removal-tooltip svg {
+    flex-shrink: 0;
+  }
+  
+  @keyframes voteRemovalFlyUp {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
+    }
+    20% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.1) rotate(90deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -150%) scale(0.8) rotate(180deg);
+    }
   }
 
   .color-picker-badge-bottom {
@@ -1331,6 +1712,19 @@
     padding: 2px 4px !important;
   }
   
+  /* Estilo para avatar clickeable */
+  .header-avatar-real {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  
+  .header-avatar-real:hover {
+    transform: scale(1.1);
+  }
+  
   /* Botón de votos con estados */
   .action-vote.has-voted {
     color: var(--vote-color, #10b981);
@@ -1345,3 +1739,10 @@
   }
   
 </style>
+
+<!-- Modal de perfil de usuario -->
+<UserProfileModal 
+  bind:isOpen={isProfileModalOpen} 
+  bind:userId={selectedProfileUserId}
+  on:pollClick={(e) => dispatch('openPollById', e.detail)}
+/>

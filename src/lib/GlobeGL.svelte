@@ -3196,6 +3196,9 @@
     SHEET_STATE = 'collapsed';
     setSheetState('collapsed');
     
+    // CRÍTICO: Esperar un tick antes de iniciar zoom para que el BottomSheet termine su transición
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
     // CRÍTICO: Iniciar zoom inmediatamente para que se ejecute en paralelo con la carga de datos
     scheduleZoom(20, 0, 2.5, 1000, 100);
     
@@ -3241,8 +3244,52 @@
     console.log('[HandleOpenPoll] 📋 MODO ENCUESTA ESPECÍFICA ACTIVADO');
     console.log('[HandleOpenPoll] Encuesta:', poll.id, '| Opciones:', options.length);
     
-    activePoll = poll;
-    activePollOptions = options;
+    // CARGAR DATOS COMPLETOS DE LA ENCUESTA DESDE LA API para obtener votos reales
+    let pollDataFromApi = poll;
+    try {
+      const response = await apiCall(`/api/polls/${poll.id}`);
+      if (response.ok) {
+        const result = await response.json();
+        pollDataFromApi = result.data || result;
+        console.log('[HandleOpenPoll] ✅ Datos de encuesta cargados desde API:', pollDataFromApi.id);
+      }
+    } catch (error) {
+      console.warn('[HandleOpenPoll] ⚠️ No se pudieron cargar datos de la API, usando datos iniciales');
+    }
+    
+    // Calcular totales de votos
+    const totalVotes = pollDataFromApi.options?.reduce((sum: number, opt: any) => 
+      sum + (opt.votes || opt._count?.votes || 0), 0
+    ) || 0;
+    
+    console.log('[HandleOpenPoll] 📊 Total de votos:', totalVotes);
+    
+    // CRÍTICO: Asegurar que poll.options también está formateado correctamente
+    const formattedPoll = {
+      ...pollDataFromApi,
+      options: options.map((opt, idx) => {
+        const apiOption = pollDataFromApi.options?.[idx];
+        const votes = apiOption?.votes || apiOption?._count?.votes || opt.votes || 0;
+        const pct = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+        
+        return {
+          ...opt,
+          id: opt.id || apiOption?.id,
+          key: opt.key || apiOption?.optionKey || `opt-${idx}`,
+          label: opt.label || apiOption?.optionLabel || apiOption?.optionText || `Opción ${idx + 1}`,
+          color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][idx % 4],
+          votes: votes,
+          pct: pct
+        };
+      })
+    };
+    
+    console.log('[HandleOpenPoll] 📊 Opciones formateadas:', formattedPoll.options.map((o: any) => 
+      ({ label: o.label, votes: o.votes, pct: Math.round(o.pct) })
+    ));
+    
+    activePoll = formattedPoll;
+    activePollOptions = formattedPoll.options;
     
     // HISTORY API: Guardar estado de encuesta en el historial
     if (!isNavigatingFromHistory) {
@@ -3364,6 +3411,14 @@
       options: options
     });
     
+    // CRÍTICO: Asegurar que el controlador del BottomSheet está listo después de todas las animaciones
+    setTimeout(() => {
+      if (sheetCtrl) {
+        console.log('[HandleOpenPoll] ✅ Reset del estado del BottomSheet controller');
+        // Limpiar cualquier estado de drag que pueda haber quedado activo
+        sheetCtrl.resetDragState();
+      }
+    }, 1200); // Después de que termine el zoom (1000ms) + margen
       }
   
   

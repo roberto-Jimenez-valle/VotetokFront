@@ -26,6 +26,7 @@
     "db:debug-geocode": "npx tsx scripts/debug-geocode.ts",
     "db:debug-topojson": "python scripts/debug_topojson.py",
     "db:populate-subdivisions": "python scripts/populate_subdivisions.py",
+    "db:add-teletransporte": "npx tsx scripts/add-teletransporte-votes.ts",
     "cleanup": "node scripts/auto-cleanup.mjs",
     "api:docs": "start http://localhost:5173/api-docs",
     "api:spec": "type src\\lib\\openapi\\spec.yaml"
