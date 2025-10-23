@@ -1,15 +1,19 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
-  import { X, Search, TrendingUp, Clock, MapPin } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { X, Search, TrendingUp, Clock, User } from 'lucide-svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { apiCall } from '$lib/api/client';
+  import AuthModal from '$lib/AuthModal.svelte';
   
   const dispatch = createEventDispatcher();
   
   interface Props {
     isOpen?: boolean;
+    isAuthenticated?: boolean;
   }
   
-  let { isOpen = $bindable(false) }: Props = $props();
+  let { isOpen = $bindable(false), isAuthenticated = false }: Props = $props();
+  let showAuthModal = $state(false);
   
   // Swipe handlers para cerrar modal (como type-options-sheet)
   let modalTouchStartY = 0;
@@ -26,52 +30,256 @@
   }
   
   let searchQuery = $state('');
-  let searchFilter = $state<'all' | 'polls' | 'users' | 'places'>('all');
+  let searchFilter = $state<'all' | 'polls' | 'users'>('all');
+  let pollsSubfilter = $state<'trending' | 'recent'>('trending');
+  let usersSubfilter = $state<'all' | 'trending' | 'followers' | 'following'>('trending');
+  let isLoading = $state(false);
+  let searchResults = $state<{
+    polls: any[];
+    users: any[];
+  }>({ polls: [], users: [] });
+  let trendingPolls = $state<any[]>([]);
+  let debounceTimer: NodeJS.Timeout;
   
-  // Mock data para búsquedas recientes
-  const recentSearches = [
-    { text: 'Elecciones 2024', type: 'polls', icon: TrendingUp },
-    { text: 'Madrid', type: 'places', icon: MapPin },
-    { text: 'Tecnología', type: 'polls', icon: TrendingUp },
-  ];
+  // Búsquedas recientes desde localStorage
+  let recentSearches = $state<Array<{ text: string; type: string; icon: any }>>([]);
   
-  // Mock data para tendencias (más items para forzar scroll)
-  const trendingTopics = [
-    { text: '¿Mejor película del año?', votes: 15420 },
-    { text: 'Cambio climático', votes: 12350 },
-    { text: 'Inteligencia Artificial', votes: 10890 },
-    { text: 'Deportes 2024', votes: 8760 },
-    { text: 'Política internacional', votes: 7500 },
-    { text: 'Economía global', votes: 6800 },
-    { text: 'Tecnología 5G', votes: 6200 },
-    { text: 'Salud y bienestar', votes: 5900 },
-    { text: 'Educación digital', votes: 5400 },
-    { text: 'Entretenimiento', votes: 5100 },
-    { text: 'Redes sociales', votes: 4800 },
-    { text: 'Gaming y eSports', votes: 4500 },
-    { text: 'Música actual', votes: 4200 },
-    { text: 'Series de TV', votes: 3900 },
-  ];
+  // Removido sistema de auto-ocultación que causaba parpadeo
   
-  function handleSearch() {
-    if (searchQuery.trim()) {
-      dispatch('search', { query: searchQuery, filter: searchFilter });
-      // Aquí iría la lógica de búsqueda real
-      console.log('Buscando:', searchQuery, 'Filtro:', searchFilter);
+  // Cargar búsquedas recientes del localStorage
+  function loadRecentSearches() {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('votetok-recent-searches');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          recentSearches = parsed.map((item: any) => ({
+            ...item,
+            icon: item.type === 'polls' ? TrendingUp : User
+          }));
+        } catch (e) {
+          console.error('Error parsing recent searches:', e);
+        }
+      }
     }
   }
   
+  // Guardar búsqueda reciente
+  function saveRecentSearch(text: string, type: string) {
+    if (typeof window !== 'undefined') {
+      const newSearch = { text, type };
+      const filtered = recentSearches.filter(s => s.text !== text);
+      const updated = [newSearch, ...filtered].slice(0, 5); // Máximo 5
+      localStorage.setItem('votetok-recent-searches', JSON.stringify(updated));
+      loadRecentSearches();
+    }
+  }
+  
+  // Cargar tendencias
+  async function loadTrending() {
+    try {
+      const response = await apiCall('/api/search/trending?limit=15');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          trendingPolls = data.data;
+        }
+      }
+    } catch (error) {
+      console.error('[SearchModal] Error loading trending:', error);
+    }
+  }
+  
+  // Buscar con debounce
+  async function performSearch() {
+    isLoading = true;
+    
+    try {
+      const query = searchQuery.trim() || '';
+      
+      // Construir parámetros de búsqueda
+      let searchParams = `q=${encodeURIComponent(query)}&filter=${searchFilter}&limit=20`;
+      
+      // Agregar subfiltros según el filtro principal
+      if (searchFilter === 'polls') {
+        searchParams += `&sort=${pollsSubfilter}`; // recent o trending
+      } else if (searchFilter === 'users') {
+        searchParams += `&userType=${usersSubfilter}`; // all o followers
+      }
+      
+      const response = await apiCall(`/api/search?${searchParams}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          searchResults = data.data;
+          // Guardar búsqueda solo si hay query
+          if (searchQuery.trim()) {
+            saveRecentSearch(searchQuery.trim(), searchFilter);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[SearchModal] Error searching:', error);
+    } finally {
+      isLoading = false;
+    }
+  }
+  
+  // Debounce para búsqueda
+  function handleSearchInput() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      performSearch();
+    }, 300);
+  }
+  
+  // Effect para cargar datos cuando se abre la modal
+  $effect(() => {
+    if (isOpen) {
+      // Resetear subfiltros inválidos si no está autenticado
+      if (!isAuthenticated && (usersSubfilter === 'followers' || usersSubfilter === 'following')) {
+        usersSubfilter = 'all';
+      }
+      
+      loadRecentSearches();
+      loadTrending();
+      // Cargar contenido inicial basado en el filtro
+      performSearch();
+    }
+  });
+  
+  // Variable para detectar cambios de filtro (no reactiva)
+  let previousFilter: string | null = null;
+  
+  // Effect para buscar cuando cambia el filtro o la query
+  $effect(() => {
+    if (isOpen) {
+      const filterChanged = previousFilter !== null && searchFilter !== previousFilter;
+      previousFilter = searchFilter;
+      
+      // Track dependencies
+      searchFilter;
+      searchQuery;
+      
+      // Si cambió el filtro, buscar inmediatamente sin debounce
+      if (filterChanged) {
+        performSearch();
+      } 
+      // Si solo cambió la query (escribiendo), usar debounce
+      else if (searchQuery.trim()) {
+        handleSearchInput();
+      } 
+      // Sin query, buscar inmediatamente
+      else {
+        performSearch();
+      }
+    }
+  });
+  
+  // Effect para buscar cuando cambian los subfiltros (excepto encuestas que filtra en frontend)
+  $effect(() => {
+    if (isOpen) {
+      // Track dependencies de subfiltros
+      usersSubfilter;
+      
+      // Buscar cuando cambian usuarios
+      if (searchFilter === 'users') {
+        performSearch();
+      }
+    }
+  });
+  
+  // Filtrar encuestas en frontend según subfiltro
+  const filteredPolls = $derived((() => {
+    if (searchFilter !== 'polls' && searchFilter !== 'all') {
+      return [];
+    }
+    
+    if (pollsSubfilter === 'trending') {
+      // Solo encuestas con muchos votos (más de 10 votos)
+      return searchResults.polls.filter(poll => poll.votesCount > 10);
+    } else {
+      // recent - encuestas recientes (últimas 7 días)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return searchResults.polls.filter(poll => {
+        const pollDate = new Date(poll.createdAt);
+        return pollDate > sevenDaysAgo;
+      });
+    }
+  })());
+  
   function clearSearch() {
     searchQuery = '';
+    // Recargar contenido sin query para el filtro actual
+    performSearch();
   }
   
   function selectRecentSearch(search: string) {
     searchQuery = search;
-    handleSearch();
+    performSearch();
+  }
+  
+  function selectTrendingPoll(poll: any) {
+    // Disparar evento para abrir en el globo
+    dispatch('openPollInGlobe', { poll });
+    closeModal();
+  }
+  
+  function selectSearchResult(type: 'poll' | 'user' | 'place', item: any) {
+    if (type === 'poll') {
+      // Disparar evento para abrir encuesta en el globo
+      dispatch('openPollInGlobe', { poll: item });
+      closeModal();
+    } else {
+      // Para usuarios y lugares, disparar evento genérico
+      dispatch('select', { type, item });
+    }
+  }
+  
+  async function handleFollowToggle(user: any) {
+    // Verificar si está autenticado
+    if (!isAuthenticated) {
+      showAuthModal = true;
+      return;
+    }
+    
+    try {
+      if (user.isFollowing) {
+        // Dejar de seguir
+        const response = await apiCall(`/api/users/${user.id}/follow`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          // Actualizar estado local
+          user.isFollowing = false;
+          user.followersCount = Math.max(0, user.followersCount - 1);
+          searchResults.users = [...searchResults.users];
+        }
+      } else {
+        // Seguir
+        const response = await apiCall(`/api/users/${user.id}/follow`, {
+          method: 'POST'
+        });
+        
+        if (response.ok) {
+          // Actualizar estado local
+          user.isFollowing = true;
+          user.followersCount += 1;
+          searchResults.users = [...searchResults.users];
+        }
+      }
+    } catch (error) {
+      console.error('[SearchModal] Error toggling follow:', error);
+    }
   }
   
   function closeModal() {
     isOpen = false;
+    searchQuery = '';
+    searchResults = { polls: [], users: [], places: [] };
   }
 </script>
 
@@ -96,38 +304,33 @@
     ontouchstart={handleModalSwipeStart}
     ontouchmove={handleModalSwipeMove}
   >
-    <!-- Header -->
+    <!-- Header con barra de búsqueda -->
     <div class="modal-header">
-      <div class="modal-header-content">
-        <Search size={24} />
-        <h2 id="search-modal-title">Buscar</h2>
-      </div>
-      <button onclick={closeModal} class="close-btn" aria-label="Cerrar">
-        <X size={24} />
-      </button>
-    </div>
-
-    <!-- Content -->
-    <div class="modal-content">
-      <!-- Barra de búsqueda -->
-      <div class="search-input-container">
-        <Search size={20} class="search-icon" />
+      <div class="search-header-container">
+        <span class="search-icon-header">
+          <Search size={20} />
+        </span>
         <input
           type="text"
           bind:value={searchQuery}
-          placeholder="Buscar encuestas, usuarios o lugares..."
-          class="search-input"
-          onkeydown={(e) => e.key === 'Enter' && handleSearch()}
+          oninput={handleSearchInput}
+          placeholder="Buscar"
+          class="search-input-header"
           autofocus
         />
         {#if searchQuery}
-          <button onclick={clearSearch} class="clear-btn" aria-label="Limpiar">
-            <X size={18} />
+          <button onclick={clearSearch} class="clear-btn-header" aria-label="Limpiar">
+            Limpiar
           </button>
         {/if}
       </div>
+      <button onclick={closeModal} class="close-btn" aria-label="Cerrar">
+        <X size={20} />
+      </button>
+    </div>
 
-      <!-- Filtros -->
+    <!-- Filtros sticky -->
+    <div class="filter-tabs-container">
       <div class="filter-tabs">
         <button
           class="filter-tab"
@@ -150,17 +353,238 @@
         >
           Usuarios
         </button>
-        <button
-          class="filter-tab"
-          class:active={searchFilter === 'places'}
-          onclick={() => searchFilter = 'places'}
-        >
-          Lugares
-        </button>
       </div>
 
+      <!-- Subfiltros dinámicos -->
+      {#if searchFilter === 'polls'}
+        <div class="subfilter-tabs">
+          <button
+            class="subfilter-tab"
+            class:active={pollsSubfilter === 'trending'}
+            onclick={() => pollsSubfilter = 'trending'}
+          >
+            Tendencias
+          </button>
+          <button
+            class="subfilter-tab"
+            class:active={pollsSubfilter === 'recent'}
+            onclick={() => pollsSubfilter = 'recent'}
+          >
+            Recientes
+          </button>
+        </div>
+      {:else if searchFilter === 'users'}
+        <div class="subfilter-tabs">
+          <button
+            class="subfilter-tab"
+            class:active={usersSubfilter === 'all'}
+            onclick={() => usersSubfilter = 'all'}
+          >
+            Todos
+          </button>
+          <button
+            class="subfilter-tab"
+            class:active={usersSubfilter === 'trending'}
+            onclick={() => usersSubfilter = 'trending'}
+          >
+            Tendencias
+          </button>
+          {#if isAuthenticated}
+            <button
+              class="subfilter-tab"
+              class:active={usersSubfilter === 'followers'}
+              onclick={() => usersSubfilter = 'followers'}
+            >
+              Seguidores
+            </button>
+            <button
+              class="subfilter-tab"
+              class:active={usersSubfilter === 'following'}
+              onclick={() => usersSubfilter = 'following'}
+            >
+              Seguidos
+            </button>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Content scrollable -->
+    <div class="modal-content">
+      <!-- Loading indicator -->
+      {#if isLoading}
+        <div class="loading-container">
+          <div class="loading-spinner"></div>
+          <p>Buscando...</p>
+        </div>
+      {/if}
+
+      <!-- Resultados de búsqueda -->
+      {#if !isLoading && (filteredPolls.length > 0 || searchResults.users.length > 0)}
+        <!-- Resultados: Encuestas -->
+        {#if (searchFilter === 'polls' || (searchFilter === 'all' && searchQuery)) && filteredPolls.length > 0}
+          <div class="section">
+            <h3 class="section-title">
+              <TrendingUp size={18} />
+              {#if searchQuery}
+                Encuestas ({filteredPolls.length})
+              {:else if pollsSubfilter === 'trending'}
+                Tendencias ({filteredPolls.length})
+              {:else}
+                Recientes ({filteredPolls.length})
+              {/if}
+            </h3>
+            {#if pollsSubfilter === 'trending'}
+              <!-- Estilo trending con ranking -->
+              <div class="trending-list">
+                {#each filteredPolls as poll, i}
+                  <button
+                    class="trending-item"
+                    onclick={() => selectSearchResult('poll', poll)}
+                  >
+                    <div class="trending-rank">#{i + 1}</div>
+                    <div class="trending-content">
+                      <div class="trending-text">{poll.title}</div>
+                      <div class="trending-votes">{poll.votesCount.toLocaleString()} votos</div>
+                    </div>
+                  </button>
+                {/each}
+              </div>
+            {:else}
+              <!-- Estilo normal de resultados -->
+              <div class="results-list">
+                {#each filteredPolls as poll}
+                  <button
+                    class="result-item poll-item"
+                    onclick={() => selectSearchResult('poll', poll)}
+                  >
+                    <div class="result-content">
+                      <div class="result-title">{poll.title}</div>
+                      {#if poll.description}
+                        <div class="result-description">{poll.description}</div>
+                      {/if}
+                      <div class="result-meta">
+                        <span class="meta-item">{poll.votesCount.toLocaleString()} votos</span>
+                        {#if poll.category}
+                          <span class="meta-divider">•</span>
+                          <span class="meta-item">{poll.category}</span>
+                        {/if}
+                      </div>
+                    </div>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        <!-- Tendencias (en "Todo" van primero) -->
+        {#if !searchQuery && !isLoading && trendingPolls.length > 0 && searchFilter === 'all'}
+          <div class="section">
+            <h3 class="section-title">
+              <TrendingUp size={18} />
+              Tendencias
+            </h3>
+            <div class="trending-list">
+              {#each trendingPolls as poll, i}
+                <button
+                  class="trending-item"
+                  onclick={() => selectTrendingPoll(poll)}
+                >
+                  <div class="trending-rank">#{i + 1}</div>
+                  <div class="trending-content">
+                    <div class="trending-text">{poll.title}</div>
+                    <div class="trending-votes">{poll.recentVotesCount?.toLocaleString() || poll.votesCount.toLocaleString()} votos</div>
+                  </div>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        <!-- Resultados: Usuarios -->
+        {#if (searchFilter === 'users' || (searchFilter === 'all' && usersSubfilter === 'trending')) && searchResults.users.length > 0}
+          <div class="section">
+            <h3 class="section-title">
+              <User size={18} />
+              {#if searchQuery}
+                Usuarios ({searchResults.users.length})
+              {:else if usersSubfilter === 'trending'}
+                Usuarios en tendencia ({searchResults.users.length})
+              {:else if usersSubfilter === 'followers'}
+                Seguidores ({searchResults.users.length})
+              {:else if usersSubfilter === 'following'}
+                Seguidos ({searchResults.users.length})
+              {:else}
+                Todos los usuarios ({searchResults.users.length})
+              {/if}
+            </h3>
+            <div class="results-list">
+              {#each searchResults.users as user}
+                <div class="result-item user-item-container">
+                  <button
+                    class="user-info"
+                    onclick={() => selectSearchResult('user', user)}
+                  >
+                    <img 
+                      src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName)}&background=random`} 
+                      alt={user.displayName}
+                      class="user-avatar"
+                    />
+                    <div class="result-content">
+                      <div class="user-name">
+                        {user.displayName}
+                        {#if user.verified}
+                          <span class="verified-badge">✓</span>
+                        {/if}
+                      </div>
+                      <div class="user-username">@{user.username}</div>
+                      {#if user.bio}
+                        <div class="result-description">{user.bio}</div>
+                      {/if}
+                      <div class="result-meta">
+                        <span class="meta-item">{user.pollsCount} encuestas</span>
+                        <span class="meta-divider">•</span>
+                        <span class="meta-item">{user.followersCount} seguidores</span>
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    class="follow-btn"
+                    class:following={user.isFollowing}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      handleFollowToggle(user);
+                    }}
+                  >
+                    {user.isFollowing ? 'Siguiendo' : 'Seguir'}
+                  </button>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+      {/if}
+
+      <!-- Sin resultados -->
+      {#if !isLoading && filteredPolls.length === 0 && searchResults.users.length === 0}
+        <div class="no-results">
+          <Search size={48} />
+          {#if searchQuery}
+            <p>No se encontraron resultados para "{searchQuery}"</p>
+          {:else if searchFilter === 'polls'}
+            <p>No hay encuestas disponibles</p>
+          {:else if searchFilter === 'users'}
+            <p>No hay usuarios disponibles</p>
+          {:else}
+            <p>No hay contenido disponible</p>
+          {/if}
+        </div>
+      {/if}
+
       <!-- Búsquedas recientes -->
-      {#if !searchQuery && recentSearches.length > 0}
+      {#if !isLoading && recentSearches.length > 0 && filteredPolls.length === 0 && searchResults.users.length === 0}
         <div class="section">
           <h3 class="section-title">
             <Clock size={18} />
@@ -172,32 +596,12 @@
                 class="recent-item"
                 onclick={() => selectRecentSearch(search.text)}
               >
-                <svelte:component this={search.icon} size={18} />
+                {#if search.type === 'polls'}
+                  <TrendingUp size={18} />
+                {:else}
+                  <User size={18} />
+                {/if}
                 <span>{search.text}</span>
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/if}
-
-      <!-- Tendencias -->
-      {#if !searchQuery}
-        <div class="section">
-          <h3 class="section-title">
-            <TrendingUp size={18} />
-            Tendencias
-          </h3>
-          <div class="trending-list">
-            {#each trendingTopics as topic, i}
-              <button
-                class="trending-item"
-                onclick={() => selectRecentSearch(topic.text)}
-              >
-                <div class="trending-rank">#{i + 1}</div>
-                <div class="trending-content">
-                  <div class="trending-text">{topic.text}</div>
-                  <div class="trending-votes">{topic.votes.toLocaleString()} votos</div>
-                </div>
               </button>
             {/each}
           </div>
@@ -206,6 +610,9 @@
     </div>
   </div>
 {/if}
+
+<!-- Modal de autenticación -->
+<AuthModal bind:isOpen={showAuthModal} />
 
 <style>
   .modal-overlay {
@@ -252,48 +659,117 @@
   .modal-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1.5rem;
+    gap: 0;
+    padding: 1rem 1.5rem 1rem 0;
     padding-top: calc(1rem + env(safe-area-inset-top));
-    padding-bottom: 0.75rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     flex-shrink: 0;
     position: sticky;
     top: 0;
     background: #181a20;
-    z-index: 10;
+    z-index: 11;
   }
 
-  .modal-header-content {
+  .search-header-container {
+    position: relative;
+    flex: 1;
     display: flex;
     align-items: center;
-    gap: 12px;
-    color: white;
+    margin-right: 12px;
+    margin-left: 1.5rem;
   }
 
-  .modal-header-content h2 {
-    font-size: 24px;
-    font-weight: 700;
-    margin: 0;
+  .search-icon-header {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgb(255, 255, 255) !important;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .search-input-header {
+    flex: 1;
+    border: none;
+    background: rgba(0, 0, 0, 1);
+    color: #ffffff;
+    font-size: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    outline: none;
+    width: 100%;
+    padding: 10px 80px 10px 44px;
+    border-radius: 20px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  .search-input-header:focus {
+    outline: none;
+  }
+
+  .search-input-header::placeholder {
+    color: rgb(255, 255, 255);
+  }
+
+  .search-input-header::-webkit-search-cancel-button {
+    display: none;
+    -webkit-appearance: none;
+  }
+
+  .search-input-header::-webkit-search-decoration {
+    display: none;
+    -webkit-appearance: none;
+  }
+
+  .clear-btn-header {
+    position: absolute;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .clear-btn-header:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 1);
   }
 
   .close-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
     border: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
   }
 
   .close-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 1);
   }
 
   .modal-content {
@@ -306,69 +782,23 @@
     gap: 1rem;
   }
 
-  .search-input-container {
-    position: relative;
-    margin-bottom: 20px;
-  }
-
-  .search-input {
-    width: 100%;
-    padding: 14px 48px 14px 48px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    color: white;
-    font-size: 16px;
-    transition: all 0.2s;
-  }
-
-  .search-input:focus {
-    outline: none;
-    border-color: rgba(59, 130, 246, 0.5);
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  .search-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .search-icon {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.5);
-    pointer-events: none;
-  }
-
-  .clear-btn {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 8px;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .clear-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+  /* Contenedor de filtros sticky */
+  .filter-tabs-container {
+    position: sticky;
+    top: 85px;
+    background: #181a20;
+    padding: 12px 1.5rem 16px;
+    z-index: 10;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .filter-tabs {
     display: flex;
     gap: 8px;
-    margin-bottom: 24px;
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .filter-tabs::-webkit-scrollbar {
@@ -386,6 +816,8 @@
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
+    flex-shrink: 0;
+    height: fit-content;
   }
 
   .filter-tab:hover {
@@ -398,8 +830,53 @@
     color: #60a5fa;
   }
 
+  /* Subfiltros */
+  .subfilter-tabs {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .subfilter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .subfilter-tab {
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .subfilter-tab:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .subfilter-tab.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+
   .section {
     margin-bottom: 32px;
+    scroll-margin-top: 140px;
+  }
+  
+  .section:first-of-type {
+    padding-top: 8px;
   }
 
   .section-title {
@@ -481,6 +958,339 @@
   .trending-votes {
     color: rgba(255, 255, 255, 0.5);
     font-size: 13px;
+  }
+
+  /* Loading */
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    gap: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Results */
+  .results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .result-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    width: 100%;
+  }
+
+  .result-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(4px);
+  }
+
+  .result-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .result-title {
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    word-wrap: break-word;
+  }
+
+  .result-description {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .result-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .meta-item {
+    display: inline;
+  }
+
+  .meta-divider {
+    opacity: 0.5;
+  }
+
+  /* User specific */
+  .user-item-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s;
+  }
+
+  .user-item-container:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .user-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: none;
+    border: none;
+    color: white;
+    text-align: left;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .follow-btn {
+    padding: 8px 20px;
+    background: rgba(59, 130, 246, 0.8);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .follow-btn:hover {
+    background: rgba(59, 130, 246, 1);
+    transform: scale(1.05);
+  }
+
+  .follow-btn.following {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .follow-btn.following:hover {
+    background: rgba(239, 68, 68, 0.8);
+    color: white;
+  }
+
+  .user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .user-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .user-username {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .verified-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3b82f6;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+  }
+
+  /* Place specific */
+  .place-item {
+    align-items: center;
+  }
+
+  .place-icon {
+    color: rgba(59, 130, 246, 0.8);
+    flex-shrink: 0;
+  }
+
+  /* No results */
+  .no-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    gap: 1rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+  }
+
+  .no-results p {
+    font-size: 15px;
+  }
+
+  /* Búsqueda de lugares (estilo BottomSheet) */
+  .place-search-wrapper {
+    position: relative;
+    padding: 12px 1.5rem;
+    background: #181a20;
+  }
+
+  .place-search-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .place-search-icon {
+    position: absolute;
+    left: 14px;
+    color: rgb(255, 255, 255);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .place-search-input {
+    flex: 1;
+    border: none;
+    background: rgba(0, 0, 0, 1);
+    color: #ffffff;
+    font-size: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    outline: none;
+    padding: 10px 100px 10px 44px;
+    border-radius: 20px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  .place-search-input::placeholder {
+    color: rgb(255, 255, 255);
+  }
+
+  .place-search-input::-webkit-search-cancel-button {
+    display: none;
+    -webkit-appearance: none;
+  }
+
+  .place-search-clear {
+    position: absolute;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .place-search-clear:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  /* Dropdown de resultados */
+  .place-search-dropdown {
+    position: absolute;
+    left: 1.5rem;
+    right: 1.5rem;
+    top: calc(100% - 8px);
+    background: rgba(20, 20, 25, 0.98);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+
+  .search-loading {
+    padding: 16px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+  }
+
+  .search-result-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: white;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .search-result-item:last-child {
+    border-bottom: none;
+  }
+
+  .search-result-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .result-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .result-name {
+    font-size: 15px;
+    font-weight: 500;
   }
 
 </style>

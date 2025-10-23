@@ -506,12 +506,14 @@
   <div class="save-snackbar">
     <div class="save-snackbar-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-        <polyline points="7 3 7 8 15 8"></polyline>
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
       </svg>
     </div>
-    <span class="save-snackbar-text">¿Guardar este tema para próximas visitas?</span>
+    <div class="save-snackbar-content">
+      <span class="save-snackbar-title">Guardar personalización</span>
+      <span class="save-snackbar-subtitle">Aplicar este tema en este dispositivo</span>
+    </div>
     <div class="save-snackbar-actions">
       <button class="save-action-btn save-action-no" onclick={dismissSaveModal}>
         No
@@ -535,7 +537,7 @@
 <style>
   .unified-toggle {
     position: fixed;
-    top: 8px;
+    top: 4px;
     right: 120px; /* Más separado de "Para ti" */
     z-index: 10001;
     background: transparent;
@@ -765,27 +767,29 @@
   /* Snackbar de guardado - estilo profesional tipo Material Design */
   .save-snackbar {
     position: fixed;
-    top: 60px; /* Debajo del header */
-    right: 20px;
+    top: 64px;
+    right: 24px;
     z-index: 20000;
     
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 18px 26px; /* Más padding para más altura */
+    gap: 14px;
+    padding: 16px 20px;
     
-    background: linear-gradient(135deg, rgba(32, 32, 36, 0.98), rgba(24, 24, 28, 0.98));
-    backdrop-filter: blur(20px);
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, rgba(24, 24, 27, 0.96), rgba(18, 18, 20, 0.96));
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      0 0 0 1px rgba(255, 255, 255, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      0 12px 40px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
     
-    animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    max-width: 520px;
-    min-height: 68px; /* Altura mínima más grande */
+    animation: slideInRight 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    max-width: 440px;
+    min-height: 80px;
   }
   
   @keyframes slideInRight {
@@ -801,15 +805,18 @@
   
   .save-snackbar-icon {
     flex-shrink: 0;
-    width: 40px; /* Más grande */
-    height: 40px; /* Más grande */
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
-    border: 1px solid rgba(99, 102, 241, 0.25);
-    border-radius: 10px;
-    color: rgba(167, 139, 250, 0.9);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.12));
+    border: 1.5px solid rgba(16, 185, 129, 0.3);
+    border-radius: 12px;
+    color: rgba(16, 185, 129, 0.95);
+    box-shadow: 
+      0 0 0 4px rgba(16, 185, 129, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
   
   .save-snackbar-icon svg {
@@ -817,15 +824,45 @@
     height: 22px;
   }
   
-  .save-snackbar-text {
+  .save-snackbar-content {
     flex: 1;
-    font-size: 15px; /* Más grande */
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.95);
-    line-height: 1.4;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  
+  .save-snackbar-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.98);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  
+  .save-snackbar-subtitle {
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.3;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  
+  .save-snackbar-subtitle::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    background: rgba(16, 185, 129, 0.6);
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
   }
   
   .save-snackbar-actions {
@@ -852,12 +889,31 @@
     background: linear-gradient(135deg, #10b981, #059669);
     color: white;
     border: none;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    box-shadow: 
+      0 2px 12px rgba(16, 185, 129, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .save-action-yes::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent);
+    opacity: 0;
+    transition: opacity 0.2s ease;
   }
   
   .save-action-yes:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    box-shadow: 
+      0 4px 16px rgba(16, 185, 129, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  
+  .save-action-yes:hover::before {
+    opacity: 1;
   }
   
   .save-action-yes:active {
@@ -909,13 +965,24 @@
   }
   
   :global(html:not(.dark)) .save-snackbar-icon {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.08));
-    border-color: rgba(99, 102, 241, 0.2);
-    color: rgba(99, 102, 241, 0.9);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.08));
+    border-color: rgba(16, 185, 129, 0.25);
+    color: rgba(5, 150, 105, 0.9);
+    box-shadow: 
+      0 0 0 4px rgba(16, 185, 129, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
   
-  :global(html:not(.dark)) .save-snackbar-text {
-    color: rgba(0, 0, 0, 0.9);
+  :global(html:not(.dark)) .save-snackbar-title {
+    color: rgba(0, 0, 0, 0.95);
+  }
+  
+  :global(html:not(.dark)) .save-snackbar-subtitle {
+    color: rgba(0, 0, 0, 0.6);
+  }
+  
+  :global(html:not(.dark)) .save-snackbar-subtitle::before {
+    background: rgba(16, 185, 129, 0.7);
   }
   
   :global(html:not(.dark)) .save-action-no {
@@ -953,8 +1020,12 @@
       min-height: 52px;
     }
     
-    .save-snackbar-text {
-      font-size: 13px;
+    .save-snackbar-title {
+      font-size: 14px;
+    }
+    
+    .save-snackbar-subtitle {
+      font-size: 12px;
     }
     
     .save-action-btn {

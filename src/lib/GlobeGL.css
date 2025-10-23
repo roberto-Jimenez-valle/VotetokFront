@@ -435,7 +435,7 @@ header {
 /* Posicionar el dropdown de tabs pegado a la derecha */
 .tabs-float {
   position: fixed;
-  top: 8px;
+  top: 4px;
   right: 10px; /* pegado al borde derecho */
   z-index: 10000; /* por debajo del BottomSheet expandido */
   display: flex;
@@ -2898,8 +2898,8 @@ header {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 8px 16px;
-  min-height: 60px;
+  padding: 4px 16px !important;
+  min-height: 44px !important;
   max-height: 200px; /* Maximum height when visible */
   /* IMPORTANTE: Permitir arrastre desde toda el área */
   cursor: grab;
@@ -2915,12 +2915,12 @@ header {
 }
 
 .nav-wrapper.nav-hidden {
-  max-height: 0;
-  min-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  margin-top: 0;
-  margin-bottom: 0;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
   opacity: 0;
   pointer-events: none;
   overflow: hidden; /* Hide overflow when collapsed */
@@ -2946,8 +2946,8 @@ header {
   align-items: center;
   gap: 2px;
   justify-content: flex-start;
-  padding: 6px 2px;
-  padding-right: 8px; /* Extra space to avoid clipping */
+  padding: 2px 2px !important;
+  padding-right: 8px !important; /* Extra space to avoid clipping */
   position: relative;
   overflow-x: auto;
   overflow-y: hidden;
@@ -2959,7 +2959,7 @@ header {
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
   z-index: 1; /* Bajo z-index para no interferir con otros elementos */
-  min-height: 48px; /* Asegurar altura mínima para el input absoluto */
+  min-height: 40px !important; /* Asegurar altura mínima para el input absoluto */
   /* Mask gradient to indicate more content */
   -webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
   mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
@@ -2978,7 +2978,7 @@ header {
 .nav-chip {
   display: inline-flex;
   align-items: center;
-  padding: 8px 14px;
+  padding: 6px 14px !important;
   border: none;
   border-radius: 20px;
   background: transparent;
@@ -3034,9 +3034,9 @@ header {
 
 /* Individual icon buttons (search and menu) */
 .nav-icon-btn {
-  width: 40px;
-  height: 40px;
-  padding: 0;
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3330,7 +3330,7 @@ header {
 /* Navigation breadcrumb */
 .navigation-breadcrumb {
   position: fixed;
-  top: 20px;
+  top: 8px;
   left: 20px;
   z-index: 10005;
   background: rgba(0, 0, 0, 0.8);

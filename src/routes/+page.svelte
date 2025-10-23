@@ -139,6 +139,7 @@
 				modalOpen={isCreatePollModalOpen} 
 				on:openCreatePoll={handleOpenCreatePoll}
 				on:closeCreatePoll={handleCloseCreatePoll}
+				on:openPollInGlobe={handleOpenPollInGlobeFromHeader}
 			/>
 		</div>
 		

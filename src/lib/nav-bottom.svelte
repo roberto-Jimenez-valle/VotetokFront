@@ -8,9 +8,10 @@
 	interface Props {
 		hidden?: boolean;
 		modalOpen?: boolean;
+		isAuthenticated?: boolean;
 	}
 	
-	let { hidden = $bindable(false), modalOpen = false }: Props = $props();
+	let { hidden = $bindable(false), modalOpen = false, isAuthenticated = false }: Props = $props();
 	let activeItem = $state('home');
 	let isLaunching = $state(false);
 	
@@ -102,6 +103,11 @@
 			dispatch('closeCreatePoll');
 		}
 	}
+	
+	// Propagar evento para abrir encuesta en globo
+	function handleOpenPollInGlobe(event: CustomEvent<{ poll: any }>) {
+		dispatch('openPollInGlobe', event.detail);
+	}
 </script>
 
 <nav
@@ -162,21 +168,27 @@
 		position: fixed;
 		bottom: 0;
 		left: 0;
-		right: 0;
 		max-width: 700px;
 		width: 100%;
 		background-color: #000000 !important;
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		padding: 0.25rem 0.25rem;
+		padding: 0.5rem 0.5rem 0.25rem 0.5rem;
 		transition: transform 0.3s ease-in-out;
 		border-top: none;
 	}
 
 	@media (min-width: 640px) {
 		.nav-bottom-fixed {
-			padding: 0.5rem 1rem;
+			padding: 0.5rem 1rem 0.25rem 1rem;
+		}
+	}
+	
+	/* Bordes redondeados en pantallas grandes */
+	@media (min-width: 700px) {
+		.nav-bottom-fixed {
+			border-radius: 20px 20px 0 0;
 		}
 	}
 
@@ -184,25 +196,28 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		height: 2.5rem;
+		height: 1.5rem;
 		width: 100%;
 	}
 
 	@media (min-width: 640px) {
 		.nav-bottom-container {
-			height: 3rem;
+			height: 1.75rem;
 		}
 	}
 
 	/* Botones normales del nav - colores fijos */
 	.nav-btn {
-		padding: 0.5rem;
+		padding: 0.25rem;
 		border-radius: 9999px;
 		transition: all 0.2s ease;
 		background: transparent;
 		border: none;
 		cursor: pointer;
 		color: #9ca3af !important; /* Gris fijo */
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.nav-btn:hover {
@@ -217,7 +232,7 @@
 	/* Botón de añadir - bordes dobles de colores diferentes */
 	.nav-btn-add {
 		width: 50px;
-		height: 32px;
+		height: 28px;
 		border-radius: 8px;
 		background: #2a2c31;
 		border: none;
@@ -230,7 +245,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0;
-		margin: 2px 0.5rem 0 0.5rem;
+		margin: 0 0.5rem;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 		position: relative;
 	}
@@ -278,12 +293,15 @@
 
 	/* Botón de perfil */
 	.nav-btn-profile {
-		padding: 0.25rem;
+		padding: 0;
 		border-radius: 9999px;
 		border: none;
 		background: transparent;
 		cursor: pointer;
 		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.nav-btn-profile:hover {
@@ -297,6 +315,6 @@
 </style>
 
 <!-- Modales -->
-<SearchModal bind:isOpen={searchModalOpen} />
+<SearchModal bind:isOpen={searchModalOpen} isAuthenticated={isAuthenticated} on:openPollInGlobe={handleOpenPollInGlobe} />
 <NotificationsModal bind:isOpen={notificationsModalOpen} />
 <ProfileModal bind:isOpen={profileModalOpen} />
