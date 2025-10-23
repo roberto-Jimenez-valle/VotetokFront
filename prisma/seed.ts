@@ -6,6 +6,8 @@ async function main() {
   console.log('🧹 Limpiando base de datos...');
   
   // Eliminar datos existentes en orden (respetando foreign keys)
+  await prisma.pollHashtag.deleteMany({});
+  await prisma.hashtag.deleteMany({});
   await prisma.vote.deleteMany({});
   await prisma.pollOption.deleteMany({});
   await prisma.poll.deleteMany({});
