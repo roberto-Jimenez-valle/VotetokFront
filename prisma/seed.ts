@@ -3,6 +3,17 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log('🧹 Limpiando base de datos...');
+  
+  // Eliminar datos existentes en orden (respetando foreign keys)
+  await prisma.vote.deleteMany({});
+  await prisma.pollOption.deleteMany({});
+  await prisma.poll.deleteMany({});
+  await prisma.featuredUser.deleteMany({});
+  await prisma.userFollower.deleteMany({});
+  await prisma.user.deleteMany({});
+  
+  console.log('✅ Base de datos limpiada');
   
   // Crear usuarios de ejemplo
     const users = await Promise.all([
