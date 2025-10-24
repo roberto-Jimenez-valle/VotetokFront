@@ -752,7 +752,7 @@ header {
     max-height: calc(75vh - 180px); /* Restar más espacio por el nav inferior */
   }
 }
-
+ 
 /* Desktop: Alinear a la izquierda y limitar ancho del bottom-sheet */
 @media (min-width: 768px) {
   .bottom-sheet {
@@ -1361,9 +1361,12 @@ header {
 }
 
 .vote-card.is-active .card-header .question-title {
-  -webkit-line-clamp: unset;
-  line-clamp: unset;
-  max-height: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Contenido adaptativo */
@@ -1617,7 +1620,7 @@ header {
     }
   }
 
-  @container (max-width: 180px) {
+  @container (max-width: 110px) {
     .vote-card:not(.is-active) .card-content {
       padding: 0 8px 36px 4px;
       align-items: flex-start;
@@ -1883,8 +1886,8 @@ header {
   gap: 0; /* pegadas por defecto */
   overflow-x: auto;
   overflow-y: hidden;
-  height: 200px;         /* altura unificada y limitada */
-  max-height: 200px;
+  min-height: 120px;        /* altura mínima */
+  max-height: 224px;        /* altura máxima */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -1894,9 +1897,13 @@ header {
 .vote-cards-grid.accordion:not(.compact-two) .vote-card {
   flex: 0 0 300px; /* base mayor para que no se vean pequeñas */
   min-width: 300px;
-  height: 100%;
+  min-height: 120px;        /* altura mínima para cards */
+  max-height: 224px;        /* altura máxima para cards */
   border-radius: 0;           /* sin esquinas redondeadas intermedias */
   overflow: hidden;           /* recorta bordes al unificar altura */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;  /* centrar contenido verticalmente */
 }
 
 /* Transición suave de anchura */
@@ -1913,7 +1920,40 @@ header {
 .vote-cards-grid.accordion:not(.compact-two) .vote-card:active { flex-basis: 600px; }
 
 /* Asegurar que el contenido se adapta durante la expansión */
-.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-content { overflow: hidden; }
+.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-content { 
+  overflow: hidden;
+  padding: 0 16px 20px 16px; /* Reducir padding inferior para mejor centrado */
+  justify-content: center;
+  align-items: center;
+}
+
+/* Header más compacto en acordeones para mejor uso del espacio */
+.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-header { 
+  padding: 8px 12px;
+  min-height: auto;
+}
+.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-header .question-title {
+  min-height: auto;
+  text-align: center !important;
+  flex: 1;
+  width: 100%;
+}
+
+/* Ocultar texto en tarjetas colapsadas (no activas) por defecto */
+.vote-cards-grid.accordion:not(.compact-two) .vote-card:not(.is-active) .card-header .question-title {
+  display: none;
+}
+
+/* Mostrar texto solo si hay suficiente ancho (>20px) sin truncar */
+@container (min-width: 110px) {
+  .vote-cards-grid.accordion:not(.compact-two) .vote-card:not(.is-active) .card-header .question-title {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
 
 /* ===================== ACCORDION FULL-WIDTH ===================== */
 /* Una sola opción: sin acordeón, sin efectos */
@@ -1921,12 +1961,48 @@ header {
   overflow-x: hidden;
   width: 100%;
   gap: 0;
+  height: 160px;
+  min-height: 160px;
+  max-height: 160px;
 }
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card {
   flex: 1 1 0 !important;
   min-width: 0 !important;
+  height: 160px !important;
+  min-height: 160px !important;
+  max-height: 160px !important;
   cursor: pointer;
-  transition: none !important;
+  transition: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.vote-cards-grid.accordion.fullwidth.compact-one .vote-card .card-content {
+  padding: 0 16px 20px 16px;
+  justify-content: center;
+  align-items: center;
+}
+.vote-cards-grid.accordion.fullwidth.compact-one .vote-card .card-header {
+  padding: 8px 12px;
+  min-height: auto;
+}
+.vote-cards-grid.accordion.fullwidth.compact-one .vote-card .card-header .question-title {
+  min-height: auto;
+  text-align: center !important;
+  flex: 1;
+  width: 100%;
+}
+.vote-cards-grid.accordion.fullwidth.compact-one .vote-card:not(.is-active) .card-header .question-title {
+  display: none;
+}
+@container (min-width: 110px) {
+  .vote-cards-grid.accordion.fullwidth.compact-one .vote-card:not(.is-active) .card-header .question-title {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card:hover,
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card:focus-visible,
@@ -1940,13 +2016,58 @@ header {
   overflow-x: hidden;    /* sin scroll horizontal */
   width: 100%;
   gap: 3px;              /* pequeño espacio entre cards */
+  height: 160px;
+  min-height: 160px;
+  max-height: 160px;
 }
 .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card {
   /* Estado inicial: todas las cards con tamaño igual para mejor visibilidad */
   flex: 1 1 0 !important;
   min-width: 0 !important;
-  transition: flex 220ms ease;
+  height: 160px !important;
+  min-height: 160px !important;
+  max-height: 160px !important;
+  transition: flex-grow 180ms ease, flex-shrink 180ms ease, opacity 250ms ease-out, transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
   flex-basis: 0 !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Animaciones deshabilitadas - las transiciones Svelte fly manejan esto ahora */
+/*.vote-cards-grid.accordion.fullwidth:not(.dense).pagination-forward .vote-card {
+  animation: slideInFromRight 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.vote-cards-grid.accordion.fullwidth:not(.dense).pagination-backward .vote-card {
+  animation: slideInFromLeft 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}*/
+.vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card .card-content {
+  padding: 0 16px 20px 16px;
+  justify-content: center;
+  align-items: center;
+}
+.vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card .card-header {
+  padding: 8px 12px;
+  min-height: auto;
+}
+.vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card .card-header .question-title {
+  min-height: auto;
+  text-align: center !important;
+  flex: 1;
+  width: 100%;
+}
+.vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card:not(.is-active) .card-header .question-title {
+  display: none;
+}
+@container (min-width: 110px) {
+  .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card:not(.is-active) .card-header .question-title {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 .vote-cards-grid.accordion.fullwidth:not(.dense):hover .vote-card { 
   flex: 1 1 0 !important; 
@@ -1962,7 +2083,7 @@ header {
   /* Cada no-activa: grow=1 */
   flex: 1 1 0 !important;
   flex-basis: 0 !important;
-  transition: flex 220ms ease;
+  transition: flex-grow 180ms ease, flex-shrink 180ms ease;
 }
 .vote-cards-grid.accordion.fullwidth:not(.dense).open .vote-card.is-active {
   /* Activa: crece según número de items, mínimo 1 */
@@ -1970,12 +2091,70 @@ header {
   flex-basis: 0 !important;
 }
 
+/* Animaciones para paginación hacia ADELANTE (forward) */
+@keyframes slideInFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToLeft {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  40% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+}
+
+/* Animaciones para paginación hacia ATRÁS (backward) */
+@keyframes slideInFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToRight {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  40% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
 /* Muchas opciones (>5): con scroll horizontal tipo carrusel */
 .vote-cards-grid.accordion.fullwidth.dense {
   display: grid !important;
   grid-auto-flow: column;
   grid-template-rows: repeat(2, 1fr);
-  grid-auto-columns: minmax(180px, 1fr);
+  grid-auto-columns: minmax(100px, 1fr);
   overflow-x: auto;
   overflow-y: hidden;
   width: 100%;
@@ -1985,7 +2164,8 @@ header {
   scrollbar-width: none;
   -ms-overflow-style: none;
   padding: 0 10px;
-  height: 200px;
+  min-height: 120px;
+  max-height: 224px;
 }
 .vote-cards-grid.accordion.fullwidth.dense::-webkit-scrollbar {
   display: none;
@@ -1996,9 +2176,51 @@ header {
   grid-row: span 1;
   min-width: 180px;
   max-width: 200px;
+  height: 160px !important;
+  min-height: 160px !important;
+  max-height: 160px !important;
   border-radius: 16px !important;
   overflow: hidden;
-  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 250ms ease-out;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Animaciones deshabilitadas - las transiciones Svelte fly manejan esto ahora */
+/*.vote-cards-grid.accordion.fullwidth.dense.pagination-forward .vote-card {
+  animation: slideInFromRight 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.vote-cards-grid.accordion.fullwidth.dense.pagination-backward .vote-card {
+  animation: slideInFromLeft 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}*/
+.vote-cards-grid.accordion.fullwidth.dense .vote-card .card-content {
+  padding: 0 16px 20px 16px;
+  justify-content: center;
+  align-items: center;
+}
+.vote-cards-grid.accordion.fullwidth.dense .vote-card .card-header {
+  padding: 8px 12px;
+  min-height: auto;
+}
+.vote-cards-grid.accordion.fullwidth.dense .vote-card .card-header .question-title {
+  min-height: auto;
+  text-align: center !important;
+  flex: 1;
+  width: 100%;
+}
+.vote-cards-grid.accordion.fullwidth.dense .vote-card:not(.is-active) .card-header .question-title {
+  display: none;
+}
+@container (min-width: 110px) {
+  .vote-cards-grid.accordion.fullwidth.dense .vote-card:not(.is-active) .card-header .question-title {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 .vote-cards-grid.accordion.fullwidth.dense .vote-card.is-active {
   z-index: 10;
@@ -2565,10 +2787,12 @@ header {
 }
 
 .poll-question.expanded {
-  -webkit-line-clamp: unset;
-  line-clamp: unset;
-  overflow: visible;
-  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 

@@ -412,7 +412,7 @@
   function exitChartView(pollId: string) {
     transitionDirectionByPoll[pollId] = 'next';
     currentPageByPoll[pollId] = 0;
-    activeAccordionByPoll[pollId] = 0;
+    activeAccordionByPoll[pollId] = null; // Empezar plegadas
   }
 
   // Helper para manejar hover en el gráfico
@@ -1419,7 +1419,7 @@
     if (signature) {
       if (signature !== lastMainOptionsSignature) {
         lastMainOptionsSignature = signature;
-        activeAccordionMainIndex = 0;
+        activeAccordionMainIndex = null; // Empezar con todas plegadas
         currentPageMain = 0; // Resetear página cuando cambian opciones
       }
     } else if (lastMainOptionsSignature) {
@@ -1429,9 +1429,10 @@
     }
   }
 
-  $: if (displayOptions.length > 1 && activeAccordionMainIndex == null) {
-    setActiveMain(0);
-  }
+  // Comentado: ahora todas las opciones empiezan plegadas/equilibradas
+  // $: if (displayOptions.length > 1 && activeAccordionMainIndex == null) {
+  //   setActiveMain(0);
+  // }
 
   $: {
     const activePollIds = new Set(additionalPolls.map(poll => poll.id));
@@ -1449,11 +1450,11 @@
       if (signature) {
         if (pollOptionSignatures[poll.id] !== signature) {
           pollOptionSignatures[poll.id] = signature;
-          activeAccordionByPoll[poll.id] = 0;
+          activeAccordionByPoll[poll.id] = null; // Empezar plegadas
           currentPageByPoll[poll.id] = 0; // Resetear página cuando cambian opciones
         }
       } else if (options.length > 1 && activeAccordionByPoll[poll.id] == null) {
-        activeAccordionByPoll[poll.id] = 0;
+        activeAccordionByPoll[poll.id] = null; // Mantener plegadas
       } else {
         if (pollOptionSignatures[poll.id]) {
           delete pollOptionSignatures[poll.id];
@@ -1464,13 +1465,23 @@
     }
   }
 
+  // Comentado: ahora todas las encuestas adicionales empiezan plegadas
+  // $: {
+  //   for (const poll of additionalPolls) {
+  //     const options = getNormalizedOptions(poll);
+  //     if (options.length > 1 && activeAccordionByPoll[poll.id] == null) {
+  //       setActiveForPoll(poll.id, 0);
+  //     }
+  //     // Resetear página si no está inicializada
+  //     if (currentPageByPoll[poll.id] === undefined) {
+  //       currentPageByPoll[poll.id] = 0;
+  //     }
+  //   }
+  // }
+  
+  // Resetear página si no está inicializada (sin auto-abrir opciones)
   $: {
     for (const poll of additionalPolls) {
-      const options = getNormalizedOptions(poll);
-      if (options.length > 1 && activeAccordionByPoll[poll.id] == null) {
-        setActiveForPoll(poll.id, 0);
-      }
-      // Resetear página si no está inicializada
       if (currentPageByPoll[poll.id] === undefined) {
         currentPageByPoll[poll.id] = 0;
       }
@@ -2930,7 +2941,7 @@
             currentPageMain = e.detail.page;
             (async () => {
               await delay(50);
-              activeAccordionMainIndex = 0;
+              activeAccordionMainIndex = null; // Mantener opciones plegadas al cambiar página
               await delay(350);
               transitionDirectionMain = null;
             })();
@@ -3078,7 +3089,7 @@
             const newPageOptions = getPaginatedOptions(sortedOptions, newPage);
             
             if (newPageOptions.items.length > 0) {
-              activeAccordionByPoll[pollId] = 0;
+              activeAccordionByPoll[pollId] = null; // Mantener plegadas al cambiar página
             }
           }}
           on:publishOption={(e: any) => handlePublishOption(e.detail.pollId, e.detail.optionKey, e.detail.label, e.detail.color)}

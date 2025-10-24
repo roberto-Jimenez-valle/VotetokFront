@@ -1,5 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
   import UserProfileModal from '$lib/UserProfileModal.svelte';
   
@@ -24,6 +26,17 @@
   const DOUBLE_CLICK_DELAY = 500; // ms
   const TOUCH_MOVE_THRESHOLD = 10; // px
   
+  // Long press tooltip
+  let showLongPressTooltip: boolean = false;
+  let longPressTooltipText: string = '';
+  let longPressTimer: any = null;
+  let longPressActivated: boolean = false; // Flag para evitar interferencia con doble click
+  const LONG_PRESS_DELAY = 500; // ms
+  
+  // Title tooltip (para títulos truncados)
+  let showTitleTooltip: boolean = false;
+  let titleTooltipText: string = '';
+  
   const OPTIONS_PER_PAGE = 4;
   
   // Props
@@ -34,6 +47,17 @@
   export let userVotes: Record<string, string> = {};
   export let multipleVotes: Record<string, string[]> = {};
   export const pollIndex: number = 0;
+  
+  // Dirección de paginación
+  let paginationDirection: 'forward' | 'backward' = 'forward';
+  let lastPage: number = currentPage;
+  
+  // Detectar cambio de página y actualizar dirección ANTES del render
+  $: if (currentPage !== lastPage) {
+    paginationDirection = currentPage > lastPage ? 'forward' : 'backward';
+    console.log('[Pagination] Dirección:', paginationDirection, 'cambio:', lastPage, '→', currentPage);
+    lastPage = currentPage;
+  }
   
   // Title expansion state
   export let pollTitleExpanded: Record<string, boolean> = {};
@@ -163,12 +187,98 @@
     dispatch('setActive', { pollId: poll.id, index });
   }
   
+  // Long press handlers
+  function startLongPress(optionText: string, event: MouseEvent | TouchEvent) {
+    // Cancelar cualquier long press anterior
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+    }
+    
+    longPressActivated = false; // Resetear flag al inicio
+    
+    longPressTimer = setTimeout(() => {
+      showLongPressTooltip = true;
+      longPressTooltipText = optionText;
+      longPressActivated = true; // Marcar que se activó el long press
+      
+      // Cancelar cualquier lógica de doble click en progreso
+      if (clickTimeout) {
+        clearTimeout(clickTimeout);
+        clickTimeout = null;
+      }
+      clickCount = 0;
+      pendingOptionKey = null;
+      showDoubleClickTooltip = false;
+      
+      console.log('[LongPress] Mostrando tooltip:', optionText);
+    }, LONG_PRESS_DELAY);
+  }
+  
+  function cancelLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    showLongPressTooltip = false;
+    longPressTooltipText = '';
+    
+    // Resetear flag después de un pequeño delay para evitar clicks inmediatos
+    setTimeout(() => {
+      longPressActivated = false;
+    }, 100);
+  }
+  
   function handlePageChange(pageIndex: number) {
     dispatch('pageChange', { pollId: poll.id, page: pageIndex });
+    // Abrir automáticamente la primera opción de la nueva página
+    setTimeout(() => {
+      dispatch('setActive', { pollId: poll.id, index: 0 });
+      console.log('[SinglePoll] Abriendo primera opción de página:', pageIndex);
+    }, 50);
   }
   
   function handleConfirmMultiple() {
     dispatch('confirmMultiple', { pollId: poll.id });
+  }
+  
+  // Title tooltip handlers
+  function showTitleTooltipHandler(text: string, event: MouseEvent) {
+    event.stopPropagation();
+    event.preventDefault();
+    console.log('[TitleTooltip] Intentando mostrar:', text);
+    console.log('[TitleTooltip] showTitleTooltip antes:', showTitleTooltip);
+    
+    showTitleTooltip = true;
+    titleTooltipText = text;
+    
+    console.log('[TitleTooltip] showTitleTooltip después:', showTitleTooltip);
+    console.log('[TitleTooltip] titleTooltipText:', titleTooltipText);
+    
+    // Agregar listener global con delay para evitar que cierre inmediatamente
+    setTimeout(() => {
+      if (showTitleTooltip && typeof document !== 'undefined') {
+        document.addEventListener('click', handleClickOutside, { once: false });
+        console.log('[TitleTooltip] Listener global agregado');
+      }
+    }, 100);
+  }
+  
+  function hideTitleTooltip() {
+    console.log('[TitleTooltip] Ocultando tooltip');
+    showTitleTooltip = false;
+    titleTooltipText = '';
+    
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('click', handleClickOutside);
+    }
+  }
+  
+  // Listener global para cerrar tooltip al hacer click fuera
+  function handleClickOutside(event: MouseEvent) {
+    console.log('[TitleTooltip] Click fuera detectado');
+    if (showTitleTooltip) {
+      hideTitleTooltip();
+    }
   }
   
   function handleAddOption() {
@@ -199,7 +309,7 @@
       <div class="header-content">
         {#if poll.type === 'hashtag'}
           <div class="poll-question-wrapper">
-            <div class="poll-question-row">
+            <div class="poll-question-row" style="position: relative;">
               <h3 
                 class="poll-question" 
                 class:expanded={pollTitleExpanded[poll.id]}
@@ -231,6 +341,17 @@
                   <span class="collapse-indicator-poll"> [−]</span>
                 {/if}
               </h3>
+              
+              <!-- Botón de tooltip para título truncado -->
+              {#if pollTitleTruncated[poll.id] || poll.question.length > 50}
+                <button 
+                  class="title-tooltip-btn"
+                  onclick={(e) => showTitleTooltipHandler(`#${poll.question}`, e)}
+                  title="Ver título completo"
+                >
+                  ⋯
+                </button>
+              {/if}
               {#if poll.closedAt}
                 {@const timeColor = getTimeRemainingColor(poll.closedAt)}
                 {@const timeText = getTimeRemaining(poll.closedAt)}
@@ -252,7 +373,7 @@
           </div>
         {:else}
           <div class="poll-question-wrapper">
-            <div class="poll-question-row">
+            <div class="poll-question-row" style="position: relative;">
               <h3 
                 class="poll-question" 
                 class:expanded={pollTitleExpanded[poll.id]}
@@ -283,6 +404,17 @@
                   <span class="collapse-indicator-poll"> [−]</span>
                 {/if}
               </h3>
+              
+              <!-- Botón de tooltip para título truncado -->
+              {#if pollTitleTruncated[poll.id] || (poll.question || poll.title || '').length > 50}
+                <button 
+                  class="title-tooltip-btn"
+                  onclick={(e) => showTitleTooltipHandler(poll.question || poll.title, e)}
+                  title="Ver título completo"
+                >
+                  ⋯
+                </button>
+              {/if}
               {#if poll.closedAt}
                 {@const timeColor = getTimeRemainingColor(poll.closedAt)}
                 {@const timeText = getTimeRemaining(poll.closedAt)}
@@ -336,9 +468,16 @@
   </div>
   
   <!-- Grid de opciones -->
-  <div class="vote-cards-container">
+  <div class="vote-cards-container" style="position: relative;">
+    <!-- Tooltip de long press con texto completo -->
+    {#if showLongPressTooltip}
+      <div class="long-press-tooltip">
+        {longPressTooltipText}
+      </div>
+    {/if}
+    
     <div 
-      class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {isSingleOptionPoll ? 'compact-one' : ''}"
+      class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {isSingleOptionPoll ? 'compact-one' : ''} pagination-{paginationDirection}"
       style="--items: {paginatedPoll.items.length}"
       role="group"
       aria-label="Opciones de {poll.question || poll.title}"
@@ -350,7 +489,7 @@
         handleDragStart(e);
       }}
     >
-      {#each paginatedPoll.items as option, index (option.key || option.id || `option-${index}`)}
+      {#each paginatedPoll.items as option, index (`${currentPage}-${option.key || option.id || index}`)}
         {@const isPollVoted = poll.type === 'multiple'
           ? (multipleVotes[poll.id]?.includes(option.key) || 
              (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(option.key))
@@ -362,8 +501,26 @@
           this={isNewOption ? 'div' : 'button'}
           role={isNewOption ? 'region' : undefined}
           class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionIndex !== index) ? 'collapsed' : ''} {isPollVoted ? 'voted' : ''}" 
-          style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, displayPct))}%; --fill-pct-val: {Math.max(0, Math.min(100, displayPct))}; --fill-window: 120px; --flex: {Math.max(0.5, displayPct / 10)};" 
+          style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, displayPct))}%; --fill-pct-val: {Math.max(0, Math.min(100, displayPct))}; --fill-window: 120px; --flex: {Math.max(0.5, displayPct / 10)};"
+          in:fly={{ x: paginationDirection === 'forward' ? 300 : -300, duration: 400, easing: cubicOut }}
+          out:fly={{ x: paginationDirection === 'forward' ? -300 : 300, duration: 300, easing: cubicOut }} 
+          ontouchstart={(e: TouchEvent) => {
+            if (isNewOption || isSingleOptionPoll) return;
+            touchStartPosition = { 
+              x: e.touches[0].clientX, 
+              y: e.touches[0].clientY 
+            };
+            startLongPress(option.label, e);
+          }}
+          onmousedown={(e: MouseEvent) => {
+            if (isNewOption || isSingleOptionPoll) return;
+            startLongPress(option.label, e);
+          }}
+          onmouseup={() => cancelLongPress()}
+          onmouseleave={() => cancelLongPress()}
           ontouchend={(e: TouchEvent) => {
+            // Cancelar long press al soltar
+            cancelLongPress();
             // Manejar touch para móvil (igual que onclick)
             if (isNewOption || isSingleOptionPoll) { return; }
             
@@ -380,85 +537,118 @@
               }
             }
             
+            // Si el long press acaba de activarse, ignorar este touch
+            if (longPressActivated) {
+              console.log('[SinglePoll] Touch ignorado - long press activo');
+              return;
+            }
+            
             const editingOption = poll.options.find((opt: any) => opt.isEditing);
             if (editingOption) {
               dispatch('cancelEditing', { pollId: poll.id, optionKey: editingOption.key });
               return;
             }
             
-            if (state !== 'expanded' || activeAccordionIndex !== index) {
-              e.preventDefault();
-              e.stopPropagation();
-              handleSetActive(index);
+            // Para polls múltiples o colaborativas: voto con un touch
+            if (poll.type === 'multiple' || poll.type === 'collaborative') {
+              if (state !== 'expanded' || activeAccordionIndex !== index) {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSetActive(index);
+                return;
+              }
+              dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
               return;
             }
             
-            if (state === 'expanded' && activeAccordionIndex === index) {
-              if (poll.type === 'multiple' || poll.type === 'collaborative') {
-                dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
-              } else {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                clickCount++;
-                pendingOptionKey = option.key;
-                
-                console.log('[SinglePoll] Touch #' + clickCount, option.key);
-                
-                if (clickTimeout) clearTimeout(clickTimeout);
-                
-                clickTimeout = setTimeout(() => {
-                  console.log('[SinglePoll] ⏰ Touch timeout ejecutado! clickCount:', clickCount);
-                  if (clickCount === 1) {
-                    console.log('[SinglePoll] Touch simple - Mostrando tooltip');
-                    showDoubleClickTooltip = true;
-                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                    tooltipTimeout = setTimeout(() => {
-                      showDoubleClickTooltip = false;
-                    }, 2000);
-                  } else if (clickCount >= 2) {
-                    console.log('[SinglePoll] ✅ DOBLE TOUCH confirmado - Votando:', pendingOptionKey);
-                    showDoubleClickTooltip = false;
-                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                    
-                    // Verificar si ya votó esta opción (desvoto)
-                    const isUnvoting = isPollVoted;
-                    
-                    if (isUnvoting) {
-                      // Mostrar X de eliminación
-                      voteRemovalColor = option.color;
-                      showVoteRemoval = true;
-                      if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-                      voteRemovalTimeout = setTimeout(() => {
-                        showVoteRemoval = false;
-                      }, 800);
-                    } else {
-                      // Mostrar check de confirmación
-                      voteConfirmationColor = option.color;
-                      showVoteConfirmation = true;
-                      if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-                      voteConfirmationTimeout = setTimeout(() => {
-                        showVoteConfirmation = false;
-                      }, 800);
-                    }
-                    
-                    dispatch('optionClick', { 
-                      event: e, 
-                      optionKey: pendingOptionKey, 
-                      pollId: poll.id, 
-                      optionColor: option.color 
-                    });
-                    console.log('[SinglePoll] Evento optionClick despachado desde touch');
-                  }
-                  
-                  clickCount = 0;
-                  pendingOptionKey = null;
-                }, DOUBLE_CLICK_DELAY);
-              }
+            // Para polls normales: sistema de doble touch (funciona tanto colapsada como expandida)
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const wasCollapsed = state !== 'expanded' || activeAccordionIndex !== index;
+            
+            // Si está colapsada, abrirla
+            if (wasCollapsed) {
+              handleSetActive(index);
             }
+            
+            // Incrementar contador y procesar doble touch
+            clickCount++;
+            pendingOptionKey = option.key;
+            
+            console.log('[SinglePoll] Touch #' + clickCount, option.key);
+            
+            if (clickTimeout) clearTimeout(clickTimeout);
+            
+            clickTimeout = setTimeout(() => {
+              console.log('[SinglePoll] ⏰ Touch timeout ejecutado! clickCount:', clickCount);
+              if (clickCount === 1) {
+                // Touch simple - Mostrar tooltip (solo si ya estaba expandida)
+                if (!wasCollapsed) {
+                  console.log('[SinglePoll] Touch simple - Mostrando tooltip');
+                  showDoubleClickTooltip = true;
+                  if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                  tooltipTimeout = setTimeout(() => {
+                    showDoubleClickTooltip = false;
+                  }, 2000);
+                } else {
+                  console.log('[SinglePoll] Touch simple en colapsada - Solo abierta');
+                }
+              } else if (clickCount >= 2) {
+                // Doble touch - VOTAR o DESVOTAR (y abrir si estaba colapsada)
+                console.log('[SinglePoll] ✅ DOBLE TOUCH confirmado - Votando:', pendingOptionKey);
+                showDoubleClickTooltip = false;
+                if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                
+                // Verificar si ya votó esta opción (desvoto)
+                const isUnvoting = isPollVoted;
+                
+                if (isUnvoting) {
+                  // Mostrar X de eliminación
+                  voteRemovalColor = option.color;
+                  showVoteRemoval = true;
+                  if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+                  voteRemovalTimeout = setTimeout(() => {
+                    showVoteRemoval = false;
+                  }, 800);
+                } else {
+                  // Mostrar check de confirmación
+                  voteConfirmationColor = option.color;
+                  showVoteConfirmation = true;
+                  if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+                  voteConfirmationTimeout = setTimeout(() => {
+                    showVoteConfirmation = false;
+                  }, 800);
+                }
+                
+                dispatch('optionClick', { 
+                  event: e, 
+                  optionKey: pendingOptionKey, 
+                  pollId: poll.id, 
+                  optionColor: option.color 
+                });
+                console.log('[SinglePoll] Evento optionClick despachado desde touch');
+              }
+              
+              clickCount = 0;
+              pendingOptionKey = null;
+            }, DOUBLE_CLICK_DELAY);
           }}
           onclick={(e: MouseEvent) => {
             if (isNewOption || isSingleOptionPoll) { return; }
+            
+            // Ignorar clicks en el botón de tooltip
+            const target = e.target as HTMLElement;
+            if (target.closest('.option-tooltip-btn')) {
+              console.log('[SinglePoll] Click en botón tooltip - ignorando');
+              return;
+            }
+            
+            // Si el long press acaba de activarse, ignorar este click
+            if (longPressActivated) {
+              console.log('[SinglePoll] Click ignorado - long press activo');
+              return;
+            }
             
             // Cancelar cualquier opción en edición antes de proceder
             const editingOption = poll.options.find((opt: any) => opt.isEditing);
@@ -467,101 +657,106 @@
               return;
             }
             
-            // Primer click: abrir la card si está colapsada
-            if (state !== 'expanded' || activeAccordionIndex !== index) {
-              e.preventDefault();
-              e.stopPropagation();
-              handleSetActive(index); 
-              return; 
-            }
-            
-            // Click: abrir si está colapsada, o detectar simple/doble click si está desplegada
-            if (state === 'expanded' && activeAccordionIndex === index) {
-              if (poll.type === 'multiple' || poll.type === 'collaborative') {
-                // Múltiples o colaborativas: votar con un click
-                dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
-              } else {
-                // Encuestas normales: detectar si es click simple o doble
+            // Para polls múltiples o colaborativas: voto con un click
+            if (poll.type === 'multiple' || poll.type === 'collaborative') {
+              if (state !== 'expanded' || activeAccordionIndex !== index) {
                 e.preventDefault();
                 e.stopPropagation();
+                handleSetActive(index); 
+                return; 
+              }
+              dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
+              return;
+            }
+            
+            // Para polls normales: sistema de doble click (funciona tanto colapsada como expandida)
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const wasCollapsed = state !== 'expanded' || activeAccordionIndex !== index;
+            
+            // Si está colapsada, abrirla
+            if (wasCollapsed) {
+              handleSetActive(index);
+            }
+            
+            // Incrementar contador y procesar doble click
+            clickCount++;
+            pendingOptionKey = option.key;
+            
+            console.log('[SinglePoll] Click #' + clickCount, option.key);
+            console.log('[SinglePoll] clickCount actual:', clickCount, 'pendingOptionKey:', option.key);
+            
+            // Cancelar timeout anterior
+            if (clickTimeout) {
+              console.log('[SinglePoll] Cancelando timeout anterior');
+              clearTimeout(clickTimeout);
+            }
+            
+            // Esperar medio segundo para ver si es doble click
+            console.log('[SinglePoll] Programando timeout de 500ms...');
+            clickTimeout = setTimeout(() => {
+              console.log('[SinglePoll] ⏰ Timeout ejecutado! clickCount:', clickCount);
+              if (clickCount === 1) {
+                // Es click simple - Mostrar tooltip (solo si ya estaba expandida)
+                if (!wasCollapsed) {
+                  console.log('[SinglePoll] Click simple confirmado - Mostrando tooltip');
+                  showDoubleClickTooltip = true;
+                  if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                  tooltipTimeout = setTimeout(() => {
+                    showDoubleClickTooltip = false;
+                  }, 2000);
+                } else {
+                  console.log('[SinglePoll] Click simple en colapsada - Solo abierta');
+                }
+              } else if (clickCount >= 2) {
+                // Es doble click - VOTAR o DESVOTAR (y abrir si estaba colapsada)
+                console.log('[SinglePoll] ✅ DOBLE CLICK confirmado - Votando:', pendingOptionKey);
+                console.log('[SinglePoll] Despachando evento optionClick:', {
+                  optionKey: pendingOptionKey,
+                  pollId: poll.id,
+                  pollType: poll.type,
+                  color: option.color
+                });
+                showDoubleClickTooltip = false;
+                if (tooltipTimeout) clearTimeout(tooltipTimeout);
                 
-                clickCount++;
-                pendingOptionKey = option.key;
+                // Verificar si ya votó esta opción (desvoto)
+                const isUnvoting = isPollVoted;
                 
-                console.log('[SinglePoll] Click #' + clickCount, option.key);
-                console.log('[SinglePoll] clickCount actual:', clickCount, 'pendingOptionKey:', option.key);
-                
-                // Cancelar timeout anterior
-                if (clickTimeout) {
-                  console.log('[SinglePoll] Cancelando timeout anterior');
-                  clearTimeout(clickTimeout);
+                if (isUnvoting) {
+                  // Mostrar X de eliminación
+                  voteRemovalColor = option.color;
+                  showVoteRemoval = true;
+                  if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+                  voteRemovalTimeout = setTimeout(() => {
+                    showVoteRemoval = false;
+                  }, 800);
+                } else {
+                  // Mostrar check de confirmación
+                  voteConfirmationColor = option.color;
+                  showVoteConfirmation = true;
+                  if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+                  voteConfirmationTimeout = setTimeout(() => {
+                    showVoteConfirmation = false;
+                  }, 800);
                 }
                 
-                // Esperar medio segundo para ver si es doble click
-                console.log('[SinglePoll] Programando timeout de 500ms...');
-                clickTimeout = setTimeout(() => {
-                  console.log('[SinglePoll] ⏰ Timeout ejecutado! clickCount:', clickCount);
-                  if (clickCount === 1) {
-                    // Es click simple - Mostrar tooltip
-                    console.log('[SinglePoll] Click simple confirmado - Mostrando tooltip');
-                    showDoubleClickTooltip = true;
-                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                    tooltipTimeout = setTimeout(() => {
-                      showDoubleClickTooltip = false;
-                    }, 2000);
-                  } else if (clickCount >= 2) {
-                    // Es doble click - VOTAR o DESVOTAR
-                    console.log('[SinglePoll] ✅ DOBLE CLICK confirmado - Votando:', pendingOptionKey);
-                    console.log('[SinglePoll] Despachando evento optionClick:', {
-                      optionKey: pendingOptionKey,
-                      pollId: poll.id,
-                      pollType: poll.type,
-                      color: option.color
-                    });
-                    showDoubleClickTooltip = false;
-                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                    
-                    // Verificar si ya votó esta opción (desvoto)
-                    const isUnvoting = isPollVoted;
-                    
-                    if (isUnvoting) {
-                      // Mostrar X de eliminación
-                      voteRemovalColor = option.color;
-                      showVoteRemoval = true;
-                      if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-                      voteRemovalTimeout = setTimeout(() => {
-                        showVoteRemoval = false;
-                      }, 800);
-                    } else {
-                      // Mostrar check de confirmación
-                      voteConfirmationColor = option.color;
-                      showVoteConfirmation = true;
-                      if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-                      voteConfirmationTimeout = setTimeout(() => {
-                        showVoteConfirmation = false;
-                      }, 800);
-                    }
-                    
-                    // Despachar el evento
-                    dispatch('optionClick', { 
-                      event: e, 
-                      optionKey: pendingOptionKey, 
-                      pollId: poll.id, 
-                      optionColor: option.color 
-                    });
-                    
-                    console.log('[SinglePoll] Evento optionClick despachado');
-                  }
-                  
-                  // Reset
-                  clickCount = 0;
-                  pendingOptionKey = null;
-                }, DOUBLE_CLICK_DELAY);
+                // Despachar el evento
+                dispatch('optionClick', { 
+                  event: e, 
+                  optionKey: pendingOptionKey, 
+                  pollId: poll.id, 
+                  optionColor: option.color 
+                });
+                
+                console.log('[SinglePoll] Evento optionClick despachado');
               }
-            } else {
-              e.preventDefault();
-              e.stopPropagation();
-            }
+              
+              // Reset
+              clickCount = 0;
+              pendingOptionKey = null;
+            }, DOUBLE_CLICK_DELAY);
           }}
           onfocus={() => !isSingleOptionPoll && !isNewOption ? handleSetActive(index) : null}
           onkeydown={(e: KeyboardEvent) => {
@@ -694,8 +889,38 @@
             <!-- Layout normal para opciones existentes -->
             <!-- Header con avatar y título -->
             {#if !isSingleOptionPoll}
-            <div class="card-header">
+            <div class="card-header" style="position: relative;">
               <h2 class="question-title">{option.label}</h2>
+              
+              <!-- Botón de tooltip para texto largo (solo cuando está desplegada/activa) -->
+              {#if activeAccordionIndex === index && option.label && option.label.length > 50}
+                <button 
+                  class="option-tooltip-btn"
+                  onpointerdown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onmousedown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  ontouchstart={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('[OptionTooltip] Botón clickeado!');
+                    showTitleTooltipHandler(option.label, e);
+                  }}
+                  title="Ver texto completo"
+                  type="button"
+                >
+                  ⋯
+                </button>
+              {/if}
+              
               <img class="creator-avatar" src={option.avatarUrl || DEFAULT_AVATAR} alt={option.label} loading="lazy" />
             </div>
             {/if}
@@ -945,6 +1170,15 @@
     </div>
   </div>
 </div>
+
+<!-- Tooltip del título truncado (fuera de todo para máxima visibilidad) -->
+{#if showTitleTooltip}
+  <div class="title-tooltip-overlay" onclick={hideTitleTooltip}>
+    <div class="title-tooltip-content" onclick={(e) => e.stopPropagation()}>
+      {titleTooltipText}
+    </div>
+  </div>
+{/if}
 
 <style>
   /* Botón confirmar votos múltiples - Versión compacta */
@@ -1478,6 +1712,172 @@
     100% {
       opacity: 0;
       transform: translate(-50%, -150%) scale(0.8) rotate(180deg);
+    }
+  }
+  
+  /* Tooltip de long press con texto completo */
+  .long-press-tooltip {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.92);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 12px;
+    pointer-events: none;
+    z-index: 10000;
+    max-width: min(400px, 90vw);
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    animation: fadeInUp 0.2s ease-out;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    word-wrap: break-word;
+    white-space: normal;
+  }
+  
+  /* Flecha del tooltip apuntando hacia abajo */
+  .long-press-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 8px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.92);
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .long-press-tooltip {
+      padding: 10px 16px;
+      font-size: 13px;
+      max-width: 85vw;
+      bottom: calc(100% + 8px);
+    }
+  }
+  
+  /* Botón de tres puntos para tooltip del título */
+  .title-tooltip-btn {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 10;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+  
+  .title-tooltip-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.95);
+    transform: translateY(-50%) scale(1.1);
+  }
+  
+  /* Botón de tres puntos para opciones */
+  .option-tooltip-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    margin-left: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 16px;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    pointer-events: auto;
+  }
+  
+  .option-tooltip-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+    transform: scale(1.15);
+  }
+  
+  /* Overlay del tooltip del título */
+  .title-tooltip-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  
+  .title-tooltip-content {
+    background: rgba(20, 20, 20, 0.95);
+    color: white;
+    padding: 24px 32px;
+    border-radius: 16px;
+    max-width: min(600px, 90vw);
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 16px;
+    line-height: 1.6;
+    text-align: center;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8);
+    animation: scaleIn 0.3s ease-out;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .title-tooltip-btn {
+      padding: 3px 8px;
+      font-size: 16px;
+    }
+    
+    .title-tooltip-content {
+      padding: 20px 24px;
+      font-size: 15px;
+      max-width: 92vw;
     }
   }
 
