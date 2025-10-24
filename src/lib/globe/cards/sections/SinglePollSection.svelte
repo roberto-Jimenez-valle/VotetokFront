@@ -59,6 +59,200 @@
     lastPage = currentPage;
   }
   
+  // Estado para gráfico histórico
+  let selectedTimeRange = '1m';
+  let historicalData: Array<{x: number, y: number, votes: number, date: Date}> = [];
+  let historicalDataByOption: Map<string, Array<{x: number, y: number, color: string, label: string}>> = new Map();
+  let isLoadingHistory = false;
+  let chartHoverData: {x: number, y: number, votes: number, date: Date} | null = null;
+  let chartSvgElement: SVGElement | null = null;
+  let pollOptions: Array<{optionKey: string, optionLabel: string, color: string}> = [];
+  
+  const timeRanges = [
+    { id: '1d', label: '1D', days: 1 },
+    { id: '5d', label: '5D', days: 5 },
+    { id: '1m', label: '1M', days: 30 },
+    { id: '6m', label: '6M', days: 180 },
+    { id: '1y', label: '1A', days: 365 }
+  ];
+  
+  // Cargar datos históricos cuando entramos en la vista de gráfico
+  $: if (currentPage === -1 && poll?.id) {
+    console.log('[Chart] Entrando en vista de gráfico, currentPage:', currentPage, 'pollId:', poll.id);
+    loadHistoricalData();
+  }
+  
+  // Debug: mostrar cuando cambia currentPage
+  $: console.log('[Chart] currentPage cambió a:', currentPage);
+  
+  async function loadHistoricalData() {
+    if (isLoadingHistory) return;
+    
+    isLoadingHistory = true;
+    try {
+      const days = timeRanges.find(r => r.id === selectedTimeRange)?.days || 30;
+      const response = await fetch(`/api/polls/${poll.id}/votes-history?days=${days}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      const result = await response.json();
+      const timeSeriesData = result.data || [];
+      const pollData = result.poll || {};
+      const meta = result.meta || {};
+      
+      console.log('[Chart] Datos recibidos:', {
+        puntos: timeSeriesData.length,
+        votosEnDB: meta.totalVotesFromDB,
+        votosEnSeries: meta.totalVotesInSeries,
+        coinciden: meta.totalVotesFromDB === meta.totalVotesInSeries
+      });
+      
+      // DEBUG: Ver primeros 3 puntos
+      console.log('[Chart] Primeros 3 puntos:', timeSeriesData.slice(0, 3).map((p: any) => ({
+        fecha: new Date(p.timestamp).toISOString(),
+        totalVotes: p.totalVotes,
+        opciones: p.optionsData?.length
+      })));
+      
+      if (timeSeriesData.length === 0) {
+        console.warn('[Chart] No hay votos en este rango de tiempo');
+        historicalData = [];
+        historicalDataByOption.clear();
+        return;
+      }
+      
+      // Guardar opciones de la encuesta
+      pollOptions = pollData.options || [];
+      
+      // Crear series por opción, asegurando datos en todos los períodos
+      const seriesByOption = new Map<string, Array<{x: number, y: number, color: string, label: string}>>();
+      
+      // Inicializar series vacías
+      pollOptions.forEach(option => {
+        seriesByOption.set(option.optionKey, []);
+      });
+      
+      // Llenar datos para cada opción en cada punto temporal
+      timeSeriesData.forEach((point: any) => {
+        const optionsData = point.optionsData  || [];
+        const optionsDataMap = new Map(optionsData.map((opt: any) => [opt.optionKey, opt]));
+        
+        // Asegurar que TODAS las opciones tengan un punto en este timestamp
+        pollOptions.forEach(option => {
+          const series = seriesByOption.get(option.optionKey);
+          const optData = optionsDataMap.get(option.optionKey) as { optionKey: string, votes: number } | undefined;
+          
+          if (series) {
+            series.push({
+              x: point.timestamp,
+              y: optData?.votes  || 0, // 0 si no hay votos en este período
+              color: option.color || '#3b82f6',
+              label: option.optionLabel
+            });
+          }
+        });
+      });
+      
+      historicalDataByOption = seriesByOption;
+      
+      // También mantener datos totales para referencia
+      historicalData = timeSeriesData.map((point: any) => ({
+        x: point.timestamp,
+        y: point.totalVotes,
+        votes: point.totalVotes,
+        date: new Date(point.timestamp)
+      }));
+      
+      console.log('[Chart] Procesadas', seriesByOption.size, 'series con', historicalData.length, 'puntos cada una');
+      
+    } catch (error) {
+      console.error('[Chart] Error cargando datos históricos:', error);
+      historicalData = [];
+    } finally {
+      isLoadingHistory = false;
+    }
+  }
+  
+  function changeTimeRange(rangeId: string) {
+    if (selectedTimeRange !== rangeId) {
+      selectedTimeRange = rangeId;
+      loadHistoricalData();
+    }
+  }
+  
+  // Crear path SVG desde los datos
+  function createChartPath(data: Array<{x: number, y: number}>, width: number, height: number): string {
+    if (!data || data.length === 0) {
+      return '';
+    }
+    
+    // Filtrar puntos inválidos
+    const validData = data.filter(d => 
+      d && 
+      typeof d.x === 'number' && !isNaN(d.x) && 
+      typeof d.y === 'number' && !isNaN(d.y)
+    );
+    
+    if (validData.length === 0) {
+      console.warn('[Chart Path] Sin datos válidos después de filtrar');
+      return '';
+    }
+    
+    const minY = Math.min(...validData.map(d => d.y));
+    const maxY = Math.max(...validData.map(d => d.y));
+    const rangeY = maxY - minY || 1;
+    
+    const points = validData.map((d, i) => {
+      const x = (i / Math.max(1, validData.length - 1)) * width;
+      const normalizedY = (d.y - minY) / rangeY;
+      const y = height - (normalizedY * (height - 20) + 10);
+      return `${x.toFixed(2)} ${y.toFixed(2)}`;
+    });
+    
+    return `M ${points.join(' L ')}`;
+  }
+  
+  // Manejar hover/touch en el gráfico
+  function handleChartInteraction(event: MouseEvent | TouchEvent) {
+    if (!chartSvgElement || historicalData.length === 0) return;
+    
+    event.preventDefault();
+    const rect = chartSvgElement.getBoundingClientRect();
+    const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+    const x = clientX - rect.left;
+    
+    // Calcular posición relativa (0 a 1)
+    const relativeX = Math.max(0, Math.min(1, x / rect.width));
+    
+    // Encontrar el punto de datos más cercano
+    const dataIndex = Math.round(relativeX * (historicalData.length - 1));
+    const dataPoint = historicalData[dataIndex];
+    
+    if (dataPoint) {
+      // Calcular la posición Y real del punto en el SVG
+      const minY = Math.min(...historicalData.map(d => d.y));
+      const maxY = Math.max(...historicalData.map(d => d.y));
+      const rangeY = maxY - minY || 1;
+      const normalizedY = (dataPoint.y - minY) / rangeY;
+      const svgY = 200 - (normalizedY * 180 + 10); // 200 es la altura, dejando padding
+      
+      chartHoverData = {
+        x: x, // Usar la posición real del mouse
+        y: dataPoint.y, // Valor real de los datos
+        votes: dataPoint.votes,
+        date: dataPoint.date
+      };
+      
+      console.log('[Chart Hover] Índice:', dataIndex, 'Votos:', dataPoint.votes, 'Fecha:', dataPoint.date.toLocaleString());
+    }
+  }
+  
+  function clearChartHover() {
+    chartHoverData = null;
+  }
+  
   // Title expansion state
   export let pollTitleExpanded: Record<string, boolean> = {};
   export let pollTitleTruncated: Record<string, boolean> = {};
@@ -467,17 +661,171 @@
     </div>
   </div>
   
-  <!-- Grid de opciones -->
+  <!-- Grid de opciones o vista de gráfico histórico -->
   <div class="vote-cards-container" style="position: relative;">
-    <!-- Tooltip de long press con texto completo -->
-    {#if showLongPressTooltip}
-      <div class="long-press-tooltip">
-        {longPressTooltipText}
+    <!-- Vista de gráfico histórico (currentPage === -1) - Renderizado como una tarjeta -->
+    {#if currentPage === -1}
+      <div class="historical-chart-wrapper">
+        <!-- Header con botones de filtro -->
+        <div class="chart-top-bar" style="position: relative;">
+          <h2 class="chart-title">📊 Histórico</h2>
+          
+          <div class="time-pills-container">
+            {#each timeRanges as range}
+              <button
+                class="time-button {selectedTimeRange === range.id ? 'selected' : ''}"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  console.log('[Chart] Cambiando rango a:', range.id);
+                  changeTimeRange(range.id);
+                }}
+                type="button"
+              >
+                {range.label}
+              </button>
+            {/each}
+          </div>
+          
+          <!-- Tooltip fijo superpuesto con z-index -->
+          {#if chartHoverData}
+            <div class="chart-tooltip-overlay">
+              <div class="tooltip-value">{chartHoverData.votes} votos</div>
+              <div class="tooltip-date">{chartHoverData.date.toLocaleString('es-ES', { 
+                day: '2-digit', 
+                month: 'short', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}</div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Área del gráfico -->
+        <div class="chart-area">
+            {#if isLoadingHistory}
+              <div class="chart-loading">
+                <span>Cargando...</span>
+              </div>
+            {:else if historicalDataByOption.size > 0}
+              <svg 
+                viewBox="0 0 300 200" 
+                class="full-chart-svg"
+                style="width: 100%; height: 200px; display: block;"
+                bind:this={chartSvgElement}
+                onmousemove={handleChartInteraction}
+                onmouseleave={clearChartHover}
+                ontouchstart={handleChartInteraction}
+                ontouchmove={handleChartInteraction}
+                ontouchend={clearChartHover}
+              >
+                
+                <!-- Línea por cada opción -->
+                {#each Array.from(historicalDataByOption.entries()) as [optionKey, seriesData]}
+                  {@const chartPath = createChartPath(seriesData, 300, 200)}
+                  {@const color = seriesData[0]?.color || '#3b82f6'}
+                  
+                  {#if chartPath}
+                    <!-- Área con gradiente por opción -->
+                    <defs>
+                      <linearGradient id="grad-{poll.id}-{optionKey}" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:{color};stop-opacity:0.15"/>
+                        <stop offset="100%" style="stop-color:{color};stop-opacity:0"/>
+                      </linearGradient>
+                      
+                      <!-- Gradiente atenuado para la parte derecha -->
+                      <linearGradient id="grad-dimmed-{poll.id}-{optionKey}" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:rgba(50, 50, 50, 0.08);stop-opacity:1"/>
+                        <stop offset="100%" style="stop-color:rgba(50, 50, 50, 0);stop-opacity:0"/>
+                      </linearGradient>
+                      
+                      <!-- Máscara para atenuar parte derecha cuando hay hover -->
+                      {#if chartHoverData}
+                        <mask id="mask-left-{poll.id}-{optionKey}">
+                          <rect x="0" y="0" width="{chartHoverData.x}" height="200" fill="white"/>
+                        </mask>
+                        <mask id="mask-right-{poll.id}-{optionKey}">
+                          <rect x="{chartHoverData.x}" y="0" width="{300 - chartHoverData.x}" height="200" fill="white"/>
+                        </mask>
+                      {/if}
+                    </defs>
+                    
+                    {#if chartHoverData}
+                      <!-- Área izquierda con color normal -->
+                      <path 
+                        d="{chartPath} L 300 200 L 0 200 Z"
+                        fill="url(#grad-{poll.id}-{optionKey})"
+                        mask="url(#mask-left-{poll.id}-{optionKey})"
+                      />
+                      <!-- Área derecha atenuada -->
+                      <path 
+                        d="{chartPath} L 300 200 L 0 200 Z"
+                        fill="url(#grad-dimmed-{poll.id}-{optionKey})"
+                        mask="url(#mask-right-{poll.id}-{optionKey})"
+                      />
+                    {:else}
+                      <!-- Área completa sin hover -->
+                      <path 
+                        d="{chartPath} L 300 200 L 0 200 Z"
+                        fill="url(#grad-{poll.id}-{optionKey})"
+                      />
+                    {/if}
+                    
+                    {#if chartHoverData}
+                      <!-- Línea parte izquierda (color normal) -->
+                      <path
+                        d={chartPath}
+                        fill="none"
+                        stroke={color}
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        opacity="0.9"
+                        mask="url(#mask-left-{poll.id}-{optionKey})"
+                      />
+                      <!-- Línea parte derecha (atenuada casi negra) -->
+                      <path
+                        d={chartPath}
+                        fill="none"
+                        stroke="rgba(50, 50, 50, 0.4)"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        opacity="0.5"
+                        mask="url(#mask-right-{poll.id}-{optionKey})"
+                      />
+                    {:else}
+                      <!-- Línea completa sin hover -->
+                      <path
+                        d={chartPath}
+                        fill="none"
+                        stroke={color}
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        opacity="0.9"
+                      />
+                    {/if}
+                  {/if}
+                {/each}
+                
+              </svg>
+            {:else}
+              <div class="chart-empty">
+                <span>Sin datos históricos</span>
+              </div>
+            {/if}
+        </div>
       </div>
-    {/if}
-    
-    <div 
-      class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {isSingleOptionPoll ? 'compact-one' : ''} pagination-{paginationDirection}"
+    {:else}
+      <!-- Tooltip de long press con texto completo -->
+      {#if showLongPressTooltip}
+        <div class="long-press-tooltip">
+          {longPressTooltipText}
+        </div>
+      {/if}
+      
+      <div 
+        class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {isSingleOptionPoll ? 'compact-one' : ''} pagination-{paginationDirection}"
       style="--items: {paginatedPoll.items.length}"
       role="group"
       aria-label="Opciones de {poll.question || poll.title}"
@@ -502,8 +850,8 @@
           role={isNewOption ? 'region' : undefined}
           class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionIndex !== index) ? 'collapsed' : ''} {isPollVoted ? 'voted' : ''}" 
           style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, displayPct))}%; --fill-pct-val: {Math.max(0, Math.min(100, displayPct))}; --fill-window: 120px; --flex: {Math.max(0.5, displayPct / 10)};"
-          in:fly={{ x: paginationDirection === 'forward' ? 300 : -300, duration: 400, easing: cubicOut }}
-          out:fly={{ x: paginationDirection === 'forward' ? -300 : 300, duration: 300, easing: cubicOut }} 
+          in:fly|local={{ x: paginationDirection === 'forward' ? 300 : -300, duration: 400, easing: cubicOut }}
+          out:fly|local={{ x: paginationDirection === 'forward' ? -300 : 300, duration: 300, easing: cubicOut }} 
           ontouchstart={(e: TouchEvent) => {
             if (isNewOption || isSingleOptionPoll) return;
             touchStartPosition = { 
@@ -958,6 +1306,7 @@
         </svelte:element>
       {/each}
     </div>
+    {/if}
   </div>
   
   <!-- Tooltip de doble click -->
@@ -991,10 +1340,18 @@
     <!-- Lado izquierdo: Icono de estadísticas -->
     <div class="bottom-controls-left">
       <button
-        class="stats-icon-btn"
+        class="stats-icon-btn {currentPage === -1 ? 'active' : ''}"
         type="button"
         title="Ver estadísticas"
         aria-label="Ver estadísticas"
+        onclick={(e) => {
+          e.stopPropagation();
+          if (currentPage === -1) {
+            handlePageChange(0);
+          } else {
+            handlePageChange(-1);
+          }
+        }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="20" x2="12" y2="10"></line>
@@ -1006,7 +1363,7 @@
     
     <!-- Centro: Paginación -->
     <div class="bottom-controls-center">
-      {#if shouldPaginate}
+      {#if shouldPaginate && currentPage !== -1}
         <div class="pagination-dots">
           {#each Array(paginatedPoll.totalPages) as _, pageIndex}
             <button 
@@ -1139,8 +1496,28 @@
         </button>
       </div>
       
-      <!-- Lado derecho: Guardar, Republicar, Compartir -->
+      <!-- Lado derecho: Histórico, Guardar, Republicar, Compartir -->
       <div class="action-group-right">
+        <button 
+          class="action-badge action-chart {currentPage === -1 ? 'active-chart' : ''}" 
+          type="button" 
+          title="Ver histórico de votos"
+          aria-label="Ver histórico de votos"
+          onclick={(e) => {
+            e.stopPropagation();
+            if (currentPage === -1) {
+              // Si ya estamos en histórico, volver a las opciones
+              handlePageChange(0);
+            } else {
+              // Ir a histórico
+              handlePageChange(-1);
+            }
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </button>
         <button class="action-badge" type="button" title="Guardar">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
@@ -1368,6 +1745,16 @@
   .stats-icon-btn svg {
     flex-shrink: 0;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  }
+  
+  .stats-icon-btn.active {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: rgb(139, 92, 246);
+  }
+  
+  .stats-icon-btn.active svg {
+    filter: drop-shadow(0 1px 4px rgba(139, 92, 246, 0.4));
   }
   
   .bottom-controls-center {
@@ -2087,6 +2474,23 @@
     color: rgba(16, 185, 129, 0.9);
   }
   
+  .action-chart {
+    color: rgba(139, 92, 246, 0.7);
+  }
+  
+  .action-chart:hover {
+    color: rgba(139, 92, 246, 0.9);
+  }
+  
+  .action-chart.active-chart {
+    background: rgba(139, 92, 246, 0.15);
+    color: rgb(139, 92, 246);
+  }
+  
+  .action-chart.active-chart svg {
+    opacity: 1;
+  }
+  
   /* Reducir espaciado del header y meta */
   .poll-header {
     margin-bottom: 0;
@@ -2136,6 +2540,170 @@
   
   .action-vote:hover {
     color: rgba(16, 185, 129, 0.9);
+  }
+  
+  /* Gráfico histórico - Estructura simplificada */
+  .historical-chart-wrapper {
+    width: 100%;
+    min-height: 300px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .chart-top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  
+  .chart-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+  }
+  
+  .time-pills-container {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .time-button {
+    padding: 6px 14px;
+    background: transparent;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.5px;
+  }
+  
+  .time-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: white;
+    transform: translateY(-1px);
+  }
+  
+  .time-button.selected {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  }
+  
+  .chart-area {
+    flex: 1;
+    min-height: 220px;
+    position: relative;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  
+  .full-chart-svg {
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+    display: block;
+    touch-action: none;
+  }
+  
+  .chart-tooltip {
+    position: absolute;
+    top: 20px;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+    padding: 10px 14px;
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 120px;
+    text-align: center;
+  }
+  
+  .chart-tooltip-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 8px 14px;
+    border-radius: 8px;
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    min-width: 110px;
+    text-align: center;
+    z-index: 50;
+  }
+  
+  .chart-tooltip-overlay .tooltip-value {
+    font-size: 17px;
+    font-weight: 600;
+    color: #3b82f6;
+    margin-bottom: 2px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+  
+  .chart-tooltip-overlay .tooltip-date {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+  }
+  
+  .tooltip-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #3b82f6;
+    margin-bottom: 4px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+  
+  .tooltip-date {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+  }
+  
+  .chart-loading,
+  .chart-empty {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 1 !important;
+    min-height: 220px !important;
+    color: white !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    background: rgba(255, 0, 0, 0.1) !important;
+  }
+  
+  .chart-loading span::after {
+    content: '...';
+    animation: dots 1.5s steps(4, end) infinite;
+  }
+  
+  @keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60%, 100% { content: '...'; }
   }
   
 </style>

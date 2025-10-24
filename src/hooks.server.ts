@@ -26,7 +26,8 @@ export const handle: Handle = async ({ event, resolve }) => {
     '/api/polls/',  // GET de encuestas y POST de votos
     '/api/geocode', // Geocoding
     '/api/users/trending',
-    '/api/users/with-activity'
+    '/api/users/with-activity',
+    '/votes-history' // Histórico de votos (datos públicos)
   ]
   
   const isPublicEndpoint = publicEndpoints.some(endpoint => pathname.includes(endpoint))
@@ -49,8 +50,12 @@ export const handle: Handle = async ({ event, resolve }) => {
     '/api/users/trending',
     '/api/users/with-activity'
   ]
+  
+  // Excluir explícitamente votes-history de app auth (es público)
+  const appAuthExclusions = ['/votes-history']
+  const isExcludedFromAppAuth = appAuthExclusions.some(exc => pathname.includes(exc))
 
-  const requiresAppAuth = appOnlyEndpoints.some(endpoint => pathname.startsWith(endpoint))
+  const requiresAppAuth = !isExcludedFromAppAuth && appOnlyEndpoints.some(endpoint => pathname.startsWith(endpoint))
 
   if (requiresAppAuth && !isLocalIP) {
     try {

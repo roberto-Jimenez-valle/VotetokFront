@@ -2970,6 +2970,10 @@
           }}
           on:dragStart={(e: any) => handleDragStart(e.detail.event)}
           on:publishOption={(e: any) => handlePublishOption(e.detail.pollId, e.detail.optionKey, e.detail.label, e.detail.color)}
+          on:goToChart={(e) => {
+            const pollId = e.detail.pollId;
+            goToChartView(pollId);
+          }}
         />
         
         <!-- Separador después de encuesta activa -->
@@ -3030,7 +3034,7 @@
           {pollIndex}
           {state}
           activeAccordionIndex={activeAccordionByPoll[poll.id] ?? null}
-          currentPage={currentPageByPoll[poll.id] || 0}
+          currentPage={currentPageByPoll[poll.id] ?? 0}
           {userVotes}
           {multipleVotes}
           {pollTitleExpanded}
@@ -3093,6 +3097,7 @@
             }
           }}
           on:publishOption={(e: any) => handlePublishOption(e.detail.pollId, e.detail.optionKey, e.detail.label, e.detail.color)}
+          on:goToChart={(e) => goToChartView(e.detail.pollId)}
         />
       {/each} 
 
