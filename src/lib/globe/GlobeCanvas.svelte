@@ -18,6 +18,7 @@
   export let onPolyCapColor: (feat: any) => string;
   export let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada (nivel 4)
   export let centerPolygonId: string | null = null; // ID del polígono centrado para resaltado
+  export let bottomSheetState: string = 'hidden'; // Estado del BottomSheet para comprimir globo en móvil
 
   // ALTITUDES FIJAS para mejor rendimiento (sin cálculos dinámicos)
   const POLY_ALT = 0.015; // Elevación fija para todos los polígonos
@@ -1131,7 +1132,7 @@
   }
 </script>
 
-<div bind:this={rootEl} class="globe-wrap"></div>
+<div bind:this={rootEl} class="globe-wrap" class:sheet-expanded={bottomSheetState === 'expanded'}></div>
 
 <style>
   :global {

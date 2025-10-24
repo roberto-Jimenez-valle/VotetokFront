@@ -97,7 +97,26 @@
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
-  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), height 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Comportamiento tipo YouTube: comprimir globo en móvil cuando BottomSheet está expandido */
+@media (max-width: 767px) {
+  .globe-wrap {
+    will-change: height;
+  }
+  
+  .globe-wrap.sheet-expanded {
+    height: 25vh; /* Globo más pequeño - 25% del viewport */
+    bottom: auto; /* Deshabilitar bottom para usar solo top + height */
+  }
+  
+  /* Transición suave solo en el contenedor */
+  .globe-wrap.sheet-expanded,
+  .globe-wrap:not(.sheet-expanded) {
+    transition: height 250ms ease-out;
+    -webkit-transition: height 250ms ease-out;
+  }
 }
 
 /* Mover globo a la derecha cuando hay modal activa en desktop */
@@ -133,6 +152,7 @@
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
+  /* NO transiciones en canvas WebGL - causa tirones */
 }
 
 /* Específico para Edge/Chromium */
@@ -161,7 +181,18 @@ header {
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
-  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), opacity 300ms ease;
+}
+
+/* Ocultar header y botón de temas en móvil cuando BottomSheet está expandido */
+@media (max-width: 767px) {
+  body:has(.bottom-sheet.solid) header,
+  body:has(.bottom-sheet.solid) .unified-toggle {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-100%);
+    -webkit-transform: translateY(-100%);
+  }
 }
 
 /* Mover header a la derecha cuando hay modal activa o BottomSheet expandido en desktop */
@@ -636,6 +667,16 @@ header {
   height: 136px; /* altura del degradado aumentada */
   pointer-events: none;
   z-index: 10; /* por encima del canvas, por debajo de la UI */
+  transition: opacity 300ms ease, transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Ocultar degradado superior en móvil cuando BottomSheet está expandido */
+@media (max-width: 767px) {
+  body:has(.bottom-sheet.solid) .globe-top-fade {
+    opacity: 0;
+    transform: translateY(-100%);
+    -webkit-transform: translateY(-100%);
+  }
 }
 /* Bottom sheet estilo Google Maps */
 .bottom-sheet {
@@ -671,6 +712,47 @@ header {
   padding-bottom: 60px;
 }
 
+/* Comportamiento tipo YouTube en móvil: BottomSheet debajo del globo comprimido */
+@media (max-width: 767px) {
+  .bottom-sheet.solid {
+    /* Cuando está expandido (solid), limitar altura para dejar ver el globo */
+    top: 25vh !important; /* Dejar 25% del viewport para ver el globo (más pequeño) */
+    height: 75vh !important; /* Ocupar el 75% inferior (más espacio para contenido) */
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    transform: translateY(0) !important; /* No necesita translateY adicional */
+    -webkit-transform: translateY(0) !important;
+  }
+  
+  /* Asegurar transición suave del BottomSheet en móvil - sincronizada con globo */
+  .bottom-sheet.solid.transitioning {
+    will-change: top, height, transform;
+    transition: top 250ms ease-out, height 250ms ease-out, transform 250ms ease-out, backdrop-filter 300ms ease !important;
+    -webkit-transition: top 250ms ease-out, height 250ms ease-out, -webkit-transform 250ms ease-out, -webkit-backdrop-filter 300ms ease !important;
+  }
+  
+  /* La barra de drag área siempre arriba del sheet - transparente para heredar fondo */
+  .bottom-sheet.solid .sheet-drag-area {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: transparent !important; /* Transparente para heredar del padre */
+  }
+  
+  /* Asegurar que el contenido scrolleable ocupa el espacio disponible */
+  .bottom-sheet.solid .main-scroll-container {
+    max-height: calc(75vh - 120px); /* Restar altura del drag area y padding */
+  }
+  
+  .bottom-sheet.solid .sheet-content {
+    max-height: calc(75vh - 120px);
+  }
+  
+  .bottom-sheet.solid .additional-polls-container {
+    max-height: calc(75vh - 180px); /* Restar más espacio por el nav inferior */
+  }
+}
+
 /* Desktop: Alinear a la izquierda y limitar ancho del bottom-sheet */
 @media (min-width: 768px) {
   .bottom-sheet {
@@ -687,9 +769,9 @@ header {
   }
   
   .bottom-sheet.transitioning {
-    transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
-    -webkit-transition: -webkit-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), -webkit-backdrop-filter 450ms ease 150ms;
-    -moz-transition: -moz-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
+    transition: transform 250ms ease-out, backdrop-filter 300ms ease;
+    -webkit-transition: -webkit-transform 250ms ease-out, -webkit-backdrop-filter 300ms ease;
+    -moz-transition: -moz-transform 250ms ease-out, backdrop-filter 300ms ease;
   }
 }
 
@@ -703,9 +785,9 @@ header {
 
 /* Transición suave solo cuando NO se está arrastrando */
 .bottom-sheet.transitioning {
-  -webkit-transition: -webkit-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), -webkit-backdrop-filter 450ms ease 150ms;
-  -moz-transition: -moz-transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
-  transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 450ms ease 150ms;
+  -webkit-transition: -webkit-transform 250ms ease-out, -webkit-backdrop-filter 300ms ease;
+  -moz-transition: -moz-transform 250ms ease-out, backdrop-filter 300ms ease;
+  transition: transform 250ms ease-out, backdrop-filter 300ms ease;
 }
 
 /* Elementos interactivos dentro del sheet mantienen su cursor apropiado */
@@ -931,6 +1013,13 @@ header {
   z-index: 10; /* Por encima del contenido */
   /* Evitar que el scroll interfiera */
   touch-action: none; /* Permitir solo arrastre, no scroll */
+}
+
+/* Drag area transparente en móvil para heredar del padre */
+@media (max-width: 767px) {
+  .bottom-sheet.glass .sheet-drag-area {
+    background: transparent !important; /* Transparente para heredar del padre */
+  }
 }
 
 .sheet-drag-area:active {

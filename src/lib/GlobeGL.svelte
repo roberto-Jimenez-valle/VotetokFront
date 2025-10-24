@@ -3190,7 +3190,7 @@
   }
   
   // Función para abrir una encuesta en el globo con sus opciones visualizadas
-  async function handleOpenPollInGlobe(event: CustomEvent<{ poll: any; options: Array<{ key: string; label: string; color: string; votes: number }> }>) {
+  async function handleOpenPollInGlobe(event: CustomEvent<{ poll: any; options: Array<{ id?: number; key: string; label: string; color: string; votes: number }> }>) {
     const { poll, options } = event.detail;
     
     // IMPORTANTE: Colapsar el BottomSheet inmediatamente para ver mejor el globo
@@ -4884,6 +4884,7 @@
   {selectedCityId}
   {centerPolygonId}
   {isDarkTheme}
+  bottomSheetState={SHEET_STATE}
   onPolyCapColor={(feat) => {
     const props = feat?.properties || {};
     const currentLevel = navigationManager?.getCurrentLevel() || 'world';

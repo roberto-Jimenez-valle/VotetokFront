@@ -123,14 +123,11 @@ async function populateSubdivisions() {
           
           await prisma.subdivision.create({
             data: {
-              countryIso3,
-              countryName,
               subdivisionId,
-              subdivisionName,
-              level: 1,
+              name: subdivisionName,
+              level: 2,  // Nivel 2: Comunidades Autónomas/Estados/Regiones
               latitude: lat,
               longitude: lon,
-              parentId: null
             }
           });
           
@@ -146,15 +143,8 @@ async function populateSubdivisions() {
     console.log(`\n🎉 ¡Completado! Total de subdivisiones: ${totalSubdivisions}`);
 
     // Mostrar estadísticas
-    const stats = await prisma.subdivision.groupBy({
-      by: ['countryIso3'],
-      _count: { id: true }
-    });
-
-    console.log('\n📊 Subdivisiones por país:');
-    for (const stat of stats.sort((a, b) => b._count.id - a._count.id).slice(0, 10)) {
-      console.log(`  ${stat.countryIso3}: ${stat._count.id}`);
-    }
+    const totalCount = await prisma.subdivision.count();
+    console.log(`\n📊 Total de subdivisiones en base de datos: ${totalCount}`);
 
   } catch (error) {
     console.error('\n❌ Error:', error);
