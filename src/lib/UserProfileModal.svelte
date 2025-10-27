@@ -68,7 +68,9 @@
   
   // Cargar datos del usuario cuando se abre el modal o cambia el userId
   $effect(() => {
+    console.log('[UserProfileModal] Effect triggered:', { isOpen, userId });
     if (isOpen && userId) {
+      console.log('[UserProfileModal] Loading user data for:', userId);
       loadUserData();
     }
   });
@@ -596,7 +598,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
-    z-index: 30000;
+    z-index: 1000000;
     backdrop-filter: blur(8px);
   }
   
@@ -614,7 +616,7 @@
     right: 0;
     bottom: 0;
     background: #181a20;
-    z-index: 30001;
+    z-index: 1000001;
     display: flex;
     flex-direction: column;
   }

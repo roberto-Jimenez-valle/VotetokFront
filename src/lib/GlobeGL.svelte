@@ -4085,6 +4085,10 @@
   // Mostrar solo hashtags (sin toggle de cuentas)
   let showAccountsLine = false; // siempre false, solo hashtags
   let lastScrollY = 0;
+  
+  // Variables para modal de perfil (controlled desde +page.svelte)
+  let isProfileModalOpen = false;
+  let selectedProfileUserId: number | null = null;
   function handleScroll() {
     const y = window.scrollY || 0;
     // Ya no alternamos barras con el scroll; solo actualizamos el estado interno
@@ -6046,6 +6050,8 @@
   {navigationManager}
   {currentAltitude}
   additionalPolls={[]}
+  bind:isProfileModalOpen={isProfileModalOpen}
+  bind:selectedProfileUserId={selectedProfileUserId}
   onToggleDropdown={toggleDropdown}
   bind:showSearch
   bind:tagQuery

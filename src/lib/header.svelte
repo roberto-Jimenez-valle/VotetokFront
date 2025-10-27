@@ -1,16 +1,20 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import SinglePollSection from './globe/cards/sections/SinglePollSection.svelte';
-  import UserProfileModal from '$lib/UserProfileModal.svelte';
   import { currentUser } from '$lib/stores';
   import { apiCall, apiPost } from '$lib/api/client';
   import '$lib/styles/trending-ranking.css';
   
   const dispatch = createEventDispatcher();
   
-  // Estado para modal de perfil
-  let isProfileModalOpen = $state(false);
-  let selectedProfileUserId = $state<number | null>(null);
+  // Props bindables para modal de perfil (controladas desde +page.svelte)
+  let { 
+    isProfileModalOpen = $bindable(false), 
+    selectedProfileUserId = $bindable(null) 
+  } = $props<{
+    isProfileModalOpen?: boolean;
+    selectedProfileUserId?: number | null;
+  }>();
 
   type TrendingUser = {
     id: number;
@@ -1010,6 +1014,8 @@
 							voteIconX={0}
 							voteIconY={0}
 							voteEffectColor="#10b981"
+							bind:isProfileModalOpen={isProfileModalOpen}
+							bind:selectedProfileUserId={selectedProfileUserId}
 							on:setActive={handleSetActive}
 							on:optionClick={handleOptionClick}
 							on:openInGlobe={handleOpenInGlobe}
@@ -1676,9 +1682,4 @@
 	}
 </style>
 
-<!-- Modal de perfil de usuario -->
-<UserProfileModal 
-	bind:isOpen={isProfileModalOpen} 
-	bind:userId={selectedProfileUserId}
-	on:pollClick={handlePollClickFromProfile}
-/>
+<!-- Modal de perfil movida a +page.svelte para que esté al nivel superior -->

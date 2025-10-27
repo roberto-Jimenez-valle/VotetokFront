@@ -4,6 +4,7 @@
 	import GlobeGL from '$lib/GlobeGL.svelte';
 	import NavBottom from '$lib/nav-bottom.svelte';
 	import CreatePollModal from '$lib/CreatePollModal.svelte';
+	import UserProfileModal from '$lib/UserProfileModal.svelte';
 	import type { Poll } from '$lib/types';
 
 	// topUsers eliminado - usar API
@@ -19,6 +20,15 @@
 	// Estado de poll eliminado - ya no se necesita PollOptionsBar
 	let isCreatePollModalOpen = $state(false);
 	let buttonColors = $state<string[]>([]);
+	
+	// Estado para modal de perfil (a nivel de aplicación)
+	let isProfileModalOpen = $state(false);
+	let selectedProfileUserId = $state<number | null>(null);
+	
+	// Debug: observar cambios
+	$effect(() => {
+		console.log('[+page] Profile modal state changed:', { isProfileModalOpen, selectedProfileUserId });
+	});
 	
 	// Referencia al componente GlobeGL
 	let globeGLComponent: any;
@@ -121,7 +131,11 @@
 
 	<!-- Contenido por encima del globo -->
 	<div class="relative">
-		<Header on:openPollInGlobe={handleOpenPollInGlobeFromHeader} />
+		<Header 
+			on:openPollInGlobe={handleOpenPollInGlobeFromHeader}
+			bind:isProfileModalOpen={isProfileModalOpen}
+			bind:selectedProfileUserId={selectedProfileUserId}
+		/>
 		<div class="w-full flex flex-col">
 			
 		</div>
@@ -148,6 +162,13 @@
 			bind:isOpen={isCreatePollModalOpen}
 			on:created={handlePollCreated}
 			buttonColors={buttonColors}
+		/>
+		
+		<!-- Modal de perfil de usuario (a nivel superior) -->
+		<UserProfileModal 
+			bind:isOpen={isProfileModalOpen}
+			bind:userId={selectedProfileUserId}
+			on:pollClick={handleOpenPollInGlobeFromHeader}
 		/>
 		
 		<!-- Barra de opciones eliminada: ya se muestra en BottomSheet -->

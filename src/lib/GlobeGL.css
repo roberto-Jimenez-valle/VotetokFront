@@ -716,8 +716,8 @@ header {
 @media (max-width: 767px) {
   .bottom-sheet.solid {
     /* Cuando está expandido (solid), limitar altura para dejar ver el globo */
-    top: 25vh !important; /* Dejar 25% del viewport para ver el globo (más pequeño) */
-    height: 75vh !important; /* Ocupar el 75% inferior (más espacio para contenido) */
+    top: calc(25vh - 15px) !important; /* Subir 15px el inicio del sheet */
+    height: calc(75vh + 15px) !important; /* Compensar aumentando la altura total */
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
     transform: translateY(0) !important; /* No necesita translateY adicional */
@@ -741,15 +741,15 @@ header {
   
   /* Asegurar que el contenido scrolleable ocupa el espacio disponible */
   .bottom-sheet.solid .main-scroll-container {
-    max-height: calc(75vh - 120px); /* Restar altura del drag area y padding */
+    max-height: calc(75vh - 105px); /* +15px disponibles por el aumento de altura */
   }
   
   .bottom-sheet.solid .sheet-content {
-    max-height: calc(75vh - 120px);
+    max-height: calc(75vh - 105px);
   }
   
   .bottom-sheet.solid .additional-polls-container {
-    max-height: calc(75vh - 180px); /* Restar más espacio por el nav inferior */
+    max-height: calc(75vh - 165px); /* +15px por el aumento de altura */
   }
 }
  

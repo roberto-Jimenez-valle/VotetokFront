@@ -1,10 +1,11 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
-  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette } from 'lucide-svelte';
+  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
   import { currentUser } from '$lib/stores';
   import { apiPost } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
+  import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   
   const dispatch = createEventDispatcher();
   
@@ -16,12 +17,12 @@
   let { isOpen = $bindable(false), buttonColors = [] }: Props = $props();
   
   // Form state
-  let title = '';
-  let description = '';
-  let category = '';
-  let imageUrl = '';
-  let imageFile: File | null = null;
-  let imagePreview: string | null = null;
+  let title = $state('');
+  let description = $state('');
+  let category = $state('');
+  let imageUrl = $state('');
+  let imageFile = $state<File | null>(null);
+  let imagePreview = $state<string | null>(null);
   
   // Paleta organizada por tonos
   const COLOR_PALETTE = {
@@ -56,13 +57,14 @@
     id: string;
     label: string;
     color: string;
+    imageUrl?: string;
   };
   
   type PollType = 'single' | 'multiple' | 'rating' | 'reactions' | 'collaborative';
   
   let options: PollOption[] = $state([
-    { id: '1', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)] },
-    { id: '2', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)] }
+    { id: '1', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)], imageUrl: '' },
+    { id: '2', label: '', color: COLORS[Math.floor(Math.random() * COLORS.length)], imageUrl: '' }
   ]);
   
   let previousIsOpen = $state(false);
@@ -77,13 +79,17 @@
     previousIsOpen = isOpen;
   });
   
-  let pollType: PollType = 'single';
-  let hashtags = '';
-  let location = '';
-  let duration = '7d'; // 1d, 3d, 7d, 30d, never
+  let pollType = $state<PollType>('single');
+  let hashtags = $state('');
+  let location = $state('');
+  let duration = $state('7d'); // 1d, 3d, 7d, 30d, never
+  let editors = $state(''); // @usuario1, @usuario2...
   
   // Estado del modal de autenticación
   let showAuthModal = $state(false);
+  
+  // Estado del tooltip de formato
+  let showFormatTooltip = $state(false);
   
   // DEBUG: Monitorear el estado de currentUser
   $effect(() => {
@@ -92,10 +98,10 @@
   });
   
   // Opciones específicas por tipo
-  let ratingCount = 5; // Para tipo 'rating'
-  let ratingIcon = '🔥'; // Icono para rating (fuego por defecto)
-  let collaborativePermission = 'anyone'; // 'anyone', 'friends', 'specific'
-  let specificFriend = ''; // Para cuando se selecciona 'specific'
+  let ratingCount = $state(5); // Para tipo 'rating'
+  let ratingIcon = $state('🔥'); // Icono para rating (fuego por defecto)
+  let collaborativePermission = $state('anyone'); // 'anyone', 'friends', 'specific'
+  let specificFriend = $state(''); // Para cuando se selecciona 'specific'
   
   // Iconos disponibles para rating
   const RATING_ICONS = [
@@ -125,17 +131,17 @@
     { value: 'never', label: 'Sin límite' }
   ];
   
-  let errors: Record<string, string> = {};
-  let isSubmitting = false;
+  let errors = $state<Record<string, string>>({});
+  let isSubmitting = $state(false);
   let showTypeOptionsModal = $state(false);
-  let activeAccordionIndex: number | null = 0;
-  let currentPage = 0;
+  let activeAccordionIndex = $state<number | null>(0);
+  let currentPage = $state(0);
   
   // Variables para swipe táctil
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let isDragging = false;
-  let gridRef: HTMLElement | null = null;
+  let touchStartX = $state(0);
+  let touchStartY = $state(0);
+  let isDragging = $state(false);
+  let gridRef = $state<HTMLElement | null>(null);
   
   // Referencias a los inputs de texto de cada opción
   let optionInputs: Record<string, HTMLTextAreaElement> = {};
@@ -199,7 +205,8 @@
     options = [...options, {
       id: newId,
       label: '',
-      color: COLORS[randomColorIndex]
+      color: COLORS[randomColorIndex],
+      imageUrl: ''
     }];
     
     // Ir a la última página
@@ -226,7 +233,8 @@
       newOptions.push({
         id: String(Date.now() + i),
         label: `${icons} (${i}/${ratingCount})`,
-        color: COLORS[Math.floor(Math.random() * COLORS.length)]
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        imageUrl: ''
       });
     }
     options = newOptions;
@@ -283,6 +291,17 @@
       // Ajustar el índice si ahora está fuera de rango
       activeAccordionIndex = Math.max(0, paginatedOptions.items.length - 2);
     }
+  }
+  
+  // Extraer URL de un texto
+  function extractUrlFromText(text: string): string | null {
+    if (!text) return null;
+    
+    // Regex para detectar URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
+    const matches = text.match(urlRegex);
+    
+    return matches ? matches[0] : null;
   }
   
   // Handle image file selection
@@ -479,14 +498,258 @@
     hashtags = '';
     location = '';
     duration = '7d';
+    editors = '';
     options = [
-      { id: '1', label: '', color: COLORS[0] },
-      { id: '2', label: '', color: COLORS[1] }
+      { id: '1', label: '', color: COLORS[0], imageUrl: '' },
+      { id: '2', label: '', color: COLORS[1], imageUrl: '' }
     ];
     errors = {};
     // Limpiar estados de modales secundarios
     colorPickerOpenFor = null;
     showTypeOptionsModal = false;
+  }
+  
+  // Parser de prompt/markdown a datos de encuesta
+  function parsePrompt(text: string) {
+    const lines = text.trim().split('\n');
+    
+    // Reiniciar valores
+    title = '';
+    description = '';
+    category = '';
+    hashtags = '';
+    imageUrl = '';
+    editors = '';
+    const parsedOptions: PollOption[] = [];
+    
+    let currentSection = 'title';
+    let currentOption: PollOption | null = null;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      if (!trimmed) continue;
+      
+      // Título: ❓ Pregunta: [título]
+      if (!title) {
+        const questionMatch = trimmed.match(/^[❓?]\s*Pregunta:\s*(.+)/i);
+        if (questionMatch) {
+          title = questionMatch[1].trim();
+          currentSection = 'content';
+          continue;
+        }
+        
+        // Formato alternativo: # Título
+        if (trimmed.startsWith('# ')) {
+          title = trimmed.replace(/^#\s*/, '');
+          currentSection = 'content';
+          continue;
+        }
+      }
+      
+      // Imagen principal: 🖼️ Imagen o vídeo:
+      const mainImageMatch = trimmed.match(/^🖼️\s*(?:Imagen|Vídeo|Video|Imagen o vídeo):\s*(.*)$/i);
+      if (mainImageMatch) {
+        const url = mainImageMatch[1].trim();
+        if (url && url !== '[URL o vacío]') {
+          imageUrl = url.trim();
+        }
+        continue;
+      }
+      
+      // Detectar líneas con solo URLs (después de la imagen principal o como línea suelta)
+      if (currentSection === 'content' && trimmed.match(/^https?:\/\/[^\s]+$/i)) {
+        // Si aún no hay imagen principal, usar esta como imagen
+        if (!imageUrl) {
+          imageUrl = trimmed.trim();
+        }
+        continue;
+      }
+      
+      // Encabezado de opciones: 🧩 Opciones:
+      if (trimmed.match(/^🧩\s*Opciones:/i)) {
+        currentSection = 'options';
+        continue;
+      }
+      
+      // Opciones: 1️⃣ [Texto] ([color])
+      const optionMatch = trimmed.match(/^(?:[1-9]️⃣|\d+[.)\s]|[-*•])\s*(.+)/);
+      if (optionMatch) {
+        let optionText = optionMatch[1].trim();
+        let optionColor = COLORS[parsedOptions.length % COLORS.length];
+        let optionImageUrl = '';
+        
+        // Buscar color al final: ([color]) o (#hex)
+        const colorMatch = optionText.match(/\(([#a-zA-Z0-9]+)\)\s*$/);
+        if (colorMatch) {
+          const extractedColor = colorMatch[1];
+          if (extractedColor.startsWith('#')) {
+            optionColor = extractedColor;
+          } else {
+            const foundColor = COLORS.find(c => c.toLowerCase().includes(extractedColor.toLowerCase()));
+            if (foundColor) optionColor = foundColor;
+          }
+          optionText = optionText.replace(/\s*\([#a-zA-Z0-9]+\)\s*$/, '').trim();
+        }
+        
+        currentOption = {
+          id: String(Date.now() + parsedOptions.length),
+          label: optionText,
+          color: optionColor,
+          imageUrl: optionImageUrl
+        };
+        parsedOptions.push(currentOption);
+        continue;
+      }
+      
+      // URL de la opción (línea siguiente a una opción)
+      if (currentOption && currentSection === 'options') {
+        // Detectar URLs de YouTube, imágenes, videos, o cualquier enlace
+        const urlMatch = trimmed.match(/^(https?:\/\/[^\s]+|\[URL o vacío\])$/i);
+        if (urlMatch && !trimmed.startsWith('🏷️') && !trimmed.startsWith('🗳️') && !trimmed.startsWith('👥') && !trimmed.startsWith('⏰')) {
+          const url = urlMatch[1];
+          if (url && url !== '[URL o vacío]') {
+            // Limpiar la URL de posibles caracteres al final
+            currentOption.imageUrl = url.trim();
+          }
+          currentOption = null;
+          continue;
+        }
+      }
+      
+      // Etiquetas: 🏷️ Etiquetas: [temas]
+      const tagsMatch = trimmed.match(/^🏷️\s*Etiquetas:\s*(.+)/i);
+      if (tagsMatch) {
+        const tagText = tagsMatch[1].trim();
+        if (tagText && tagText !== '[temas]') {
+          hashtags = tagText.split(/[,\s]+/)
+            .filter(t => t)
+            .map(t => t.startsWith('#') ? t : '#' + t)
+            .join(' ');
+        }
+        continue;
+      }
+      
+      // Tipo de encuesta: 🗳️ Tipo de encuesta: [tipo]
+      const pollTypeMatch = trimmed.match(/^🗳️\s*Tipo de encuesta:\s*(.+)/i);
+      if (pollTypeMatch) {
+        const type = pollTypeMatch[1].trim().toLowerCase();
+        if (type.includes('única') || type.includes('unica') || type.includes('single')) pollType = 'single';
+        else if (type.includes('múltiple') || type.includes('multiple')) pollType = 'multiple';
+        else if (type.includes('rating') || type.includes('valoración')) pollType = 'rating';
+        else if (type.includes('reacciones') || type.includes('reactions')) pollType = 'reactions';
+        else if (type.includes('colaborativa') || type.includes('collaborative')) pollType = 'collaborative';
+        continue;
+      }
+      
+      // Editores: 👥 Editores: [@usuario1, @usuario2]
+      const editorsMatch = trimmed.match(/^👥\s*Editores:\s*(.+)/i);
+      if (editorsMatch) {
+        const editorText = editorsMatch[1].trim();
+        if (editorText && !editorText.includes('[') && !editorText.includes('...')) {
+          editors = editorText;
+        }
+        continue;
+      }
+      
+      // Tiempo: ⏰ Tiempo: [duración]
+      const timeMatch = trimmed.match(/^⏰\s*Tiempo:\s*(.+)/i);
+      if (timeMatch) {
+        const timeText = timeMatch[1].trim().toLowerCase();
+        if (timeText.includes('1 día') || timeText.includes('1d')) duration = '1d';
+        else if (timeText.includes('3 día') || timeText.includes('3d')) duration = '3d';
+        else if (timeText.includes('7 día') || timeText.includes('7d')) duration = '7d';
+        else if (timeText.includes('30 día') || timeText.includes('30d') || timeMatch[1].includes('mes')) duration = '30d';
+        else if (timeText.includes('sin límite') || timeText.includes('never') || timeText.includes('ilimitado')) duration = 'never';
+        else if (timeText.match(/hasta\s+\d{1,2}\/\d{1,2}\/\d{4}/)) duration = 'never'; // Fecha específica -> sin límite por ahora
+        continue;
+      }
+      
+      // Hashtags sueltos
+      if (trimmed.startsWith('#')) {
+        const tags = trimmed.split(/\s+/).filter(t => t.startsWith('#'));
+        if (tags.length > 0) {
+          if (hashtags) hashtags += ' ';
+          hashtags += tags.join(' ');
+        }
+        continue;
+      }
+      
+      // Descripción (líneas sin marcadores especiales después del título)
+      if (title && currentSection === 'content' && !trimmed.match(/^[-*•\d]/)) {
+        if (description) description += ' ';
+        description += trimmed;
+      }
+    }
+    
+    // Aplicar opciones parseadas
+    if (parsedOptions.length >= 2) {
+      options = parsedOptions;
+    }
+    
+    // Si no hay título, usar la primera línea
+    if (!title && lines.length > 0) {
+      title = lines[0].trim().substring(0, 200);
+    }
+    
+    // Resetear estados de paginación
+    currentPage = 0;
+    activeAccordionIndex = 0;
+  }
+  
+  // Generar formato de plantilla para copiar
+  function getTemplateFormat(): string {
+    const lines: string[] = [];
+    
+    lines.push('❓ Pregunta: [título de la encuesta]');
+    lines.push('');
+    lines.push('🖼️ Imagen o vídeo:');
+    lines.push('[URL o vacío]');
+    lines.push('');
+    lines.push('🧩 Opciones:');
+    lines.push('1️⃣ [Texto de opción 1] ([color])');
+    lines.push('[URL o vacío]');
+    lines.push('2️⃣ [Texto de opción 2] ([color])');
+    lines.push('[URL o vacío]');
+    lines.push('');
+    lines.push('🏷️ Etiquetas: [temas]');
+    lines.push('🗳️ Tipo de encuesta: [única / múltiple / rating / reacciones / colaborativa]');
+    lines.push('👥 Editores: [@usuario1, @usuario2, ...]');
+    lines.push('⏰ Tiempo: [ej. 3 días / hasta 30/10/2025]');
+    
+    return lines.join('\n');
+  }
+  
+  // Copiar formato al portapapeles
+  async function copyTemplateFormat() {
+    const template = getTemplateFormat();
+    try {
+      await navigator.clipboard.writeText(template);
+      // Mostrar feedback visual
+      showFormatTooltip = false;
+      setTimeout(() => {
+        alert('✅ Formato copiado al portapapeles. Pégalo en cualquier IA para generar tu encuesta.');
+      }, 100);
+    } catch (err) {
+      console.error('Error al copiar:', err);
+    }
+  }
+  
+  // Detectar y parsear automáticamente al pegar en el título
+  function handleTitlePaste(e: ClipboardEvent) {
+    const pastedText = e.clipboardData?.getData('text');
+    if (!pastedText) return;
+    
+    // Detectar si el texto pegado tiene formato completo
+    const hasFormatMarkers = pastedText.includes('❓ Pregunta:') || 
+                            pastedText.includes('🧩 Opciones:') ||
+                            pastedText.includes('🗳️ Tipo de encuesta:');
+    
+    if (hasFormatMarkers) {
+      e.preventDefault();
+      parsePrompt(pastedText);
+    }
   }
   
   // Cerrar al presionar Escape
@@ -496,47 +759,49 @@
     }
   }
   
-  // Funciones para manejo de swipe táctil
-  function handleTouchStart(e: TouchEvent) {
-    // No procesar si el touch empieza en un textarea, input o botón
+  // Funciones para manejo de swipe con pointer events
+  function handlePointerDown(e: PointerEvent) {
+    // No procesar si empieza en un textarea, input o botón
     const target = e.target as HTMLElement;
     if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) {
       isDragging = false;
       return;
     }
     
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
+    touchStartX = e.clientX;
+    touchStartY = e.clientY;
     isDragging = false;
   }
   
-  function handleTouchMove(e: TouchEvent) {
-    if (!gridRef) return;
+  function handlePointerMove(e: PointerEvent) {
+    if (!gridRef || touchStartX === null) return;
     
-    // No procesar si el touch está en un textarea, input o botón
+    // No procesar si está en un textarea, input o botón
     const target = e.target as HTMLElement;
     if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) {
       return;
     }
     
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - touchStartX;
-    const deltaY = touch.clientY - touchStartY;
+    const deltaX = e.clientX - touchStartX;
+    const deltaY = e.clientY - touchStartY;
+    
+    // Solo considerar drag si hay movimiento significativo
+    const hasMoved = Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10;
     
     // Detectar si es movimiento horizontal (más horizontal que vertical)
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20) {
+    if (hasMoved && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
       isDragging = true;
       e.preventDefault();
       
       const currentIndex = activeAccordionIndex;
       const totalCards = paginatedOptions.items.length;
       
-      if (deltaX > 50) {
+      if (deltaX > 100) {
         if (currentIndex !== null && currentIndex > 0) {
           // Swipe derecha -> card anterior
           const newIndex = currentIndex - 1;
           activeAccordionIndex = newIndex;
-          touchStartX = touch.clientX; // Reset para siguiente detección
+          touchStartX = e.clientX; // Reset para siguiente detección
           
           // Enfocar el input si la opción está vacía
           setTimeout(() => {
@@ -547,19 +812,24 @@
                 input.focus();
               }
             }
+            isDragging = false;
           }, 100);
         } else if (currentIndex === 0 && currentPage > 0) {
           // Swipe derecho desde primera card -> página anterior
           currentPage -= 1;
           activeAccordionIndex = ITEMS_PER_PAGE - 1;
-          touchStartX = touch.clientX; // Reset para siguiente detección
+          touchStartX = e.clientX; // Reset para siguiente detección
+          setTimeout(() => isDragging = false, 100);
+        } else {
+          isDragging = false;
         }
-      } else if (deltaX < -50) {
+      } else if (deltaX < -80 && !isDragging) {
+        isDragging = true;
         if (currentIndex !== null && currentIndex < totalCards - 1) {
           // Swipe izquierda -> card siguiente
           const newIndex = currentIndex + 1;
           activeAccordionIndex = newIndex;
-          touchStartX = touch.clientX; // Reset para siguiente detección
+          touchStartX = e.clientX; // Reset para siguiente detección
           
           // Enfocar el input si la opción está vacía
           setTimeout(() => {
@@ -570,16 +840,18 @@
                 input.focus();
               }
             }
+            isDragging = false;
           }, 100);
         } else if (currentIndex === totalCards - 1 && currentPage < totalPages - 1) {
           // Swipe izquierdo desde última card -> página siguiente
           currentPage += 1;
           activeAccordionIndex = 0;
-          touchStartX = touch.clientX; // Reset para siguiente detección
+          touchStartX = e.clientX; // Reset para siguiente detección
+          setTimeout(() => isDragging = false, 100);
         } else if (currentIndex === totalCards - 1 && currentPage === totalPages - 1) {
           // Swipe izquierdo desde la última card de la última página -> crear nueva opción
           if (options.length < 10) {
-            touchStartX = touch.clientX; // Reset para siguiente detección
+            touchStartX = e.clientX; // Reset para siguiente detección
             addOption();
             // Dar tiempo para que se cree la opción antes de activarla
             setTimeout(() => {
@@ -689,19 +961,73 @@
     
     <!-- Content -->
     <div class="modal-content">
-      <!-- Card principal -->
-      <div class="main-card">
-        <!-- Título de la encuesta -->
-        <div class="poll-title-section">
-          <textarea
-            class="poll-title-input"
-            class:error={errors.title}
-            placeholder="¿Cuál es tu pregunta?"
-            bind:value={title}
-            rows="2"
-            maxlength="200"
-          ></textarea>
-        </div>
+        <!-- Card principal -->
+        <div class="main-card">
+          <!-- Título de la encuesta -->
+          <div class="poll-title-section">
+            <div class="title-input-wrapper">
+              <textarea
+                class="poll-title-input"
+                class:error={errors.title}
+                placeholder="¿Cuál es tu pregunta?"
+                bind:value={title}
+                rows="2"
+                onpaste={handleTitlePaste}
+              ></textarea>
+              <div class="info-tooltip-container">
+                <button
+                  class="info-btn"
+                  onclick={() => showFormatTooltip = !showFormatTooltip}
+                  title="Ver formato para IA"
+                  aria-label="Información sobre formato"
+                  type="button"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+                {#if showFormatTooltip}
+                  <div class="format-tooltip" transition:fade={{ duration: 150 }}>
+                    <div class="tooltip-header">
+                      <span class="tooltip-title">🤖 Formato para IA</span>
+                      <button 
+                        class="tooltip-close"
+                        onclick={() => showFormatTooltip = false}
+                        type="button"
+                        aria-label="Cerrar"
+                      >
+                        <X class="w-3 h-3" />
+                      </button>
+                    </div>
+                    <p class="tooltip-description">
+                      Copia este formato y úsalo en ChatGPT, Claude o cualquier IA para generar tu encuesta. Luego pega el resultado aquí.
+                    </p>
+                    <div class="tooltip-template">
+                      <code>{getTemplateFormat()}</code>
+                    </div>
+                    <button 
+                      class="copy-format-btn"
+                      onclick={copyTemplateFormat}
+                      type="button"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Copiar formato
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Preview multimedia del título principal -->
+          {#if extractUrlFromText(title) || imageUrl}
+            {@const detectedMainUrl = extractUrlFromText(title)}
+            <div class="main-media-preview">
+              <MediaEmbed url={detectedMainUrl || imageUrl || ''} mode="full" width="100%" height="100%" />
+            </div>
+          {/if}
         
         <!-- Grid de opciones con botón añadir integrado -->
         <div class="vote-cards-container">
@@ -709,21 +1035,33 @@
             class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''}"
             style="--items: {paginatedOptions.items.length}"
             bind:this={gridRef}
-            ontouchstart={handleTouchStart}
-            ontouchmove={handleTouchMove}
-            ontouchend={handleTouchEnd}
           >
             {#each paginatedOptions.items as option, index (option.id)}
               {@const globalIndex = currentPage * ITEMS_PER_PAGE + index}
               {@const pct = Math.round(100 / options.length)}
-              <div 
+              {@const detectedUrl = extractUrlFromText(option.label)}
+              <button 
+                type="button"
                 class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {activeAccordionIndex !== index ? 'collapsed' : ''}" 
                 style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)};" 
                 onclick={() => setActive(index)}
-                role="button"
-                tabindex="0"
-                onkeydown={(e) => {if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActive(index); }}}
               >
+                {#if activeAccordionIndex === index && (detectedUrl || option.imageUrl)}
+                  <div 
+                    role="button"
+                    tabindex="-1"
+                    class="option-media-background" 
+                    onclick={(e) => e.stopPropagation()}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
+                    <MediaEmbed url={detectedUrl || option.imageUrl || ''} mode="full" />
+                    <div class="media-overlay"></div>
+                  </div>
+                {/if}
                 <div class="card-header">
                   {#if activeAccordionIndex === index}
                     <div class="char-counter">{option.label.length}/200</div>
@@ -751,49 +1089,65 @@
                   </div>
                 </div>
                 {#if globalIndex > 0}
-                  <button
+                  <div
+                    role="button"
+                    tabindex="0"
                     class="remove-option-badge"
                     onclick={(e) => {
                       e.stopPropagation();
                       removeOption(option.id);
                     }}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeOption(option.id);
+                      }
+                    }}
                     title="Eliminar"
-                    type="button"
                   >
                     <X class="w-3.5 h-3.5" />
-                  </button>
+                  </div>
                 {/if}
-                <button
+                <div
+                  role="button"
+                  tabindex="0"
                   class="color-picker-badge-absolute"
                   style="background-color: {option.color}"
                   onclick={(e) => {
                     e.stopPropagation();
                     colorPickerOpenFor = option.id;
                   }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      colorPickerOpenFor = option.id;
+                    }
+                  }}
                   title="Cambiar color"
                   aria-label="Cambiar color"
-                  type="button"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                   </svg>
-                </button>
-              </div>
+                </div>
+              </button>
             {/each}
           </div>
-          
-          <!-- Botón añadir opción a la derecha -->
-          {#if options.length < 10}
-            <button
-              type="button"
-              class="add-option-button-inline"
-              onclick={addOption}
-              title="Añadir opción"
-            >
-              <Plus class="w-5 h-5" />
-            </button>
-          {/if}
         </div>
+        
+        <!-- Botón añadir opción debajo -->
+        {#if options.length < 10}
+          <button
+            type="button"
+            class="add-option-button-below"
+            onclick={addOption}
+          >
+            <Plus class="w-5 h-5" />
+            <span>Añadir opción</span>
+          </button>
+        {/if}
         
         <!-- Indicadores de paginación -->
         {#if totalPages > 1}
@@ -1360,6 +1714,13 @@
     z-index: 1;
   }
   
+  .title-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
   .question-title {
     font-size: 18px;
     font-weight: 600;
@@ -1394,11 +1755,13 @@
     outline: none;
     resize: none;
     width: 100%;
+    flex: 1;
     padding: 0;
+    padding-right: 0.5rem;
     font-family: inherit;
     letter-spacing: -0.02em;
     min-height: 42px;
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
     overflow-wrap: break-word;
     -webkit-overflow-scrolling: touch;
@@ -1501,7 +1864,8 @@
     transform: translateZ(0);
     will-change: transform, box-shadow;
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                min-height 0.3s ease;
     display: flex;
     flex-direction: column;
     border: none;
@@ -1517,6 +1881,10 @@
     --fill-window: 120px;
   }
   
+  .vote-card.is-active {
+    min-height: 400px;
+  }
+  
   .vote-card.collapsed {
     background: #252525;
   }
@@ -1529,7 +1897,7 @@
   .vote-card .card-header,
   .vote-card .card-content {
     position: relative;
-    z-index: 0;
+    z-index: 2;
     background: transparent;
   }
   
@@ -1542,7 +1910,7 @@
     position: relative;
     flex: 1;
     background: transparent;
-    z-index: 1;
+    z-index: 2;
     pointer-events: none;
   }
   
@@ -1607,6 +1975,7 @@
     overflow: hidden;
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
   }
   
   .vote-card.is-active .question-title.editable {
@@ -1614,6 +1983,7 @@
     overflow-x: hidden;
     height: 100%;
     white-space: pre-wrap;
+    pointer-events: auto;
   }
   
   .question-title.editable::placeholder {
@@ -1650,6 +2020,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    pointer-events: auto;
   }
   
   .vote-card.is-active .remove-option-badge {
@@ -1668,7 +2039,7 @@
   }
   
   .card-content {
-    flex: 0 0 auto;
+    flex: 1;
     padding: 0 16px 16px 16px;
     display: flex;
     flex-direction: column;
@@ -1680,7 +2051,12 @@
   
   .vote-card.collapsed .card-content {
     justify-content: center;
-    flex: 1;
+  }
+  
+  .vote-card.is-active .card-content {
+    justify-content: flex-start;
+    padding-top: 8px;
+    gap: 8px;
   }
   
   .card-content::before {
@@ -1709,20 +2085,22 @@
   }
   
   .percentage-display {
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
-    z-index: 0;
+    z-index: 1;
     background: transparent;
     pointer-events: none;
+    min-height: 60px;
   }
   
   .percentage-display.is-active {
     justify-content: flex-start;
-    align-items: flex-end;
-    padding-left: 0;
+    align-items: flex-start;
+    padding-left: 8px;
+    min-height: 40px;
   }
   
   .percentage-large {
@@ -1740,17 +2118,19 @@
     bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(10px);
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2;
+    pointer-events: auto;
   }
   
   .vote-card.is-active .color-picker-badge-absolute {
@@ -1860,32 +2240,76 @@
     }
   }
   
-  .add-option-button-inline {
-    flex-shrink: 0;
-    min-width: 50px;
-    width: 50px;
-    height: 240px;
-    background: rgba(255, 255, 255, 0.03);
-    border: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0 16px 16px 0;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 1.25rem;
-    font-weight: 300;
+  /* Preview multimedia del título principal */
+  .main-media-preview {
+    width: 100%;
+    max-width: 100%;
+    height: 140px;
+    margin: 12px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    background: #2c2c2e;
+    position: relative;
+    z-index: 1;
+  }
+  
+  /* Estilos para MediaEmbed de fondo en opciones */
+  .option-media-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    z-index: 0;
+  }
+  
+  .media-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.6) 0%,
+      rgba(0, 0, 0, 0.3) 40%,
+      rgba(0, 0, 0, 0.6) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+  
+  .add-option-button-below {
+    width: 100%;
+    padding: 14px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-left: -24px;
-    margin-right: 16px;
-    z-index: 0;
+    gap: 8px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    margin-top: 16px;
   }
   
-  .add-option-button-inline:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-left-color: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.7);
+  .add-option-button-below:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.95);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+  
+  .add-option-button-below:active {
+    transform: translateY(0);
   }
   
   /* Paginación - Exacto como BottomSheet */
@@ -2363,6 +2787,138 @@
   
   .sheet-confirm-btn:active {
     transform: translateY(0);
+  }
+  
+  /* Tooltip de formato */
+  .info-tooltip-container {
+    position: relative;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 0.25rem;
+  }
+  
+  .info-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 0.5rem;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .info-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.95);
+  }
+  
+  .format-tooltip {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 380px;
+    max-width: 90vw;
+    background: rgba(20, 20, 25, 0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    z-index: 999999;
+  }
+  
+  .tooltip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  
+  .tooltip-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: white;
+  }
+  
+  .tooltip-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .tooltip-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .tooltip-description {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.5;
+    margin: 0 0 0.75rem 0;
+  }
+  
+  .tooltip-template {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  
+  .tooltip-template code {
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  
+  .copy-format-btn {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    background: #3b82f6;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  
+  .copy-format-btn:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+  }
+  
+  .copy-format-btn:active {
+    transform: translateY(0);
+  }
+  
+  @media (max-width: 480px) {
+    .format-tooltip {
+      width: calc(100vw - 32px);
+      right: -8px;
+    }
   }
   
   /* Responsive */

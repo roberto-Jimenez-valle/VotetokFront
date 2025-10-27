@@ -3,14 +3,9 @@
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
-  import UserProfileModal from '$lib/UserProfileModal.svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
-  
-  // Estado para modal de perfil
-  let isProfileModalOpen: boolean = false;
-  let selectedProfileUserId: number | null = null;
   let showDoubleClickTooltip: boolean = false;
   let showVoteConfirmation: boolean = false;
   let showVoteRemoval: boolean = false;
@@ -268,6 +263,10 @@
   export let voteIconY: number = 0;
   export let voteEffectColor: string = '#10b981';
   
+  // Profile modal state (bindable, controlled from +page.svelte)
+  export let isProfileModalOpen: boolean = false;
+  export let selectedProfileUserId: number | null = null;
+  
   let pollGridRef: HTMLElement;
   let voteIconElement: HTMLElement | null = null;
   
@@ -367,10 +366,7 @@
   // NUNCA reordenar opciones para evitar confusión al usuario
   // Las opciones mantienen su orden original siempre
   $: sortedPollOptions = getNormalizedOptions(poll);
-  $: shouldPaginate = sortedPollOptions.length > OPTIONS_PER_PAGE;
-  $: paginatedPoll = shouldPaginate 
-    ? getPaginatedOptions(sortedPollOptions, currentPage)
-    : { items: sortedPollOptions, totalPages: 1, hasNext: false, hasPrev: false };
+  $: paginatedPoll = getPaginatedOptions(sortedPollOptions, currentPage);
   $: isSingleOptionPoll = sortedPollOptions.length === 1;
   $: isExpired = poll.closedAt ? isPollExpired(poll.closedAt) : false;
   $: pollVotedOption = displayVotes[poll.id] || userVotes[poll.id];
@@ -645,8 +641,10 @@
           onclick={(e) => {
             e.stopPropagation();
             if (poll.user?.id) {
+              console.log('[Avatar Click] Abriendo perfil de usuario:', poll.user.id);
               selectedProfileUserId = poll.user.id;
               isProfileModalOpen = true;
+              console.log('[Avatar Click] Estado actualizado:', { isProfileModalOpen, selectedProfileUserId });
             }
           }}
           aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
@@ -666,11 +664,10 @@
     <!-- Vista de gráfico histórico (currentPage === -1) - Renderizado como una tarjeta -->
     {#if currentPage === -1}
       <div class="historical-chart-wrapper">
-        <!-- Header con botones de filtro -->
-        <div class="chart-top-bar" style="position: relative;">
-          <h2 class="chart-title">📊 Histórico</h2>
-          
-          <div class="time-pills-container">
+        <!-- Área del gráfico con botones dentro -->
+        <div class="chart-area">
+          <!-- Botones de filtro posicionados absolutamente dentro -->
+          <div class="time-pills-container" style="position: absolute; top: 8px; left: 8px; z-index: 10;">
             {#each timeRanges as range}
               <button
                 class="time-button {selectedTimeRange === range.id ? 'selected' : ''}"
@@ -698,10 +695,7 @@
               })}</div>
             </div>
           {/if}
-        </div>
-
-        <!-- Área del gráfico -->
-        <div class="chart-area">
+          
             {#if isLoadingHistory}
               <div class="chart-loading">
                 <span>Cargando...</span>
@@ -709,8 +703,9 @@
             {:else if historicalDataByOption.size > 0}
               <svg 
                 viewBox="0 0 300 200" 
+                preserveAspectRatio="none"
                 class="full-chart-svg"
-                style="width: 100%; height: 200px; display: block;"
+                style="width: 100%; height: 100%; display: block;"
                 bind:this={chartSvgElement}
                 onmousemove={handleChartInteraction}
                 onmouseleave={clearChartHover}
@@ -824,6 +819,8 @@
         </div>
       {/if}
       
+      
+
       <div 
         class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {isSingleOptionPoll ? 'compact-one' : ''} pagination-{paginationDirection}"
       style="--items: {paginatedPoll.items.length}"
@@ -1335,10 +1332,9 @@
     </div>
   {/if}
   
-  <!-- Controles inferiores: izquierda (estadísticas), centro (paginación), derecha (acciones) -->
+  <!-- Controles inferiores: centro (estadísticas + paginación), derecha (acciones) -->
   <div class="bottom-controls-container">
-    <!-- Lado izquierdo: Icono de estadísticas -->
-    <div class="bottom-controls-left">
+    <div class="bottom-controls-center">
       <button
         class="stats-icon-btn {currentPage === -1 ? 'active' : ''}"
         type="button"
@@ -1353,28 +1349,21 @@
           }
         }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="20" x2="12" y2="10"></line>
-          <line x1="18" y1="20" x2="18" y2="4"></line>
-          <line x1="6" y1="20" x2="6" y2="16"></line>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
         </svg>
       </button>
-    </div>
-    
-    <!-- Centro: Paginación -->
-    <div class="bottom-controls-center">
-      {#if shouldPaginate && currentPage !== -1}
-        <div class="pagination-dots">
-          {#each Array(paginatedPoll.totalPages) as _, pageIndex}
-            <button 
-              class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
-              onclick={() => handlePageChange(pageIndex)}
-              type="button"
-              aria-label="Página {pageIndex + 1}"
-            ></button>
-          {/each}
-        </div>
-      {/if}
+
+      <div class="pagination-dots">
+        {#each Array(paginatedPoll.totalPages) as _, pageIndex}
+          <button 
+            class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
+            onclick={() => handlePageChange(pageIndex)}
+            type="button"
+            aria-label="Página {pageIndex + 1}"
+          ></button>
+        {/each}
+      </div>
     </div>
     
     <!-- Lado derecho: Botones de acción -->
@@ -1496,28 +1485,9 @@
         </button>
       </div>
       
-      <!-- Lado derecho: Histórico, Guardar, Republicar, Compartir -->
+      <!-- Lado derecho: Guardar, Republicar, Compartir -->
       <div class="action-group-right">
-        <button 
-          class="action-badge action-chart {currentPage === -1 ? 'active-chart' : ''}" 
-          type="button" 
-          title="Ver histórico de votos"
-          aria-label="Ver histórico de votos"
-          onclick={(e) => {
-            e.stopPropagation();
-            if (currentPage === -1) {
-              // Si ya estamos en histórico, volver a las opciones
-              handlePageChange(0);
-            } else {
-              // Ir a histórico
-              handlePageChange(-1);
-            }
-          }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-        </button>
+        
         <button class="action-badge" type="button" title="Guardar">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
@@ -1715,26 +1685,23 @@
   
   /* Botón de estadísticas */
   .stats-icon-btn {
-    width: 36px;
-    height: 36px;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    color: rgba(255, 255, 255, 0.6);
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.65);
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
+    transition: color 0.2s ease, transform 0.2s ease;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: none;
   }
   
   .stats-icon-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.95);
     transform: scale(1.05);
   }
   
@@ -1748,13 +1715,11 @@
   }
   
   .stats-icon-btn.active {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.4);
-    color: rgb(139, 92, 246);
+    color: #3b82f6;
   }
   
   .stats-icon-btn.active svg {
-    filter: drop-shadow(0 1px 4px rgba(139, 92, 246, 0.4));
+    filter: drop-shadow(0 1px 4px rgba(59, 130, 246, 0.4));
   }
   
   .bottom-controls-center {
@@ -1762,6 +1727,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 10px;
   }
 
   /* Botón añadir opción pequeño debajo - estilo card con borde color */
@@ -1799,6 +1765,8 @@
     margin: 0 -1rem;
     padding: 0 1rem;
   }
+
+  /* Altura de la card de estadísticas (vista de gráfico) igual a opciones */
 
   /* Botón añadir opción inline a la derecha - Efecto Glass */
   .add-option-button-inline {
@@ -2545,15 +2513,15 @@
   /* Gráfico histórico - Estructura simplificada */
   .historical-chart-wrapper {
     width: 100%;
-    min-height: 300px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
-    border-radius: 20px;
-    padding: 20px;
+    height: auto; /* altura automática según contenido */
+    background: transparent;
+    border-radius: 0;
+    padding: 0 16px; /* padding horizontal a los lados */
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: none;
+    box-shadow: none;
+    box-sizing: border-box;
   }
   
   .chart-top-bar {
@@ -2578,16 +2546,16 @@
   }
   
   .time-button {
-    padding: 6px 14px;
+    padding: 4px 10px;
     background: transparent;
-    border: 1.5px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
     color: rgba(255, 255, 255, 0.7);
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
   }
   
   .time-button:hover {
@@ -2601,24 +2569,26 @@
     background: #3b82f6;
     border-color: #3b82f6;
     color: white;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
   }
   
   .chart-area {
-    flex: 1;
-    min-height: 220px;
+    width: 100%;
+    height: 160px; /* altura más reducida */
     position: relative;
     background: rgba(0, 0, 0, 0.15);
     border-radius: 12px;
-    padding: 12px;
+    padding: 36px 8px 8px 0; /* sin padding izquierdo */
+    box-sizing: border-box;
+    touch-action: pan-y; /* permitir scroll vertical */
   }
   
   .full-chart-svg {
     width: 100%;
     height: 100%;
-    min-height: 200px;
+    min-height: 0;
     display: block;
-    touch-action: none;
+    touch-action: pan-y; /* permitir scroll vertical, bloquear horizontal */
   }
   
   .chart-tooltip {
@@ -2687,12 +2657,13 @@
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    flex: 1 !important;
-    min-height: 220px !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
     color: white !important;
     font-size: 16px !important;
     font-weight: 600 !important;
-    background: rgba(255, 0, 0, 0.1) !important;
+    background: rgba(255, 255, 255, 0.03) !important;
   }
   
   .chart-loading span::after {
@@ -2708,9 +2679,4 @@
   
 </style>
 
-<!-- Modal de perfil de usuario -->
-<UserProfileModal 
-  bind:isOpen={isProfileModalOpen} 
-  bind:userId={selectedProfileUserId}
-  on:pollClick={(e) => dispatch('openPollById', e.detail)}
-/>
+<!-- Modal de perfil movida a +page.svelte para que esté al nivel superior -->
