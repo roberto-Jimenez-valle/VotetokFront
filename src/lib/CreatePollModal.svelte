@@ -396,8 +396,17 @@
         // Encontrar la opción y reemplazar la URL
         const option = options.find(opt => opt.id === optionId);
         if (option) {
-          // Reemplazar la URL vieja con la de Giphy
-          option.label = option.label.replace(failedUrl, gifUrl);
+          // Reemplazar la URL en el label si está ahí
+          if (option.label.includes(failedUrl)) {
+            option.label = option.label.replace(failedUrl, gifUrl);
+            console.log(`[Giphy Fallback] ✅ URL reemplazada en label`);
+          }
+          
+          // Reemplazar la URL en imageUrl si está ahí
+          if (option.imageUrl === failedUrl) {
+            option.imageUrl = gifUrl;
+            console.log(`[Giphy Fallback] ✅ URL reemplazada en imageUrl`);
+          }
           
           console.log(`[Giphy Fallback] ✅ Opción "${searchTerm}" actualizada con GIF de Giphy`);
         }
@@ -410,15 +419,67 @@
   }
   
   /**
-   * Handler para cuando una imagen de MediaEmbed falla
+   * Handler para cuando una imagen de MediaEmbed falla en una opción
    * Se llama desde el evento onerror del MediaEmbed
    */
-  function handleImageLoadError(optionId: string, optionLabel: string, imageUrl: string) {
+  function handleImageLoadError(optionId: string, optionLabel: string, failedImageUrl: string) {
     console.log(`[Image Error] 🚨 Imagen falló para opción: "${getLabelWithoutUrl(optionLabel)}"`);
-    console.log(`[Image Error] URL fallida:`, imageUrl);
+    console.log(`[Image Error] URL fallida:`, failedImageUrl);
     
     // Reemplazar automáticamente con Giphy
-    replaceWithGiphyFallback(optionId, optionLabel, imageUrl);
+    replaceWithGiphyFallback(optionId, optionLabel, failedImageUrl);
+  }
+  
+  /**
+   * Handler para cuando la imagen principal de la encuesta falla
+   */
+  async function handleMainImageLoadError(failedImageUrl: string) {
+    console.log(`[Image Error] 🚨 Imagen principal falló:`, failedImageUrl);
+    
+    // Evitar loops infinitos
+    if (failedUrls.has(failedImageUrl)) {
+      console.log('[Giphy Fallback] Ya se intentó reemplazar la imagen principal');
+      return;
+    }
+    
+    // Usar el título sin URL como término de búsqueda
+    const searchTerm = titleWithoutUrl.trim();
+    
+    if (!searchTerm) {
+      console.warn('[Giphy Fallback] No hay título para buscar GIF de imagen principal');
+      return;
+    }
+    
+    console.log(`[Giphy Fallback] 🎬 Buscando GIF para imagen principal: "${searchTerm}"`);
+    
+    try {
+      const gifUrl = await giphyGifUrl(searchTerm);
+      
+      if (gifUrl) {
+        console.log(`[Giphy Fallback] ✅ GIF encontrado para imagen principal:`, gifUrl);
+        
+        // Marcar como fallida
+        failedUrls.set(failedImageUrl, gifUrl);
+        
+        // Reemplazar la URL en el título si está ahí
+        if (title.includes(failedImageUrl)) {
+          title = title.replace(failedImageUrl, gifUrl);
+          console.log(`[Giphy Fallback] ✅ URL reemplazada en título`);
+        }
+        
+        // Reemplazar en imageUrl si está ahí
+        if (imageUrl === failedImageUrl) {
+          imageUrl = gifUrl;
+          console.log(`[Giphy Fallback] ✅ URL reemplazada en imageUrl principal`);
+        }
+        
+        console.log(`[Giphy Fallback] ✅ Imagen principal actualizada con GIF de Giphy`);
+      } else {
+        console.warn(`[Giphy Fallback] ❌ No se encontró GIF para imagen principal`);
+      }
+    } catch (error) {
+      console.error('[Giphy Fallback] Error buscando GIF para imagen principal:', error);
+    }
   }
   
   // Handle image file selection
@@ -1245,7 +1306,13 @@
                   <p>Cargando preview...</p>
                 </div>
               {:else}
-                <MediaEmbed url={detectedMainUrl || imageUrl || ''} mode="full" width="100%" height="100%" />
+                <MediaEmbed 
+                  url={detectedMainUrl || imageUrl || ''} 
+                  mode="full" 
+                  width="100%" 
+                  height="100%"
+                  on:imageerror={(e) => handleMainImageLoadError(e.detail.url)}
+                />
               {/if}
             </div>
           {/if}
