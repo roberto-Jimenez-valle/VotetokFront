@@ -5,18 +5,74 @@
     url: string;
     width?: string;
     height?: string;
-    mode?: 'full' | 'preview'; // full = 180px alto, preview = 130px
+    mode?: 'full' | 'preview' | 'linkedin'; // full = 180px alto, preview = 130px, linkedin = preview horizontal
   }
   
-  let { url, width = '100%', height = 'auto', mode = 'preview' }: Props = $props();
+  let { url = '', mode = 'preview', width = '100%', height = '100%' }: Props = $props();
   
   let embedType: string = $state('');
   let embedHTML: string = $state('');
   let metadata: any = $state(null);
   let loading: boolean = $state(true);
   let error: boolean = $state(false);
+
+  /**
+   * Convierte una URL de imagen externa a través del proxy de medios
+   * Resuelve problemas de CORS y X-Frame-Options
+   */
+  function getProxiedImageUrl(imageUrl: string): string {
+    if (!imageUrl) return imageUrl;
+    
+    try {
+      const urlObj = new URL(imageUrl);
+      const hostname = urlObj.hostname.toLowerCase();
+      
+      // Lista de dominios que sabemos que funcionan bien sin proxy
+      const noProxyDomains = [
+        'picsum.photos',
+        'placehold.co',
+        'via.placeholder.com',
+        'ui-avatars.com',
+        'dummyimage.com'
+      ];
+      
+      const needsProxy = !noProxyDomains.some(domain => 
+        hostname === domain || hostname.endsWith('.' + domain)
+      );
+      
+      if (needsProxy) {
+        // Usar nuestro proxy de medios
+        return `/api/media-proxy?url=${encodeURIComponent(imageUrl)}`;
+      }
+      
+      return imageUrl;
+    } catch {
+      return imageUrl;
+    }
+  }
   
-  // Detectar tipo de URL y generar embed
+  /**
+   * Sistema de contenido embebido tipo LinkedIn
+   * 
+   * CONTENIDO EMBEBIDO INTERACTIVO (iframes):
+   * - YouTube: Videos embebidos
+   * - Vimeo: Videos embebidos
+   * - Spotify: Canciones, álbumes, playlists embebidas
+   * - SoundCloud: Audio embebido
+   * - Twitch: Videos de Twitch embebidos
+   * - Megaphone: Podcasts embebidos
+   * - Omny.fm: Podcasts embebidos
+   * - SlideShare: Presentaciones (via metadata)
+   * 
+   * CONTENIDO COMO PREVIEW (layout LinkedIn):
+   * - Twitter/X: Preview con metadatos Open Graph
+   * - Instagram: Preview con metadatos
+   * - TikTok: Preview con metadatos
+   * - Facebook: Preview con metadatos
+   * - LinkedIn: Preview con metadatos
+   * - Forbes, Bloomberg, NBC, etc.: Preview con metadatos
+   * - Cualquier otro sitio: Preview con metadatos Open Graph
+   */
   async function detectAndGenerateEmbed(url: string) {
     if (!url || url.trim() === '') {
       console.log('[MediaEmbed] URL vacía, no se procesará');
@@ -87,13 +143,43 @@
         return;
       }
       
+      // SlideShare
+      if (url.includes('slideshare.net')) {
+        embedType = 'slideshare';
+        // SlideShare requiere obtener el código embed de su API
+        embedType = 'generic';
+        await fetchMetadata(url);
+        return;
+      }
+      
+      // Megaphone (podcasts)
+      if (url.includes('megaphone.fm') || url.includes('player.megaphone.fm')) {
+        embedType = 'megaphone';
+        embedHTML = `<iframe src="${url}" width="100%" height="100%" style="border:none;border-radius:12px;" scrolling="no"></iframe>`;
+        loading = false;
+        return;
+      }
+      
+      // Omny.fm (podcasts)
+      if (url.includes('omny.fm')) {
+        embedType = 'omny';
+        // Convertir URL de escucha a URL de embed
+        let embedUrl = url;
+        if (url.includes('omny.fm/shows/')) {
+          embedUrl = url.replace('/shows/', '/shows/embed/');
+        }
+        embedHTML = `<iframe src="${embedUrl}" width="100%" height="100%" style="border:none;border-radius:12px;" scrolling="no"></iframe>`;
+        loading = false;
+        return;
+      }
+      
       // Detectar imágenes directas
       if (url.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i)) {
         embedType = 'generic';
         metadata = {
-          title: 'Imagen',
-          description: new URL(url).hostname,
-          image: url,
+          title: new URL(url).hostname,
+          description: '',
+          image: getProxiedImageUrl(url),
           url: url
         };
         loading = false;
@@ -127,74 +213,118 @@
     return null;
   }
   
-  // Obtener metadatos con Microlink con timeout
+  // Obtener metadatos con validación del backend
   async function fetchMetadata(url: string) {
     try {
-      // Timeout de 8 segundos
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      console.log('[MediaEmbed] Validando URL con backend...');
       
-      console.log('[MediaEmbed] Llamando a Microlink API...');
-      const response = await fetch(
-        `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
-        { signal: controller.signal }
-      );
-      clearTimeout(timeoutId);
-      
-      const data = await response.json();
-      console.log('[MediaEmbed] Respuesta de Microlink:', data);
-      
-      if (data.status === 'success' && data.data) {
-        let imageUrl = data.data.image?.url || '';
+      // Primero intentar con nuestro API de validación
+      try {
+        const response = await fetch('/api/validate-preview', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ url })
+        });
         
-        // Fallbacks específicos por plataforma
-        if (url.includes('instagram.com')) {
-          if (!imageUrl || imageUrl.includes('static/images')) {
-            imageUrl = 'https://i.imgur.com/qj8nF2J.jpeg';
-          }
-        } else if (url.includes('tiktok.com')) {
-          // TikTok suele tener imagen en los metadatos
-          if (!imageUrl) {
-            imageUrl = 'https://placehold.co/220x130/000/FFF?text=TikTok';
-          }
-        } else if (url.includes('twitter.com') || url.includes('x.com')) {
-          // Twitter/X suele tener imagen
-          if (!imageUrl) {
-            imageUrl = 'https://placehold.co/220x130/1DA1F2/FFF?text=X';
-          }
-        } else if (url.includes('facebook.com')) {
-          if (!imageUrl) {
-            imageUrl = 'https://placehold.co/220x130/1877F2/FFF?text=Facebook';
-          }
-        } else if (url.includes('pinterest.com')) {
-          if (!imageUrl) {
-            imageUrl = 'https://placehold.co/220x130/E60023/FFF?text=Pinterest';
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[MediaEmbed] Respuesta del API de validación:', data);
+          
+          if (data.success && data.data) {
+            metadata = {
+              title: data.data.title,
+              description: data.data.description,
+              image: getProxiedImageUrl(data.data.image),
+              url: data.data.url
+            };
+            embedType = data.data.type || 'generic';
+            console.log('[MediaEmbed] ✅ Metadata establecida:', { embedType, metadata });
+            loading = false;
+            return;
           }
         }
-        
-        // Fallback genérico
-        if (!imageUrl) {
-          imageUrl = 'https://placehold.co/220x130/333/FFF?text=?';
-        }
-        
-        metadata = {
-          title: data.data.title || 'Publicación detectada',
-          description: data.data.description || new URL(url).hostname,
-          image: imageUrl,
-          url: url
-        };
-        console.log('[MediaEmbed] Metadata creada:', metadata);
-      } else {
-        // Fallback si Microlink falla
-        console.log('[MediaEmbed] Microlink falló, usando fallback');
+      } catch (apiError) {
+        console.log('[MediaEmbed] API de validación falló, usando Microlink fallback:', apiError);
+      }
+      
+      // Fallback a Microlink si el API falla
+      try {
+        await fetchMetadataWithMicrolink(url);
+      } catch (microlinkError) {
+        console.log('[MediaEmbed] Microlink también falló, usando fallback manual:', microlinkError);
         createFallbackMetadata(url);
       }
+      
     } catch (err) {
       console.error('[MediaEmbed] Error fetching metadata:', err);
-      // Si falla por timeout o error, crear metadata fallback
       createFallbackMetadata(url);
     } finally {
       loading = false;
+    }
+  }
+  
+  // Método original con Microlink como fallback
+  async function fetchMetadataWithMicrolink(url: string) {
+    // Timeout de 8 segundos
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    console.log('[MediaEmbed] Llamando a Microlink API...');
+    const response = await fetch(
+      `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeoutId);
+    
+    const data = await response.json();
+    console.log('[MediaEmbed] Respuesta de Microlink:', data);
+    
+    if (data.status === 'success' && data.data) {
+      let imageUrl = data.data.image?.url || '';
+      
+      // Fallbacks específicos por plataforma
+      if (url.includes('instagram.com')) {
+        if (!imageUrl || imageUrl.includes('static/images')) {
+          imageUrl = 'https://i.imgur.com/qj8nF2J.jpeg';
+        }
+      } else if (url.includes('tiktok.com')) {
+        // TikTok suele tener imagen en los metadatos
+        if (!imageUrl) {
+          imageUrl = 'https://placehold.co/220x130/000/FFF?text=TikTok';
+        }
+      } else if (url.includes('twitter.com') || url.includes('x.com')) {
+        // Twitter/X suele tener imagen
+        if (!imageUrl) {
+          imageUrl = 'https://placehold.co/220x130/1DA1F2/FFF?text=X';
+        }
+      } else if (url.includes('facebook.com')) {
+        if (!imageUrl) {
+          imageUrl = 'https://placehold.co/220x130/1877F2/FFF?text=Facebook';
+        }
+      } else if (url.includes('pinterest.com')) {
+        if (!imageUrl) {
+          imageUrl = 'https://placehold.co/220x130/E60023/FFF?text=Pinterest';
+        }
+      }
+      
+      // Fallback genérico
+      if (!imageUrl) {
+        imageUrl = 'https://placehold.co/220x130/333/FFF?text=?';
+      }
+      
+      metadata = {
+        title: data.data.title || 'Publicación detectada',
+        description: data.data.description || new URL(url).hostname,
+        image: imageUrl,
+        url: url
+      };
+      console.log('[MediaEmbed] Metadata creada:', metadata);
+    } else {
+      // Fallback si Microlink falla
+      console.log('[MediaEmbed] Microlink falló, usando fallback');
+      createFallbackMetadata(url);
     }
   }
   
@@ -225,7 +355,10 @@
         image: placeholder,
         url: url
       };
-    } catch {
+      embedType = 'generic'; // Asegurar que se muestre como card
+      console.log('[MediaEmbed] Fallback metadata creada:', metadata);
+    } catch (err) {
+      console.error('[MediaEmbed] Error creando fallback:', err);
       error = true;
     }
   }
@@ -260,30 +393,36 @@
         </a>
       {/if}
     </div>
-  {:else if embedType === 'youtube' || embedType === 'spotify' || embedType === 'vimeo' || embedType === 'soundcloud' || embedType === 'twitch'}
+  {:else if embedType === 'youtube' || embedType === 'spotify' || embedType === 'vimeo' || embedType === 'soundcloud' || embedType === 'twitch' || embedType === 'megaphone' || embedType === 'omny' || embedType === 'slideshare'}
     <div class="embed-container">
       {@html embedHTML}
     </div>
-  {:else if embedType === 'generic' && metadata}
+  {:else if (embedType === 'generic' || embedType === 'text' || embedType === 'website') && metadata}
     <button 
-      class="mini-card" 
+      class="mini-card linkedin-card" 
       onclick={() => window.open(metadata.url, '_blank')}
       type="button"
       aria-label={`Abrir ${metadata.title}`}
     >
-      <img 
-        src={metadata.image} 
-        alt={metadata.title}
-        onerror={(e) => {
-          const img = e.target as HTMLImageElement;
-          if (img.src !== 'https://placehold.co/220x130/333/FFF?text=?') {
-            img.src = 'https://placehold.co/220x130/333/FFF?text=?';
-          }
-        }}
-      />
-      <div class="info">
+      <div class="linkedin-image">
+        <img 
+          src={metadata.image} 
+          alt={metadata.title}
+          loading="lazy"
+          onerror={(e) => {
+            const img = e.target as HTMLImageElement;
+            const fallbackUrl = 'https://placehold.co/220x130/333/FFF?text=?';
+            if (img.src !== fallbackUrl && !img.src.includes(fallbackUrl)) {
+              img.src = fallbackUrl;
+            }
+          }}
+        />
+      </div>
+      <div class="linkedin-content">
         <h4>{metadata.title}</h4>
-        <p>{metadata.description}</p>
+        {#if metadata.description}
+          <p>{metadata.description}</p>
+        {/if}
       </div>
     </button>
   {/if}
@@ -403,6 +542,101 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  
+  /* Layout vertical: imagen arriba, texto abajo */
+  .linkedin-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background: rgba(44, 44, 46, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    min-height: 150px;
+  }
+  
+  .linkedin-card:hover {
+    transform: none;
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(44, 44, 46, 1);
+  }
+  
+  .linkedin-image {
+    width: 100%;
+    height: 120px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  
+  .linkedin-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 1;
+  }
+  
+  .linkedin-content {
+    flex: 1;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    text-align: center;
+    min-width: 0;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+  }
+  
+  .linkedin-content h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    line-height: 1.4;
+  }
+  
+  .linkedin-content p {
+    margin: 0;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    line-clamp: 1;
+    line-height: 1.3;
+  }
+  
+  /* Ajustes para modo preview (espacios pequeños) */
+  .preview-mode .linkedin-card {
+    min-height: 130px;
+  }
+  
+  .preview-mode .linkedin-image {
+    width: 100%;
+    height: 90px;
+  }
+  
+  .preview-mode .linkedin-content {
+    padding: 6px 8px;
+    gap: 2px;
+  }
+  
+  .preview-mode .linkedin-content h4 {
+    font-size: 11px;
+  }
+  
+  .preview-mode .linkedin-content p {
+    font-size: 10px;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
   
   .error-state {

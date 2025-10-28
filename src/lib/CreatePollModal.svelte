@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
-  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2 } from 'lucide-svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { currentUser } from '$lib/stores';
   import { apiPost } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
@@ -154,6 +154,25 @@
   
   let selectedColor = $derived(`hsl(${selectedHue}, ${selectedSaturation}%, 55%)`);
   
+  // Estado para preview interactivo en opciones
+  let activePreviewOption = $state<string | null>(null);
+  
+  // Detectar si es dispositivo táctil
+  let isTouchDevice = $state(false);
+  
+  // Estado para previews que están cargando
+  let loadingPreviews = $state<Set<string>>(new Set());
+  
+  // Variables derivadas para el título sin URL
+  let detectedTitleUrl = $derived(extractUrlFromText(title));
+  let titleWithoutUrl = $derived(detectedTitleUrl ? title.replace(detectedTitleUrl, ' ').replace(/\s+/g, ' ').trim() : title);
+  
+  // Función helper para obtener label sin URL (reactiva)
+  function getLabelWithoutUrl(label: string): string {
+    const url = extractUrlFromText(label);
+    return url ? label.replace(url, ' ').replace(/\s+/g, ' ').trim() : label;
+  }
+  
   // Paginación - máximo 4 opciones por página como en BottomSheet
   const ITEMS_PER_PAGE = 4;
   
@@ -168,6 +187,9 @@
   // Función para cambiar acordeón activo
   function setActive(index: number) {
     const wasAlreadyActive = activeAccordionIndex === index;
+    
+    // Desactivar modo interactivo al cambiar de opción
+    activePreviewOption = null;
     
     // Si se hace click en la ya activa, también enfocar si está vacía
     // Si se hace click en otra, cambiar
@@ -304,6 +326,36 @@
     return matches ? matches[0] : null;
   }
   
+  // Validar URL y generar preview
+  async function validateAndPreviewUrl(url: string): Promise<{ isValid: boolean; data?: any; error?: string }> {
+    if (!url || url.trim() === '') {
+      return { isValid: false, error: 'URL vacía' };
+    }
+    
+    try {
+      const response = await fetch('/api/validate-preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ url: url.trim() })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          return { isValid: true, data: data.data };
+        }
+      }
+      
+      return { isValid: false, error: 'URL no válida o no accesible' };
+      
+    } catch (err) {
+      console.error('[Validate URL] Error:', err);
+      return { isValid: false, error: 'Error al validar la URL' };
+    }
+  }
+  
   // Handle image file selection
   async function handleImageSelect(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -335,7 +387,7 @@
   }
   
   // Validar formulario
-  function validate(): boolean {
+  async function validate(): Promise<boolean> {
     errors = {};
     
     if (!title.trim()) {
@@ -348,6 +400,23 @@
     
     if (description && description.length > 500) {
       errors.description = 'La descripción no puede superar 500 caracteres';
+    }
+    
+    // Validar URL principal si existe
+    if (imageUrl) {
+      const urlValidation = await validateAndPreviewUrl(imageUrl);
+      if (!urlValidation.isValid) {
+        errors.image = urlValidation.error || 'URL no válida';
+      }
+    }
+    
+    // Validar URL extraída del título
+    const titleUrl = extractUrlFromText(title);
+    if (titleUrl) {
+      const urlValidation = await validateAndPreviewUrl(titleUrl);
+      if (!urlValidation.isValid) {
+        errors.title = 'La URL en el título no es válida: ' + (urlValidation.error || 'URL no accesible');
+      }
     }
     
     // Validar opciones (solo las que tienen contenido)
@@ -371,6 +440,17 @@
       errors.options = 'No puedes tener opciones duplicadas';
     }
     
+    // Validar URLs de las opciones
+    for (const opt of validOptions) {
+      const optionUrl = extractUrlFromText(opt.label) || opt.imageUrl;
+      if (optionUrl) {
+        const urlValidation = await validateAndPreviewUrl(optionUrl);
+        if (!urlValidation.isValid) {
+          errors[`option_${opt.id}`] = 'URL no válida: ' + (urlValidation.error || 'URL no accesible');
+        }
+      }
+    }
+    
     return Object.keys(errors).length === 0;
   }
   
@@ -392,7 +472,9 @@
     
     console.log('✅ Usuario autenticado, continuando con publicación');
     
-    if (!validate()) {
+    // Validar formulario (ahora es async)
+    const isValid = await validate();
+    if (!isValid) {
       console.error('❌ Validación fallida:', errors);
       return;
     }
@@ -759,6 +841,11 @@
     }
   }
   
+  // Detectar si es dispositivo táctil al montar el componente
+  onMount(() => {
+    isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  });
+  
   // Funciones para manejo de swipe con pointer events
   function handlePointerDown(e: PointerEvent) {
     // No procesar si empieza en un textarea, input o botón
@@ -945,13 +1032,19 @@
     </div>
     
     <!-- Errores generales -->
-    {#if errors.title || errors.options || errors.submit}
+    {#if errors.title || errors.options || errors.submit || errors.image || errors.description}
       <div class="error-banner">
         {#if errors.title}
           <p>❌ {errors.title}</p>
         {/if}
         {#if errors.options}
           <p>❌ {errors.options}</p>
+        {/if}
+        {#if errors.image}
+          <p>❌ {errors.image}</p>
+        {/if}
+        {#if errors.description}
+          <p>❌ {errors.description}</p>
         {/if}
         {#if errors.submit}
           <p>❌ {errors.submit}</p>
@@ -970,9 +1063,43 @@
                 class="poll-title-input"
                 class:error={errors.title}
                 placeholder="¿Cuál es tu pregunta?"
-                bind:value={title}
+                value={titleWithoutUrl}
+                oninput={(e) => {
+                  const newValue = (e.target as HTMLTextAreaElement).value;
+                  const currentUrl = extractUrlFromText(title);
+                  
+                  // Si había URL, mantenerla al final; si no, solo el texto
+                  if (currentUrl) {
+                    title = newValue ? `${newValue} ${currentUrl}` : currentUrl;
+                  } else {
+                    title = newValue;
+                  }
+                  
+                  // Sincronizar el value del textarea solo si detectamos URL nueva o cambio de URL
+                  const textarea = e.target as HTMLTextAreaElement;
+                  const updatedUrl = extractUrlFromText(title);
+                  if (updatedUrl && updatedUrl !== currentUrl) {
+                    const currentTitleWithoutUrl = title.replace(updatedUrl, '').trim();
+                    const cursorPos = textarea.selectionStart;
+                    textarea.value = currentTitleWithoutUrl;
+                    textarea.setSelectionRange(cursorPos, cursorPos);
+                  }
+                }}
                 rows="2"
-                onpaste={handleTitlePaste}
+                onpaste={(e) => {
+                  handleTitlePaste(e);
+                  // Después de pegar, sincronizar el textarea solo si hay URL
+                  setTimeout(() => {
+                    const textarea = e.target as HTMLTextAreaElement;
+                    const updatedUrl = extractUrlFromText(title);
+                    if (updatedUrl) {
+                      const currentTitleWithoutUrl = title.replace(updatedUrl, '').trim();
+                      const cursorPos = textarea.selectionStart;
+                      textarea.value = currentTitleWithoutUrl;
+                      textarea.setSelectionRange(cursorPos, cursorPos);
+                    }
+                  }, 10);
+                }}
               ></textarea>
               <div class="info-tooltip-container">
                 <button
@@ -1024,8 +1151,37 @@
           <!-- Preview multimedia del título principal -->
           {#if extractUrlFromText(title) || imageUrl}
             {@const detectedMainUrl = extractUrlFromText(title)}
+            {@const isLoading = loadingPreviews.has('title')}
             <div class="main-media-preview">
-              <MediaEmbed url={detectedMainUrl || imageUrl || ''} mode="full" width="100%" height="100%" />
+              <button
+                type="button"
+                class="remove-preview-btn"
+                onclick={() => {
+                  // Limpiar la URL del título o imageUrl
+                  const urlInTitle = extractUrlFromText(title);
+                  if (urlInTitle) {
+                    // Solo eliminar la URL, mantener el resto del texto
+                    title = title.replace(urlInTitle, ' ').replace(/\s+/g, ' ').trim();
+                  } else if (imageUrl) {
+                    imageUrl = '';
+                  }
+                  // Limpiar estado de carga
+                  loadingPreviews.delete('title');
+                  loadingPreviews = loadingPreviews;
+                }}
+                title="Eliminar preview"
+                aria-label="Eliminar preview"
+              >
+                <X class="w-5 h-5" />
+              </button>
+              {#if isLoading}
+                <div class="preview-loading">
+                  <Loader2 class="w-8 h-8 animate-spin" />
+                  <p>Cargando preview...</p>
+                </div>
+              {:else}
+                <MediaEmbed url={detectedMainUrl || imageUrl || ''} mode="full" width="100%" height="100%" />
+              {/if}
             </div>
           {/if}
         
@@ -1047,36 +1203,163 @@
                 onclick={() => setActive(index)}
               >
                 {#if activeAccordionIndex === index && (detectedUrl || option.imageUrl)}
+                  {@const isOptionLoading = loadingPreviews.has(option.id)}
                   <div 
                     role="button"
                     tabindex="-1"
-                    class="option-media-background" 
-                    onclick={(e) => e.stopPropagation()}
+                    class="option-media-background {activePreviewOption === option.id ? 'interactive-mode' : ''}" 
+                    onmouseenter={() => {
+                      // Solo hover en dispositivos no táctiles
+                      if (!isTouchDevice) {
+                        activePreviewOption = option.id;
+                      }
+                    }}
+                    onmouseleave={() => {
+                      // Solo hover en dispositivos no táctiles
+                      if (!isTouchDevice) {
+                        activePreviewOption = null;
+                      }
+                    }}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      // En dispositivos táctiles, toggle con click
+                      if (isTouchDevice) {
+                        activePreviewOption = activePreviewOption === option.id ? null : option.id;
+                      }
+                    }}
                     onkeydown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.stopPropagation();
                       }
                     }}
                   >
-                    <MediaEmbed url={detectedUrl || option.imageUrl || ''} mode="full" />
-                    <div class="media-overlay"></div>
+                    <div
+                      role="button"
+                      tabindex="0"
+                      class="remove-option-preview-btn"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        // Desactivar modo interactivo
+                        activePreviewOption = null;
+                        // Limpiar la URL de la opción, mantener el resto del texto
+                        const urlInLabel = extractUrlFromText(option.label);
+                        if (urlInLabel) {
+                          // Reemplazar la URL y limpiar espacios múltiples
+                          option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
+                        } else if (option.imageUrl) {
+                          option.imageUrl = '';
+                        }
+                        // Limpiar estado de carga
+                        loadingPreviews.delete(option.id);
+                        loadingPreviews = loadingPreviews;
+                        // Enfocar el textarea de esta opción después de que reaparezca
+                        setTimeout(() => {
+                          const input = optionInputs[option.id];
+                          if (input) {
+                            input.focus();
+                          }
+                        }, 50);
+                      }}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          activePreviewOption = null;
+                          const urlInLabel = extractUrlFromText(option.label);
+                          if (urlInLabel) {
+                            // Reemplazar la URL y limpiar espacios múltiples
+                            option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
+                          } else if (option.imageUrl) {
+                            option.imageUrl = '';
+                          }
+                          // Limpiar estado de carga
+                          loadingPreviews.delete(option.id);
+                          loadingPreviews = loadingPreviews;
+                          // Enfocar el textarea de esta opción después de que reaparezca
+                          setTimeout(() => {
+                            const input = optionInputs[option.id];
+                            if (input) {
+                              input.focus();
+                            }
+                          }, 50);
+                        }
+                      }}
+                      title="Eliminar preview"
+                      aria-label="Eliminar preview"
+                    >
+                      <X class="w-4 h-4" />
+                    </div>
+                    {#if isOptionLoading}
+                      <div class="preview-loading">
+                        <Loader2 class="w-6 h-6 animate-spin" />
+                        <p class="text-sm">Cargando...</p>
+                      </div>
+                    {:else}
+                      <MediaEmbed url={detectedUrl || option.imageUrl || ''} mode="full" />
+                    {/if}
+                    <div class="media-overlay {activePreviewOption === option.id ? 'hidden' : ''}"></div>
                   </div>
                 {/if}
-                <div class="card-header">
+                <div class="card-header {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
                   {#if activeAccordionIndex === index}
-                    <div class="char-counter">{option.label.length}/200</div>
+                    {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
+                    {@const currentUrl = extractUrlFromText(option.label)}
+                    <div class="char-counter">{labelWithoutUrl.length}/200</div>
+                    <textarea
+                      class="question-title editable"
+                      class:rating-emoji={pollType === 'rating' && /^[\p{Emoji}\s]+$/u.test(option.label || '')}
+                      class:error={errors[`option_${option.id}`]}
+                      placeholder="Opción {globalIndex + 1}"
+                      value={labelWithoutUrl}
+                      oninput={(e) => {
+                        const newValue = (e.target as HTMLTextAreaElement).value;
+                        const currentUrl = extractUrlFromText(option.label);
+                        
+                        // Si había URL, mantenerla al final; si no, solo el texto
+                        if (currentUrl) {
+                          option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
+                        } else {
+                          option.label = newValue;
+                        }
+                        
+                        // Sincronizar el value del textarea solo si detectamos URL nueva o cambio de URL
+                        const textarea = e.target as HTMLTextAreaElement;
+                        const updatedUrl = extractUrlFromText(option.label);
+                        if (updatedUrl && updatedUrl !== currentUrl) {
+                          const newLabelWithoutUrl = option.label.replace(updatedUrl, '').trim();
+                          const cursorPos = textarea.selectionStart;
+                          textarea.value = newLabelWithoutUrl;
+                          textarea.setSelectionRange(cursorPos, cursorPos);
+                        }
+                      }}
+                      onpaste={(e) => {
+                        // Después de pegar, sincronizar el textarea solo si hay URL
+                        setTimeout(() => {
+                          const textarea = optionInputs[option.id];
+                          if (textarea) {
+                            const updatedUrl = extractUrlFromText(option.label);
+                            if (updatedUrl) {
+                              const newLabelWithoutUrl = option.label.replace(updatedUrl, '').trim();
+                              const cursorPos = textarea.selectionStart;
+                              textarea.value = newLabelWithoutUrl;
+                              textarea.setSelectionRange(cursorPos, cursorPos);
+                            }
+                          }
+                        }, 10);
+                      }}
+                      bind:this={optionInputs[option.id]}
+                      maxlength="200"
+                      onclick={(e) => e.stopPropagation()}
+                    ></textarea>
                   {/if}
-                  <textarea
-                    class="question-title editable"
-                    class:rating-emoji={pollType === 'rating' && /^[\p{Emoji}\s]+$/u.test(option.label || '')}
-                    placeholder="Opción {globalIndex + 1}"
-                    bind:value={option.label}
-                    bind:this={optionInputs[option.id]}
-                    maxlength="200"
-                    onclick={(e) => e.stopPropagation()}
-                  ></textarea>
+                  {#if errors[`option_${option.id}`] && activeAccordionIndex === index}
+                    <div class="option-error">
+                      <span class="error-icon">⚠️</span>
+                      <span class="error-text">{errors[`option_${option.id}`]}</span>
+                    </div>
+                  {/if}
                 </div>
-                <div class="card-content">
+                <div class="card-content {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
                   <div class="percentage-display {activeAccordionIndex === index ? 'is-active' : ''}">
                     <span
                       class="percentage-large"
@@ -1109,6 +1392,35 @@
                     <X class="w-3.5 h-3.5" />
                   </div>
                 {/if}
+                <!-- Botón para toggle preview en móvil -->
+                {#if isTouchDevice && (detectedUrl || option.imageUrl)}
+                  <div
+                    role="button"
+                    tabindex="0"
+                    class="toggle-preview-badge"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      activePreviewOption = activePreviewOption === option.id ? null : option.id;
+                    }}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        activePreviewOption = activePreviewOption === option.id ? null : option.id;
+                      }
+                    }}
+                    title={activePreviewOption === option.id ? "Mostrar controles" : "Ocultar controles"}
+                    aria-label={activePreviewOption === option.id ? "Mostrar controles" : "Ocultar controles"}
+                  >
+                    {#if activePreviewOption === option.id}
+                      <Eye class="w-4 h-4" />
+                    {:else}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                      </svg>
+                    {/if}
+                  </div>
+                {/if}
                 <div
                   role="button"
                   tabindex="0"
@@ -1137,19 +1449,9 @@
           </div>
         </div>
         
-        <!-- Botón añadir opción debajo -->
-        {#if options.length < 10}
-          <button
-            type="button"
-            class="add-option-button-below"
-            onclick={addOption}
-          >
-            <Plus class="w-5 h-5" />
-            <span>Añadir opción</span>
-          </button>
-        {/if}
-        
-        <!-- Indicadores de paginación -->
+        <!-- Contenedor para paginación y botón flotante -->
+        <div class="pagination-container">
+          <!-- Indicadores de paginación -->
         {#if totalPages > 1}
           <div class="pagination-dots">
             {#each Array(totalPages) as _, pageIndex}
@@ -1163,6 +1465,24 @@
                 aria-label="Página {pageIndex + 1}"
               ></button>
             {/each}
+          </div>
+        {/if}
+        </div>
+        
+        <!-- Botón flotante abajo a la derecha -->
+        {#if options.length < 10}
+          {@const nextColor = COLORS[options.length % COLORS.length]}
+          <div class="add-option-wrapper">
+            <button
+              type="button"
+              class="add-option-floating-bottom"
+              style="border-color: {nextColor};"
+              onclick={addOption}
+              title="Añadir opción"
+              aria-label="Añadir nueva opción"
+            >
+              <Plus class="w-6 h-6" />
+            </button>
           </div>
         {/if}
         
@@ -1815,6 +2135,7 @@
   
   /* Contenedor de tarjetas con botón añadir */
   .vote-cards-container {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0;
@@ -2011,7 +2332,7 @@
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(10px);
     border: none;
-    border-radius: 50%;
+    border-radius: 4px;
     color: rgba(255, 255, 255, 0.8);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -2113,6 +2434,38 @@
     transition: font-size 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
+  /* Botón para toggle preview en móvil */
+  .toggle-preview-badge {
+    position: absolute;
+    bottom: 16px;
+    right: 60px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: all 0.2s ease;
+    pointer-events: auto;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .vote-card.is-active .toggle-preview-badge {
+    right: 60px;
+  }
+  
+  .toggle-preview-badge:hover {
+    background: rgba(59, 130, 246, 0.8);
+    border-color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.15);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  }
+  
   .color-picker-badge-absolute {
     position: absolute;
     bottom: 16px;
@@ -2121,15 +2474,13 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(10px);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    z-index: 2;
-    flex-shrink: 0;
+    border: 2px solid rgba(255, 255, 255, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: all 0.2s ease;
     pointer-events: auto;
   }
   
@@ -2240,6 +2591,33 @@
     }
   }
   
+  /* Indicador de carga del preview */
+  .preview-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.9);
+    z-index: 2;
+  }
+  
+  .preview-loading p {
+    font-size: 14px;
+    margin: 0;
+  }
+  
+  .preview-loading p.text-sm {
+    font-size: 12px;
+  }
+  
   /* Preview multimedia del título principal */
   .main-media-preview {
     width: 100%;
@@ -2254,6 +2632,35 @@
     z-index: 1;
   }
   
+  .remove-preview-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+  }
+  
+  .remove-preview-btn:hover {
+    background: rgba(239, 68, 68, 0.9);
+    transform: scale(1.1);
+  }
+  
+  .remove-preview-btn:active {
+    transform: scale(0.95);
+  }
+  
   /* Estilos para MediaEmbed de fondo en opciones */
   .option-media-background {
     position: absolute;
@@ -2264,6 +2671,41 @@
     border-radius: 16px;
     overflow: hidden;
     z-index: 0;
+    transition: z-index 0.3s ease;
+  }
+  
+  /* Modo interactivo - traer el preview al frente */
+  .option-media-background.interactive-mode {
+    z-index: 5;
+    cursor: default;
+  }
+  
+  .remove-option-preview-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 12;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .remove-option-preview-btn:hover {
+    background: rgba(239, 68, 68, 0.9);
+    transform: scale(1.1);
+  }
+  
+  .remove-option-preview-btn:active {
+    transform: scale(0.95);
   }
   
   .media-overlay {
@@ -2280,36 +2722,64 @@
     );
     pointer-events: none;
     z-index: 1;
+    transition: opacity 0.3s ease;
   }
   
-  .add-option-button-below {
+  .media-overlay.hidden {
+    opacity: 0;
+  }
+  
+  /* Ocultar elementos cuando el preview está en modo interactivo */
+  .hidden-for-preview {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  
+  /* Wrapper del botón flotante */
+  .add-option-wrapper {
+    position: relative;
     width: 100%;
-    padding: 14px 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px dashed rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.7);
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 20px;
+    margin-top: 8px;
+  }
+  
+  /* Botón flotante abajo a la derecha */
+  .add-option-floating-bottom {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: rgba(20, 20, 25, 0.98);
+    border: none;
+    border-bottom: 3px solid;
+    color: rgba(255, 255, 255, 0.95);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    margin-top: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    z-index: 10;
   }
   
-  .add-option-button-below:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.3);
-    color: rgba(255, 255, 255, 0.95);
+  .add-option-floating-bottom:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+    background: rgba(30, 30, 35, 1);
   }
   
-  .add-option-button-below:active {
+  .add-option-floating-bottom:active {
     transform: translateY(0);
+  }
+  
+  /* Contenedor de paginación y botón */
+  .pagination-container {
+    position: relative;
+    width: 100%;
   }
   
   /* Paginación - Exacto como BottomSheet */
@@ -2912,6 +3382,42 @@
   
   .copy-format-btn:active {
     transform: translateY(0);
+  }
+  
+  /* Option error styles */
+  .option-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    animation: slideDown 0.2s ease-out;
+  }
+  
+  .option-error .error-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  
+  .option-error .error-text {
+    font-size: 11px;
+    color: rgba(239, 68, 68, 0.9);
+    line-height: 1.3;
+    word-break: break-word;
+  }
+  
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   
   @media (max-width: 480px) {
