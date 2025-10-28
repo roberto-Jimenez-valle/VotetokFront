@@ -411,15 +411,32 @@
           src={metadata.image} 
           alt={metadata.title}
           loading="lazy"
+          data-original-url={url}
           onerror={(e) => {
             const img = e.target as HTMLImageElement;
             const fallbackUrl = 'https://placehold.co/220x130/333/FFF?text=?';
             
+            // Extraer URL original si viene del proxy
+            let originalImageUrl = img.src;
+            if (img.src.includes('/api/media-proxy?url=')) {
+              try {
+                const proxyUrl = new URL(img.src, window.location.origin);
+                const urlParam = proxyUrl.searchParams.get('url');
+                if (urlParam) {
+                  originalImageUrl = decodeURIComponent(urlParam);
+                  console.log('[MediaEmbed] URL original extraída del proxy:', originalImageUrl);
+                }
+              } catch (err) {
+                console.warn('[MediaEmbed] No se pudo extraer URL original del proxy');
+              }
+            }
+            
             // Emitir evento antes de aplicar fallback
             if (img.src !== fallbackUrl && !img.src.includes(fallbackUrl)) {
-              console.log('[MediaEmbed] 🚨 Imagen falló:', img.src);
+              console.log('[MediaEmbed] 🚨 Imagen falló:', originalImageUrl);
+              console.log('[MediaEmbed] 📤 Emitiendo evento imageerror');
               dispatch('imageerror', { 
-                url: img.src,
+                url: originalImageUrl,  // URL original, no la del proxy
                 originalUrl: url 
               });
               img.src = fallbackUrl;
