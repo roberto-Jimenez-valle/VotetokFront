@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
+  
+  const dispatch = createEventDispatcher();
   
   interface Props {
     url: string;
@@ -412,7 +414,14 @@
           onerror={(e) => {
             const img = e.target as HTMLImageElement;
             const fallbackUrl = 'https://placehold.co/220x130/333/FFF?text=?';
+            
+            // Emitir evento antes de aplicar fallback
             if (img.src !== fallbackUrl && !img.src.includes(fallbackUrl)) {
+              console.log('[MediaEmbed] 🚨 Imagen falló:', img.src);
+              dispatch('imageerror', { 
+                url: img.src,
+                originalUrl: url 
+              });
               img.src = fallbackUrl;
             }
           }}

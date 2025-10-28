@@ -267,6 +267,9 @@ function getPlatformFallback(url: string): string {
   if (url.includes('pinterest.com')) {
     return 'https://placehold.co/220x130/E60023/FFF?text=Pinterest';
   }
+  if (url.includes('giphy.com')) {
+    return 'https://placehold.co/220x130/000000/00FF99?text=GIPHY';
+  }
   
   return 'https://placehold.co/220x130/333/FFF?text=?';
 }

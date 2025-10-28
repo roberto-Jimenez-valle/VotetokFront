@@ -250,6 +250,9 @@ const optimized = await sharp(buffer)
 - ✅ Pixabay (`cdn.pixabay.com`)
 - ✅ Picsum Photos (`picsum.photos`)
 
+### GIFs Animados
+- ✅ Giphy (`media.giphy.com`, `i.giphy.com`, `media0-4.giphy.com`)
+
 ### CDNs de Video
 - ✅ Vimeo CDN (`i.vimeocdn.com`)
 - ✅ YouTube CDN (`i.ytimg.com`, `img.youtube.com`)
@@ -269,7 +272,7 @@ const optimized = await sharp(buffer)
 - ✅ CloudFront (`cloudfront.net`)
 - ✅ GitHub (`githubusercontent.com`)
 
-**Total**: 25+ dominios configurados
+**Total**: 30+ dominios configurados (incluyendo Giphy)
 
 ---
 

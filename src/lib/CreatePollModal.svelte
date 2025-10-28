@@ -6,6 +6,7 @@
   import { apiPost } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
+  import { giphyGifUrl } from '$lib/services/giphy';
   
   const dispatch = createEventDispatcher();
   
@@ -162,6 +163,9 @@
   
   // Estado para previews que están cargando
   let loadingPreviews = $state<Set<string>>(new Set());
+  
+  // Estado para rastrear URLs que ya fallaron y se reemplazaron con Giphy
+  let failedUrls = $state<Map<string, string>>(new Map());
   
   // Variables derivadas para el título sin URL
   let detectedTitleUrl = $derived(extractUrlFromText(title));
@@ -354,6 +358,67 @@
       console.error('[Validate URL] Error:', err);
       return { isValid: false, error: 'Error al validar la URL' };
     }
+  }
+  
+  /**
+   * Reemplazar automáticamente una URL de imagen rota con un GIF de Giphy
+   * @param optionId - ID de la opción que falló
+   * @param optionLabel - Texto de la opción para buscar en Giphy
+   * @param failedUrl - URL que falló
+   */
+  async function replaceWithGiphyFallback(optionId: string, optionLabel: string, failedUrl: string) {
+    // Evitar loops infinitos: si ya intentamos reemplazar esta URL, no hacerlo de nuevo
+    if (failedUrls.has(failedUrl)) {
+      console.log('[Giphy Fallback] Ya se intentó reemplazar:', failedUrl);
+      return;
+    }
+    
+    // Extraer texto limpio sin URL para usar como término de búsqueda
+    const searchTerm = getLabelWithoutUrl(optionLabel).trim();
+    
+    if (!searchTerm) {
+      console.warn('[Giphy Fallback] No hay texto para buscar GIF');
+      return;
+    }
+    
+    console.log(`[Giphy Fallback] 🎬 Buscando GIF para: "${searchTerm}"`);
+    
+    try {
+      // Buscar GIF en Giphy usando el texto de la opción
+      const gifUrl = await giphyGifUrl(searchTerm);
+      
+      if (gifUrl) {
+        console.log(`[Giphy Fallback] ✅ GIF encontrado:`, gifUrl);
+        
+        // Marcar URL como fallida para evitar intentarlo de nuevo
+        failedUrls.set(failedUrl, gifUrl);
+        
+        // Encontrar la opción y reemplazar la URL
+        const option = options.find(opt => opt.id === optionId);
+        if (option) {
+          // Reemplazar la URL vieja con la de Giphy
+          option.label = option.label.replace(failedUrl, gifUrl);
+          
+          console.log(`[Giphy Fallback] ✅ Opción "${searchTerm}" actualizada con GIF de Giphy`);
+        }
+      } else {
+        console.warn(`[Giphy Fallback] ❌ No se encontró GIF para: "${searchTerm}"`);
+      }
+    } catch (error) {
+      console.error('[Giphy Fallback] Error buscando GIF:', error);
+    }
+  }
+  
+  /**
+   * Handler para cuando una imagen de MediaEmbed falla
+   * Se llama desde el evento onerror del MediaEmbed
+   */
+  function handleImageLoadError(optionId: string, optionLabel: string, imageUrl: string) {
+    console.log(`[Image Error] 🚨 Imagen falló para opción: "${getLabelWithoutUrl(optionLabel)}"`);
+    console.log(`[Image Error] URL fallida:`, imageUrl);
+    
+    // Reemplazar automáticamente con Giphy
+    replaceWithGiphyFallback(optionId, optionLabel, imageUrl);
   }
   
   // Handle image file selection
@@ -1295,7 +1360,11 @@
                         <p class="text-sm">Cargando...</p>
                       </div>
                     {:else}
-                      <MediaEmbed url={detectedUrl || option.imageUrl || ''} mode="full" />
+                      <MediaEmbed 
+                        url={detectedUrl || option.imageUrl || ''} 
+                        mode="full"
+                        on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
+                      />
                     {/if}
                     <div class="media-overlay {activePreviewOption === option.id ? 'hidden' : ''}"></div>
                   </div>

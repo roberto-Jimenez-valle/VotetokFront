@@ -33,6 +33,16 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     'pixabay.com',
     'picsum.photos',
     
+    // Giphy (GIFs animados)
+    'media.giphy.com',
+    'giphy.com',
+    'i.giphy.com',
+    'media0.giphy.com',
+    'media1.giphy.com',
+    'media2.giphy.com',
+    'media3.giphy.com',
+    'media4.giphy.com',
+    
     // CDNs de video populares
     'i.vimeocdn.com',
     'vimeocdn.com',

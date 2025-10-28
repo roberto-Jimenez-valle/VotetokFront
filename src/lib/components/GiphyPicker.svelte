@@ -1,0 +1,431 @@
+<script lang="ts">
+  import { searchGiphy, getTrendingGifs, getBestGifUrl, type GiphyGif } from '$lib/services/giphy';
+  import { Search, Loader2, TrendingUp } from 'lucide-svelte';
+  
+  // Props
+  interface Props {
+    onSelect: (gifUrl: string) => void;
+    onClose?: () => void;
+  }
+  
+  let { onSelect, onClose }: Props = $props();
+  
+  // Estado
+  let searchTerm = $state('');
+  let gifs = $state<GiphyGif[]>([]);
+  let isLoading = $state(false);
+  let showTrending = $state(true);
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  
+  // Cargar trending al inicio
+  $effect(() => {
+    if (showTrending) {
+      loadTrending();
+    }
+  });
+  
+  async function loadTrending() {
+    isLoading = true;
+    try {
+      gifs = await getTrendingGifs(20, 'g');
+      showTrending = true;
+    } catch (error) {
+      console.error('Error cargando trending GIFs:', error);
+    } finally {
+      isLoading = false;
+    }
+  }
+  
+  async function handleSearch() {
+    if (!searchTerm.trim()) {
+      loadTrending();
+      return;
+    }
+    
+    // Limpiar timer anterior
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    // Debounce de 500ms
+    debounceTimer = setTimeout(async () => {
+      isLoading = true;
+      showTrending = false;
+      
+      try {
+        gifs = await searchGiphy(searchTerm, {
+          limit: 20,
+          rating: 'g',
+          lang: 'es'
+        });
+      } catch (error) {
+        console.error('Error buscando GIFs:', error);
+      } finally {
+        isLoading = false;
+      }
+    }, 500);
+  }
+  
+  function selectGif(gif: GiphyGif) {
+    // Usar fixed_height para mejor rendimiento
+    const gifUrl = getBestGifUrl(gif, 'fixed_height');
+    onSelect(gifUrl);
+  }
+</script>
+
+<div class="giphy-picker">
+  <!-- Header -->
+  <div class="header">
+    <div class="title-row">
+      <h3>
+        {#if showTrending}
+          <TrendingUp class="icon" />
+        {:else}
+          <Search class="icon" />
+        {/if}
+        {showTrending ? 'GIFs Trending' : 'Buscar GIFs'}
+      </h3>
+      {#if onClose}
+        <button class="close-btn" onclick={onClose} type="button">✕</button>
+      {/if}
+    </div>
+    
+    <!-- Barra de búsqueda -->
+    <div class="search-bar">
+      <Search class="search-icon" />
+      <input
+        type="text"
+        bind:value={searchTerm}
+        oninput={handleSearch}
+        placeholder="Buscar GIFs en Giphy..."
+        class="search-input"
+      />
+      {#if searchTerm}
+        <button
+          class="clear-btn"
+          onclick={() => {
+            searchTerm = '';
+            loadTrending();
+          }}
+          type="button"
+        >
+          ✕
+        </button>
+      {/if}
+    </div>
+  </div>
+  
+  <!-- Loading -->
+  {#if isLoading}
+    <div class="loading">
+      <Loader2 class="spinner" />
+      <p>Cargando GIFs...</p>
+    </div>
+  {/if}
+  
+  <!-- Grid de GIFs -->
+  {#if !isLoading && gifs.length > 0}
+    <div class="gifs-grid">
+      {#each gifs as gif (gif.id)}
+        <button
+          class="gif-item"
+          onclick={() => selectGif(gif)}
+          type="button"
+          title={gif.title}
+        >
+          <img
+            src={getBestGifUrl(gif, 'fixed_height_small')}
+            alt={gif.title}
+            loading="lazy"
+          />
+          <div class="gif-overlay">
+            <span class="gif-title">{gif.title}</span>
+          </div>
+        </button>
+      {/each}
+    </div>
+  {/if}
+  
+  <!-- Empty state -->
+  {#if !isLoading && gifs.length === 0 && !showTrending}
+    <div class="empty-state">
+      <p>No se encontraron GIFs para "{searchTerm}"</p>
+      <button class="trending-btn" onclick={loadTrending} type="button">
+        <TrendingUp class="icon" />
+        Ver Trending
+      </button>
+    </div>
+  {/if}
+  
+  <!-- Footer -->
+  <div class="footer">
+    <span class="powered-by">
+      Powered by <strong>GIPHY</strong>
+    </span>
+  </div>
+</div>
+
+<style>
+  .giphy-picker {
+    display: flex;
+    flex-direction: column;
+    background: rgba(20, 20, 22, 0.98);
+    border-radius: 16px;
+    overflow: hidden;
+    max-height: 600px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .header {
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  :global(.icon) {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .close-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+  }
+  
+  .search-bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  
+  :global(.search-icon) {
+    position: absolute;
+    left: 12px;
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+  }
+  
+  .search-input {
+    width: 100%;
+    padding: 10px 40px 10px 40px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: white;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s;
+  }
+  
+  .search-input:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(0, 255, 153, 0.4);
+  }
+  
+  .search-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+  
+  .clear-btn {
+    position: absolute;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    color: white;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  
+  .clear-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  
+  :global(.spinner) {
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 12px;
+    color: #00ff99;
+  }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
+  .gifs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    max-height: 440px;
+  }
+  
+  .gif-item {
+    position: relative;
+    aspect-ratio: 1;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+  }
+  
+  .gif-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 255, 153, 0.3);
+  }
+  
+  .gif-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .gif-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+    padding: 8px 6px 6px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  
+  .gif-item:hover .gif-overlay {
+    opacity: 1;
+  }
+  
+  .gif-title {
+    font-size: 10px;
+    color: white;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    overflow: hidden;
+    line-height: 1.3;
+  }
+  
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  
+  .empty-state p {
+    margin: 0 0 16px;
+  }
+  
+  .trending-btn {
+    background: rgba(0, 255, 153, 0.15);
+    border: 1px solid rgba(0, 255, 153, 0.3);
+    border-radius: 8px;
+    padding: 10px 20px;
+    color: #00ff99;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  
+  .trending-btn:hover {
+    background: rgba(0, 255, 153, 0.25);
+    transform: translateY(-2px);
+  }
+  
+  .footer {
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.4);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+  }
+  
+  .powered-by {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  
+  .powered-by strong {
+    color: #00ff99;
+    font-weight: 700;
+  }
+  
+  /* Scrollbar personalizado */
+  .gifs-grid::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .gifs-grid::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+  }
+  
+  .gifs-grid::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 153, 0.3);
+    border-radius: 4px;
+  }
+  
+  .gifs-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 153, 0.5);
+  }
+</style>
