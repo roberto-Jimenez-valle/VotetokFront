@@ -6,7 +6,16 @@
   import { apiPost } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
+  import LinkPreview from '$lib/components/LinkPreview.svelte';
   import { giphyGifUrl } from '$lib/services/giphy';
+  import { 
+    extractUrls, 
+    fetchLinkPreviewCached, 
+    isDirectImage, 
+    isEmbeddableVideo,
+    getDomainName,
+    type LinkPreviewData
+  } from '$lib/services/linkPreview';
   
   const dispatch = createEventDispatcher();
   
@@ -166,6 +175,11 @@
   
   // Estado para rastrear URLs que ya fallaron y se reemplazaron con Giphy
   let failedUrls = $state<Map<string, string>>(new Map());
+  
+  // Estado para link previews detectados
+  let linkPreviews = $state<Map<string, LinkPreviewData>>(new Map());
+  let detectedTitlePreview = $state<LinkPreviewData | null>(null);
+  let optionPreviews = $state<Map<string, LinkPreviewData>>(new Map());
   
   // Variables derivadas para el título sin URL
   let detectedTitleUrl = $derived(extractUrlFromText(title));
@@ -330,26 +344,22 @@
     return matches ? matches[0] : null;
   }
   
-  // Validar URL y generar preview
+  // Validar URL y generar preview usando el nuevo sistema
   async function validateAndPreviewUrl(url: string): Promise<{ isValid: boolean; data?: any; error?: string }> {
     if (!url || url.trim() === '') {
       return { isValid: false, error: 'URL vacía' };
     }
     
     try {
-      const response = await fetch('/api/validate-preview', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ url: url.trim() })
-      });
+      // Intentar obtener preview del enlace
+      const preview = await fetchLinkPreviewCached(url.trim());
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data) {
-          return { isValid: true, data: data.data };
-        }
+      if (preview) {
+        // Guardar el preview en el mapa
+        linkPreviews.set(url, preview);
+        linkPreviews = linkPreviews;
+        
+        return { isValid: true, data: preview };
       }
       
       return { isValid: false, error: 'URL no válida o no accesible' };
@@ -357,6 +367,75 @@
     } catch (err) {
       console.error('[Validate URL] Error:', err);
       return { isValid: false, error: 'Error al validar la URL' };
+    }
+  }
+  
+  // Detectar y cargar preview automáticamente cuando se detecta URL en título
+  async function detectAndLoadTitlePreview(text: string) {
+    const urls = extractUrls(text);
+    console.log('🔍 [CreatePollModal] URLs detectadas en título:', urls);
+    
+    if (urls.length > 0) {
+      const url = urls[0];
+      console.log('🎯 [CreatePollModal] Cargando preview para:', url);
+      
+      // Solo cargar si es una URL nueva
+      if (detectedTitlePreview?.url !== url) {
+        loadingPreviews.add('title');
+        loadingPreviews = loadingPreviews;
+        
+        const preview = await fetchLinkPreviewCached(url);
+        console.log('📦 [CreatePollModal] Preview recibido:', {
+          hasPreview: !!preview,
+          title: preview?.title,
+          hasImage: !!preview?.image,
+          image: preview?.image,
+          type: preview?.type
+        });
+        
+        if (preview) {
+          detectedTitlePreview = preview;
+          linkPreviews.set(url, preview);
+          linkPreviews = linkPreviews;
+          console.log('✅ [CreatePollModal] detectedTitlePreview seteado:', detectedTitlePreview);
+        } else {
+          console.warn('❌ [CreatePollModal] Preview es null');
+        }
+        
+        loadingPreviews.delete('title');
+        loadingPreviews = loadingPreviews;
+      }
+    } else {
+      detectedTitlePreview = null;
+    }
+  }
+  
+  // Detectar y cargar preview para una opción
+  async function detectAndLoadOptionPreview(optionId: string, text: string) {
+    const urls = extractUrls(text);
+    if (urls.length > 0) {
+      const url = urls[0];
+      
+      // Solo cargar si es una URL nueva para esta opción
+      const currentPreview = optionPreviews.get(optionId);
+      if (currentPreview?.url !== url) {
+        loadingPreviews.add(optionId);
+        loadingPreviews = loadingPreviews;
+        
+        const preview = await fetchLinkPreviewCached(url);
+        if (preview) {
+          optionPreviews.set(optionId, preview);
+          optionPreviews = optionPreviews;
+          linkPreviews.set(url, preview);
+          linkPreviews = linkPreviews;
+        }
+        
+        loadingPreviews.delete(optionId);
+        loadingPreviews = loadingPreviews;
+      }
+    } else {
+      optionPreviews.delete(optionId);
+      optionPreviews = optionPreviews;
     }
   }
   
@@ -715,6 +794,11 @@
     // Limpiar estados de modales secundarios
     colorPickerOpenFor = null;
     showTypeOptionsModal = false;
+    // Limpiar previews
+    linkPreviews = new Map();
+    detectedTitlePreview = null;
+    optionPreviews = new Map();
+    loadingPreviews = new Set();
   }
   
   // Parser de prompt/markdown a datos de encuesta
@@ -970,6 +1054,56 @@
   // Detectar si es dispositivo táctil al montar el componente
   onMount(() => {
     isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  });
+  
+  // Efecto reactivo: detectar URLs en título y cargar preview automáticamente
+  $effect(() => {
+    console.log('🔎 [$effect] EJECUTADO - Título:', title, 'isOpen:', isOpen);
+    
+    if (!title || !isOpen) {
+      console.log('❌ [$effect] Condición no cumplida - title:', !!title, 'isOpen:', isOpen);
+      return;
+    }
+    
+    const urls = extractUrls(title);
+    console.log('🔍 [$effect] URLs extraídas con extractUrls:', urls);
+    
+    // También probar con la función vieja
+    const urlVieja = extractUrlFromText(title);
+    console.log('🔍 [$effect] URL con extractUrlFromText:', urlVieja);
+    
+    if (urls.length > 0) {
+      // Debounce: esperar 500ms después de que el usuario deje de escribir
+      const timeoutId = setTimeout(() => {
+        detectAndLoadTitlePreview(title);
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    } else {
+      // Limpiar preview si ya no hay URL
+      detectedTitlePreview = null;
+    }
+  });
+  
+  // Efecto reactivo: detectar URLs en opciones y cargar previews
+  $effect(() => {
+    if (isOpen && options.length > 0) {
+      // Para cada opción con texto, detectar URLs
+      for (const option of options) {
+        if (option.label) {
+          const urls = extractUrls(option.label);
+          if (urls.length > 0) {
+            // Debounce: esperar 500ms
+            const timeoutId = setTimeout(() => {
+              detectAndLoadOptionPreview(option.id, option.label);
+            }, 500);
+            
+            // Cleanup
+            return () => clearTimeout(timeoutId);
+          }
+        }
+      }
+    }
   });
   
   // Funciones para manejo de swipe con pointer events
@@ -1275,37 +1409,57 @@
           </div>
           
           <!-- Preview multimedia del título principal -->
-          {#if extractUrlFromText(title) || imageUrl}
+          {#if detectedTitlePreview || extractUrlFromText(title) || imageUrl}
             {@const detectedMainUrl = extractUrlFromText(title)}
             {@const isLoading = loadingPreviews.has('title')}
+            {#if typeof console !== 'undefined'}
+              {console.log('🖼️ [Template] Preview conditions:', {
+                hasDetectedPreview: !!detectedTitlePreview,
+                detectedMainUrl,
+                isDirectImage: isDirectImage(detectedMainUrl || ''),
+                isLoading
+              })}
+            {/if}
             <div class="main-media-preview">
-              <button
-                type="button"
-                class="remove-preview-btn"
-                onclick={() => {
-                  // Limpiar la URL del título o imageUrl
-                  const urlInTitle = extractUrlFromText(title);
-                  if (urlInTitle) {
-                    // Solo eliminar la URL, mantener el resto del texto
-                    title = title.replace(urlInTitle, ' ').replace(/\s+/g, ' ').trim();
-                  } else if (imageUrl) {
-                    imageUrl = '';
-                  }
-                  // Limpiar estado de carga
-                  loadingPreviews.delete('title');
-                  loadingPreviews = loadingPreviews;
-                }}
-                title="Eliminar preview"
-                aria-label="Eliminar preview"
-              >
-                <X class="w-5 h-5" />
-              </button>
               {#if isLoading}
                 <div class="preview-loading">
                   <Loader2 class="w-8 h-8 animate-spin" />
                   <p>Cargando preview...</p>
                 </div>
+              {:else if detectedTitlePreview && !isDirectImage(detectedMainUrl || '')}
+                <!-- Link Preview con metadatos -->
+                <LinkPreview 
+                  preview={detectedTitlePreview}
+                  onRemove={() => {
+                    const urlInTitle = extractUrlFromText(title);
+                    if (urlInTitle) {
+                      title = title.replace(urlInTitle, ' ').replace(/\s+/g, ' ').trim();
+                    }
+                    detectedTitlePreview = null;
+                    loadingPreviews.delete('title');
+                    loadingPreviews = loadingPreviews;
+                  }}
+                />
               {:else}
+                <!-- Fallback: MediaEmbed para imágenes directas -->
+                <button
+                  type="button"
+                  class="remove-preview-btn"
+                  onclick={() => {
+                    const urlInTitle = extractUrlFromText(title);
+                    if (urlInTitle) {
+                      title = title.replace(urlInTitle, ' ').replace(/\s+/g, ' ').trim();
+                    } else if (imageUrl) {
+                      imageUrl = '';
+                    }
+                    loadingPreviews.delete('title');
+                    loadingPreviews = loadingPreviews;
+                  }}
+                  title="Eliminar preview"
+                  aria-label="Eliminar preview"
+                >
+                  <X class="w-5 h-5" />
+                </button>
                 <MediaEmbed 
                   url={detectedMainUrl || imageUrl || ''} 
                   mode="full" 
@@ -1334,8 +1488,9 @@
                 style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)};" 
                 onclick={() => setActive(index)}
               >
-                {#if activeAccordionIndex === index && (detectedUrl || option.imageUrl)}
+                {#if activeAccordionIndex === index && (detectedUrl || option.imageUrl || optionPreviews.has(option.id))}
                   {@const isOptionLoading = loadingPreviews.has(option.id)}
+                  {@const optionPreview = optionPreviews.get(option.id)}
                   <div 
                     role="button"
                     tabindex="-1"
@@ -1426,7 +1581,17 @@
                         <Loader2 class="w-6 h-6 animate-spin" />
                         <p class="text-sm">Cargando...</p>
                       </div>
+                    {:else if optionPreview && !isDirectImage(detectedUrl || '')}
+                      <!-- Link Preview con metadatos -->
+                      <div class="option-link-preview-wrapper">
+                        <LinkPreview 
+                          preview={optionPreview}
+                          compact={true}
+                          clickable={false}
+                        />
+                      </div>
                     {:else}
+                      <!-- Fallback: MediaEmbed para imágenes directas -->
                       <MediaEmbed 
                         url={detectedUrl || option.imageUrl || ''} 
                         mode="full"
@@ -2842,6 +3007,31 @@
   
   .remove-option-preview-btn:active {
     transform: scale(0.95);
+  }
+  
+  /* Wrapper para LinkPreview en opciones */
+  .option-link-preview-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    overflow: hidden;
+  }
+  
+  .option-link-preview-wrapper :global(.link-preview) {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* LinkPreview en título principal */
+  .main-media-preview :global(.link-preview) {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
   }
   
   .media-overlay {

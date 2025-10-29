@@ -72,7 +72,46 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     // Otros servicios conocidos
     'gravatar.com',
     'githubusercontent.com',
-    'github.com'
+    'github.com',
+    
+    // Servicios de video adicionales
+    'dailymotion.com',
+    'streamable.com',
+    'twitch.tv',
+    'ttvnw.net',
+    
+    // Reddit
+    'redd.it',
+    'reddit.com',
+    'preview.redd.it',
+    'external-preview.redd.it',
+    
+    // Twitter/X adicionales
+    'twimg.com',
+    'x.com',
+    
+    // TikTok
+    'tiktokcdn.com',
+    'tiktok.com',
+    
+    // Spotify
+    'scdn.co',
+    'spotify.com',
+    
+    // Discord
+    'cdn.discordapp.com',
+    'media.discordapp.net',
+    
+    // Tenor (GIFs)
+    'tenor.com',
+    'media.tenor.com',
+    
+    // Imgur adicionales
+    'i.stack.imgur.com',
+    
+    // Wikipedia/Wikimedia adicionales
+    'wikimedia.org',
+    'wikipedia.org'
   ],
   
   // Tipos MIME permitidos

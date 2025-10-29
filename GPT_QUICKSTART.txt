@@ -1,0 +1,131 @@
+═══════════════════════════════════════════════════════════════
+  🚀 QUICK START - GPT Generador de Encuestas VouTop
+═══════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────┐
+│ OPCIÓN 1: USO INMEDIATO (ChatGPT Normal)                   │
+└─────────────────────────────────────────────────────────────┘
+
+1. Abre ChatGPT: https://chat.openai.com/
+2. Copia y pega el contenido de: GPT_PROMPT_QUICK.txt
+3. Escribe: "Genera encuesta sobre [tema] con enlace de [fuente]"
+4. ¡Listo! 🎉
+
+┌─────────────────────────────────────────────────────────────┐
+│ OPCIÓN 2: CUSTOM GPT (Recomendado para uso frecuente)      │
+└─────────────────────────────────────────────────────────────┘
+
+1. ChatGPT → My GPTs → Create a GPT
+2. Nombre: "VouTop Poll Generator"
+3. Instructions: Pega contenido de GPT_POLL_GENERATOR_PROMPT.md
+4. Save → Only me
+5. ¡Usa tu GPT personalizado! 🤖
+
+═══════════════════════════════════════════════════════════════
+  📝 EJEMPLOS DE USO RÁPIDO
+═══════════════════════════════════════════════════════════════
+
+Tecnología:
+  "Encuesta sobre nuevo iPhone con review de YouTube"
+
+Noticias:
+  "Encuesta de actualidad con fuentes El País y BBC"
+
+Entretenimiento:
+  "¿Netflix o HBO? Con comparativa de catálogos"
+
+Deportes:
+  "¿Quién ganará la Champions? Con análisis de Marca"
+
+Múltiple:
+  "Crea 5 encuestas: tech, noticias, cultura, deportes, lifestyle"
+
+═══════════════════════════════════════════════════════════════
+  🎯 FORMATO QUE GENERARÁ
+═══════════════════════════════════════════════════════════════
+
+# [Título claro de la encuesta]
+
+[Contexto con 1-3 enlaces relevantes]
+https://ejemplo.com/noticia
+
+## Opciones:
+- Opción 1
+- Opción 2
+- Opción 3
+- Opción 4
+
+═══════════════════════════════════════════════════════════════
+  ✅ PLATAFORMAS SOPORTADAS (500+ dominios)
+═══════════════════════════════════════════════════════════════
+
+REDES SOCIALES:
+  Twitter/X, Instagram, TikTok, Facebook, LinkedIn, Reddit
+
+VIDEO/MÚSICA:
+  YouTube, Spotify, Vimeo, Twitch
+
+NOTICIAS:
+  El País, BBC, CNN, TechCrunch, The Guardian, Reuters
+  + 180+ periódicos en español e internacionales
+
+E-COMMERCE:
+  Amazon (todos los países), eBay, Etsy
+
+CONOCIMIENTO:
+  Wikipedia, GitHub, Stack Overflow
+
+═══════════════════════════════════════════════════════════════
+  🔥 COMANDOS ULTRA-RÁPIDOS
+═══════════════════════════════════════════════════════════════
+
+"tech + youtube"           → Encuesta tech con video
+"news spain"               → Actualidad española
+"fun viral"                → Encuesta entretenida trending
+"debate neutral [tema]"    → Debate sin sesgos
+"product amazon [nombre]"  → Review producto
+
+═══════════════════════════════════════════════════════════════
+  📚 ARCHIVOS DISPONIBLES
+═══════════════════════════════════════════════════════════════
+
+GPT_PROMPT_QUICK.txt           → Para copiar-pegar en ChatGPT
+GPT_POLL_GENERATOR_PROMPT.md   → Instrucciones completas
+GPT_CUSTOM_CONFIG.json         → Config para Custom GPT
+GPT_SETUP_INSTRUCTIONS.md      → Guía detallada paso a paso
+GPT_EXAMPLE_PROMPTS.md         → 100+ ejemplos listos
+LINK_PREVIEW_PLATFORMS.md      → Lista completa de plataformas
+
+═══════════════════════════════════════════════════════════════
+  💡 TIP PRO
+═══════════════════════════════════════════════════════════════
+
+Guarda este comando en Notes/Notion/donde sea:
+
+  "Genera 5 encuestas para hoy: tech, noticias, cultura,
+   deportes, lifestyle. Con enlaces de YouTube, Twitter
+   y periódicos. Tono informal."
+
+Úsalo cada mañana para tener contenido listo. ☕
+
+═══════════════════════════════════════════════════════════════
+  🎓 APRENDE MÁS
+═══════════════════════════════════════════════════════════════
+
+¿Primera vez? Lee:
+  → GPT_SETUP_INSTRUCTIONS.md (10 min)
+
+¿Quieres ejemplos? Abre:
+  → GPT_EXAMPLE_PROMPTS.md (100+ prompts listos)
+
+¿Dudas técnicas? Consulta:
+  → LINK_PREVIEW_PLATFORMS.md (plataformas soportadas)
+
+═══════════════════════════════════════════════════════════════
+
+¿Listo para empezar? 
+1. Elige OPCIÓN 1 o 2 arriba ☝️
+2. Copia un ejemplo de uso 📝
+3. ¡Genera tu primera encuesta! 🎉
+
+═══════════════════════════════════════════════════════════════
