@@ -181,22 +181,36 @@
   let transitionDirection = $state<'forward' | 'backward'>('forward');
   let exitingOption = $state<string | null>(null);
   
-  // Efecto para animación de acordeón al cambiar entre cards maximizadas
+  // Efecto para animar el slider horizontal con transform3d en modo maximizado
   $effect(() => {
-    if (maximizedOption && previousMaximizedOption && maximizedOption !== previousMaximizedOption) {
-      // Detectar dirección del cambio
+    if (maximizedOption && typeof document !== 'undefined' && gridRef) {
       const currentIdx = options.findIndex(opt => opt.id === maximizedOption);
-      const previousIdx = options.findIndex(opt => opt.id === previousMaximizedOption);
       
-      if (currentIdx > previousIdx) {
-        transitionDirection = 'forward';
-      } else {
-        transitionDirection = 'backward';
+      if (currentIdx !== -1) {
+        // Calcular el desplazamiento horizontal basado en el ancho del contenedor
+        const container = gridRef.parentElement;
+        const cardWidth = container ? container.offsetWidth : window.innerWidth;
+        const offset = currentIdx * cardWidth;
+        
+        console.log('[CreatePoll Slider]', {
+          currentIdx,
+          cardWidth,
+          containerWidth: container?.offsetWidth,
+          offset,
+          transform: `translate3d(-${offset}px, 0, 0)`
+        });
+        
+        // Aplicar transform3d al contenedor
+        gridRef.style.transform = `translate3d(-${offset}px, 0, 0)`;
+        gridRef.style.transition = previousMaximizedOption ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none';
       }
-      
-      // Incrementar contador para forzar re-render con nueva key
-      transitionCounter++;
+    } else if (!maximizedOption && typeof document !== 'undefined' && gridRef) {
+      // RESETEAR el transform cuando se sale del modo maximizado
+      console.log('[CreatePoll Slider] 🔄 Reseteando transform');
+      gridRef.style.transform = '';
+      gridRef.style.transition = '';
     }
+    
     previousMaximizedOption = maximizedOption;
   });
   
@@ -235,6 +249,18 @@
     hasPrev: currentPage > 0
   });
   
+  // Variable derivada: cuando está maximizado, renderizar TODAS las opciones
+  let optionsToRender = $derived.by(() => {
+    if (!maximizedOption) {
+      console.log('[optionsToRender] Modo normal, items:', paginatedOptions.items.length);
+      return paginatedOptions.items;
+    }
+    
+    // En modo maximizado: renderizar TODAS las opciones para el slider horizontal
+    console.log('[optionsToRender] Modo maximizado, renderizando todas:', options.length, 'cards');
+    return options;
+  });
+  
   // Función para cambiar acordeón activo
   function setActive(index: number) {
     const wasAlreadyActive = activeAccordionIndex === index;
@@ -250,7 +276,7 @@
     
     // Enfocar el input si la opción está vacía (tanto al cambiar como al hacer click en la activa)
     setTimeout(() => {
-      const option = paginatedOptions.items[index];
+      const option = optionsToRender[index];
       if (option && !option.label.trim()) {
         const input = optionInputs[option.id];
         if (input) {
@@ -264,6 +290,7 @@
   function handleSwipeStart(e: TouchEvent | PointerEvent) {
     if (!maximizedOption) return;
     
+    console.log('[CreatePoll Swipe] 🚀 handleSwipeStart');
     const touch = 'touches' in e ? e.touches[0] : e;
     swipeStartX = touch.clientX;
     swipeStartY = touch.clientY;
@@ -278,34 +305,40 @@
     const deltaY = touch.clientY - swipeStartY;
     
     // Solo considerar swipe horizontal si el movimiento es más horizontal que vertical
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20) {
       e.preventDefault();
+      console.log('[CreatePoll Swipe] ⬅️➡️ Movimiento horizontal detectado:', deltaX);
     }
   }
   
   function handleSwipeEnd(e: TouchEvent | PointerEvent) {
     if (!isSwiping || !maximizedOption) return;
     
+    console.log('[CreatePoll Swipe] 🏁 handleSwipeEnd');
     const touch = 'changedTouches' in e ? e.changedTouches[0] : e;
     const deltaX = touch.clientX - swipeStartX;
     const deltaY = touch.clientY - swipeStartY;
+    
+    console.log('[CreatePoll Swipe] Delta:', { deltaX, deltaY, threshold: swipeThreshold });
     
     // Solo si es swipe horizontal (más horizontal que vertical)
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
       const currentIdx = options.findIndex(opt => opt.id === maximizedOption);
       
+      console.log('[CreatePoll Swipe] Cambio detectado. CurrentIdx:', currentIdx, 'Total:', options.length);
+      
       if (deltaX < 0 && currentIdx < options.length - 1) {
         // Swipe izquierda - siguiente
         const nextIdx = currentIdx + 1;
+        console.log('[CreatePoll Swipe] ➡️ Siguiente opción:', nextIdx);
         maximizedOption = options[nextIdx].id;
-        activeAccordionIndex = nextIdx % ITEMS_PER_PAGE;
-        currentPage = Math.floor(nextIdx / ITEMS_PER_PAGE);
+        // NO cambiar currentPage ni activeAccordionIndex en maximizado
       } else if (deltaX > 0 && currentIdx > 0) {
         // Swipe derecha - anterior
         const prevIdx = currentIdx - 1;
+        console.log('[CreatePoll Swipe] ⬅️ Anterior opción:', prevIdx);
         maximizedOption = options[prevIdx].id;
-        activeAccordionIndex = prevIdx % ITEMS_PER_PAGE;
-        currentPage = Math.floor(prevIdx / ITEMS_PER_PAGE);
+        // NO cambiar currentPage ni activeAccordionIndex en maximizado
       }
     }
     
@@ -1139,6 +1172,44 @@
   // Detectar si es dispositivo táctil al montar el componente
   onMount(() => {
     isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // Agregar listeners globales para AMBOS modos
+    const handleGlobalMove = (e: TouchEvent | PointerEvent) => {
+      if (maximizedOption && isSwiping) {
+        // Modo maximizado
+        handleSwipeMove(e);
+      } else if (!maximizedOption) {
+        // Modo normal (paginación)
+        handlePointerMove(e as PointerEvent);
+      }
+    };
+    
+    const handleGlobalEnd = (e: TouchEvent | PointerEvent) => {
+      if (maximizedOption && isSwiping) {
+        // Modo maximizado
+        handleSwipeEnd(e);
+      } else if (!maximizedOption) {
+        // Modo normal
+        handlePointerUp();
+      }
+    };
+    
+    // Agregar listeners globales para capturar eventos fuera de la card
+    document.addEventListener('pointermove', handleGlobalMove);
+    document.addEventListener('pointerup', handleGlobalEnd);
+    document.addEventListener('touchmove', handleGlobalMove, { passive: false });
+    document.addEventListener('touchend', handleGlobalEnd);
+    
+    console.log('[CreatePoll] ✅ Listeners globales agregados (normal + maximizado)');
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('pointermove', handleGlobalMove);
+      document.removeEventListener('pointerup', handleGlobalEnd);
+      document.removeEventListener('touchmove', handleGlobalMove);
+      document.removeEventListener('touchend', handleGlobalEnd);
+      console.log('[CreatePoll] 🧹 Listeners globales removidos');
+    };
   });
   
   // Efecto reactivo: detectar URLs en título y cargar preview automáticamente
@@ -1226,24 +1297,33 @@
   });
   
   // Funciones para manejo de swipe con pointer events
-  function handlePointerDown(e: PointerEvent) {
+  function handlePointerDown(e: PointerEvent | TouchEvent) {
     // Guardar posición inicial, incluso si es en textarea/input
-    touchStartX = e.clientX;
-    touchStartY = e.clientY;
+    const touch = 'touches' in e ? e.touches[0] : e;
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
     isDragging = false;
+    console.log('[CreatePoll Normal] 👇 handlePointerDown:', { x: touchStartX, y: touchStartY });
   }
   
-  function handlePointerMove(e: PointerEvent) {
+  function handlePointerMove(e: PointerEvent | TouchEvent) {
     if (!gridRef) return;
+    if (touchStartX === 0 && touchStartY === 0) return; // No hay punto de inicio
     
-    const deltaX = e.clientX - touchStartX;
-    const deltaY = e.clientY - touchStartY;
+    const touch = 'touches' in e ? e.touches[0] : e;
+    const deltaX = touch.clientX - touchStartX;
+    const deltaY = touch.clientY - touchStartY;
     
     // Solo considerar drag si hay movimiento significativo
     const hasMoved = Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10;
     
-    // Detectar si es movimiento horizontal (más horizontal que vertical)
-    if (hasMoved && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
+    if (hasMoved) {
+      console.log('[CreatePoll Normal] ➡️ Movimiento detectado:', { deltaX, deltaY, hasMoved });
+    }
+    
+    // Detectar si es movimiento horizontal (más horizontal que vertical) - threshold reducido a 50
+    if (hasMoved && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+      console.log('[CreatePoll Normal] ✅ Swipe horizontal válido:', deltaX);
       const target = e.target as HTMLElement;
       
       // Si el textarea/input tiene el foco activo, NO permitir swipe (dejar escribir)
@@ -1265,40 +1345,48 @@
       const totalCards = paginatedOptions.items.length;
       const totalPages = Math.ceil(options.length / ITEMS_PER_PAGE);
       
-      if (deltaX > 60) {
+      if (deltaX > 50) {
         isDragging = true;
+        console.log('[CreatePoll Normal] ➡️ Swipe DERECHA detectado');
         // Swipe derecha
         if (currentIndex !== null && currentIndex > 0) {
           // Card anterior en la misma página
+          console.log('[CreatePoll Normal] Cambiando a card anterior:', currentIndex - 1);
           activeAccordionIndex = currentIndex - 1;
-          touchStartX = e.clientX;
+          touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else if (currentIndex === 0 && currentPage > 0) {
           // Página anterior
+          console.log('[CreatePoll Normal] Cambiando a página anterior:', currentPage - 1);
           pageTransitionDirection = 'right';
           currentPage -= 1;
           activeAccordionIndex = ITEMS_PER_PAGE - 1;
-          touchStartX = e.clientX;
+          touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else {
+          console.log('[CreatePoll Normal] No hay más opciones a la derecha');
           isDragging = false;
         }
-      } else if (deltaX < -60) {
+      } else if (deltaX < -50) {
         isDragging = true;
+        console.log('[CreatePoll Normal] ⬅️ Swipe IZQUIERDA detectado');
         // Swipe izquierda
         if (currentIndex !== null && currentIndex < totalCards - 1) {
           // Card siguiente en la misma página
+          console.log('[CreatePoll Normal] Cambiando a card siguiente:', currentIndex + 1);
           activeAccordionIndex = currentIndex + 1;
-          touchStartX = e.clientX;
+          touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else if (currentIndex === totalCards - 1 && currentPage < totalPages - 1) {
           // Swipe izquierdo desde última card -> página siguiente
+          console.log('[CreatePoll Normal] Cambiando a página siguiente:', currentPage + 1);
           pageTransitionDirection = 'left';
           currentPage += 1;
           activeAccordionIndex = 0;
-          touchStartX = e.clientX;
+          touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else {
+          console.log('[CreatePoll Normal] No hay más opciones a la izquierda');
           isDragging = false;
         }
       }
@@ -1571,32 +1659,50 @@
           {/if}
         
         <!-- Grid de opciones con botón añadir integrado -->
-        <div class="vote-cards-container">
-          {#key currentPage}
+        <div class="vote-cards-container {maximizedOption ? 'maximized' : ''}">
+          {#key maximizedOption ? 'maximized' : currentPage}
             <div 
-              class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''}"
-              style="--items: {paginatedOptions.items.length}"
+              class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {maximizedOption ? 'has-maximized' : ''}"
+              style="--items: {optionsToRender.length}"
               bind:this={gridRef}
               in:fly={!maximizedOption ? { x: pageTransitionDirection === 'left' ? 300 : -300, duration: 250, delay: 50 } : { duration: 0 }}
               out:fly={!maximizedOption ? { x: pageTransitionDirection === 'left' ? -300 : 300, duration: 250 } : { duration: 0 }}
             >
-              {#each paginatedOptions.items as option, index (option.id)}
-                {@const globalIndex = currentPage * ITEMS_PER_PAGE + index}
+              {#each optionsToRender as option, index (option.id)}
+                {@const globalIndex = maximizedOption ? options.findIndex(opt => opt.id === option.id) : (currentPage * ITEMS_PER_PAGE + index)}
                 {@const pct = Math.round(100 / options.length)}
                 {@const detectedUrl = extractUrlFromText(option.label)}
                 <button 
                 type="button"
-                class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {activeAccordionIndex !== index ? 'collapsed' : ''} {maximizedOption === option.id ? `is-maximized accordion-transition accordion-${transitionDirection}` : ''}" 
-                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)}; {maximizedOption === option.id ? `--border-radius: ${globalIndex === 0 ? '16px 0 0 16px' : globalIndex === options.length - 1 ? '0 16px 16px 0' : '0'};` : ''}" 
+                class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {activeAccordionIndex !== index ? 'collapsed' : ''} {maximizedOption === option.id ? 'is-maximized' : ''} {maximizedOption === option.id ? 'active-maximized' : ''}" 
+                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)}; {maximizedOption ? `--card-index: ${globalIndex}; --border-radius: ${globalIndex === 0 ? '16px 0 0 16px' : globalIndex === options.length - 1 ? '0 16px 16px 0' : '0'};` : ''}" 
                 onclick={() => {
                   if (maximizedOption !== option.id && !isDragging) {
-                    setActive(index);
+                    if (maximizedOption) {
+                      // Si estamos en modo maximizado, cambiar a esta opción
+                      maximizedOption = option.id;
+                      activeAccordionIndex = index % ITEMS_PER_PAGE;
+                      currentPage = Math.floor(globalIndex / ITEMS_PER_PAGE);
+                    } else {
+                      setActive(index);
+                    }
                   }
                 }}
-                onpointerdown={maximizedOption === option.id ? handleSwipeStart : handlePointerDown}
-                onpointermove={maximizedOption === option.id ? handleSwipeMove : handlePointerMove}
-                onpointerup={maximizedOption === option.id ? handleSwipeEnd : handlePointerUp}
-                style:touch-action={maximizedOption === option.id ? 'pan-y' : 'auto'}
+                onpointerdown={(e) => {
+                  if (maximizedOption) {
+                    handleSwipeStart(e);
+                  } else {
+                    handlePointerDown(e);
+                  }
+                }}
+                ontouchstart={(e) => {
+                  if (maximizedOption) {
+                    handleSwipeStart(e);
+                  } else {
+                    handlePointerDown(e as any);
+                  }
+                }}
+                style:touch-action="pan-y"
               >
                 {#if optionPreviews.has(option.id) || loadingPreviews.has(option.id) || (detectedUrl && detectedUrl.trim() !== '') || (option.imageUrl && option.imageUrl.trim() !== '')}
                   {@const isLoading = loadingPreviews.has(option.id)}
@@ -1752,9 +1858,12 @@
                       }}
                       bind:this={optionInputs[option.id]}
                       maxlength="200"
-                      onpointerdown={maximizedOption === option.id ? handleSwipeStart : handlePointerDown}
-                      onpointermove={maximizedOption === option.id ? handleSwipeMove : handlePointerMove}
-                      onpointerup={maximizedOption === option.id ? handleSwipeEnd : handlePointerUp}
+                      onpointerdown={(e) => {
+                        // No capturar eventos de swipe en el textarea para que se pueda escribir
+                        if (!maximizedOption) {
+                          handlePointerDown(e);
+                        }
+                      }}
                       style:touch-action="pan-y"
                       ></textarea>
                     {#if errors[`option_${option.id}`]}
@@ -1830,13 +1939,49 @@
                     class="minimize-badge"
                     onclick={(e) => {
                       e.stopPropagation();
-                      maximizedOption = null;
+                      // Calcular la página y el índice correcto antes de minimizar
+                      const optionGlobalIndex = options.findIndex(opt => opt.id === option.id);
+                      if (optionGlobalIndex !== -1) {
+                        const targetPage = Math.floor(optionGlobalIndex / ITEMS_PER_PAGE);
+                        const targetIndex = optionGlobalIndex % ITEMS_PER_PAGE;
+                        console.log('[Minimize] Restaurando a página:', targetPage, 'índice:', targetIndex);
+                        
+                        // Primero minimizar
+                        maximizedOption = null;
+                        
+                        // Luego actualizar página e índice en el siguiente frame
+                        requestAnimationFrame(() => {
+                          currentPage = targetPage;
+                          activeAccordionIndex = targetIndex;
+                          console.log('[Minimize] ✅ Estado restaurado');
+                        });
+                      } else {
+                        maximizedOption = null;
+                      }
                     }}
                     onkeydown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         e.stopPropagation();
-                        maximizedOption = null;
+                        // Calcular la página y el índice correcto antes de minimizar
+                        const optionGlobalIndex = options.findIndex(opt => opt.id === option.id);
+                        if (optionGlobalIndex !== -1) {
+                          const targetPage = Math.floor(optionGlobalIndex / ITEMS_PER_PAGE);
+                          const targetIndex = optionGlobalIndex % ITEMS_PER_PAGE;
+                          console.log('[Minimize] Restaurando a página:', targetPage, 'índice:', targetIndex);
+                          
+                          // Primero minimizar
+                          maximizedOption = null;
+                          
+                          // Luego actualizar página e índice en el siguiente frame
+                          requestAnimationFrame(() => {
+                            currentPage = targetPage;
+                            activeAccordionIndex = targetIndex;
+                            console.log('[Minimize] ✅ Estado restaurado');
+                          });
+                        } else {
+                          maximizedOption = null;
+                        }
                       }
                     }}
                     title="Restaurar"
@@ -1851,39 +1996,39 @@
               {/each}
             </div>
           {/key}
-          
-          <!-- Navegación para card maximizada (fuera del botón) -->
-          {#if maximizedOption}
-            <div class="maximized-navigation">
-              <!-- Puntos de paginación -->
-              <div class="maximized-dots">
-                {#each options as opt, idx}
-                  <button
-                    type="button"
-                    class="maximized-dot"
-                    class:active={opt.id === maximizedOption}
-                    style="--dot-color: {opt.color};"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      maximizedOption = opt.id;
-                      activeAccordionIndex = idx % ITEMS_PER_PAGE;
-                      currentPage = Math.floor(idx / ITEMS_PER_PAGE);
-                    }}
-                    aria-label="Ir a opción {idx + 1}"
-                  ></button>
-                {/each}
-              </div>
-            </div>
-          {/if}
         </div>
+        
+        <!-- Navegación para card maximizada (fuera de vote-cards-container) -->
+        {#if maximizedOption}
+          <div class="maximized-navigation">
+            <!-- Puntos de paginación -->
+            <div class="maximized-dots">
+              {#each options as opt, idx}
+                <button
+                  type="button"
+                  class="maximized-dot"
+                  class:active={opt.id === maximizedOption}
+                  style="--dot-color: {opt.color};"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    maximizedOption = opt.id;
+                    // NO cambiar currentPage ni activeAccordionIndex en maximizado
+                    // El slider ya maneja el desplazamiento basado en maximizedOption
+                  }}
+                  aria-label="Ir a opción {idx + 1}"
+                ></button>
+              {/each}
+            </div>
+          </div>
+        {/if}
         
         <!-- Contenedor para paginación y botón flotante -->
         <div class="pagination-container">
           <!-- Indicadores de paginación -->
           <!-- Dots de paginación y botones en la misma línea -->
           <div class="cards-actions">
-            <!-- Dots de paginación centrados -->
-            {#if totalPages > 1}
+            <!-- Dots de paginación por página (solo en modo normal) -->
+            {#if totalPages > 1 && !maximizedOption}
               <div class="pagination-dots-inline">
                 {#each Array(totalPages) as _, pageIndex}
                   <button 
@@ -2641,12 +2786,12 @@
     border-radius: 2px;
   }
   
-  .vote-cards-grid.accordion.fullwidth {
+  .vote-cards-grid.accordion.fullwidth:not(.has-maximized) {
     grid-template-columns: repeat(var(--items), 1fr);
     transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
-  .vote-cards-grid.accordion.fullwidth.open {
+  .vote-cards-grid.accordion.fullwidth.open:not(.has-maximized) {
     grid-template-columns: var(--flex, 1) repeat(calc(var(--items) - 1), 0.3fr);
   }
   
@@ -2683,6 +2828,18 @@
   
   .vote-card.collapsed {
     background: #252525;
+  }
+  
+  /* Asegurar que las cards normales sean visibles */
+  .vote-cards-grid:not(.has-maximized) .vote-card {
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
+    width: auto !important;
+    min-width: auto !important;
+    height: auto !important;
+    min-height: 240px !important;
+    max-height: none !important;
   }
   
   .vote-card:not(.is-maximized):hover { 
@@ -4081,11 +4238,11 @@
   /* Animación de expansión dramática */
   @keyframes expandFromSmall {
     0% {
-      transform: translate(-50%, -50%) scale(0.1);
+      transform: scale(0.5);
       opacity: 0;
     }
     100% {
-      transform: translate(-50%, -50%) scale(1);
+      transform: scale(1);
       opacity: 1;
     }
   }
@@ -4096,14 +4253,11 @@
   @keyframes slideInFromRight {
     0% {
       opacity: 0;
-      transform: translate(calc(-50% + 120%), -50%) scale(0.9);
-    }
-    50% {
-      opacity: 1;
+      transform: translateX(100%) scale(0.9);
     }
     100% {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: translateX(0) scale(1);
     }
   }
   
@@ -4111,14 +4265,11 @@
   @keyframes slideOutToLeft {
     0% {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-    }
-    50% {
-      opacity: 0;
+      transform: translateX(0) scale(1);
     }
     100% {
       opacity: 0;
-      transform: translate(calc(-50% - 120%), -50%) scale(0.9);
+      transform: translateX(-100%) scale(0.9);
     }
   }
   
@@ -4126,14 +4277,11 @@
   @keyframes slideInFromLeft {
     0% {
       opacity: 0;
-      transform: translate(calc(-50% - 120%), -50%) scale(0.9);
-    }
-    50% {
-      opacity: 1;
+      transform: translateX(-100%) scale(0.9);
     }
     100% {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: translateX(0) scale(1);
     }
   }
   
@@ -4141,108 +4289,165 @@
   @keyframes slideOutToRight {
     0% {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-    }
-    50% {
-      opacity: 0;
+      transform: translateX(0) scale(1);
     }
     100% {
       opacity: 0;
-      transform: translate(calc(-50% + 120%), -50%) scale(0.9);
+      transform: translateX(100%) scale(0.9);
     }
   }
   
-  /* Aplicar animación de entrada según dirección */
-  .vote-card.is-maximized.accordion-transition.accordion-forward {
-    animation: slideInFromRight 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  /* Sistema de slider horizontal con transform3d (sin animaciones independientes) */
+  
+  /* Contenedor en modo normal */
+  .vote-cards-container:not(.maximized) {
+    position: relative !important;
+    width: auto !important;
+    height: auto !important;
+    display: block !important;
+    overflow: visible !important;
   }
   
-  .vote-card.is-maximized.accordion-transition.accordion-backward {
-    animation: slideInFromLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  /* Backdrop negro detrás del contenedor maximizado */
+  .vote-cards-container.maximized::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: -1;
+    pointer-events: none;
+    transition: none;
+    opacity: 1;
   }
   
-  /* Animaciones de salida (cuando la card se va) */
-  .vote-card.is-maximized.accordion-exit.accordion-forward {
-    animation: slideOutToLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
-  }
-  
-  .vote-card.is-maximized.accordion-exit.accordion-backward {
-    animation: slideOutToRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
-  }
-  
-  /* Expansión a pantalla completa del vote-card */
-  .vote-cards-grid .vote-card.is-maximized,
-  .vote-cards-grid.accordion.fullwidth .vote-card.is-maximized,
-  .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card.is-maximized {
+  /* Contenedor padre cuando hay cards maximizadas */
+  .vote-cards-container.maximized {
     position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) scale(1);
-    width: calc(100% - 10px) !important;
+    inset: 0 !important;
+    margin: auto !important;
+    width: 100vw !important;
     max-width: 700px !important;
-    z-index: 40000 !important;
-    
-    min-height: 65vh !important;
+    height: 70vh !important;
+    max-height: 900px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    z-index: 10 !important;
+  }
+  
+  /* Contenedor de cards maximizadas: slider horizontal */
+  .vote-cards-grid.has-maximized {
+    /* Sobrescribir TODOS los estilos del grid base */
+    display: flex !important;
+    flex-direction: row !important;
     flex: none !important;
-    min-width: auto !important;
-    border: 3px solid var(--card-color) !important;
-    border-radius: var(--border-radius, 0) !important;
-    box-shadow: 0 0 0 100vmax #000000, 0 0 60px var(--card-color) !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 70vh !important;
+    max-height: 900px !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    grid-template-columns: none !important;
+    grid-auto-flow: unset !important;
+    grid-auto-columns: unset !important;
+    /* transform3d se aplica dinámicamente desde JS */
+    will-change: transform;
+    align-items: center !important;
+    position: relative !important;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  
+  /* TODAS las cards dentro del grid maximizado necesitan estos estilos base */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card {
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    min-height: 70vh !important;
+    max-height: 900px !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
-    pointer-events: auto !important;
+    flex-shrink: 0 !important;
+    transform: none !important;
     cursor: default !important;
-    opacity: 1 !important;
-  }
-  
-  /* Animación inicial solo cuando NO hay accordion-transition */
-  .vote-cards-grid .vote-card.is-maximized:not(.accordion-transition),
-  .vote-cards-grid.accordion.fullwidth .vote-card.is-maximized:not(.accordion-transition),
-  .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card.is-maximized:not(.accordion-transition) {
-    animation: expandFromSmall 0.25s cubic-bezier(0.25, 0.1, 0.25, 1) forwards !important;
-  }
-  
-  /* Prevenir efectos de hover, active, focus en card maximizada */
-  .vote-card.is-maximized:hover,
-  .vote-card.is-maximized:active,
-  .vote-card.is-maximized:focus,
-  .vote-card.is-maximized:focus-visible,
-  .vote-card.is-maximized:focus-within {
-    box-shadow: 0 0 0 100vmax #000000, 0 0 60px var(--card-color) !important;
-  }
-  
-  .vote-card.is-maximized:not(.accordion-transition):hover,
-  .vote-card.is-maximized:not(.accordion-transition):active,
-  .vote-card.is-maximized:not(.accordion-transition):focus,
-  .vote-card.is-maximized:not(.accordion-transition):focus-visible,
-  .vote-card.is-maximized:not(.accordion-transition):focus-within {
-    transform: translate(-50%, -50%) scale(1) !important;
+    transition: none !important;
     opacity: 1 !important;
     background: #2a2a2a !important;
   }
   
-  /* Asegurar que no haya cambios de color al hacer click */
-  .vote-card.is-maximized,
-  .vote-card.is-maximized::before,
-  .vote-card.is-maximized::after {
-    background-color: #2a2a2a !important;
+  /* Forzar que TODAS las cards en maximizado muestren su contenido completo */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card .question-title,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card .card-header,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card .card-content {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Mantener color picker en su posición correcta en todas las cards maximizadas */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card .color-picker-badge-absolute {
+    left: auto !important;
+    right: 76px !important;
+    transform: translateX(0) !important;
+  }
+  
+  /* Desactivar estados de botón en cards maximizadas */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card:active,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card:focus,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card:focus-visible,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card.is-active,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card.is-active:active,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card.is-active:focus {
+    opacity: 1 !important;
+    transform: none !important;
+    outline: none !important;
+    background: #2a2a2a !important;
+  }
+  
+  /* Forzar opacidad en todos los hijos de la card maximizada */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card *,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card:active *,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card:focus * {
+    opacity: 1 !important;
     transition: none !important;
   }
   
-  /* Backdrop que bloquea clicks en el fondo */
-  .vote-card.is-maximized::before {
+  /* Desactivar tap highlight en mobile */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none !important;
+  }
+  
+  /* Estilos adicionales solo para la card que está actualmente maximizada */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card.is-maximized,
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card.is-maximized {
+    z-index: 2 !important;
+  }
+  
+
+  /* Animación inicial cuando se maximiza por primera vez */
+  .vote-card.is-maximized {
+    animation: expandFromSmall 0.25s cubic-bezier(0.25, 0.1, 0.25, 1) forwards !important;
+  }
+  
+ 
+  
+  /* Backdrop oscuro detrás de todas las cards */
+  .vote-cards-grid:has(.vote-card.is-maximized)::before {
     content: '';
     position: fixed;
     inset: 0;
     background: #000000;
-    z-index: -1;
-    pointer-events: auto;
-    cursor: default;
+    z-index: 0;
+    pointer-events: none;
   }
   
   /* Bloquear interacción con el modal cuando hay card maximizada */
-  .modal-container:has(.vote-card.is-maximized) .modal-content > *:not(.vote-cards-container):not(.main-card) {
+  .modal-container:has(.vote-card.is-maximized) .modal-content > *:not(.vote-cards-container):not(.main-card):not(.cards-actions) {
     pointer-events: none;
     user-select: none;
   }
@@ -4326,15 +4531,15 @@
     color: #ffffff;
   }
   
-  /* Bloquear botones de navegación y elementos fuera de la card maximizada */
-  .modal-container:has(.vote-card.is-maximized) .pagination-dots,
-  .modal-container:has(.vote-card.is-maximized) .pagination-dots-inline,
+  
+  /* Bloquear solo otros elementos fuera de la card maximizada */
   .modal-container:has(.vote-card.is-maximized) .pagination-container,
-  .modal-container:has(.vote-card.is-maximized) .action-buttons,
-  .modal-container:has(.vote-card.is-maximized) .vote-card:not(.is-maximized) {
+  .modal-container:has(.vote-card.is-maximized) .action-buttons {
     pointer-events: none !important;
     opacity: 0.3 !important;
   }
+  
+  /* CSS antiguo eliminado - ahora se usa .vote-cards-container.maximized y .vote-cards-grid.has-maximized */
   
   .vote-card.is-maximized .card-header {
     padding: 70px 30px 20px 30px !important;
@@ -4422,7 +4627,7 @@
   /* Navegación para card maximizada */
   .maximized-navigation {
     position: fixed;
-    top: calc(45% + 75vh / 2 + 20px);
+    bottom: 50px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -4442,28 +4647,32 @@
   }
   
   .maximized-dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: var(--dot-color, white);
+    opacity: 1 !important;
+    filter: brightness(1.2) saturate(1.3) !important;
     border: none;
     cursor: pointer;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1),
                 transform 0.2s ease;
     padding: 0;
     pointer-events: auto;
+    position: relative;
+    z-index: 99999;
   }
   
   .maximized-dot:hover {
-    transform: scale(1.3);
+    transform: scale(1.2);
   }
   
   .maximized-dot.active {
-    width: 28px;
-    height: 10px;
-    border-radius: 5px;
+    width: 24px;
+    height: 8px;
+    border-radius: 4px;
     background: var(--dot-color, white);
   }
   
@@ -4514,7 +4723,7 @@
     }
     
     .maximized-navigation {
-      top: calc(45% + 75vh / 2 + 15px);
+      bottom: 50px;
       gap: 15px;
       padding: 16px 16px;
     }
