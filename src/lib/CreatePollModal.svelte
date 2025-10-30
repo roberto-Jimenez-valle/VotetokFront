@@ -154,7 +154,7 @@
   let gridRef = $state<HTMLElement | null>(null);
   
   // Referencias a los inputs de texto de cada opción
-  let optionInputs: Record<string, HTMLTextAreaElement> = {};
+  let optionInputs = $state<Record<string, HTMLTextAreaElement>>({});
   
   // Estado del color picker
   let colorPickerOpenFor = $state<string | null>(null);
@@ -166,6 +166,38 @@
   
   // Estado para preview interactivo en opciones
   let activePreviewOption = $state<string | null>(null);
+  
+  // Estado para opción maximizada
+  let maximizedOption = $state<string | null>(null);
+  
+  // Variables para swipe horizontal en cards maximizadas
+  let swipeStartX = $state(0);
+  let swipeStartY = $state(0);
+  let isSwiping = $state(false);
+  let swipeThreshold = 50; // píxeles mínimos para considerar swipe
+  let previousMaximizedOption = $state<string | null>(null);
+  let transitionCounter = $state(0);
+  let transitionDirection = $state<'forward' | 'backward'>('forward');
+  let exitingOption = $state<string | null>(null);
+  
+  // Efecto para animación de acordeón al cambiar entre cards maximizadas
+  $effect(() => {
+    if (maximizedOption && previousMaximizedOption && maximizedOption !== previousMaximizedOption) {
+      // Detectar dirección del cambio
+      const currentIdx = options.findIndex(opt => opt.id === maximizedOption);
+      const previousIdx = options.findIndex(opt => opt.id === previousMaximizedOption);
+      
+      if (currentIdx > previousIdx) {
+        transitionDirection = 'forward';
+      } else {
+        transitionDirection = 'backward';
+      }
+      
+      // Incrementar contador para forzar re-render con nueva key
+      transitionCounter++;
+    }
+    previousMaximizedOption = maximizedOption;
+  });
   
   // Detectar si es dispositivo táctil
   let isTouchDevice = $state(false);
@@ -225,6 +257,58 @@
         }
       }
     }, wasAlreadyActive ? 0 : 100);
+  }
+  
+  // Funciones para swipe horizontal en cards maximizadas
+  function handleSwipeStart(e: TouchEvent | PointerEvent) {
+    if (!maximizedOption) return;
+    
+    const touch = 'touches' in e ? e.touches[0] : e;
+    swipeStartX = touch.clientX;
+    swipeStartY = touch.clientY;
+    isSwiping = true;
+  }
+  
+  function handleSwipeMove(e: TouchEvent | PointerEvent) {
+    if (!isSwiping || !maximizedOption) return;
+    
+    const touch = 'touches' in e ? e.touches[0] : e;
+    const deltaX = touch.clientX - swipeStartX;
+    const deltaY = touch.clientY - swipeStartY;
+    
+    // Solo considerar swipe horizontal si el movimiento es más horizontal que vertical
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
+      e.preventDefault();
+    }
+  }
+  
+  function handleSwipeEnd(e: TouchEvent | PointerEvent) {
+    if (!isSwiping || !maximizedOption) return;
+    
+    const touch = 'changedTouches' in e ? e.changedTouches[0] : e;
+    const deltaX = touch.clientX - swipeStartX;
+    const deltaY = touch.clientY - swipeStartY;
+    
+    // Solo si es swipe horizontal (más horizontal que vertical)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
+      const currentIdx = options.findIndex(opt => opt.id === maximizedOption);
+      
+      if (deltaX < 0 && currentIdx < options.length - 1) {
+        // Swipe izquierda - siguiente
+        const nextIdx = currentIdx + 1;
+        maximizedOption = options[nextIdx].id;
+        activeAccordionIndex = nextIdx % ITEMS_PER_PAGE;
+        currentPage = Math.floor(nextIdx / ITEMS_PER_PAGE);
+      } else if (deltaX > 0 && currentIdx > 0) {
+        // Swipe derecha - anterior
+        const prevIdx = currentIdx - 1;
+        maximizedOption = options[prevIdx].id;
+        activeAccordionIndex = prevIdx % ITEMS_PER_PAGE;
+        currentPage = Math.floor(prevIdx / ITEMS_PER_PAGE);
+      }
+    }
+    
+    isSwiping = false;
   }
   
   // Función para calcular font size basado en porcentaje (exacta del BottomSheet)
@@ -1106,6 +1190,40 @@
     }
   });
   
+  // Efecto: Pausar reproducción cuando cambias de opción activa o maximizada
+  $effect(() => {
+    // Ejecutar cuando cambia activeAccordionIndex o maximizedOption
+    const currentActive = maximizedOption || (activeAccordionIndex !== null ? paginatedOptions.items[activeAccordionIndex]?.id : null);
+    
+    // Pausar todos los iframes que no sean la opción activa
+    if (typeof document !== 'undefined') {
+      const iframes = document.querySelectorAll('.option-media-background iframe');
+      iframes.forEach((iframe: Element) => {
+        const htmlIframe = iframe as HTMLIFrameElement;
+        const container = htmlIframe.closest('.vote-card');
+        const isActive = container?.classList.contains('is-active') || container?.classList.contains('is-maximized');
+        
+        if (!isActive && htmlIframe.src) {
+          // Pausar video enviando mensaje postMessage a YouTube/Vimeo
+          try {
+            if (htmlIframe.src.includes('youtube.com') || htmlIframe.src.includes('youtu.be')) {
+              htmlIframe.contentWindow?.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+            } else if (htmlIframe.src.includes('vimeo.com')) {
+              htmlIframe.contentWindow?.postMessage('{"method":"pause"}', '*');
+            } else if (htmlIframe.src.includes('spotify.com')) {
+              // Spotify no tiene API pública para pausar, pero podemos recargar
+              const currentSrc = htmlIframe.src;
+              htmlIframe.src = '';
+              setTimeout(() => htmlIframe.src = currentSrc, 10);
+            }
+          } catch (e) {
+            // Silenciar errores de postMessage
+          }
+        }
+      });
+    }
+  });
+  
   // Funciones para manejo de swipe con pointer events
   function handlePointerDown(e: PointerEvent) {
     // No procesar si empieza en un textarea, input o botón
@@ -1272,23 +1390,38 @@
     ontouchmove={(e) => handleModalSwipeMove(e, close)}
   >
     <!-- Header -->
-    <div class="modal-header">
-      <button
-        class="close-btn"
-        onclick={close}
-        disabled={isSubmitting}
-        aria-label="Cerrar"
-      >
-        <X class="w-5 h-5" />
-      </button>
-      <h2 id="modal-title">Nueva encuesta</h2>
-      <button
-        class="publish-btn"
-        onclick={handleSubmit}
-        disabled={isSubmitting}
-      >
-        {isSubmitting ? 'Publicando...' : 'Publicar'}
-      </button>
+    <div class="modal-header {maximizedOption ? 'maximized' : ''}">
+      {#if !maximizedOption}
+        <button
+          class="close-btn"
+          onclick={close}
+          disabled={isSubmitting}
+          aria-label="Cerrar"
+        >
+          <X class="w-5 h-5" />
+        </button>
+        
+        <h2 id="modal-title">Nueva encuesta</h2>
+        
+        <button
+          class="publish-btn"
+          onclick={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Publicando...' : 'Publicar'}
+        </button>
+      {:else}
+        <div class="maximized-poll-title-overlay">
+          <textarea
+            placeholder="¿Cuál es tu pregunta?"
+            rows="2"
+            class="poll-title-input"
+            bind:value={title}
+            onclick={(e) => e.stopPropagation()}
+            maxlength="280"
+          ></textarea>
+        </div>
+      {/if}
     </div>
     
     <!-- Errores generales -->
@@ -1484,12 +1617,22 @@
               {@const detectedUrl = extractUrlFromText(option.label)}
               <button 
                 type="button"
-                class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {activeAccordionIndex !== index ? 'collapsed' : ''}" 
-                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)};" 
-                onclick={() => setActive(index)}
+                class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {activeAccordionIndex !== index ? 'collapsed' : ''} {maximizedOption === option.id ? `is-maximized accordion-transition accordion-${transitionDirection}` : ''}" 
+                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)}; {maximizedOption === option.id ? `--border-radius: ${globalIndex === 0 ? '16px 0 0 16px' : globalIndex === options.length - 1 ? '0 16px 16px 0' : '0'};` : ''}" 
+                onclick={() => {
+                  if (maximizedOption !== option.id) {
+                    setActive(index);
+                  }
+                }}
+                ontouchstart={maximizedOption === option.id ? handleSwipeStart : undefined}
+                ontouchmove={maximizedOption === option.id ? handleSwipeMove : undefined}
+                ontouchend={maximizedOption === option.id ? handleSwipeEnd : undefined}
+                onpointerdown={maximizedOption === option.id ? handleSwipeStart : undefined}
+                onpointermove={maximizedOption === option.id ? handleSwipeMove : undefined}
+                onpointerup={maximizedOption === option.id ? handleSwipeEnd : undefined}
               >
-                {#if activeAccordionIndex === index && (detectedUrl || option.imageUrl || optionPreviews.has(option.id))}
-                  {@const isOptionLoading = loadingPreviews.has(option.id)}
+                {#if optionPreviews.has(option.id) || loadingPreviews.has(option.id) || (detectedUrl && detectedUrl.trim() !== '') || (option.imageUrl && option.imageUrl.trim() !== '')}
+                  {@const isLoading = loadingPreviews.has(option.id)}
                   {@const optionPreview = optionPreviews.get(option.id)}
                   <div 
                     role="button"
@@ -1526,49 +1669,43 @@
                       class="remove-option-preview-btn"
                       onclick={(e) => {
                         e.stopPropagation();
-                        // Desactivar modo interactivo
-                        activePreviewOption = null;
-                        // Limpiar la URL de la opción, mantener el resto del texto
+                        
+                        // Limpiar cachés
+                        loadingPreviews.delete(option.id);
+                        optionPreviews.delete(option.id);
+                        
+                        // Limpiar URL del label
                         const urlInLabel = extractUrlFromText(option.label);
                         if (urlInLabel) {
-                          // Reemplazar la URL y limpiar espacios múltiples
                           option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
-                        } else if (option.imageUrl) {
-                          option.imageUrl = '';
                         }
-                        // Limpiar estado de carga
-                        loadingPreviews.delete(option.id);
-                        loadingPreviews = loadingPreviews;
-                        // Enfocar el textarea de esta opción después de que reaparezca
-                        setTimeout(() => {
-                          const input = optionInputs[option.id];
-                          if (input) {
-                            input.focus();
-                          }
-                        }, 50);
+                        
+                        // Limpiar imageUrl
+                        option.imageUrl = '';
+                        
+                        // Trigger reactivity
+                        options = [...options];
                       }}
                       onkeydown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           e.stopPropagation();
-                          activePreviewOption = null;
+                          
+                          // Limpiar cachés
+                          loadingPreviews.delete(option.id);
+                          optionPreviews.delete(option.id);
+                          
+                          // Limpiar URL del label
                           const urlInLabel = extractUrlFromText(option.label);
                           if (urlInLabel) {
-                            // Reemplazar la URL y limpiar espacios múltiples
                             option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
-                          } else if (option.imageUrl) {
-                            option.imageUrl = '';
                           }
-                          // Limpiar estado de carga
-                          loadingPreviews.delete(option.id);
-                          loadingPreviews = loadingPreviews;
-                          // Enfocar el textarea de esta opción después de que reaparezca
-                          setTimeout(() => {
-                            const input = optionInputs[option.id];
-                            if (input) {
-                              input.focus();
-                            }
-                          }, 50);
+                          
+                          // Limpiar imageUrl
+                          option.imageUrl = '';
+                          
+                          // Trigger reactivity
+                          options = [...options];
                         }
                       }}
                       title="Eliminar preview"
@@ -1576,22 +1713,20 @@
                     >
                       <X class="w-4 h-4" />
                     </div>
-                    {#if isOptionLoading}
+                    {#if isLoading}
                       <div class="preview-loading">
                         <Loader2 class="w-6 h-6 animate-spin" />
                         <p class="text-sm">Cargando...</p>
                       </div>
-                    {:else if optionPreview && !isDirectImage(detectedUrl || '')}
-                      <!-- Link Preview con metadatos -->
-                      <div class="option-link-preview-wrapper">
-                        <LinkPreview 
-                          preview={optionPreview}
-                          compact={true}
-                          clickable={false}
-                        />
-                      </div>
-                    {:else}
-                      <!-- Fallback: MediaEmbed para imágenes directas -->
+                    {:else if optionPreview}
+                      <!-- Usar MediaEmbed para todos los previews, maneja tanto embeds como metadatos -->
+                      <MediaEmbed 
+                        url={optionPreview.url} 
+                        mode="full"
+                        on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
+                      />
+                    {:else if detectedUrl || option.imageUrl}
+                      <!-- Fallback: MediaEmbed cuando no hay preview cacheado -->
                       <MediaEmbed 
                         url={detectedUrl || option.imageUrl || ''} 
                         mode="full"
@@ -1601,8 +1736,9 @@
                     <div class="media-overlay {activePreviewOption === option.id ? 'hidden' : ''}"></div>
                   </div>
                 {/if}
+                
                 <div class="card-header {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
-                  {#if activeAccordionIndex === index}
+                  {#if maximizedOption === option.id || activeAccordionIndex === index}
                     {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
                     {@const currentUrl = extractUrlFromText(option.label)}
                     <div class="char-counter">{labelWithoutUrl.length}/200</div>
@@ -1653,7 +1789,7 @@
                       onclick={(e) => e.stopPropagation()}
                     ></textarea>
                   {/if}
-                  {#if errors[`option_${option.id}`] && activeAccordionIndex === index}
+                  {#if errors[`option_${option.id}`] && (maximizedOption === option.id || activeAccordionIndex === index)}
                     <div class="option-error">
                       <span class="error-icon">⚠️</span>
                       <span class="error-text">{errors[`option_${option.id}`]}</span>
@@ -1661,10 +1797,10 @@
                   {/if}
                 </div>
                 <div class="card-content {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
-                  <div class="percentage-display {activeAccordionIndex === index ? 'is-active' : ''}">
+                  <div class="percentage-display {(maximizedOption === option.id || activeAccordionIndex === index) ? 'is-active' : ''}">
                     <span
                       class="percentage-large"
-                      style="font-size: {(activeAccordionIndex === index
+                      style="font-size: {((maximizedOption === option.id || activeAccordionIndex === index)
                         ? fontSizeForPct(pct)
                         : Math.min(fontSizeForPct(pct), 21))}px"
                     >
@@ -1693,35 +1829,6 @@
                     <X class="w-3.5 h-3.5" />
                   </div>
                 {/if}
-                <!-- Botón para toggle preview en móvil -->
-                {#if isTouchDevice && (detectedUrl || option.imageUrl)}
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="toggle-preview-badge"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      activePreviewOption = activePreviewOption === option.id ? null : option.id;
-                    }}
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        activePreviewOption = activePreviewOption === option.id ? null : option.id;
-                      }
-                    }}
-                    title={activePreviewOption === option.id ? "Mostrar controles" : "Ocultar controles"}
-                    aria-label={activePreviewOption === option.id ? "Mostrar controles" : "Ocultar controles"}
-                  >
-                    {#if activePreviewOption === option.id}
-                      <Eye class="w-4 h-4" />
-                    {:else}
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    {/if}
-                  </div>
-                {/if}
                 <div
                   role="button"
                   tabindex="0"
@@ -1745,47 +1852,132 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                   </svg>
                 </div>
+                
+                <!-- Botón de minimizar (solo cuando está maximizada) -->
+                {#if maximizedOption === option.id}
+                  <div
+                    role="button"
+                    tabindex="0"
+                    class="minimize-badge"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      maximizedOption = null;
+                    }}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        maximizedOption = null;
+                      }
+                    }}
+                    title="Restaurar"
+                    aria-label="Restaurar"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                    </svg>
+                  </div>
+                {/if}
               </button>
             {/each}
           </div>
+          
+          <!-- Navegación para card maximizada (fuera del botón) -->
+          {#if maximizedOption}
+            <div class="maximized-navigation">
+              <!-- Puntos de paginación -->
+              <div class="maximized-dots">
+                {#each options as opt, idx}
+                  <button
+                    type="button"
+                    class="maximized-dot"
+                    class:active={opt.id === maximizedOption}
+                    style="--dot-color: {opt.color};"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      maximizedOption = opt.id;
+                      activeAccordionIndex = idx % ITEMS_PER_PAGE;
+                      currentPage = Math.floor(idx / ITEMS_PER_PAGE);
+                    }}
+                    aria-label="Ir a opción {idx + 1}"
+                  ></button>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
         
         <!-- Contenedor para paginación y botón flotante -->
         <div class="pagination-container">
           <!-- Indicadores de paginación -->
-        {#if totalPages > 1}
-          <div class="pagination-dots">
-            {#each Array(totalPages) as _, pageIndex}
-              <button 
-                class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
-                onclick={() => {
-                  currentPage = pageIndex;
-                  activeAccordionIndex = 0;
-                }}
+          <!-- Dots de paginación y botones en la misma línea -->
+          <div class="cards-actions">
+            <!-- Dots de paginación centrados -->
+            {#if totalPages > 1}
+              <div class="pagination-dots-inline">
+                {#each Array(totalPages) as _, pageIndex}
+                  <button 
+                    class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
+                    onclick={() => {
+                      currentPage = pageIndex;
+                      activeAccordionIndex = 0;
+                    }}
+                    type="button"
+                    aria-label="Página {pageIndex + 1}"
+                  ></button>
+                {/each}
+              </div>
+            {/if}
+            
+            <!-- Botones alineados a la derecha -->
+            <div class="action-buttons">
+            <!-- Botón de maximizar -->
+            {#if activeAccordionIndex !== null && paginatedOptions.items[activeAccordionIndex] && !maximizedOption}
+              {@const activeOption = paginatedOptions.items[activeAccordionIndex]}
+              {@const activeOptionGlobalIndex = currentPage * ITEMS_PER_PAGE + activeAccordionIndex}
+              <button
                 type="button"
-                aria-label="Página {pageIndex + 1}"
-              ></button>
-            {/each}
+                class="maximize-floating-button"
+                style="border-bottom-color: {activeOption.color};"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  maximizedOption = activeOption.id;
+                  // Asegurar que el índice activo coincida con la opción maximizada
+                  const optIndex = options.findIndex(opt => opt.id === activeOption.id);
+                  if (optIndex !== -1) {
+                    activeAccordionIndex = optIndex % ITEMS_PER_PAGE;
+                    currentPage = Math.floor(optIndex / ITEMS_PER_PAGE);
+                  }
+                }}
+                title="Maximizar"
+                aria-label="Maximizar"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+              </button>
+            {/if}
+            
+            <!-- Botón de añadir opción -->
+            {#if options.length < 10}
+              {@const nextColor = COLORS[options.length % COLORS.length]}
+              <button
+                type="button"
+                class="add-option-floating-bottom"
+                style="border-color: {nextColor};"
+                onclick={addOption}
+                title="Añadir opción"
+                aria-label="Añadir nueva opción"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon lucide lucide-plus w-6 h-6">
+                  <path d="M5 12h14"></path>
+                  <path d="M12 5v14"></path>
+                </svg>
+              </button>
+            {/if}
+            </div>
           </div>
-        {/if}
         </div>
-        
-        <!-- Botón flotante abajo a la derecha -->
-        {#if options.length < 10}
-          {@const nextColor = COLORS[options.length % COLORS.length]}
-          <div class="add-option-wrapper">
-            <button
-              type="button"
-              class="add-option-floating-bottom"
-              style="border-color: {nextColor};"
-              onclick={addOption}
-              title="Añadir opción"
-              aria-label="Añadir nueva opción"
-            >
-              <Plus class="w-6 h-6" />
-            </button>
-          </div>
-        {/if}
         
         <!-- Info adicional -->
         {#if title.length > 0 || options.some(o => o.label.trim())}
@@ -2200,6 +2392,11 @@
     overflow: hidden;
   }
   
+  /* Permitir overflow cuando hay card maximizada */
+  .modal-container:has(.vote-card.is-maximized) {
+    overflow: visible;
+  }
+  
   .modal-header {
     display: flex;
     align-items: center;
@@ -2300,6 +2497,11 @@
     overscroll-behavior: contain;
     touch-action: pan-y;
     position: relative;
+  }
+  
+  /* Permitir overflow y expandir altura cuando hay card maximizada */
+  .modal-content:has(.vote-card.is-maximized) {
+    overflow: visible;
   }
   
   .modal-content::-webkit-scrollbar {
@@ -2439,9 +2641,9 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0;
-    margin: 0 -1rem;
-    padding: 0.75rem 0;
+    justify-content: center;
+   
+    overflow: visible;
   }
   
   /* Grid de opciones - Estilo BottomSheet */
@@ -2483,11 +2685,15 @@
   .vote-card {
     border-radius: 16px;
     cursor: pointer;
-    transform: translateZ(0);
-    will-change: transform, box-shadow;
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                min-height 0.3s ease;
+    will-change: transform, box-shadow, opacity;
+    transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
+                opacity 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
+                width 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
+                height 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
+                box-shadow 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transform-origin: center center;
+    transform: scale(1);
+    opacity: 1;
     display: flex;
     flex-direction: column;
     border: none;
@@ -2511,9 +2717,34 @@
     background: #252525;
   }
   
-  .vote-card:hover { 
+  .vote-card:not(.is-maximized):hover { 
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+  
+  /* ANULAR hover de translateY para maximizadas */
+  button.vote-card.is-maximized:hover {
+    transform: translate(-50%, -50%) scale(1) !important;
+  }
+  
+  /* Eliminar COMPLETAMENTE hover cuando está maximizada */
+  button.vote-card.is-maximized,
+  button.vote-card.is-maximized:hover,
+  button.vote-card.is-active.is-maximized,
+  button.vote-card.is-active.is-maximized:hover,
+  .vote-cards-grid button.vote-card.is-maximized,
+  .vote-cards-grid button.vote-card.is-maximized:hover {
+    pointer-events: auto !important;
+  }
+  
+  button.vote-card.is-maximized:not(.accordion-transition),
+  button.vote-card.is-maximized:not(.accordion-transition):hover {
+    transform: translate(-50%, -50%) scale(1) !important;
+  }
+  
+  button.vote-card.is-maximized:hover {
+    box-shadow: 0 0 0 100vmax #000000, 0 0 60px var(--card-color) !important;
+    cursor: default !important;
   }
   
   .vote-card .card-header,
@@ -2735,37 +2966,6 @@
     transition: font-size 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
-  /* Botón para toggle preview en móvil */
-  .toggle-preview-badge {
-    position: absolute;
-    bottom: 16px;
-    right: 60px;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 2;
-    transition: all 0.2s ease;
-    pointer-events: auto;
-    color: rgba(255, 255, 255, 0.9);
-  }
-  
-  .vote-card.is-active .toggle-preview-badge {
-    right: 60px;
-  }
-  
-  .toggle-preview-badge:hover {
-    background: rgba(59, 130, 246, 0.8);
-    border-color: rgba(255, 255, 255, 0.8);
-    transform: scale(1.15);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
-  }
   
   .color-picker-badge-absolute {
     position: absolute;
@@ -2806,6 +3006,13 @@
     height: 0.75rem;
     color: rgba(255, 255, 255, 0.9);
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+  
+  button.vote-card:hover:not(:disabled):not(.is-maximized):not(.is-active.is-maximized) {
+    transform: scale(1.02);
+    box-shadow: 
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 0 0 2px rgba(255, 255, 255, 0.06);
   }
   
   :global(.color-picker-overlay) {
@@ -2968,11 +3175,34 @@
     top: 0;
     left: 0;
     width: 100%;
-    height: 100%;
+    height: 55%;
+    max-height: 220px;
     border-radius: 16px;
     overflow: hidden;
     z-index: 0;
-    transition: z-index 0.3s ease;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .option-media-background :global(img),
+  .option-media-background :global(video),
+  .option-media-background :global(iframe) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .vote-card.is-active .option-media-background {
+    height: 100%;
+    max-height: 260px;
+  }
+  
+  .vote-card.is-active .option-media-background :global(img),
+  .vote-card.is-active .option-media-background :global(video),
+  .vote-card.is-active .option-media-background :global(iframe) {
+    object-fit: contain;
   }
   
   /* Modo interactivo - traer el preview al frente */
@@ -2983,21 +3213,22 @@
   
   .remove-option-preview-btn {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 12;
-    width: 28px;
-    height: 28px;
+    top: 60px;
+    right: 0;
+    z-index: 50;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   }
   
   .remove-option-preview-btn:hover {
@@ -3007,6 +3238,21 @@
   
   .remove-option-preview-btn:active {
     transform: scale(0.95);
+  }
+  
+  /* Botón X más grande y visible en modo maximizado */
+  .vote-card.is-maximized .remove-option-preview-btn {
+    display: flex !important;
+    z-index: 100 !important;
+    width: 40px !important;
+    height: 40px !important;
+    top: 60px !important;
+    right: 0 !important;
+  }
+  
+  .vote-card.is-maximized .remove-option-preview-btn :global(svg) {
+    width: 20px !important;
+    height: 20px !important;
   }
   
   /* Wrapper para LinkPreview en opciones */
@@ -3062,16 +3308,84 @@
     transition: opacity 0.3s ease;
   }
   
-  /* Wrapper del botón flotante */
-  .add-option-wrapper {
+  /* Contenedor de botones de acción */
+  .cards-actions {
+    display: flex;
     position: relative;
-    width: 100%;
-    height: 60px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    min-height: 48px;
+  }
+  
+  /* Botones de acción alineados a la derecha */
+  .action-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    position: absolute;
+    right: 0;
+  }
+  
+  /* Botón de minimizar dentro de card maximizada */
+  .minimize-badge {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 44px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.9);
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    padding-right: 20px;
-    margin-top: 8px;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 50000 !important;
+    pointer-events: auto !important;
+  }
+  
+  .minimize-badge:hover {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+  
+  .minimize-badge:active {
+    transform: scale(1);
+  }
+  
+  /* Botón de maximizar flotante */
+  .maximize-floating-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: rgba(30, 30, 35, 0.95);
+    backdrop-filter: blur(10px);
+    border: none;
+    border-bottom: 3px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 10;
+  }
+  
+  .maximize-floating-button:hover {
+    background: rgba(40, 40, 45, 1);
+    border-bottom-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  }
+  
+  .maximize-floating-button:active {
+    transform: translateY(0);
   }
   
   /* Botón flotante abajo a la derecha */
@@ -3079,16 +3393,16 @@
     width: 48px;
     height: 48px;
     border-radius: 8px;
-    background: rgba(20, 20, 25, 0.98);
+    background: rgba(30, 30, 35, 0.95);
+    backdrop-filter: blur(10px);
     border: none;
     border-bottom: 3px solid;
-    color: rgba(255, 255, 255, 0.95);
-    cursor: pointer;
-    transition: all 0.3s ease;
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
     z-index: 10;
   }
   
@@ -3102,19 +3416,30 @@
     transform: translateY(0);
   }
   
-  /* Contenedor de paginación y botón */
+  /* Contenedor de paginación y botones */
   .pagination-container {
     position: relative;
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
   }
   
-  /* Paginación - Exacto como BottomSheet */
+  /* Contenedor de dots de paginación inline */
+  .pagination-dots-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  /* Contenedor de dots de paginación (legacy, por si se usa) */
   .pagination-dots {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 8px;
-    padding: 16px 0;
+    padding: 12px 0;
   }
   
   .pagination-dot {
@@ -3767,6 +4092,458 @@
     .modal-content {
       padding: 3rem 2.5rem;
       padding-bottom: 3rem;
+    }
+  }
+  
+  /* Animación de expansión dramática */
+  @keyframes expandFromSmall {
+    0% {
+      transform: translate(-50%, -50%) scale(0.1);
+      opacity: 0;
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+  }
+  
+  /* Animaciones direccionales para cards maximizadas */
+  
+  /* FORWARD: Entra desde la derecha */
+  @keyframes slideInFromRight {
+    0% {
+      opacity: 0;
+      transform: translate(calc(-50% + 120%), -50%) scale(0.9);
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  
+  /* FORWARD: Sale hacia la izquierda */
+  @keyframes slideOutToLeft {
+    0% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(calc(-50% - 120%), -50%) scale(0.9);
+    }
+  }
+  
+  /* BACKWARD: Entra desde la izquierda */
+  @keyframes slideInFromLeft {
+    0% {
+      opacity: 0;
+      transform: translate(calc(-50% - 120%), -50%) scale(0.9);
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  
+  /* BACKWARD: Sale hacia la derecha */
+  @keyframes slideOutToRight {
+    0% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(calc(-50% + 120%), -50%) scale(0.9);
+    }
+  }
+  
+  /* Aplicar animación de entrada según dirección */
+  .vote-card.is-maximized.accordion-transition.accordion-forward {
+    animation: slideInFromRight 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  }
+  
+  .vote-card.is-maximized.accordion-transition.accordion-backward {
+    animation: slideInFromLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  }
+  
+  /* Animaciones de salida (cuando la card se va) */
+  .vote-card.is-maximized.accordion-exit.accordion-forward {
+    animation: slideOutToLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  }
+  
+  .vote-card.is-maximized.accordion-exit.accordion-backward {
+    animation: slideOutToRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  }
+  
+  /* Expansión a pantalla completa del vote-card */
+  .vote-cards-grid .vote-card.is-maximized,
+  .vote-cards-grid.accordion.fullwidth .vote-card.is-maximized,
+  .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card.is-maximized {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) scale(1);
+    width: calc(100% - 10px) !important;
+    max-width: 700px !important;
+    z-index: 40000 !important;
+    
+    min-height: 65vh !important;
+    flex: none !important;
+    min-width: auto !important;
+    border: 3px solid var(--card-color) !important;
+    border-radius: var(--border-radius, 0) !important;
+    box-shadow: 0 0 0 100vmax #000000, 0 0 60px var(--card-color) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    pointer-events: auto !important;
+    cursor: default !important;
+    opacity: 1 !important;
+  }
+  
+  /* Animación inicial solo cuando NO hay accordion-transition */
+  .vote-cards-grid .vote-card.is-maximized:not(.accordion-transition),
+  .vote-cards-grid.accordion.fullwidth .vote-card.is-maximized:not(.accordion-transition),
+  .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card.is-maximized:not(.accordion-transition) {
+    animation: expandFromSmall 0.25s cubic-bezier(0.25, 0.1, 0.25, 1) forwards !important;
+  }
+  
+  /* Prevenir efectos de hover, active, focus en card maximizada */
+  .vote-card.is-maximized:hover,
+  .vote-card.is-maximized:active,
+  .vote-card.is-maximized:focus,
+  .vote-card.is-maximized:focus-visible,
+  .vote-card.is-maximized:focus-within {
+    box-shadow: 0 0 0 100vmax #000000, 0 0 60px var(--card-color) !important;
+  }
+  
+  .vote-card.is-maximized:not(.accordion-transition):hover,
+  .vote-card.is-maximized:not(.accordion-transition):active,
+  .vote-card.is-maximized:not(.accordion-transition):focus,
+  .vote-card.is-maximized:not(.accordion-transition):focus-visible,
+  .vote-card.is-maximized:not(.accordion-transition):focus-within {
+    transform: translate(-50%, -50%) scale(1) !important;
+    opacity: 1 !important;
+    background: #2a2a2a !important;
+  }
+  
+  /* Asegurar que no haya cambios de color al hacer click */
+  .vote-card.is-maximized,
+  .vote-card.is-maximized::before,
+  .vote-card.is-maximized::after {
+    background-color: #2a2a2a !important;
+    transition: none !important;
+  }
+  
+  /* Backdrop que bloquea clicks en el fondo */
+  .vote-card.is-maximized::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: #000000;
+    z-index: -1;
+    pointer-events: auto;
+    cursor: default;
+  }
+  
+  /* Bloquear interacción con el modal cuando hay card maximizada */
+  .modal-container:has(.vote-card.is-maximized) .modal-content > *:not(.vote-cards-container):not(.main-card) {
+    pointer-events: none;
+    user-select: none;
+  }
+  
+  /* Mantener header interactivo cuando hay card maximizada */
+  .modal-container:has(.vote-card.is-maximized) .modal-header {
+    pointer-events: auto;
+  }
+  
+  /* Mantener visible el título de la encuesta cuando hay card maximizada */
+  .modal-container:has(.vote-card.is-maximized) .main-card {
+    pointer-events: auto;
+    opacity: 1;
+    z-index: 10;
+  }
+  
+  /* Header cuando está maximizado */
+  .modal-header.maximized {
+    justify-content: center;
+    padding: 10px 20px;
+  }
+  
+  /* Título de la encuesta en card maximizada dentro del header */
+  .maximized-poll-title-overlay {
+    width: 100%;
+    max-width: 800px;
+    z-index: 50001;
+  }
+  
+  .maximized-poll-title-overlay .poll-title-input {
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.4;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    width: 100%;
+    padding: 8px 12px;
+    font-family: inherit;
+    letter-spacing: -0.02em;
+    min-height: 42px;
+    max-height: 100px;
+    overflow-y: auto;
+    overflow-wrap: break-word;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    field-sizing: content;
+    text-align: center;
+    transition: font-size 0.2s ease;
+  }
+  
+  /* Placeholder grande */
+  .maximized-poll-title-overlay .poll-title-input:placeholder-shown {
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  
+  .maximized-poll-title-overlay .poll-title-input::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .maximized-poll-title-overlay .poll-title-input::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .maximized-poll-title-overlay .poll-title-input::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
+  
+  .maximized-poll-title-overlay .poll-title-input::placeholder {
+    color: #52525b;
+    font-weight: 600;
+  }
+  
+  .maximized-poll-title-overlay .poll-title-input:focus {
+    color: #ffffff;
+  }
+  
+  /* Bloquear botones de navegación y elementos fuera de la card maximizada */
+  .modal-container:has(.vote-card.is-maximized) .pagination-dots,
+  .modal-container:has(.vote-card.is-maximized) .pagination-dots-inline,
+  .modal-container:has(.vote-card.is-maximized) .pagination-container,
+  .modal-container:has(.vote-card.is-maximized) .action-buttons,
+  .modal-container:has(.vote-card.is-maximized) .vote-card:not(.is-maximized) {
+    pointer-events: none !important;
+    opacity: 0.3 !important;
+  }
+  
+  .vote-card.is-maximized .card-header {
+    padding: 70px 30px 20px 30px !important;
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end !important;
+    min-height: 150px !important;
+    pointer-events: auto !important;
+  }
+  
+  .vote-card.is-maximized .card-content {
+    flex: 0 0 auto !important;
+    padding: 20px !important;
+    min-height: 80px !important;
+    pointer-events: auto !important;
+  }
+  
+  /* Mantener todos los elementos internos visibles */
+  .vote-card.is-maximized * {
+    opacity: 1 !important;
+  }
+  
+  .vote-card.is-maximized .question-title.editable {
+    font-size: 22px !important;
+    min-height: 80px !important;
+    max-height: 180px !important;
+    overflow-y: auto !important;
+    pointer-events: auto !important;
+    background: transparent !important;
+    opacity: 1 !important;
+  }
+  
+  .vote-card.is-maximized .question-title.editable:focus,
+  .vote-card.is-maximized .question-title.editable:active {
+    background: transparent !important;
+    opacity: 1 !important;
+  }
+  
+  .vote-card.is-maximized .char-counter {
+    font-size: 14px !important;
+    top: 20px !important;
+    right: 20px !important;
+  }
+  
+  .vote-card.is-maximized .color-picker-badge-absolute {
+    bottom: 20px !important;
+    right: 80px !important;
+    width: 48px !important;
+    height: 48px !important;
+  }
+  
+  .vote-card.is-maximized .remove-option-badge {
+    display: none !important;
+  }
+  
+  .vote-card.is-maximized .option-media-background {
+    position: relative !important;
+    height: 65% !important;
+    min-height: 400px !important;
+    max-height: 650px !important;
+    width: 100% !important;
+    z-index: 0 !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(0, 0, 0, 0.3) !important;
+    border-radius: 0 !important;
+  }
+  
+  .vote-card.is-maximized .option-media-background :global(img),
+  .vote-card.is-maximized .option-media-background :global(video),
+  .vote-card.is-maximized .option-media-background :global(iframe) {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+  }
+  
+  .vote-card.is-maximized .option-media-background :global(.link-preview) {
+    width: 90% !important;
+    max-width: 600px !important;
+  }
+  
+  /* Navegación para card maximizada */
+  .maximized-navigation {
+    position: fixed;
+    top: calc(45% + 75vh / 2 + 20px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    z-index: 100000 !important;
+    pointer-events: auto !important;
+    padding: 12px 20px;
+    backdrop-filter: blur(10px);
+    border-radius: 30px;
+  }
+  
+  .maximized-dots {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  
+  .maximized-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--dot-color, white);
+    border: none;
+    cursor: pointer;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.2s ease;
+    padding: 0;
+    pointer-events: auto;
+  }
+  
+  .maximized-dot:hover {
+    transform: scale(1.3);
+  }
+  
+  .maximized-dot.active {
+    width: 28px;
+    height: 10px;
+    border-radius: 5px;
+    background: var(--dot-color, white);
+  }
+  
+  @media (max-width: 768px) {
+    .vote-card.is-maximized {
+      width: calc(100vw - 20px) !important;
+      height: calc(100vh - 20px) !important;
+      margin: 10px 0 !important;
+    }
+    
+    .modal-header.maximized {
+      padding: 12px 15px !important;
+    }
+    
+    .maximized-poll-title-overlay {
+      max-width: 100% !important;
+    }
+    
+    .maximized-poll-title-overlay .poll-title-input {
+      font-size: 1rem !important;
+    }
+    
+    .maximized-poll-title-overlay .poll-title-input:placeholder-shown {
+      font-size: 1.5rem !important;
+    }
+    
+    .vote-card.is-maximized .card-header {
+      padding: 50px 20px 15px 20px !important;
+    }
+    
+    .vote-card.is-maximized .question-title.editable {
+      font-size: 18px !important;
+      min-height: 100px !important;
+    }
+    
+    .vote-card.is-maximized .color-picker-badge-absolute {
+      bottom: 15px !important;
+      right: 70px !important;
+      width: 44px !important;
+      height: 44px !important;
+    }
+    
+    .minimize-badge {
+      bottom: 15px !important;
+      right: 15px !important;
+      width: 44px !important;
+      height: 44px !important;
+    }
+    
+    .maximized-navigation {
+      top: calc(45% + 75vh / 2 + 15px);
+      gap: 15px;
+      padding: 16px 16px;
+    }
+    
+    .maximized-dot {
+      width: 8px;
+      height: 8px;
+    }
+    
+    .maximized-dot.active {
+      width: 24px;
+      height: 8px;
     }
   }
 </style>

@@ -592,11 +592,29 @@ async function fetchOpenGraph(targetUrl: string): Promise<LinkPreviewData> {
   } catch (err) {
     clearTimeout(timeoutId);
     
-    // Si falla, retornar datos mínimos
+    // Si falla, retornar datos mínimos con nombre legible
     const urlObj = new URL(targetUrl);
+    
+    // Nombres legibles para dominios conocidos
+    const friendlyNames: Record<string, string> = {
+      'primevideo.com': 'Prime Video',
+      'netflix.com': 'Netflix',
+      'disneyplus.com': 'Disney+',
+      'hbomax.com': 'HBO Max',
+      'hulu.com': 'Hulu',
+      'twitch.tv': 'Twitch',
+      'spotify.com': 'Spotify'
+    };
+    
+    const domain = urlObj.hostname.replace('www.', '');
+    const title = friendlyNames[domain] || urlObj.hostname;
+    
+    console.log(`[Link Preview] ⚠️ Fetch failed for ${targetUrl}, returning minimal data:`, err);
+    
     return {
       url: targetUrl,
-      title: urlObj.hostname,
+      title: title,
+      description: 'Haz clic para ver en ' + title,
       domain: urlObj.hostname,
       type: 'generic',
       isSafe: isSafeDomain(targetUrl),

@@ -19,41 +19,98 @@ REGLAS:
 - Enlaces: De plataformas soportadas (ver lista)
 - Tono: Neutral o claramente marcado si no lo es
 
-PLATAFORMAS EMBEBIBLES SOPORTADAS:
+DOMINIOS EMBEBIBLES SOPORTADOS (500+ total):
 
 REDES SOCIALES:
 ✅ Twitter/X: twitter.com, x.com
 ✅ Instagram: instagram.com, instagr.am
 ✅ TikTok: tiktok.com, vm.tiktok.com
 ✅ Facebook: facebook.com, fb.watch
-✅ LinkedIn: linkedin.com/posts
-✅ Reddit: reddit.com/r/
+✅ LinkedIn: linkedin.com
+✅ Reddit: reddit.com
+✅ Pinterest: pinterest.com
 
 VIDEO & MÚSICA:
 ✅ YouTube: youtube.com, youtu.be
 ✅ Spotify: open.spotify.com
-✅ Vimeo, Twitch, SoundCloud
+✅ Vimeo: vimeo.com
+✅ Twitch: twitch.tv
+✅ SoundCloud: soundcloud.com
+✅ Dailymotion: dailymotion.com
 
-NOTICIAS (con preview de imagen):
-✅ España: elpais.com, elmundo.es, abc.es, elconfidencial.com, lavanguardia.com
-✅ LATAM: clarin.com, lanacion.com.ar, infobae.com, eltiempo.com, emol.com
-✅ Internacional: bbc.com, cnn.com, theguardian.com, nytimes.com, reuters.com
-✅ Tech: techcrunch.com, theverge.com, wired.com, arstechnica.com
+NOTICIAS ESPAÑA (15):
+✅ elpais.com, elmundo.es, abc.es, lavanguardia.com, elconfidencial.com
+✅ 20minutos.es, eldiario.es, publico.es, elespanol.com, expansion.com
+✅ cincodias.com, vozpopuli.com, okdiario.com, huffingtonpost.es
 
-E-COMMERCE (con imagen producto):
-✅ Amazon: amazon.com, amazon.es, amzn.eu
-✅ eBay, Etsy, AliExpress
+NOTICIAS LATAM (29):
+✅ Argentina: clarin.com, lanacion.com.ar, infobae.com, pagina12.com.ar
+✅ México: eluniversal.com.mx, reforma.com, milenio.com, proceso.com.mx
+✅ Colombia: eltiempo.com, semana.com, elespectador.com
+✅ Chile: emol.com, latercera.com, elmercurio.com
+✅ Perú: elcomercio.pe, gestion.pe
+✅ Y más...
+
+NOTICIAS INTERNACIONAL (25+):
+✅ USA/UK: bbc.com, cnn.com, theguardian.com, nytimes.com, washingtonpost.com
+✅ reuters.com, bloomberg.com, economist.com, ft.com, wsj.com, forbes.com
+✅ telegraph.co.uk, independent.co.uk, dailymail.co.uk
+
+NOTICIAS EUROPA (48):
+✅ Francia: lemonde.fr, lefigaro.fr, liberation.fr, leparisien.fr
+✅ Alemania: spiegel.de, bild.de, welt.de, faz.net, sueddeutsche.de
+✅ Italia: corriere.it, repubblica.it, lastampa.it
+✅ Portugal: publico.pt, expresso.pt, dn.pt
+
+TECH NEWS (10):
+✅ techcrunch.com, theverge.com, wired.com, arstechnica.com
+✅ cnet.com, engadget.com, zdnet.com, venturebeat.com
+
+E-COMMERCE (40+):
+✅ Amazon: amazon.com, amazon.es, amazon.co.uk, amazon.de, amazon.fr
+✅ ebay.com, etsy.com, aliexpress.com, walmart.com, target.com
+✅ bestbuy.com, ikea.com, zara.com, hm.com, nike.com, adidas.com
 
 CONOCIMIENTO:
-✅ Wikipedia: wikipedia.org (todos los idiomas)
+✅ Wikipedia: wikipedia.org (todos idiomas)
 ✅ GitHub: github.com
 ✅ Stack Overflow: stackoverflow.com
+✅ Medium: medium.com
+✅ Dev.to: dev.to
 
-OTROS:
-✅ Bloomberg, Forbes, Nature, Science
-✅ Behance, Dribbble (diseño)
-✅ Steam, IGN (gaming)
-✅ TripAdvisor, Booking, Airbnb (viajes)
+CIENTÍFICOS (8):
+✅ nature.com, science.org, arxiv.org, pubmed.gov
+✅ researchgate.net, academia.edu
+
+BIG TECH (34):
+✅ google.com, microsoft.com, apple.com, meta.com, amazon.com
+✅ netflix.com, adobe.com, salesforce.com, oracle.com, ibm.com
+✅ nvidia.com, samsung.com, sony.com, intel.com, amd.com
+
+GAMING (19):
+✅ steam.com, epicgames.com, ea.com, ubisoft.com
+✅ twitch.tv, ign.com, gamespot.com, polygon.com
+
+VIAJES (19):
+✅ booking.com, airbnb.com, tripadvisor.com, expedia.com, kayak.com
+
+FINANZAS (30):
+✅ paypal.com, stripe.com, coinbase.com, robinhood.com, binance.com
+
+STREAMING (15):
+✅ netflix.com, disneyplus.com, hbomax.com, primevideo.com
+
+EDUCACIÓN (9):
+✅ coursera.org, udemy.com, edx.org, khanacademy.org
+✅ mit.edu, stanford.edu, harvard.edu
+
+DISEÑO (7):
+✅ behance.net, dribbble.com, unsplash.com, canva.com, figma.com
+
+DELIVERY (16):
+✅ ubereats.com, doordash.com, glovo.com, rappi.com
+
++300 dominios más verificados y seguros
 
 EJEMPLOS RÁPIDOS:
 

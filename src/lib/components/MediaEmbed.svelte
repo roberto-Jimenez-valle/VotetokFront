@@ -88,94 +88,7 @@
     error = false;
     
     try {
-      // YouTube
-      if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        embedType = 'youtube';
-        const videoId = extractYouTubeId(url);
-        console.log('[MediaEmbed] YouTube detectado - VideoID:', videoId);
-        if (videoId) {
-          embedHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&controls=1" allowfullscreen style="width:100%;height:100%;border:none;border-radius:12px;"></iframe>`;
-          console.log('[MediaEmbed] YouTube iframe creado');
-        } else {
-          console.error('[MediaEmbed] No se pudo extraer el videoId de:', url);
-          error = true;
-        }
-        loading = false;
-        return;
-      }
-      
-      // Spotify
-      if (url.includes('spotify.com')) {
-        embedType = 'spotify';
-        let embedUrl = url.replace('open.spotify.com', 'open.spotify.com/embed');
-        embedUrl += (embedUrl.includes('?') ? '&' : '?') + 'utm_source=generator';
-        if (mode === 'full') embedUrl += '&visual=true';
-        embedHTML = `<iframe src="${embedUrl}" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" style="width:100%;height:100%;border:none;border-radius:12px;"></iframe>`;
-        loading = false;
-        return;
-      }
-      
-      // Vimeo
-      if (url.includes('vimeo.com')) {
-        embedType = 'vimeo';
-        const videoId = url.split('/').pop()?.split('?')[0];
-        if (videoId) {
-          embedHTML = `<iframe src="https://player.vimeo.com/video/${videoId}?api=1&controls=1" allow="autoplay; fullscreen; picture-in-picture" style="width:100%;height:100%;border:none;border-radius:12px;"></iframe>`;
-        }
-        loading = false;
-        return;
-      }
-      
-      // SoundCloud
-      if (url.includes('soundcloud.com')) {
-        embedType = 'soundcloud';
-        embedHTML = `<iframe src="https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true" allow="autoplay" style="width:100%;height:100%;border:none;border-radius:12px;"></iframe>`;
-        loading = false;
-        return;
-      }
-      
-      // Twitch
-      if (url.includes('twitch.tv')) {
-        embedType = 'twitch';
-        const videoId = url.split('/videos/')[1]?.split('?')[0];
-        if (videoId) {
-          embedHTML = `<iframe src="https://player.twitch.tv/?video=${videoId}&parent=${window.location.hostname}&autoplay=false" allowfullscreen style="width:100%;height:100%;border:none;border-radius:12px;"></iframe>`;
-        }
-        loading = false;
-        return;
-      }
-      
-      // SlideShare
-      if (url.includes('slideshare.net')) {
-        embedType = 'slideshare';
-        // SlideShare requiere obtener el código embed de su API
-        embedType = 'generic';
-        await fetchMetadata(url);
-        return;
-      }
-      
-      // Megaphone (podcasts)
-      if (url.includes('megaphone.fm') || url.includes('player.megaphone.fm')) {
-        embedType = 'megaphone';
-        embedHTML = `<iframe src="${url}" width="100%" height="100%" style="border:none;border-radius:12px;" scrolling="no"></iframe>`;
-        loading = false;
-        return;
-      }
-      
-      // Omny.fm (podcasts)
-      if (url.includes('omny.fm')) {
-        embedType = 'omny';
-        // Convertir URL de escucha a URL de embed
-        let embedUrl = url;
-        if (url.includes('omny.fm/shows/')) {
-          embedUrl = url.replace('/shows/', '/shows/embed/');
-        }
-        embedHTML = `<iframe src="${embedUrl}" width="100%" height="100%" style="border:none;border-radius:12px;" scrolling="no"></iframe>`;
-        loading = false;
-        return;
-      }
-      
-      // Detectar imágenes directas
+      // Detectar imágenes directas (no necesitan oEmbed)
       if (url.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i)) {
         embedType = 'generic';
         metadata = {
@@ -189,9 +102,8 @@
         return;
       }
       
-      // Instagram, TikTok, Twitter/X, Facebook, Pinterest, y otros: usar metadatos
-      embedType = 'generic';
-      console.log('[MediaEmbed] Fetching metadata para:', url);
+      // TODOS los enlaces pasan por el sistema oEmbed/link-preview centralizado
+      console.log('[MediaEmbed] Usando sistema oEmbed/link-preview centralizado');
       await fetchMetadata(url);
       
     } catch (err) {
@@ -201,54 +113,52 @@
     }
   }
   
-  // Extraer ID de YouTube
-  function extractYouTubeId(url: string): string | null {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-      /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
-    ];
-    
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) return match[1];
-    }
-    return null;
-  }
-  
   // Obtener metadatos con validación del backend
   async function fetchMetadata(url: string) {
     try {
-      console.log('[MediaEmbed] Validando URL con backend...');
+      console.log('[MediaEmbed] Obteniendo preview con oEmbed/Open Graph...');
       
-      // Primero intentar con nuestro API de validación
+      // Usar nuestro API de link-preview (oEmbed + Open Graph)
       try {
-        const response = await fetch('/api/validate-preview', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ url })
-        });
+        const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
         
         if (response.ok) {
-          const data = await response.json();
-          console.log('[MediaEmbed] Respuesta del API de validación:', data);
+          const result = await response.json();
+          console.log('[MediaEmbed] Respuesta del API:', result);
           
-          if (data.success && data.data) {
-            metadata = {
-              title: data.data.title,
-              description: data.data.description,
-              image: getProxiedImageUrl(data.data.image),
-              url: data.data.url
-            };
-            embedType = data.data.type || 'generic';
-            console.log('[MediaEmbed] ✅ Metadata establecida:', { embedType, metadata });
+          // Los datos están en result.data
+          const data = result.data || result;
+          
+          if (data) {
+            // Si tiene HTML embebido de oEmbed, usarlo
+            if (data.embedHtml || data.html) {
+              embedType = data.providerName || data.provider || 'oembed';
+              embedHTML = data.embedHtml || data.html;
+              console.log('[MediaEmbed] ✅ oEmbed HTML recibido para:', embedType);
+            } 
+            // Si no, usar metadatos para preview
+            else {
+              // Usar placeholder si no hay imagen
+              const imageUrl = data.image || data.imageProxied;
+              const finalImage = imageUrl 
+                ? getProxiedImageUrl(imageUrl) 
+                : `https://placehold.co/400x250/1a1a2e/white?text=${encodeURIComponent(data.domain || new URL(url).hostname)}`;
+              
+              metadata = {
+                title: data.title || 'Sin título',
+                description: data.description || '',
+                image: finalImage,
+                url: data.url || url
+              };
+              embedType = data.type || 'opengraph';
+              console.log('[MediaEmbed] ✅ Metadata establecida:', { embedType, metadata, hasRealImage: !!imageUrl });
+            }
             loading = false;
             return;
           }
         }
       } catch (apiError) {
-        console.log('[MediaEmbed] API de validación falló, usando Microlink fallback:', apiError);
+        console.log('[MediaEmbed] API link-preview falló, usando Microlink fallback:', apiError);
       }
       
       // Fallback a Microlink si el API falla
@@ -395,11 +305,12 @@
         </a>
       {/if}
     </div>
-  {:else if embedType === 'youtube' || embedType === 'spotify' || embedType === 'vimeo' || embedType === 'soundcloud' || embedType === 'twitch' || embedType === 'megaphone' || embedType === 'omny' || embedType === 'slideshare'}
+  {:else if embedHTML && embedHTML.trim() !== ''}
+    <!-- Renderizar cualquier HTML de embed (oEmbed, etc.) -->
     <div class="embed-container">
       {@html embedHTML}
     </div>
-  {:else if (embedType === 'generic' || embedType === 'text' || embedType === 'website') && metadata}
+  {:else if (embedType === 'generic' || embedType === 'opengraph' || embedType === 'text' || embedType === 'website') && metadata}
     <button 
       class="mini-card linkedin-card" 
       onclick={() => window.open(metadata.url, '_blank')}
@@ -538,17 +449,6 @@
   
   .mini-card:hover img {
     opacity: 0.75;
-  }
-  
-  .mini-card .info {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
-    padding: 6px 8px;
-    box-sizing: border-box;
   }
   
   .mini-card h4 {
