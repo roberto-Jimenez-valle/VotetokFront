@@ -146,6 +146,7 @@
   let showTypeOptionsModal = $state(false);
   let activeAccordionIndex = $state<number | null>(0);
   let currentPage = $state(0);
+  let pageTransitionDirection = $state<'left' | 'right'>('right');
   
   // Variables para swipe táctil
   let touchStartX = $state(0);
@@ -1226,26 +1227,14 @@
   
   // Funciones para manejo de swipe con pointer events
   function handlePointerDown(e: PointerEvent) {
-    // No procesar si empieza en un textarea, input o botón
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) {
-      isDragging = false;
-      return;
-    }
-    
+    // Guardar posición inicial, incluso si es en textarea/input
     touchStartX = e.clientX;
     touchStartY = e.clientY;
     isDragging = false;
   }
   
   function handlePointerMove(e: PointerEvent) {
-    if (!gridRef || touchStartX === null) return;
-    
-    // No procesar si está en un textarea, input o botón
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) {
-      return;
-    }
+    if (!gridRef) return;
     
     const deltaX = e.clientX - touchStartX;
     const deltaY = e.clientY - touchStartY;
@@ -1254,97 +1243,74 @@
     const hasMoved = Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10;
     
     // Detectar si es movimiento horizontal (más horizontal que vertical)
-    if (hasMoved && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-      isDragging = true;
+    if (hasMoved && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
+      const target = e.target as HTMLElement;
+      
+      // Si el textarea/input tiene el foco activo, NO permitir swipe (dejar escribir)
+      if ((target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') && 
+          document.activeElement === target) {
+        return; // Dejar que el usuario escriba/seleccione
+      }
+      
       e.preventDefault();
+      
+      // Si todas están minimizadas, activar la primera al hacer swipe
+      if (activeAccordionIndex === null) {
+        activeAccordionIndex = 0;
+        isDragging = false;
+        return;
+      }
       
       const currentIndex = activeAccordionIndex;
       const totalCards = paginatedOptions.items.length;
+      const totalPages = Math.ceil(options.length / ITEMS_PER_PAGE);
       
-      if (deltaX > 100) {
+      if (deltaX > 60) {
+        isDragging = true;
+        // Swipe derecha
         if (currentIndex !== null && currentIndex > 0) {
-          // Swipe derecha -> card anterior
-          const newIndex = currentIndex - 1;
-          activeAccordionIndex = newIndex;
-          touchStartX = e.clientX; // Reset para siguiente detección
-          
-          // Enfocar el input si la opción está vacía
-          setTimeout(() => {
-            const option = paginatedOptions.items[newIndex];
-            if (option && !option.label.trim()) {
-              const input = optionInputs[option.id];
-              if (input) {
-                input.focus();
-              }
-            }
-            isDragging = false;
-          }, 100);
+          // Card anterior en la misma página
+          activeAccordionIndex = currentIndex - 1;
+          touchStartX = e.clientX;
+          setTimeout(() => isDragging = false, 100);
         } else if (currentIndex === 0 && currentPage > 0) {
-          // Swipe derecho desde primera card -> página anterior
+          // Página anterior
+          pageTransitionDirection = 'right';
           currentPage -= 1;
           activeAccordionIndex = ITEMS_PER_PAGE - 1;
-          touchStartX = e.clientX; // Reset para siguiente detección
+          touchStartX = e.clientX;
           setTimeout(() => isDragging = false, 100);
         } else {
           isDragging = false;
         }
-      } else if (deltaX < -80 && !isDragging) {
+      } else if (deltaX < -60) {
         isDragging = true;
+        // Swipe izquierda
         if (currentIndex !== null && currentIndex < totalCards - 1) {
-          // Swipe izquierda -> card siguiente
-          const newIndex = currentIndex + 1;
-          activeAccordionIndex = newIndex;
-          touchStartX = e.clientX; // Reset para siguiente detección
-          
-          // Enfocar el input si la opción está vacía
-          setTimeout(() => {
-            const option = paginatedOptions.items[newIndex];
-            if (option && !option.label.trim()) {
-              const input = optionInputs[option.id];
-              if (input) {
-                input.focus();
-              }
-            }
-            isDragging = false;
-          }, 100);
+          // Card siguiente en la misma página
+          activeAccordionIndex = currentIndex + 1;
+          touchStartX = e.clientX;
+          setTimeout(() => isDragging = false, 100);
         } else if (currentIndex === totalCards - 1 && currentPage < totalPages - 1) {
           // Swipe izquierdo desde última card -> página siguiente
+          pageTransitionDirection = 'left';
           currentPage += 1;
           activeAccordionIndex = 0;
-          touchStartX = e.clientX; // Reset para siguiente detección
+          touchStartX = e.clientX;
           setTimeout(() => isDragging = false, 100);
-        } else if (currentIndex === totalCards - 1 && currentPage === totalPages - 1) {
-          // Swipe izquierdo desde la última card de la última página -> crear nueva opción
-          if (options.length < 10) {
-            touchStartX = e.clientX; // Reset para siguiente detección
-            addOption();
-            // Dar tiempo para que se cree la opción antes de activarla
-            setTimeout(() => {
-              // Calcular si la nueva opción estará en una nueva página
-              const newTotalOptions = options.length;
-              const newTotalPages = Math.ceil(newTotalOptions / ITEMS_PER_PAGE);
-              const newOptionPage = Math.floor((newTotalOptions - 1) / ITEMS_PER_PAGE);
-              const newOptionIndexInPage = (newTotalOptions - 1) % ITEMS_PER_PAGE;
-              
-              currentPage = newOptionPage;
-              activeAccordionIndex = newOptionIndexInPage;
-              
-              // Enfocar el input de la nueva opción
-              setTimeout(() => {
-                const newOption = options[options.length - 1];
-                if (newOption) {
-                  const input = optionInputs[newOption.id];
-                  if (input) {
-                    input.focus();
-                  }
-                }
-              }, 100);
-            }, 50);
-          }
+        } else {
+          isDragging = false;
         }
       }
     }
     // Si es más vertical o ambiguo, dejar que el scroll funcione normalmente
+  }
+  
+  function handlePointerUp() {
+    // Reset del estado de drag
+    isDragging = false;
+    touchStartX = 0;
+    touchStartY = 0;
   }
   
   function handleTouchEnd() {
@@ -1606,30 +1572,31 @@
         
         <!-- Grid de opciones con botón añadir integrado -->
         <div class="vote-cards-container">
-          <div 
-            class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''}"
-            style="--items: {paginatedOptions.items.length}"
-            bind:this={gridRef}
-          >
-            {#each paginatedOptions.items as option, index (option.id)}
-              {@const globalIndex = currentPage * ITEMS_PER_PAGE + index}
-              {@const pct = Math.round(100 / options.length)}
-              {@const detectedUrl = extractUrlFromText(option.label)}
-              <button 
+          {#key currentPage}
+            <div 
+              class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''}"
+              style="--items: {paginatedOptions.items.length}"
+              bind:this={gridRef}
+              in:fly={!maximizedOption ? { x: pageTransitionDirection === 'left' ? 300 : -300, duration: 250, delay: 50 } : { duration: 0 }}
+              out:fly={!maximizedOption ? { x: pageTransitionDirection === 'left' ? -300 : 300, duration: 250 } : { duration: 0 }}
+            >
+              {#each paginatedOptions.items as option, index (option.id)}
+                {@const globalIndex = currentPage * ITEMS_PER_PAGE + index}
+                {@const pct = Math.round(100 / options.length)}
+                {@const detectedUrl = extractUrlFromText(option.label)}
+                <button 
                 type="button"
                 class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {activeAccordionIndex !== index ? 'collapsed' : ''} {maximizedOption === option.id ? `is-maximized accordion-transition accordion-${transitionDirection}` : ''}" 
                 style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)}; {maximizedOption === option.id ? `--border-radius: ${globalIndex === 0 ? '16px 0 0 16px' : globalIndex === options.length - 1 ? '0 16px 16px 0' : '0'};` : ''}" 
                 onclick={() => {
-                  if (maximizedOption !== option.id) {
+                  if (maximizedOption !== option.id && !isDragging) {
                     setActive(index);
                   }
                 }}
-                ontouchstart={maximizedOption === option.id ? handleSwipeStart : undefined}
-                ontouchmove={maximizedOption === option.id ? handleSwipeMove : undefined}
-                ontouchend={maximizedOption === option.id ? handleSwipeEnd : undefined}
-                onpointerdown={maximizedOption === option.id ? handleSwipeStart : undefined}
-                onpointermove={maximizedOption === option.id ? handleSwipeMove : undefined}
-                onpointerup={maximizedOption === option.id ? handleSwipeEnd : undefined}
+                onpointerdown={maximizedOption === option.id ? handleSwipeStart : handlePointerDown}
+                onpointermove={maximizedOption === option.id ? handleSwipeMove : handlePointerMove}
+                onpointerup={maximizedOption === option.id ? handleSwipeEnd : handlePointerUp}
+                style:touch-action={maximizedOption === option.id ? 'pan-y' : 'auto'}
               >
                 {#if optionPreviews.has(option.id) || loadingPreviews.has(option.id) || (detectedUrl && detectedUrl.trim() !== '') || (option.imageUrl && option.imageUrl.trim() !== '')}
                   {@const isLoading = loadingPreviews.has(option.id)}
@@ -1740,14 +1707,13 @@
                 <div class="card-header {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
                   {#if maximizedOption === option.id || activeAccordionIndex === index}
                     {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
-                    {@const currentUrl = extractUrlFromText(option.label)}
                     <div class="char-counter">{labelWithoutUrl.length}/200</div>
                     <textarea
-                      class="question-title editable"
-                      class:rating-emoji={pollType === 'rating' && /^[\p{Emoji}\s]+$/u.test(option.label || '')}
-                      class:error={errors[`option_${option.id}`]}
-                      placeholder="Opción {globalIndex + 1}"
-                      value={labelWithoutUrl}
+                        class="question-title editable"
+                        class:rating-emoji={pollType === 'rating' && /^[\p{Emoji}\s]+$/u.test(option.label || '')}
+                        class:error={errors[`option_${option.id}`]}
+                        placeholder="Opción {globalIndex + 1}"
+                        value={labelWithoutUrl}
                       oninput={(e) => {
                         const newValue = (e.target as HTMLTextAreaElement).value;
                         const currentUrl = extractUrlFromText(option.label);
@@ -1786,14 +1752,17 @@
                       }}
                       bind:this={optionInputs[option.id]}
                       maxlength="200"
-                      onclick={(e) => e.stopPropagation()}
-                    ></textarea>
-                  {/if}
-                  {#if errors[`option_${option.id}`] && (maximizedOption === option.id || activeAccordionIndex === index)}
-                    <div class="option-error">
-                      <span class="error-icon">⚠️</span>
-                      <span class="error-text">{errors[`option_${option.id}`]}</span>
-                    </div>
+                      onpointerdown={maximizedOption === option.id ? handleSwipeStart : handlePointerDown}
+                      onpointermove={maximizedOption === option.id ? handleSwipeMove : handlePointerMove}
+                      onpointerup={maximizedOption === option.id ? handleSwipeEnd : handlePointerUp}
+                      style:touch-action="pan-y"
+                      ></textarea>
+                    {#if errors[`option_${option.id}`]}
+                      <div class="option-error">
+                        <span class="error-icon">⚠️</span>
+                        <span class="error-text">{errors[`option_${option.id}`]}</span>
+                      </div>
+                    {/if}
                   {/if}
                 </div>
                 <div class="card-content {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
@@ -1879,8 +1848,9 @@
                   </div>
                 {/if}
               </button>
-            {/each}
-          </div>
+              {/each}
+            </div>
+          {/key}
           
           <!-- Navegación para card maximizada (fuera del botón) -->
           {#if maximizedOption}
@@ -1919,6 +1889,7 @@
                   <button 
                     class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
                     onclick={() => {
+                      pageTransitionDirection = pageIndex > currentPage ? 'left' : 'right';
                       currentPage = pageIndex;
                       activeAccordionIndex = 0;
                     }}
@@ -2641,9 +2612,6 @@
     position: relative;
     display: flex;
     align-items: center;
-    justify-content: center;
-   
-    overflow: visible;
   }
   
   /* Grid de opciones - Estilo BottomSheet */
@@ -2933,6 +2901,10 @@
     opacity: 1;
   }
   
+  .vote-card.is-maximized .card-content::before {
+    opacity: 1;
+  }
+  
   .vote-card.is-active .card-content::before {
     opacity: 1;
   }
@@ -3184,6 +3156,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    pointer-events: none;
   }
   
   .option-media-background :global(img),
@@ -3229,6 +3202,7 @@
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    pointer-events: auto;
   }
   
   .remove-option-preview-btn:hover {
@@ -3238,6 +3212,15 @@
   
   .remove-option-preview-btn:active {
     transform: scale(0.95);
+  }
+  
+  /* Ocultar preview y botón X en cards colapsadas */
+  .vote-card.collapsed .option-media-background {
+    display: none !important;
+  }
+  
+  .vote-card.collapsed .remove-option-preview-btn {
+    display: none !important;
   }
   
   /* Botón X más grande y visible en modo maximizado */
