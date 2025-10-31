@@ -181,12 +181,44 @@
   let transitionDirection = $state<'forward' | 'backward'>('forward');
   let exitingOption = $state<string | null>(null);
   
+  // Función para pausar todos los videos
+  function pauseAllVideos(exceptVideo?: HTMLVideoElement) {
+    if (typeof document === 'undefined') return;
+    
+    const allVideos = document.querySelectorAll('.vote-card video');
+    let pausedCount = 0;
+    
+    allVideos.forEach((video: Element) => {
+      const htmlVideo = video as HTMLVideoElement;
+      if (htmlVideo !== exceptVideo && !htmlVideo.paused) {
+        htmlVideo.pause();
+        pausedCount++;
+      }
+    });
+    
+    if (pausedCount > 0) {
+      console.log(`[CreatePoll Video] ⏸️ ${pausedCount} video(s) pausado(s)`);
+    }
+  }
+  
   // Efecto para animar el slider horizontal con transform3d en modo maximizado
   $effect(() => {
     if (maximizedOption && typeof document !== 'undefined' && gridRef) {
       const currentIdx = options.findIndex(opt => opt.id === maximizedOption);
       
       if (currentIdx !== -1) {
+        // Pausar TODOS los videos inmediatamente al cambiar de card
+        if (previousMaximizedOption && previousMaximizedOption !== maximizedOption) {
+          console.log('[CreatePoll Slider] 🎬 Cambiando de card, pausando videos...');
+          pauseAllVideos();
+          
+          // Esperar un poco más para que el DOM se actualice y luego pausar de nuevo
+          setTimeout(() => {
+            pauseAllVideos();
+            console.log('[CreatePoll Slider] ✅ Segunda pausa de seguridad');
+          }, 100);
+        }
+        
         // Calcular el desplazamiento horizontal basado en el ancho del contenedor
         const container = gridRef.parentElement;
         const cardWidth = container ? container.offsetWidth : window.innerWidth;
@@ -209,6 +241,9 @@
       console.log('[CreatePoll Slider] 🔄 Reseteando transform');
       gridRef.style.transform = '';
       gridRef.style.transition = '';
+      
+      // NO pausar videos al salir de maximizado - mantener reproducción
+      console.log('[CreatePoll Slider] 📹 Videos se mantienen al minimizar');
     }
     
     previousMaximizedOption = maximizedOption;
@@ -1212,6 +1247,58 @@
     };
   });
   
+  // Sistema de gestión de reproducción de videos: solo uno a la vez
+  $effect(() => {
+    if (!isOpen || typeof document === 'undefined') return;
+    
+    const videoPlayHandlers = new Map<HTMLVideoElement, () => void>();
+    
+    // Esperar a que el DOM esté listo
+    setTimeout(() => {
+      const allVideos = document.querySelectorAll('.vote-card video');
+      
+      allVideos.forEach((video: Element) => {
+        const htmlVideo = video as HTMLVideoElement;
+        
+        // Handler para cuando este video empieza a reproducirse
+        const playHandler = () => {
+          console.log('[CreatePoll Video] ▶️ Video reproduciendo, pausando otros...');
+          pauseAllVideos(htmlVideo);
+        };
+        
+        htmlVideo.addEventListener('play', playHandler);
+        videoPlayHandlers.set(htmlVideo, playHandler);
+      });
+      
+      console.log(`[CreatePoll Video] ✅ ${allVideos.length} video(s) monitorizados`);
+    }, 100);
+    
+    // Cleanup
+    return () => {
+      videoPlayHandlers.forEach((handler, video) => {
+        video.removeEventListener('play', handler);
+      });
+      videoPlayHandlers.clear();
+      console.log('[CreatePoll Video] 🧹 Listeners de video removidos');
+    };
+  });
+  
+  // Sistema de pausa de videos al cambiar de card
+  $effect(() => {
+    if (typeof document === 'undefined' || !isOpen) return;
+    
+    // Crear un identificador único para este efecto
+    const effectId = `${maximizedOption}-${activeAccordionIndex}-${currentPage}`;
+    
+    console.log('[CreatePoll VideoPause] 🔄 Cambio detectado:', effectId);
+    
+    // Pausar TODOS los videos cuando cambia la card activa
+    setTimeout(() => {
+      pauseAllVideos();
+      console.log('[CreatePoll VideoPause] ⏸️ Todos los videos pausados');
+    }, 100);
+  });
+  
   // Efecto reactivo: detectar URLs en título y cargar preview automáticamente
   $effect(() => {
     console.log('🔎 [$effect] EJECUTADO - Título:', title, 'isOpen:', isOpen);
@@ -1704,7 +1791,7 @@
                 }}
                 style:touch-action="pan-y"
               >
-                {#if optionPreviews.has(option.id) || loadingPreviews.has(option.id) || (detectedUrl && detectedUrl.trim() !== '') || (option.imageUrl && option.imageUrl.trim() !== '')}
+                {#if maximizedOption || optionPreviews.has(option.id) || loadingPreviews.has(option.id) || (detectedUrl && detectedUrl.trim() !== '') || (option.imageUrl && option.imageUrl.trim() !== '')}
                   {@const isLoading = loadingPreviews.has(option.id)}
                   {@const optionPreview = optionPreviews.get(option.id)}
                   <div 
@@ -1805,13 +1892,21 @@
                         mode="full"
                         on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
                       />
+                    {:else if maximizedOption}
+                      <!-- En maximizado sin preview, mostrar placeholder con color de la card -->
+                      <div class="preview-placeholder" style="background: {option.color}20;">
+                        <div class="placeholder-content">
+                          <ImageIcon class="w-12 h-12" style="color: {option.color};" />
+                          <p style="color: {option.color};">Sin preview</p>
+                        </div>
+                      </div>
                     {/if}
                     <div class="media-overlay {activePreviewOption === option.id ? 'hidden' : ''}"></div>
                   </div>
                 {/if}
                 
                 <div class="card-header {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
-                  {#if maximizedOption === option.id || activeAccordionIndex === index}
+                  {#if maximizedOption || activeAccordionIndex === index}
                     {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
                     <div class="char-counter">{labelWithoutUrl.length}/200</div>
                     <textarea
@@ -3255,6 +3350,33 @@
     font-size: 12px;
   }
   
+  /* Placeholder cuando no hay preview en maximizado */
+  .preview-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+  }
+  
+  .placeholder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    opacity: 0.6;
+  }
+  
+  .placeholder-content p {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0;
+  }
+  
   /* Preview multimedia del título principal */
   .main-media-preview {
     width: 100%;
@@ -4395,6 +4517,56 @@
     transform: translateX(0) !important;
   }
   
+  /* MAXIMIZADO: Habilitar interacción completa con videos */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card.is-maximized .option-media-background {
+    pointer-events: auto !important;
+    z-index: 2 !important;
+  }
+  
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card.is-maximized .option-media-background :global(*) {
+    pointer-events: auto !important;
+  }
+  
+  /* MAXIMIZADO: Cards NO maximizadas tienen preview pero sin interacción */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card:not(.is-maximized) .option-media-background {
+    pointer-events: none !important;
+  }
+  
+  /* NORMAL: contenedor NO captura, solo los videos */
+  .vote-card:not(.is-maximized) .option-media-background {
+    pointer-events: none !important;
+  }
+  
+  .vote-card:not(.is-maximized) .option-media-background :global(video),
+  .vote-card:not(.is-maximized) .option-media-background :global(iframe) {
+    pointer-events: auto !important;
+  }
+  
+  /* Asegurar que el fill de porcentaje sea visible sobre el preview en maximizado */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card .card-content::before {
+    z-index: 10 !important;
+    opacity: 1 !important;
+    position: absolute !important;
+    bottom: 0 !important;
+  }
+  
+  /* Asegurar que el card-content esté sobre el preview y en la parte inferior */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card .card-content {
+    z-index: 3 !important;
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 40% !important;
+    flex: none !important;
+    pointer-events: none !important;
+  }
+  
+  /* Permitir interacción con elementos dentro del card-content */
+  .vote-cards-container.maximized .vote-cards-grid.has-maximized .vote-card .card-content > * {
+    pointer-events: auto !important;
+  }
+  
   /* Desactivar estados de botón en cards maximizadas */
   .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card:active,
   .vote-cards-container.maximized .vote-cards-grid.has-maximized button.vote-card:focus,
@@ -4597,17 +4769,20 @@
   }
   
   .vote-card.is-maximized .option-media-background {
-    position: relative !important;
-    height: 65% !important;
-    min-height: 400px !important;
-    max-height: 650px !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 60% !important;
+    max-height: 500px !important;
     width: 100% !important;
-    z-index: 0 !important;
-    flex: 0 0 auto !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: rgba(0, 0, 0, 0.3) !important;
+    border-radius: 16px 16px 0 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    z-index: 1 !important;
+  }
+
+  .vote-card.is-maximized .option-media-background :global(*) {
     border-radius: 0 !important;
   }
   
