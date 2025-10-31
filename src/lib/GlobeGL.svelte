@@ -3551,22 +3551,20 @@
     return { bg: '#0a0a0a', sphere: '#1a1a1a', stroke: '#2e2e2e', noData: '#141414', atmosphere: '#1a1a1a', isDark: true };
   }
   
-  const initialColors = getInitialThemeColors();
-  
   // Flag para controlar cuándo renderizar GlobeCanvas
   let isGlobeLibraryReady = false;
 
-  // Controles de color (color pickers) y opacidad (sliders) - Inicializados con tema guardado o Carbon
+  // Controles de color (color pickers) y opacidad (sliders) - Inicializados con valores seguros por defecto
   let capColor = themeConfig.theme.colors.accent.blue;
   let capOpacityPct = 100;
-  let sphereColor = initialColors.sphere;
+  let sphereColor = '#1a1a1a';
   let sphereOpacityPct = 100;
-  let strokeColor = initialColors.stroke;
-  let bgColor = initialColors.bg;
-  let polygonNoDataColor = initialColors.noData;
-  let atmosphereColor = initialColors.atmosphere;
+  let strokeColor = '#2e2e2e';
+  let bgColor = '#0a0a0a';
+  let polygonNoDataColor = '#141414';
+  let atmosphereColor = '#1a1a1a';
   let atmosphereAltitude = 0.12; // Altura sutil para atmósfera
-  let isDarkTheme = initialColors.isDark; // Estado del tema desde localStorage o true por defecto
+  let isDarkTheme = true; // Estado del tema desde localStorage o true por defecto
 
   // Colores derivados (conveniencia)
   $: capBaseColor = capColor;
@@ -4516,6 +4514,15 @@
       
       // Delay adicional para asegurar que stores están listos
       await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Cargar tema guardado ahora que estamos listos
+      const initialColors = getInitialThemeColors();
+      sphereColor = initialColors.sphere;
+      strokeColor = initialColors.stroke;
+      bgColor = initialColors.bg;
+      polygonNoDataColor = initialColors.noData;
+      atmosphereColor = initialColors.atmosphere;
+      isDarkTheme = initialColors.isDark;
       
       // Activar renderizado de GlobeCanvas
       isGlobeLibraryReady = true;
