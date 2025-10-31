@@ -435,6 +435,166 @@ VoteTokFront/
    - Implementar caching
    - Mejorar error handling
 
+### K. BASE DE DATOS POSTGRESQL (ANÁLISIS EXHAUSTIVO)
+
+#### K.1 Esquema y Diseño
+
+1. **Auditar estructura de tablas**
+   - Revisar normalización (¿está correctamente normalizada?)
+   - Identificar redundancia de datos
+   - Verificar integridad referencial (foreign keys)
+   - Revisar tipos de datos apropiados
+   - Identificar campos que deberían ser NOT NULL
+   - Revisar constraints y validaciones a nivel de BD
+
+2. **Analizar relaciones**
+   - Verificar foreign keys y sus acciones (CASCADE, SET NULL, etc.)
+   - Identificar relaciones faltantes
+   - Revisar cardinalidad (1:1, 1:N, N:M)
+   - Proponer mejoras en el modelo relacional
+
+3. **Revisar nomenclatura**
+   - Consistencia en nombres de tablas
+   - Consistencia en nombres de columnas
+   - Convenciones de naming (snake_case, camelCase)
+   - Claridad y descriptividad
+
+#### K.2 Índices y Performance
+
+1. **Auditar índices existentes**
+   - Identificar tablas sin índices apropiados
+   - Detectar índices no utilizados (dead indexes)
+   - Revisar índices duplicados o redundantes
+   - Verificar índices en foreign keys
+   - Analizar índices compuestos vs simples
+
+2. **Proponer nuevos índices**
+   - Índices para queries frecuentes
+   - Índices parciales para casos específicos
+   - Índices GiST/GIN para búsquedas full-text
+   - Índices para ordenamiento (ORDER BY)
+   - Índices para joins frecuentes
+
+3. **Analizar uso de índices**
+   - Revisar EXPLAIN ANALYZE de queries críticas
+   - Identificar sequential scans que deberían usar índices
+   - Optimizar índices según patrones de uso real
+
+#### K.3 Queries y Optimización
+
+1. **Auditar queries existentes**
+   - Identificar N+1 queries
+   - Detectar queries lentas (>100ms)
+   - Revisar uso de SELECT *
+   - Identificar queries sin WHERE apropiado
+   - Detectar queries con múltiples JOINs complejos
+
+2. **Optimizar queries críticas**
+   - Usar EXPLAIN ANALYZE para identificar cuellos de botella
+   - Proponer reescritura de queries ineficientes
+   - Implementar CTEs (Common Table Expressions) donde sea apropiado
+   - Optimizar subconsultas
+   - Reducir número de roundtrips a la BD
+
+3. **Implementar caching de queries**
+   - Identificar queries que se repiten frecuentemente
+   - Proponer estrategias de caching (Redis, en memoria)
+   - Implementar materialized views para agregaciones costosas
+   - Cache de conteos y estadísticas
+
+#### K.4 Datos y Volumen
+
+1. **Analizar volumen de datos**
+   - Tamaño actual de cada tabla
+   - Proyección de crecimiento
+   - Identificar tablas que crecerán rápidamente
+   - Proponer estrategias de particionamiento si es necesario
+
+2. **Optimizar almacenamiento**
+   - Identificar columnas con datos redundantes
+   - Proponer normalización adicional si es necesario
+   - Revisar uso de JSON/JSONB (¿es apropiado?)
+   - Optimizar tipos de datos (INT vs BIGINT, VARCHAR vs TEXT)
+
+3. **Gestión de datos históricos**
+   - Proponer archivado de datos antiguos
+   - Estrategias de soft delete vs hard delete
+   - Implementar particionamiento por fecha si es necesario
+
+#### K.5 Seguridad y Permisos
+
+1. **Auditar seguridad**
+   - Revisar permisos de usuarios de BD
+   - Verificar uso de prepared statements (prevención de SQL injection)
+   - Revisar exposición de datos sensibles
+   - Validar encriptación de datos sensibles
+
+2. **Proponer mejoras de seguridad**
+   - Row-level security si es apropiado
+   - Auditoría de cambios críticos
+   - Backups y estrategias de recuperación
+
+#### K.6 Migraciones y Versionado
+
+1. **Revisar sistema de migraciones**
+   - ¿Hay sistema de migraciones implementado?
+   - ¿Las migraciones son reversibles?
+   - ¿Hay documentación de cambios de esquema?
+
+2. **Proponer mejoras**
+   - Implementar migraciones automáticas si no existen
+   - Versionado de esquema
+   - Estrategias de rollback
+
+#### K.7 Monitoreo y Métricas
+
+1. **Implementar monitoreo**
+   - Queries lentas (slow query log)
+   - Uso de conexiones
+   - Tamaño de tablas e índices
+   - Cache hit ratio
+   - Locks y deadlocks
+
+2. **Métricas a incluir en el informe**
+   - Queries más lentas (top 10)
+   - Tablas más grandes
+   - Índices más usados/no usados
+   - Conexiones activas promedio
+   - Tiempo de respuesta promedio por endpoint
+
+#### K.8 Casos Específicos de VoteTok
+
+1. **Tabla de encuestas (polls)**
+   - Índices en user_id, created_at, status
+   - Optimizar queries de trending polls
+   - Particionamiento por fecha si hay muchas encuestas
+
+2. **Tabla de votos (votes)**
+   - Índices compuestos en (poll_id, user_id)
+   - Índices en subdivision_id para agregaciones geográficas
+   - Considerar particionamiento por fecha
+   - Optimizar conteos de votos (materialized views?)
+
+3. **Tabla de subdivisiones (subdivisions)**
+   - Índices en level, parent_id, country_iso
+   - Índices GiST para búsquedas geográficas si hay lat/lon
+   - Optimizar queries jerárquicas (país → subdivisión)
+
+4. **Tabla de usuarios (users)**
+   - Índices en username, email
+   - Índices en created_at para usuarios recientes
+   - Optimizar queries de followers/following
+
+5. **Tabla de notificaciones (notifications)**
+   - Índices en (user_id, read, created_at)
+   - Considerar archivado de notificaciones antiguas
+   - Optimizar queries de notificaciones no leídas
+
+6. **Agregaciones geográficas**
+   - Optimizar queries que agrupan por país/subdivisión
+   - Considerar materialized views para resultados por región
+   - Índices apropiados para JOINs con datos geográficos
+
 ---
 
 ## 🎯 TAREAS ESPECÍFICAS
@@ -442,6 +602,8 @@ VoteTokFront/
 ### FASE 1: ANÁLISIS (NO MODIFICAR CÓDIGO AÚN)
 
 1. **Lee TODOS los archivos principales**:
+   
+   **Frontend:**
    - `src/lib/GlobeGL.svelte`
    - `src/lib/header.svelte`
    - `src/lib/CreatePollModal.svelte`
@@ -451,15 +613,47 @@ VoteTokFront/
    - `src/lib/globe/GlobeCanvas.svelte`
    - `src/lib/globe/cards/sections/SinglePollSection.svelte`
    - `src/routes/+page.svelte`
+   
+   **Backend y Base de Datos:**
+   - Todos los archivos en `src/routes/api/` (endpoints)
+   - Archivos de configuración de base de datos
+   - Esquema de base de datos (si existe archivo de schema)
+   - Archivos de migraciones (si existen)
+   - `src/lib/server/` (si existe lógica de servidor)
 
-2. **Genera un mapa mental** de:
+2. **Analiza la base de datos PostgreSQL**:
+   - Conecta a la BD y ejecuta queries de análisis:
+     ```sql
+     -- Listar todas las tablas y sus tamaños
+     SELECT schemaname, tablename, 
+            pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+     FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+     ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+     
+     -- Listar índices y su uso
+     SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch
+     FROM pg_stat_user_indexes
+     ORDER BY idx_scan ASC;
+     
+     -- Queries lentas (si está habilitado pg_stat_statements)
+     SELECT query, calls, total_time, mean_time
+     FROM pg_stat_statements
+     ORDER BY mean_time DESC LIMIT 10;
+     ```
+   - Documenta el esquema actual (tablas, columnas, tipos, relaciones)
+   - Identifica índices existentes
+   - Analiza queries en los endpoints API
+
+3. **Genera un mapa mental** de:
    - Dependencias entre componentes
-   - Flujo de datos
+   - Flujo de datos (frontend → API → BD)
    - Event chains
    - Lifecycle hooks
    - Stores y estado global
+   - Estructura de tablas y relaciones de BD
+   - Flujo de queries más frecuentes
 
-3. **Identifica y prioriza problemas**:
+4. **Identifica y prioriza problemas**:
    - 🔴 CRÍTICO: Afecta funcionalidad o rendimiento severamente
    - 🟡 IMPORTANTE: Mejora significativa pero no bloquea
    - 🟢 NICE-TO-HAVE: Mejoras menores
@@ -481,28 +675,57 @@ VoteTokFront/
 3. **Propón mejoras específicas** para:
    - Cada componente grande
    - Sistema de estado
-   - Performance crítica
+   - Performance crítica (JS, CSS, assets)
    - Accesibilidad
+
+4. **Análisis de rendimiento detallado**:
+   - Ejecutar Lighthouse y documentar scores actuales
+   - Identificar bottlenecks de JavaScript con Performance tab
+   - Analizar CSS no utilizado con Coverage tab
+   - Medir bundle size y proponer optimizaciones
+   - Identificar memory leaks con Memory profiler
+   - Analizar Core Web Vitals y proponer mejoras específicas
 
 ### FASE 3: IMPLEMENTACIÓN
 
 1. **Implementa cambios CRÍTICOS** (🔴):
+   
+   **Frontend:**
    - Divide GlobeGL.svelte en componentes más pequeños
    - Refactoriza header.svelte
    - Crea sistema de stores si necesario
-   - Optimiza rendimiento crítico
+   - Optimiza rendimiento crítico (JS, CSS)
    - Corrige bugs graves
+   
+   **Base de Datos:**
+   - Agrega índices faltantes críticos
+   - Optimiza queries más lentas (>500ms)
+   - Corrige problemas de N+1 queries
+   - Implementa caching para queries frecuentes
+   - Corrige problemas de integridad referencial
 
 2. **Implementa cambios IMPORTANTES** (🟡):
+   
+   **Frontend:**
    - Mejora tipado TypeScript
    - Extrae código duplicado
    - Optimiza carga de datos
    - Mejora accesibilidad
+   - Reduce bundle size
+   
+   **Base de Datos:**
+   - Agrega índices para optimización
+   - Implementa materialized views si es apropiado
+   - Optimiza queries moderadamente lentas (100-500ms)
+   - Mejora estructura de tablas si es necesario
+   - Implementa archivado de datos históricos
 
 3. **Implementa NICE-TO-HAVE** (🟢) si hay tiempo:
    - Mejoras menores de UX
    - Optimizaciones adicionales
    - Documentación
+   - Índices parciales para casos específicos
+   - Particionamiento de tablas grandes
 
 ### FASE 4: VALIDACIÓN
 
@@ -511,11 +734,30 @@ VoteTokFront/
    - La app compila correctamente
    - Funcionalidad principal intacta
    - No hay regresiones
+   - Queries de BD funcionan correctamente
+   - No hay errores en endpoints API
 
 2. **Mide mejoras**:
+   
+   **Frontend:**
    - Bundle size antes/después
    - Lighthouse scores antes/después
    - Complejidad de componentes antes/después
+   - Core Web Vitals antes/después
+   - Memory usage antes/después
+   
+   **Base de Datos:**
+   - Tiempo de queries antes/después (ejecutar EXPLAIN ANALYZE)
+   - Número de índices antes/después
+   - Tamaño de BD antes/después
+   - Cache hit ratio antes/después
+   - Tiempo de respuesta de endpoints API antes/después
+   
+3. **Genera reportes de performance**:
+   - Ejecutar Lighthouse y guardar resultados
+   - Ejecutar queries de análisis de BD y documentar
+   - Tomar screenshots de Performance tab
+   - Documentar mejoras con gráficos si es posible
 
 ---
 
@@ -557,6 +799,14 @@ Para cada componente principal:
 - Problemas encontrados
 - Mejoras implementadas
 - Checklist de A11Y
+
+#### 2.6 Base de Datos PostgreSQL
+- Análisis del esquema actual
+- Problemas de normalización/diseño
+- Índices faltantes o redundantes
+- Queries lentas identificadas
+- Optimizaciones implementadas
+- Propuestas de mejora adicionales
 
 ### 3. CAMBIOS IMPLEMENTADOS
 
@@ -644,6 +894,28 @@ Lista detallada de todos los cambios con:
 | Total transfer size | X KB | Y KB | -Z% |
 | Requests bloqueantes | X | Y | -Z |
 | Cache hit rate | X% | Y% | +Z% |
+
+#### 4.9 Base de Datos PostgreSQL
+
+| Métrica | Antes | Después | Mejora |
+|---------|-------|---------|--------|
+| Queries lentas (>100ms) | X | Y | -Z |
+| Tiempo promedio de query | X ms | Y ms | -Z% |
+| Índices no utilizados | X | Y | -Z |
+| Índices faltantes agregados | 0 | Y | +Y |
+| Tamaño total de BD | X MB | Y MB | -Z% |
+| N+1 queries detectadas | X | Y | -Z |
+| Sequential scans innecesarios | X | Y | -Z |
+| Cache hit ratio | X% | Y% | +Z% |
+
+#### 4.10 API Performance
+
+| Métrica | Antes | Después | Mejora |
+|---------|-------|---------|--------|
+| Tiempo respuesta promedio | X ms | Y ms | -Z% |
+| Endpoints lentos (>500ms) | X | Y | -Z |
+| Llamadas API redundantes | X | Y | -Z |
+| Payload promedio | X KB | Y KB | -Z% |
 
 ### 5. ROADMAP FUTURO
 
@@ -775,4 +1047,110 @@ npx lighthouse http://localhost:4173 --view
 6. **Sexto**: Implementa cambios críticos
 7. **Séptimo**: Genera informe final
 
+---
+
+## ⚡ ÉNFASIS ESPECIAL EN RENDIMIENTO COMPLETO
+
+**ES CRÍTICO** que dediques especial atención al análisis exhaustivo de rendimiento en frontend Y backend:
+
+### 🔍 JavaScript Performance
+- **Profiling detallado**: Usa Chrome DevTools Performance para identificar funciones lentas, long tasks, y bottlenecks
+- **Bundle analysis**: Analiza el tamaño del bundle, identifica dependencias pesadas, propón code splitting
+- **Memory leaks**: Detecta memory leaks en event listeners, closures, y animaciones
+- **Event handlers**: Revisa todos los event listeners globales, implementa debouncing/throttling donde sea necesario
+- **Reactividad**: Optimiza el uso de runes de Svelte 5 ($state, $derived, $effect)
+- **WebGL**: Optimiza el rendimiento del globo 3D (Three.js), reduce re-renderizados innecesarios
+
+### 🎨 CSS Performance
+- **CSS no utilizado**: Identifica y elimina CSS que no se usa (usa Coverage tab)
+- **Selectores**: Optimiza selectores complejos que causan reflows
+- **Animaciones**: Asegura que las animaciones usen transform/opacity para GPU acceleration
+- **Layout thrashing**: Detecta y elimina operaciones que causan reflows múltiples
+- **Critical CSS**: Identifica CSS crítico para above-the-fold
+- **Organización**: Propón mejor estructura y eliminación de duplicados
+
+### 📦 Assets y Recursos
+- **Imágenes**: Optimiza tamaños, propón formatos modernos (WebP, AVIF)
+- **Fuentes**: Optimiza carga de fuentes, implementa font-display: swap
+- **TopoJSON**: Revisa tamaño de archivos geográficos, propón lazy loading
+- **Compresión**: Asegura que todos los assets estén comprimidos (gzip/brotli)
+
+### 📊 Core Web Vitals
+Debes medir y optimizar específicamente:
+- **LCP (Largest Contentful Paint)**: Target < 2.5s
+- **FID/INP (First Input Delay)**: Target < 100ms
+- **CLS (Cumulative Layout Shift)**: Target < 0.1
+- **TTFB (Time to First Byte)**: Target < 600ms
+
+### 🗄️ Base de Datos PostgreSQL Performance
+- **Índices**: Analiza índices existentes, identifica faltantes, elimina redundantes
+- **Queries lentas**: Usa EXPLAIN ANALYZE para identificar queries >100ms
+- **N+1 queries**: Detecta y corrige problemas de N+1 en endpoints
+- **Caching**: Implementa caching para queries frecuentes
+- **Esquema**: Revisa normalización y estructura de tablas
+- **Volumen**: Analiza tamaño de tablas y propón particionamiento si es necesario
+- **Monitoreo**: Documenta queries más lentas y propón optimizaciones
+
+### 🔬 Herramientas Obligatorias
+
+**Frontend:**
+1. **Lighthouse**: Ejecuta auditoría completa y documenta scores
+2. **Performance tab**: Graba sesión de uso típico y analiza
+3. **Memory tab**: Toma heap snapshots y detecta leaks
+4. **Coverage tab**: Identifica código no utilizado
+5. **Network tab**: Analiza waterfall y optimiza carga
+
+**Base de Datos:**
+1. **EXPLAIN ANALYZE**: Para todas las queries críticas
+2. **pg_stat_statements**: Analiza queries más frecuentes y lentas
+3. **pg_stat_user_indexes**: Revisa uso de índices
+4. **pg_stat_user_tables**: Analiza tamaño y acceso a tablas
+5. **Herramientas de monitoreo**: pgAdmin, DataGrip, o similar
+
+### 📈 Métricas Esperadas en el Informe
+El informe final DEBE incluir tablas comparativas con:
+
+**Frontend:**
+- Bundle size antes/después (total, chunks, gzip)
+- Lighthouse scores antes/después (Performance, A11Y, Best Practices, SEO)
+- Core Web Vitals antes/después (LCP, FID, CLS, TTFB)
+- JavaScript metrics (execution time, long tasks, memory usage)
+- CSS metrics (unused CSS, selector count, recalculate style time)
+- Network metrics (requests count, transfer size, cache hit rate)
+
+**Base de Datos:**
+- Queries lentas antes/después (número y tiempo promedio)
+- Índices antes/después (total, no usados, agregados)
+- Tiempo de respuesta de endpoints API antes/después
+- N+1 queries detectadas y corregidas
+- Cache hit ratio antes/después
+- Tamaño de BD antes/después
+
+---
+
+## 🎯 OBJETIVO FINAL
+
 **¡Adelante! Necesito que seas exhaustivo, crítico y propositivo. No tengas miedo de proponer cambios grandes si son necesarios.**
+
+**RECUERDA**: El rendimiento completo (frontend Y backend) es TAN IMPORTANTE como la arquitectura y la calidad del código. Dedica tiempo significativo a:
+
+**Frontend:**
+1. Medir el rendimiento actual con herramientas reales (Lighthouse, Performance tab)
+2. Identificar bottlenecks de JavaScript y CSS con datos concretos
+3. Implementar optimizaciones medibles (bundle size, Core Web Vitals)
+4. Documentar mejoras con métricas antes/después
+
+**Base de Datos:**
+1. Analizar el esquema actual y queries existentes
+2. Identificar queries lentas con EXPLAIN ANALYZE
+3. Detectar N+1 queries y problemas de índices
+4. Implementar optimizaciones (índices, caching, reescritura de queries)
+5. Documentar mejoras con métricas antes/después
+
+El informe final debe demostrar mejoras tangibles en:
+- ✅ **Rendimiento frontend** (bundle, Lighthouse, Core Web Vitals)
+- ✅ **Rendimiento de base de datos** (queries, índices, tiempo de respuesta)
+- ✅ **Arquitectura y código** (componentes, tipado, organización)
+- ✅ **Accesibilidad** (A11Y scores, navegación por teclado)
+
+**NO es suficiente solo refactorizar código. Debes MEDIR y OPTIMIZAR el rendimiento real de la aplicación completa.**
