@@ -33,11 +33,16 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    // Desactivar minificación completamente para evitar romper globe.gl
-    minify: false,
+    // Activar minificación para producción
+    minify: 'esbuild',
     commonjsOptions: {
       include: [/three/, /globe\.gl/, /three-globe/, /d3/, /node_modules/],
       transformMixedEsModules: true
+    },
+    // Eliminar console.logs en producción
+    esbuildOptions: {
+      drop: ['console', 'debugger'],
+      keepNames: true
     },
     rollupOptions: {
       output: {
