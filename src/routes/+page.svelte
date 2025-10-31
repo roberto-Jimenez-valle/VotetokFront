@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import Header from '$lib/header.svelte';
 	// Usamos un componente dedicado GlobeGL basado en Globe.gl
 	import GlobeGL from '$lib/GlobeGL.svelte';
@@ -123,13 +124,15 @@
 
 
 <div class="min-h-screen text-white font-sans">
-	<!-- Globo de fondo a pantalla completa -->
+	<!-- Globo de fondo a pantalla completa - solo en cliente -->
+	{#if browser}
 	<GlobeGL 
 		bind:this={globeGLComponent}
 		on:sheetstatechange={handleSheetStateChange} 
 		on:altitudechange={handleAltitudeChange}
 		on:dropdownstatechange={handleDropdownStateChange}
 	/>
+	{/if}
 
 	<!-- Contenido por encima del globo -->
 	<div class="relative">
