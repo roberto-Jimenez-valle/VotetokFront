@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-static';
+import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */
@@ -8,14 +8,11 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		// Usar adapter-static en modo SPA (Single Page Application)
-		// Esto elimina completamente el sistema SSR y resuelve el error de hidratación
+		// Usar adapter-node para ejecutar servidor Node.js con APIs
 		adapter: adapter({
-			pages: 'build',
-			assets: 'build',
-			fallback: 'index.html', // SPA mode - todas las rutas van a index.html
+			out: 'build',
 			precompress: false,
-			strict: false
+			envPrefix: ''
 		})
 	}
 };

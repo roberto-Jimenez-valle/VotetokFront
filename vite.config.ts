@@ -35,14 +35,6 @@ export default defineConfig({
     target: 'es2020',
     // Desactivar minificación completamente para evitar romper globe.gl
     minify: false,
-    // Configurar esbuild para preservar nombres
-    esbuildOptions: {
-      keepNames: true,
-      minify: false,
-      minifyIdentifiers: false,
-      minifySyntax: false,
-      minifyWhitespace: false
-    },
     commonjsOptions: {
       include: [/three/, /globe\.gl/, /three-globe/, /d3/, /node_modules/],
       transformMixedEsModules: true
