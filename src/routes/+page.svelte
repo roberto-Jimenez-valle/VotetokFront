@@ -26,20 +26,43 @@
 	let isProfileModalOpen = $state(false);
 	let selectedProfileUserId = $state<number | null>(null);
 	
-	// Escuchar cambios en la variable global - solo en el cliente
-	let mounted = $state(false);
-	onMount(() => {
-		mounted = true;
-	});
-	
-	// Debug: observar cambios
-	$effect(() => {
-		if (!mounted) return;
-		console.log('[+page] Profile modal state changed:', { isProfileModalOpen, selectedProfileUserId });
-	});
-	
 	// Referencia al componente GlobeGL
 	let globeGLComponent: any;
+	
+	onMount(() => {
+		// Debug: observar cambios en profile modal
+		const unsubscribeProfile = $effect.root(() => {
+			$effect(() => {
+				console.log('[+page] Profile modal state changed:', { isProfileModalOpen, selectedProfileUserId });
+			});
+		});
+		
+		// Escuchar cambios en la variable global
+		const unsubscribeGlobal = $effect.root(() => {
+			$effect(() => {
+				const checkGlobalState = () => {
+					if (typeof window === 'undefined') return;
+					const globalState = (window as any).globalNavDropdownOpen;
+					if (globalState !== undefined && globalState !== forceHideNav) {
+						console.log(`[+page] 🌐 Variable global cambió a: ${globalState}`);
+						forceHideNav = globalState;
+						hideNav = globalState;
+						dropdownOpen = globalState;
+					}
+				};
+				
+				// Verificar cada 100ms
+				const interval = setInterval(checkGlobalState, 100);
+				return () => clearInterval(interval);
+			});
+		});
+		
+		// Cleanup
+		return () => {
+			unsubscribeProfile?.();
+			unsubscribeGlobal?.();
+		};
+	});
 	
 	function handleOpenCreatePoll(event: CustomEvent<{ colors: string[] }>) {
 		buttonColors = event.detail.colors;
@@ -105,24 +128,6 @@
 	}
 	
 	// handlePollSelected eliminado - ya no se necesita
-	
-	$effect(() => {
-		if (!mounted || typeof window === 'undefined') return;
-		
-		const checkGlobalState = () => {
-			const globalState = (window as any).globalNavDropdownOpen;
-			if (globalState !== undefined && globalState !== forceHideNav) {
-				console.log(`[+page] 🌐 Variable global cambió a: ${globalState}`);
-				forceHideNav = globalState;
-				hideNav = globalState;
-				dropdownOpen = globalState;
-			}
-		};
-		
-		// Verificar cada 100ms (rápido pero no excesivo)
-		const interval = setInterval(checkGlobalState, 100);
-		return () => clearInterval(interval);
-	});
 
 </script>
 
