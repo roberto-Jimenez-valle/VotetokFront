@@ -707,6 +707,62 @@ Cambios NO implementados pero recomendados:
 4. **TypeScript** strict mode compliance
 5. **Accesibilidad** en modals y navegación
 
+### Herramientas de Análisis de Rendimiento
+
+**Debes usar estas herramientas para el análisis:**
+
+1. **Chrome DevTools**
+   - Performance tab: Grabar sesión de uso típico (navegación, votación, cambio de país)
+   - Memory tab: Heap snapshots antes/después de acciones
+   - Coverage tab: Identificar CSS/JS no utilizado
+   - Lighthouse: Auditoría completa (Performance, A11Y, Best Practices, SEO)
+   - Network tab: Analizar waterfall, tamaños, tiempos
+
+2. **Vite Build Analysis**
+   - Ejecutar `npm run build` y analizar output
+   - Usar `rollup-plugin-visualizer` para ver composición del bundle
+   - Revisar chunks generados y sus tamaños
+
+3. **Bundle Analyzers**
+   - Analizar dependencias con `npm ls`
+   - Identificar duplicados con `npm dedupe`
+   - Revisar package.json para dependencias innecesarias
+
+4. **Performance Profiling**
+   - Usar React DevTools Profiler (si aplica)
+   - Identificar componentes que re-renderizan frecuentemente
+   - Medir tiempo de renderizado de componentes grandes
+
+5. **CSS Analysis**
+   - Usar PurgeCSS o similar para identificar CSS no usado
+   - Analizar especificidad con herramientas como CSS Stats
+   - Revisar performance de selectores complejos
+
+6. **Métricas Reales**
+   - Lighthouse CI para métricas consistentes
+   - WebPageTest para análisis detallado
+   - Chrome User Experience Report para datos reales
+
+**Comandos útiles a ejecutar:**
+```bash
+# Build y análisis
+npm run build
+npm run preview
+
+# Análisis de bundle
+npx vite-bundle-visualizer
+
+# Análisis de dependencias
+npm ls --depth=0
+npm outdated
+
+# TypeScript check
+npx tsc --noEmit
+
+# Lighthouse desde CLI
+npx lighthouse http://localhost:4173 --view
+```
+
 ---
 
 ## 🚀 COMENZAR
