@@ -725,26 +725,18 @@
   const dispatch = createEventDispatcher();
 
   onMount(async () => {
-    // Importación dinámica con manejo de errores mejorado
-    let Globe;
-    try {
-      const globeModule = await import('globe.gl');
-      Globe = globeModule.default || globeModule;
-      
-      // Verificar que Globe es una función constructor
-      if (typeof Globe !== 'function') {
-        console.error('[GlobeCanvas] Globe no es una función constructor:', Globe);
-        throw new Error('Globe.gl no se cargó correctamente');
-      }
-    } catch (error) {
-      console.error('[GlobeCanvas] Error al importar globe.gl:', error);
+    // Usar Globe.gl desde CDN (cargado en app.html)
+    const Globe = (window as any).Globe;
+    
+    if (!Globe || typeof Globe !== 'function') {
+      console.error('[GlobeCanvas] Globe.gl no está disponible desde CDN');
       if (rootEl) {
         rootEl.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white; text-align: center; font-family: sans-serif;">
             <div>
               <h3>Error Loading 3D Globe</h3>
-              <p>Failed to load the 3D visualization library.</p>
-              <p>Please refresh the page or try again later.</p>
+              <p>Globe.gl library failed to load from CDN.</p>
+              <p>Please refresh the page to try again.</p>
             </div>
           </div>
         `;

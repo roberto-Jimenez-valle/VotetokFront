@@ -19,12 +19,10 @@ export default defineConfig({
   optimizeDeps: {
     include: [
       'three',
-      'globe.gl',
-      'three-globe',
       'd3',
       'topojson-client'
     ],
-    exclude: [],
+    exclude: ['globe.gl', 'three-globe'], // Excluir porque se carga desde CDN
     esbuildOptions: {
       // Evitar minificación agresiva que puede romper constructores
       keepNames: true
