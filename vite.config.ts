@@ -25,9 +25,9 @@ export default defineConfig({
     exclude: ['globe.gl', 'three-globe'], // Excluir porque se carga desde CDN
     esbuildOptions: {
       // Evitar minificación agresiva que puede romper constructores
-      keepNames: true,
-      // Eliminar console.logs también en dependencias
-      drop: ['console', 'debugger']
+      keepNames: true
+      // TEMPORAL: Mantener console.logs para debug
+      // drop: ['console', 'debugger']
     }
   },
   ssr: {
@@ -35,15 +35,15 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    // Activar minificación para producción
-    minify: 'esbuild',
+    // TEMPORAL: Desactivar minificación para debuggear
+    minify: false,
     commonjsOptions: {
       include: [/three/, /globe\.gl/, /three-globe/, /d3/, /node_modules/],
       transformMixedEsModules: true
     },
-    // Eliminar console.logs en producción
+    // TEMPORAL: Mantener console.logs para debug
     esbuildOptions: {
-      drop: ['console', 'debugger'],
+      // drop: ['console', 'debugger'],
       keepNames: true
     },
     rollupOptions: {

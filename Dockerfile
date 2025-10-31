@@ -47,7 +47,7 @@ RUN npm install -g pnpm@8
 COPY --from=deps /app/node_modules ./node_modules
 
 # CACHEBUST: Invalidar caché para forzar rebuild del código fuente
-ARG CACHEBUST=20251031-1900
+ARG CACHEBUST=20251031-1907
 RUN echo "Cache bust: $CACHEBUST"
 
 # Copy source code
