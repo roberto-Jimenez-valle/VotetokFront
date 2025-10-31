@@ -7,7 +7,7 @@
  * Uso: /api/media-proxy?url=https://i.imgur.com/abc123.jpg
  */
 
-import { error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import {
   isDomainAllowed,
   isMimeTypeAllowed,
@@ -27,10 +27,10 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
   
   // 1. Validar que se proporcionó una URL
   if (!targetUrl) {
-    throw error(400, {
+    return json({
       message: 'Parámetro "url" es requerido',
       code: 'MISSING_URL'
-    });
+    }, { status: 400 });
   }
   
   // 2. Validar formato de URL
@@ -38,28 +38,28 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
   try {
     validUrl = new URL(targetUrl);
   } catch {
-    throw error(400, {
+    return json({
       message: 'URL inválida',
       code: 'INVALID_URL'
-    });
+    }, { status: 400 });
   }
   
   // 3. Verificar que el dominio está en la whitelist
   if (!isDomainAllowed(targetUrl)) {
     console.warn('[Media Proxy] Dominio no permitido:', validUrl.hostname);
-    throw error(403, {
+    return json({
       message: `Dominio no permitido: ${validUrl.hostname}`,
       code: 'DOMAIN_NOT_ALLOWED',
       hint: 'Solo se permiten dominios de la whitelist configurada'
-    });
+    }, { status: 403 });
   }
   
   // 4. Verificar protocolo (solo HTTPS)
   if (validUrl.protocol !== 'https:') {
-    throw error(400, {
+    return json({
       message: 'Solo se permiten URLs con protocolo HTTPS',
       code: 'INSECURE_PROTOCOL'
-    });
+    }, { status: 400 });
   }
   
   // 5. Verificar caché
@@ -103,31 +103,31 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
     
     // 8. Verificar que la respuesta es exitosa
     if (!response.ok) {
-      throw error(response.status, {
+      return json({
         message: `Error al obtener el recurso: ${response.statusText}`,
         code: 'UPSTREAM_ERROR'
-      });
+      }, { status: response.status });
     }
     
     // 9. Verificar Content-Type
     const contentType = response.headers.get('Content-Type') || '';
     
     if (!isMimeTypeAllowed(contentType)) {
-      throw error(415, {
+      return json({
         message: `Tipo de contenido no permitido: ${contentType}`,
         code: 'UNSUPPORTED_MEDIA_TYPE',
         hint: 'Solo se permiten imágenes, videos y audios'
-      });
+      }, { status: 415 });
     }
     
     // 10. Verificar tamaño del archivo
     const contentLength = response.headers.get('Content-Length');
     if (contentLength && parseInt(contentLength) > MEDIA_PROXY_CONFIG.maxFileSize) {
-      throw error(413, {
+      return json({
         message: 'Archivo demasiado grande',
         code: 'FILE_TOO_LARGE',
         hint: `Tamaño máximo: ${MEDIA_PROXY_CONFIG.maxFileSize / 1024 / 1024}MB`
-      });
+      }, { status: 413 });
     }
     
     // 11. Leer el contenido
@@ -135,10 +135,10 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
     
     // 12. Verificar tamaño real
     if (arrayBuffer.byteLength > MEDIA_PROXY_CONFIG.maxFileSize) {
-      throw error(413, {
+      return json({
         message: 'Archivo demasiado grande',
         code: 'FILE_TOO_LARGE'
-      });
+      }, { status: 413 });
     }
     
     // 13. Guardar en caché
@@ -177,16 +177,16 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
     console.error('[Media Proxy] Error:', err);
     
     if (err.name === 'AbortError') {
-      throw error(504, {
+      return json({
         message: 'Timeout al obtener el recurso',
         code: 'TIMEOUT'
-      });
+      }, { status: 504 });
     }
     
-    throw error(500, {
+    return json({
       message: err.message || 'Error al procesar el recurso',
       code: 'PROXY_ERROR'
-    });
+    }, { status: 500 });
   }
 };
 

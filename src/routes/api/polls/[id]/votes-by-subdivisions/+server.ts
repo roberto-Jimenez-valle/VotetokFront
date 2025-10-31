@@ -71,6 +71,9 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		const subdivisionVotes: Record<string, Record<string, number>> = {};
 
 		for (const vote of votes) {
+			// Skip if subdivision is null
+			if (!vote.subdivision) continue;
+			
 			// Extraer nivel 2 del subdivisionId
 			// ESP.1.2 → ESP.1 (comunidad)
 			// ESP.1 → ESP.1 (ya es comunidad)

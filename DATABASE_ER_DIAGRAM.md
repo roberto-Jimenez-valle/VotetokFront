@@ -1,4 +1,4 @@
-# Diagrama Entidad-Relación - VoteTok Database
+# Diagrama Entidad-Relación - VouTop Database
 
 ## 📊 Diagrama Visual
 

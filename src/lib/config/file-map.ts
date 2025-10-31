@@ -8,12 +8,12 @@ export const FILE_MAP = {
   'WORLD3.json': 'WORLD3.json',
   'countries-110m-iso.json': 'countries-110m-iso.json',
   'countries-110m-iso-geojson-fixed.json': 'countries-110m-iso-geojson-fixed.json',
-  
-  // Función helper para obtener nombre real
-  getFileName(logicalName: string): string {
-    return this[logicalName as keyof typeof FILE_MAP] || logicalName;
-  }
 } as const;
+
+// Función helper para obtener nombre real
+export function getFileName(logicalName: string): string {
+  return (FILE_MAP as any)[logicalName] || logicalName;
+}
 
 // Obtener nombre de archivo para países/subdivisiones
 export function getCountryFileName(countryCode: string, subdivisionId?: string): string {

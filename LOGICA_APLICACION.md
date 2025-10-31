@@ -1,4 +1,4 @@
-# Lógica de Aplicación - VoteTok (ACTUALIZADA)
+# Lógica de Aplicación - VouTop (ACTUALIZADA)
 
 ## 🎯 Flujo Principal de la Aplicación
 

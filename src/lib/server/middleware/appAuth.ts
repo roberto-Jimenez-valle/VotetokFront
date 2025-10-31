@@ -16,11 +16,7 @@ export async function requireAppSignature(event: RequestEvent): Promise<AppAuthR
 
   // 1. Verificar headers presentes
   if (!appId || !timestamp || !signature) {
-    throw error(401, {
-      message: 'App authentication required. Please use the official app.',
-      code: 'APP_AUTH_MISSING',
-      hint: 'Missing X-App-ID, X-Timestamp, or X-Signature headers'
-    })
+    throw error(401, 'App authentication required. Please use the official app.');
   }
 
   // 2. Leer body si existe (para POST/PUT/PATCH)
@@ -81,10 +77,7 @@ export async function requireAppSignature(event: RequestEvent): Promise<AppAuthR
 
     const errorData = errorMessages[result.error || 'INVALID_SIGNATURE']
     
-    throw error(errorData.status, {
-      message: errorData.message,
-      code: errorData.code
-    })
+    throw error(errorData.status, errorData.message);
   }
 
   return result

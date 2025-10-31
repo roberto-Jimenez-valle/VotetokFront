@@ -1,4 +1,4 @@
-# 🎉 RESUMEN FINAL - VoteTok
+# 🎉 RESUMEN FINAL - VouTop
 
 ## ✅ TODO COMPLETADO
 

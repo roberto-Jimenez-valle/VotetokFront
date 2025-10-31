@@ -222,7 +222,7 @@ getTimeRemainingColor(closedAt) → "green"
 ```javascript
 {
   username: 'demo_user',
-  email: 'demo@votetok.com',
+  email: 'demo@voutop.com',
   displayName: 'Usuario Demo',
   verified: false
 }

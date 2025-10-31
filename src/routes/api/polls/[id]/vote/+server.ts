@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 export const POST: RequestHandler = async ({ params, request, getClientAddress }) => {
@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
       console.log('[API Vote] 📦 Body recibido:', JSON.stringify(body, null, 2));
     } catch (err) {
       console.error('[API Vote] ❌ Error parseando JSON:', err);
-      throw error(400, 'Invalid JSON in request body');
+      return json({ message: 'Invalid JSON in request body' }, { status: 400 });
     }
   
   const { optionId, userId, latitude, longitude, subdivisionId } = body;
@@ -33,22 +33,22 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
   // Validar campos requeridos
   if (!optionId || typeof optionId !== 'number') {
     console.error('[API Vote] ❌ optionId inválido:', optionId);
-    throw error(400, 'optionId es requerido y debe ser un número');
+    return json({ message: 'optionId es requerido y debe ser un número' }, { status: 400 });
   }
 
   if (latitude === undefined || latitude === null || typeof latitude !== 'number') {
     console.error('[API Vote] ❌ latitude inválida:', latitude);
-    throw error(400, 'latitude es requerida y debe ser un número');
+    return json({ message: 'latitude es requerida y debe ser un número' }, { status: 400 });
   }
 
   if (longitude === undefined || longitude === null || typeof longitude !== 'number') {
     console.error('[API Vote] ❌ longitude inválida:', longitude);
-    throw error(400, 'longitude es requerida y debe ser un número');
+    return json({ message: 'longitude es requerida y debe ser un número' }, { status: 400 });
   }
 
   if (subdivisionId !== null && subdivisionId !== undefined && typeof subdivisionId !== 'number') {
     console.error('[API Vote] ❌ subdivisionId inválido:', subdivisionId);
-    throw error(400, 'subdivisionId debe ser un número (ID de BD) o null');
+    return json({ message: 'subdivisionId debe ser un número (ID de BD) o null' }, { status: 400 });
   }
 
   // Validar que la opción pertenece a la encuesta
@@ -61,7 +61,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 
   if (!option) {
     console.error('[API Vote] ❌ Opción no encontrada:', optionId);
-    throw error(404, 'Opción no encontrada');
+    return json({ message: 'Opción no encontrada' }, { status: 404 });
   }
 
   // Verificar si el usuario ya votó en esta encuesta
@@ -145,7 +145,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     // Si es un error de validación de Prisma
     if (err.code === 'P2002') {
       console.error('[API Vote] ⚠️ Violación de constraint único:', err.meta);
-      throw error(400, 'Ya existe un voto para esta combinación');
+      return json({ message: 'Ya existe un voto para esta combinación' }, { status: 400 });
     }
     
     // Si es un error conocido de SvelteKit
@@ -154,7 +154,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     }
     
     // Error genérico
-    throw error(500, `Error al procesar el voto: ${err.message}`);
+    return json({ message: `Error al procesar el voto: ${err.message}` }, { status: 500 });
   }
 };
 
@@ -165,7 +165,7 @@ export const DELETE: RequestHandler = async ({ params, request, getClientAddress
     const { id } = params;
     
     // Obtener userId del contexto de sesión (locals.user) o null para anónimos
-    const userId = locals.user?.id || null;
+    const userId = locals.user?.userId || null;
     const ipAddress = getClientAddress();
     
     console.log('[API Vote DELETE] Buscando voto para pollId:', id, 'userId:', userId, 'IP:', ipAddress);
@@ -183,7 +183,7 @@ export const DELETE: RequestHandler = async ({ params, request, getClientAddress
     
     if (!existingVote) {
       console.log('[API Vote DELETE] ⚠️ No se encontró voto para eliminar');
-      throw error(404, 'No se encontró el voto');
+      return json({ message: 'No se encontró el voto' }, { status: 404 });
     }
     
     // Eliminar el voto
@@ -201,6 +201,6 @@ export const DELETE: RequestHandler = async ({ params, request, getClientAddress
       throw err;
     }
     
-    throw error(500, `Error al eliminar el voto: ${err.message}`);
+    return json({ message: `Error al eliminar el voto: ${err.message}` }, { status: 500 });
   }
 };

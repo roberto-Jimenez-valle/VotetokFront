@@ -3517,23 +3517,6 @@
     height: 20px !important;
   }
   
-  /* Wrapper para LinkPreview en opciones */
-  .option-link-preview-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px;
-    overflow: hidden;
-  }
-  
-  .option-link-preview-wrapper :global(.link-preview) {
-    max-width: 100%;
-    width: 100%;
-    height: auto;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
   
   /* LinkPreview en título principal */
   .main-media-preview :global(.link-preview) {
@@ -3695,15 +3678,7 @@
     gap: 8px;
   }
   
-  /* Contenedor de dots de paginación (legacy, por si se usa) */
-  .pagination-dots {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 0;
-  }
-  
+  /* Dots de paginación */
   .pagination-dot {
     width: 8px;
     height: 8px;

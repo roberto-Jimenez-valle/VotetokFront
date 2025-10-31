@@ -6,8 +6,8 @@ export interface GlobeUiState {
   width: string;
   bottom: number;
   zIndex: number;
-  top: number;
-  left: number;
+  top?: number;
+  left?: number;
   position?: 'absolute' | 'fixed' | 'relative';
   // Puedes agregar más propiedades según lo necesites
 }

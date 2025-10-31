@@ -12,13 +12,18 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 			return json({ error: 'No autenticado' }, { status: 401 });
 		}
 
-		if (session.userId === id) {
+		// Verificar que el usuario a seguir existe
+		const userId = parseInt(id as string, 10);
+		if (isNaN(userId)) {
+			return json({ error: 'ID de usuario inválido' }, { status: 400 });
+		}
+		
+		if (session.userId === userId) {
 			return json({ error: 'No puedes seguirte a ti mismo' }, { status: 400 });
 		}
-
-		// Verificar que el usuario a seguir existe
+		
 		const userToFollow = await prisma.user.findUnique({
-			where: { id }
+			where: { id: userId }
 		});
 
 		if (!userToFollow) {
@@ -26,11 +31,11 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		}
 
 		// Verificar si ya lo sigue
-		const existingFollow = await prisma.follow.findUnique({
+		const existingFollow = await prisma.userFollower.findUnique({
 			where: {
 				followerId_followingId: {
 					followerId: session.userId,
-					followingId: id
+					followingId: userId
 				}
 			}
 		});
@@ -40,10 +45,10 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		}
 
 		// Crear la relación de seguimiento
-		await prisma.follow.create({
+		await prisma.userFollower.create({
 			data: {
 				followerId: session.userId,
-				followingId: id
+				followingId: userId
 			}
 		});
 
@@ -64,12 +69,17 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			return json({ error: 'No autenticado' }, { status: 401 });
 		}
 
+		const userId = parseInt(id as string, 10);
+		if (isNaN(userId)) {
+			return json({ error: 'ID de usuario inválido' }, { status: 400 });
+		}
+		
 		// Eliminar la relación de seguimiento
-		await prisma.follow.delete({
+		await prisma.userFollower.delete({
 			where: {
 				followerId_followingId: {
 					followerId: session.userId,
-					followingId: id
+					followingId: userId
 				}
 			}
 		});

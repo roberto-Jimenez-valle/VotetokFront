@@ -254,14 +254,15 @@
   export let pollTitleElements: Record<string, HTMLElement> = {};
   
   // Vote effect state (passed from parent)
-  export let voteEffectActive: boolean = false;
-  export let voteEffectPollId: string | null = null;
+  // Commented out as these are currently unused - can be re-enabled if needed
+  // export let voteEffectActive: boolean = false;
+  // export let voteEffectPollId: string | null = null;
   export let displayVotes: Record<string, string> = {};
-  export let voteClickX: number = 0;
-  export let voteClickY: number = 0;
-  export let voteIconX: number = 0;
-  export let voteIconY: number = 0;
-  export let voteEffectColor: string = '#10b981';
+  // export let voteClickX: number = 0;
+  // export let voteClickY: number = 0;
+  // export let voteIconX: number = 0;
+  // export let voteIconY: number = 0;
+  // export let voteEffectColor: string = '#10b981';
   
   // Profile modal state (bindable, controlled from +page.svelte)
   export let isProfileModalOpen: boolean = false;
@@ -712,6 +713,8 @@
                 ontouchstart={handleChartInteraction}
                 ontouchmove={handleChartInteraction}
                 ontouchend={clearChartHover}
+                role="img"
+                aria-label="Gráfico histórico de votación"
               >
                 
                 <!-- Línea por cada opción -->
@@ -1520,8 +1523,22 @@
 
 <!-- Tooltip del título truncado (fuera de todo para máxima visibilidad) -->
 {#if showTitleTooltip}
-  <div class="title-tooltip-overlay" onclick={hideTitleTooltip}>
-    <div class="title-tooltip-content" onclick={(e) => e.stopPropagation()}>
+  <div 
+    class="title-tooltip-overlay" 
+    onclick={hideTitleTooltip}
+    onkeydown={(e) => e.key === 'Escape' && hideTitleTooltip()}
+    role="button"
+    tabindex="0"
+    aria-label="Cerrar tooltip"
+  >
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div 
+      class="title-tooltip-content" 
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.key === 'Escape' && hideTitleTooltip()}
+      role="tooltip"
+      aria-live="polite"
+    >
       {titleTooltipText}
     </div>
   </div>

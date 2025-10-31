@@ -94,7 +94,7 @@ class MediaProxyConfig:
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     CACHE_MAX_AGE = 7 * 24 * 60 * 60  # 7 días
     TIMEOUT = 8  # segundos
-    USER_AGENT = 'VouTop-MediaProxy/1.0 (https://votetok.app)'
+    USER_AGENT = 'VouTop-MediaProxy/1.0 (https://voutop.app)'
 
 
 config = MediaProxyConfig()

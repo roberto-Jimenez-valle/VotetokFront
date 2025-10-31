@@ -66,7 +66,7 @@ async function createHmacSignature(
   }
 }
 
-const APP_ID = import.meta.env.VITE_APP_ID || 'votetok-web-v1'
+const APP_ID = import.meta.env.VITE_APP_ID || 'voutop-web-v1'
 const APP_SECRET = import.meta.env.VITE_APP_SECRET || 'change-this-app-secret-in-production-random-64-chars'
 
 // DEBUG: Verificar que las variables se carguen
@@ -78,6 +78,7 @@ export interface SignatureHeaders {
   'X-App-ID': string
   'X-Timestamp': string
   'X-Signature': string
+  [key: string]: string  // Add index signature for compatibility with Record<string, string>
 }
 
 /**

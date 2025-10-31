@@ -1,4 +1,4 @@
-# 🚀 Quick Start - Base de Datos VoteTok
+# 🚀 Quick Start - Base de Datos VouTop
 
 ## ⚡ Inicio Rápido (5 minutos)
 
@@ -153,7 +153,7 @@ cat prisma/schema.prisma
 ## 📁 Estructura de Archivos Creados
 
 ```
-VoteTokFront/
+VouTopFront/
 ├── prisma/
 │   ├── schema.prisma          ✅ Esquema de BD
 │   ├── seed.ts                ✅ Datos iniciales

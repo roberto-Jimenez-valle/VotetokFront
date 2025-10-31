@@ -20,6 +20,6 @@ Write-Host ""
 Write-Host "📋 Configuración aplicada:" -ForegroundColor Cyan
 Write-Host "  JWT_SECRET: $($jwtSecret.Substring(0, 20))..." -ForegroundColor Gray
 Write-Host "  APP_SECRET: $($appSecret.Substring(0, 20))..." -ForegroundColor Gray
-Write-Host "  VITE_APP_ID: votetok-web-v1" -ForegroundColor Gray
+Write-Host "  VITE_APP_ID: voutop-web-v1" -ForegroundColor Gray
 Write-Host "  VITE_APP_SECRET: $($appSecret.Substring(0, 20))..." -ForegroundColor Gray
 Write-Host ""

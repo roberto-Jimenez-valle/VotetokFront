@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 // Endpoint público - no requiere autenticación
@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     });
 
     if (!poll) {
-      throw error(404, 'Poll not found');
+      return json({ message: 'Poll not found' }, { status: 404 });
     }
 
     // Calcular fecha de inicio
@@ -140,7 +140,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     });
   } catch (err) {
     console.error('[API] Error loading poll votes history:', err);
-    throw error(500, 'Failed to load votes history');
+    return json({ message: 'Failed to load votes history' }, { status: 500 });
   }
 };
 

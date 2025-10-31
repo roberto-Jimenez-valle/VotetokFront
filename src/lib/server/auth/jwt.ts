@@ -48,7 +48,12 @@ export async function generateRefreshToken(payload: Omit<JWTPayload, 'iat' | 'ex
 export async function verifyJWT(token: string): Promise<JWTPayload> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload as JWTPayload
+    // Safe type assertion with validation
+    const jwtPayload = payload as unknown as JWTPayload;
+    if (!jwtPayload.userId || !jwtPayload.username || !jwtPayload.role) {
+      throw new Error('Invalid token payload structure');
+    }
+    return jwtPayload;
   } catch (err) {
     throw new Error('Invalid or expired token')
   }

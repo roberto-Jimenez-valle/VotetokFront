@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { fetchMetadata } from '$lib/server/metadata';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -6,7 +6,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const { url } = await request.json();
     
     if (!url || typeof url !== 'string') {
-      throw error(400, { message: 'URL es requerida' });
+      return json({ message: 'URL es requerida' }, { status: 400 });
     }
 
     // Validar formato de URL
@@ -14,14 +14,14 @@ export const POST: RequestHandler = async ({ request }) => {
     try {
       validUrl = new URL(url).href;
     } catch {
-      throw error(400, { message: 'URL inválida' });
+      return json({ message: 'URL inválida' }, { status: 400 });
     }
 
     // Obtener metadatos
     const metadata = await fetchMetadata(validUrl);
     
     if (!metadata) {
-      throw error(400, { message: 'No se pudo obtener información de la URL' });
+      return json({ message: 'No se pudo obtener información de la URL' }, { status: 400 });
     }
 
     // Generar thumbnail personalizado si es necesario
@@ -41,10 +41,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
   } catch (err: any) {
     console.error('[Validate Preview] Error:', err);
-    return error(500, { 
+    return json({ 
       message: err.message || 'Error al validar la URL',
       code: 'VALIDATION_ERROR'
-    });
+    }, { status: 500 });
   }
 };
 

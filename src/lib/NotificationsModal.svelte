@@ -18,7 +18,7 @@
   
   // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
-  let scrollContainer: HTMLElement | null = null;
+  let scrollContainer = $state<HTMLElement | null>(null);
   
   function handleModalSwipeStart(e: TouchEvent) {
     modalTouchStartY = e.touches[0].clientY;
@@ -230,9 +230,12 @@
               onkeydown={(e) => e.key === 'Enter' && handleAvatarClick(notification.id, e)}
             >
               <img src={notification.user.avatar} alt={notification.user.name} />
-              <div class="notification-icon" class:vote={notification.type === 'vote'} class:like={notification.type === 'like'} class:follow={notification.type === 'follow'} class:comment={notification.type === 'comment'}>
-                <svelte:component this={notification.icon} size={14} />
-              </div>
+              {#if notification.icon}
+                {@const Icon = notification.icon}
+                <div class="notification-icon" class:vote={notification.type === 'vote'} class:like={notification.type === 'like'} class:follow={notification.type === 'follow'} class:comment={notification.type === 'comment'}>
+                  <Icon size={14} />
+                </div>
+              {/if}
             </div>
             
             <div 

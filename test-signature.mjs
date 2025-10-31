@@ -1,7 +1,7 @@
 // Script para probar el sistema de App Signature
 import { createHmac } from 'crypto';
 
-const APP_ID = 'votetok-web-v1';
+const APP_ID = 'voutop-web-v1';
 const APP_SECRET = '3c936cdc9c7087bef3e653780cd2209d4c8ec4c873f1c808f5c2e01cd69dc1a3405b4e6ee78e9a2795fe1a36';
 
 function createSignature(method, path, timestamp, body = '') {

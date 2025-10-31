@@ -82,13 +82,7 @@ function checkRateLimit(key: string, config: RateLimitConfig): { allowed: boolea
   if (record.count >= config.max) {
     const retryAfter = Math.ceil((record.resetAt - now) / 1000)
     
-    throw error(429, {
-      message: `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
-      code: 'RATE_LIMIT_EXCEEDED',
-      retryAfter,
-      limit: config.max,
-      resetAt: record.resetAt
-    })
+    throw error(429, `Rate limit exceeded. Try again in ${retryAfter} seconds.`);
   }
 
   // Incrementar contador

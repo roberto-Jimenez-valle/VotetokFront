@@ -60,6 +60,9 @@ export const GET: RequestHandler = async ({ params }) => {
 		const countryVotes: Record<string, Record<string, number>> = {};
 
 		for (const vote of votes) {
+			// Skip if subdivision is null
+			if (!vote.subdivision) continue;
+			
 			// Extraer código país: ESP.1.2 -> ESP, ESP -> ESP
 			const countryIso = vote.subdivision.subdivisionId.split('.')[0];
 			const optionKey = optionIdToKey.get(vote.optionId);

@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 export const GET: RequestHandler = async ({ params, url }) => {
@@ -13,7 +13,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     });
 
     if (!poll) {
-      throw error(404, 'Poll not found');
+      return json({ message: 'Poll not found' }, { status: 404 });
     }
 
     // Calcular fecha de inicio

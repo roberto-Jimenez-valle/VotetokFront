@@ -1,4 +1,4 @@
-# ✅ TODO LISTO - Cómo Ejecutar VoteTok
+# ✅ TODO LISTO - Cómo Ejecutar VouTop
 
 ## 🎉 La migración está COMPLETA
 

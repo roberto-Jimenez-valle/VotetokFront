@@ -3,6 +3,9 @@ import { prisma } from '$lib/server/prisma';
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
+    if (!params.id) {
+      return error(400, { message: 'Poll ID is required' });
+    }
     const pollId = parseInt(params.id);
     const data = await request.json();
     const { label, color, userId } = data;
@@ -35,7 +38,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     
     // Si no se proporciona userId, intentar obtenerlo de locals (sesión)
     if (!finalUserId && locals.user) {
-      finalUserId = locals.user.id;
+      finalUserId = locals.user.userId;
     }
     
     // Si aún no hay userId, usar el creador de la encuesta como fallback

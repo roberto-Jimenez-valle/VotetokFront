@@ -162,16 +162,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			});
 
 			// Obtener lista de usuarios que el usuario actual sigue
-			let followingIds: string[] = [];
+			let followingIds: number[] = [];
 			if (session?.userId) {
-				const following = await prisma.follow.findMany({
+				const following = await prisma.userFollower.findMany({
 					where: {
 						followerId: session.userId,
 						followingId: { in: users.map(u => u.id) }
 					},
 					select: { followingId: true }
 				});
-				followingIds = following.map(f => f.followingId);
+				followingIds = following.map((f: { followingId: number }) => f.followingId);
 			}
 
 			results.users = users.map(user => ({

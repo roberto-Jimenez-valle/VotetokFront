@@ -7,7 +7,7 @@
  * Body: { url: string } o { embedCode: string }
  */
 
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import {
   validateAndSanitizeIframe,
   validateEmbedCode,
@@ -27,10 +27,10 @@ export const POST: RequestHandler = async ({ request }) => {
       const result = validateEmbedCode(embedCode);
       
       if (!result.isValid) {
-        throw error(400, {
+        return json({
           message: result.error || 'Código embed inválido',
           code: 'INVALID_EMBED_CODE'
-        });
+        }, { status: 400 });
       }
       
       return json({
@@ -59,10 +59,10 @@ export const POST: RequestHandler = async ({ request }) => {
       const validation = validateAndSanitizeIframe(targetUrl);
       
       if (!validation.isValid) {
-        throw error(400, {
+        return json({
           message: validation.error || 'URL de iframe inválida',
           code: 'INVALID_IFRAME_URL'
-        });
+        }, { status: 400 });
       }
       
       // Obtener atributos seguros
@@ -83,10 +83,10 @@ export const POST: RequestHandler = async ({ request }) => {
     }
     
     // Sin URL ni embed code
-    throw error(400, {
+    return json({
       message: 'Se requiere "url" o "embedCode"',
       code: 'MISSING_PARAMETER'
-    });
+    }, { status: 400 });
     
   } catch (err: any) {
     console.error('[Validate Iframe] Error:', err);
@@ -97,10 +97,10 @@ export const POST: RequestHandler = async ({ request }) => {
     }
     
     // Error genérico
-    throw error(500, {
+    return json({
       message: err.message || 'Error al validar iframe',
       code: 'VALIDATION_ERROR'
-    });
+    }, { status: 500 });
   }
 };
 

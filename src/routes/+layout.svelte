@@ -40,7 +40,7 @@
 	
 	onMount(() => {
 		// 🔐 Verificar acceso
-		const access = localStorage.getItem('votetok-access');
+		const access = localStorage.getItem('voutop-access');
 		hasAccess = access === 'granted';
 		
 		// Si no tiene acceso, no continuar con el resto de la inicialización
@@ -50,7 +50,7 @@
 		}
 		
 		// 👤 Cargar usuario seleccionado desde localStorage
-		const savedUser = localStorage.getItem('votetok-test-user');
+		const savedUser = localStorage.getItem('voutop-test-user');
 		if (savedUser) {
 			try {
 				const user = JSON.parse(savedUser);
@@ -202,15 +202,6 @@
 		color: #c9d1d9;
 		letter-spacing: 1px;
 		animation: fadeInUp 1s ease-out;
-	}
-	
-	/* Imagen del splash */
-	.splash-image {
-		max-width: 400px;
-		width: 90%;
-		height: auto;
-		object-fit: contain;
-		animation: fadeInUp 1s ease-out 0.2s backwards;
 	}
 	
 	/* Animaciones */

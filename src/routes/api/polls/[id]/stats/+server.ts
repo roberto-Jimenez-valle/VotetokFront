@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 export const GET: RequestHandler = async ({ params }) => {
@@ -11,7 +11,7 @@ export const GET: RequestHandler = async ({ params }) => {
   });
 
   if (!poll) {
-    throw error(404, 'Poll not found');
+    return json({ message: 'Poll not found' }, { status: 404 });
   }
 
   // Obtener estadísticas
@@ -37,10 +37,14 @@ export const GET: RequestHandler = async ({ params }) => {
   ]);
 
   // Obtener datos completos de subdivisiones para agrupar por país
+  const subdivisionIds = votesBySubdivision
+    .map(v => v.subdivisionId)
+    .filter((id): id is number => id !== null);
+    
   const subdivisions = await prisma.subdivision.findMany({
     where: {
       id: {
-        in: votesBySubdivision.map(v => v.subdivisionId)
+        in: subdivisionIds
       }
     },
     select: {
@@ -64,6 +68,7 @@ export const GET: RequestHandler = async ({ params }) => {
   const votesBySubdivisionMap: Record<string, { name: string, level: number, count: number }> = {};
 
   for (const vote of votesBySubdivision) {
+    if (!vote.subdivisionId) continue;
     const sub = subdivisionMap.get(vote.subdivisionId);
     if (sub) {
       // Extraer código país

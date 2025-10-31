@@ -37,7 +37,7 @@
   
   // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
-  let scrollContainer: HTMLElement | null = null;
+  let scrollContainer = $state<HTMLElement | null>(null);
   
   function handleModalSwipeStart(e: TouchEvent) {
     modalTouchStartY = e.touches[0].clientY;
@@ -445,14 +445,7 @@
                       pollTitleExpanded={{}}
                       pollTitleTruncated={{}}
                       pollTitleElements={{}}
-                      voteEffectActive={false}
-                      voteEffectPollId={null}
                       displayVotes={{}}
-                      voteClickX={0}
-                      voteClickY={0}
-                      voteIconX={0}
-                      voteIconY={0}
-                      voteEffectColor="#10b981"
                       on:openPollById={(e) => {
                         handlePollClick(e.detail.pollId);
                         closeModal();
@@ -532,14 +525,7 @@
                         pollTitleExpanded={{}}
                         pollTitleTruncated={{}}
                         pollTitleElements={{}}
-                        voteEffectActive={false}
-                        voteEffectPollId={null}
                         displayVotes={{}}
-                        voteClickX={0}
-                        voteClickY={0}
-                        voteIconX={0}
-                        voteIconY={0}
-                        voteEffectColor="#10b981"
                         on:openPollById={(e) => {
                           handlePollClick(e.detail.pollId);
                           closeModal();

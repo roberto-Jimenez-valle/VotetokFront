@@ -147,7 +147,7 @@ Cada request incluye:
 #### 1. Variables de Entorno
 ```bash
 # .env
-VITE_APP_ID=votetok-web-v1
+VITE_APP_ID=voutop-web-v1
 VITE_APP_SECRET=super-secret-key-never-share-this-1234567890
 
 # Backend (.env)
@@ -228,7 +228,7 @@ export async function requireAppSignature(event: RequestEvent) {
   }
   
   // 2. Validar App ID
-  const validAppIds = ['votetok-web-v1', 'votetok-ios-v1', 'votetok-android-v1']
+  const validAppIds = ['voutop-web-v1', 'voutop-ios-v1', 'voutop-android-v1']
   if (!validAppIds.includes(appId)) {
     throw error(403, {
       message: 'Invalid app ID',
@@ -389,7 +389,7 @@ import okhttp3.CertificatePinner
 import okhttp3.OkHttpClient
 
 val certificatePinner = CertificatePinner.Builder()
-    .add("api.votetok.com", "sha256/AAAAAAAAAA...") // Tu hash
+    .add("api.voutop.com", "sha256/AAAAAAAAAA...") // Tu hash
     .build()
 
 val client = OkHttpClient.Builder()
@@ -428,7 +428,7 @@ import { initializeAppCheck, ReCaptchaV3Provider } from '@firebase/app-check'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  projectId: "votetok",
+  projectId: "voutop",
   appId: "1:123456789:web:abcdef"
 }
 

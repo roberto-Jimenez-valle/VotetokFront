@@ -2,7 +2,7 @@
 
 ## 📋 Descripción General
 
-Este documento describe el sistema completo de recomendaciones personalizadas implementado en VoteTok, que diferencia entre encuestas **"Para ti"** (personalizadas) y **"Tendencias"** (globales).
+Este documento describe el sistema completo de recomendaciones personalizadas implementado en VouTop, que diferencia entre encuestas **"Para ti"** (personalizadas) y **"Tendencias"** (globales).
 
 ---
 
@@ -531,4 +531,4 @@ onMount(async () => {
 
 **Última actualización:** 2025-01-11
 **Versión:** 1.0
-**Autor:** Sistema de Desarrollo VoteTok
+**Autor:** Sistema de Desarrollo VouTop

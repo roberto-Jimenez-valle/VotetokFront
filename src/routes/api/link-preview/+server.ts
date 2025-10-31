@@ -7,7 +7,7 @@
  * GET /api/link-preview?url=https://...
  */
 
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { findOEmbedProvider, buildOEmbedUrl, isSafeDomain } from '$lib/server/oembed-providers';
 import { isDomainAllowed } from '$lib/server/media-proxy-config';
 
@@ -43,28 +43,28 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
   
   // 1. Validar URL
   if (!targetUrl) {
-    throw error(400, {
+    return json({
       message: 'Parámetro "url" es requerido',
       code: 'MISSING_URL'
-    });
+    }, { status: 400 });
   }
   
   let validUrl: URL;
   try {
     validUrl = new URL(targetUrl);
   } catch {
-    throw error(400, {
+    return json({
       message: 'URL inválida',
       code: 'INVALID_URL'
-    });
+    }, { status: 400 });
   }
   
   // 2. Solo HTTPS
   if (validUrl.protocol !== 'https:' && validUrl.protocol !== 'http:') {
-    throw error(400, {
+    return json({
       message: 'Solo se permiten URLs HTTP/HTTPS',
       code: 'INVALID_PROTOCOL'
-    });
+    }, { status: 400 });
   }
   
   // 3. Verificar caché
@@ -144,10 +144,10 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
   } catch (err: any) {
     console.error('[Link Preview] Error:', err);
     
-    throw error(500, {
+    return json({
       message: err.message || 'Error al obtener preview del enlace',
       code: 'PREVIEW_ERROR'
-    });
+    }, { status: 500 });
   }
 };
 

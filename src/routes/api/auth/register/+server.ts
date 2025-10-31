@@ -17,28 +17,28 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Validaciones básicas
     if (!username || !email || !password) {
-      throw error(400, {
+      return json({
         message: 'Username, email and password are required',
         code: 'MISSING_FIELDS'
-      })
+      }, { status: 400 })
     }
 
     // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      throw error(400, {
+      return json({
         message: 'Invalid email format',
         code: 'INVALID_EMAIL'
-      })
+      }, { status: 400 })
     }
 
     // Validar username (alfanumérico, guiones bajos)
     const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/
     if (!usernameRegex.test(username)) {
-      throw error(400, {
+      return json({
         message: 'Username must be 3-20 characters and contain only letters, numbers, and underscores',
         code: 'INVALID_USERNAME'
-      })
+      }, { status: 400 })
     }
 
     // Verificar que username no exista
@@ -47,10 +47,10 @@ export const POST: RequestHandler = async ({ request }) => {
     })
 
     if (existingUsername) {
-      throw error(409, {
+      return json({
         message: 'Username already taken',
         code: 'USERNAME_EXISTS'
-      })
+      }, { status: 409 })
     }
 
     // Verificar que email no exista
@@ -59,10 +59,10 @@ export const POST: RequestHandler = async ({ request }) => {
     })
 
     if (existingEmail) {
-      throw error(409, {
+      return json({
         message: 'Email already registered',
         code: 'EMAIL_EXISTS'
-      })
+      }, { status: 409 })
     }
 
     // TODO: En producción, hashear password con bcrypt/argon2
@@ -125,9 +125,9 @@ export const POST: RequestHandler = async ({ request }) => {
       throw err
     }
     
-    throw error(500, {
+    return json({
       message: 'Registration failed',
       code: 'REGISTER_ERROR'
-    })
+    }, { status: 500 })
   }
 }

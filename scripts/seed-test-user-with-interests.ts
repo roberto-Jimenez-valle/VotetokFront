@@ -14,11 +14,11 @@ async function main() {
 
   // 1. Crear usuario de prueba
   const testUser = await prisma.user.upsert({
-    where: { email: 'testuser@votetok.com' },
+    where: { email: 'testuser@voutop.com' },
     update: {},
     create: {
       username: 'testuser',
-      email: 'testuser@votetok.com',
+      email: 'testuser@voutop.com',
       displayName: 'Usuario de Prueba',
       bio: 'Usuario de prueba para sistema de recomendaciones',
       avatarUrl: 'https://i.pravatar.cc/150?u=testuser',
@@ -97,11 +97,11 @@ async function main() {
 
   // 4. Crear un segundo usuario para que el primero pueda seguir
   const otherUser = await prisma.user.upsert({
-    where: { email: 'creator@votetok.com' },
+    where: { email: 'creator@voutop.com' },
     update: {},
     create: {
       username: 'creator',
-      email: 'creator@votetok.com',
+      email: 'creator@voutop.com',
       displayName: 'Creador Popular',
       bio: 'Creador de encuestas interesantes',
       avatarUrl: 'https://i.pravatar.cc/150?u=creator',

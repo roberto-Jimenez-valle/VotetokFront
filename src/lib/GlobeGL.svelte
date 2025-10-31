@@ -3459,7 +3459,7 @@
     }
     
     try {
-      const saved = localStorage.getItem('votetok-theme');
+      const saved = localStorage.getItem('voutop-theme');
       if (saved) {
         const parsed = JSON.parse(saved);
         console.log('[GlobeGL] Inicializando con tema guardado:', parsed);
@@ -4761,7 +4761,7 @@
         window.addEventListener('searchSelect', searchSelectHandler);
     
     // Verificar si hay tema guardado antes de inicializar colores
-    const hasSavedTheme = localStorage.getItem('votetok-theme');
+    const hasSavedTheme = localStorage.getItem('voutop-theme');
     if (!hasSavedTheme) {
       // Solo inicializar desde theme.json si NO hay tema guardado
       console.log('[GlobeGL] No hay tema guardado, inicializando desde theme.json');
@@ -6050,8 +6050,6 @@
   {navigationManager}
   {currentAltitude}
   additionalPolls={[]}
-  bind:isProfileModalOpen={isProfileModalOpen}
-  bind:selectedProfileUserId={selectedProfileUserId}
   onToggleDropdown={toggleDropdown}
   bind:showSearch
   bind:tagQuery

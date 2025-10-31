@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 export const GET: RequestHandler = async ({ params }) => {
@@ -44,7 +44,7 @@ export const GET: RequestHandler = async ({ params }) => {
   });
 
   if (!poll) {
-    throw error(404, 'Poll not found');
+    return json({ message: 'Poll not found' }, { status: 404 });
   }
 
   // Transformar opciones para incluir voteCount y avatarUrl

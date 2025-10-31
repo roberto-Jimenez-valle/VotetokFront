@@ -1,4 +1,4 @@
-# 🚀 Guía de Implementación - Base de Datos VoteTok
+# 🚀 Guía de Implementación - Base de Datos VouTop
 
 ## 📋 Pasos para Implementar la Base de Datos
 

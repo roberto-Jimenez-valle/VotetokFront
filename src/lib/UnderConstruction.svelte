@@ -9,10 +9,10 @@
 
 	const SECRET_CODE = '031188';
 
-	// Lista de usuarios disponibles para testing
+	// Lista de usuarios disponibles para testing (IDs de PostgreSQL producción)
 	const availableUsers = [
 		{
-			id: 1,
+			id: 43,
 			username: 'maria_gonzalez',
 			displayName: 'María González',
 			email: 'maria@votetok.com',
@@ -20,11 +20,11 @@
 			verified: true,
 			bio: 'Activista social y política',
 			countryIso3: 'ESP',
-			subdivisionId: '1',
+			subdivisionId: null,
 			role: 'user'
 		},
 		{
-			id: 2,
+			id: 44,
 			username: 'carlos_lopez',
 			displayName: 'Carlos López',
 			email: 'carlos@votetok.com',
@@ -32,11 +32,11 @@
 			verified: true,
 			bio: 'Analista político',
 			countryIso3: 'ESP',
-			subdivisionId: '2',
+			subdivisionId: null,
 			role: 'user'
 		},
 		{
-			id: 3,
+			id: 41,
 			username: 'laura_sanchez',
 			displayName: 'Laura Sánchez',
 			email: 'laura@votetok.com',
@@ -44,11 +44,11 @@
 			verified: false,
 			bio: 'Periodista independiente',
 			countryIso3: 'MEX',
-			subdivisionId: '3',
+			subdivisionId: null,
 			role: 'user'
 		},
 		{
-			id: 4,
+			id: 45,
 			username: 'juan_martin',
 			displayName: 'Juan Martín',
 			email: 'juan@votetok.com',
@@ -56,11 +56,11 @@
 			verified: true,
 			bio: 'Economista',
 			countryIso3: 'ARG',
-			subdivisionId: '4',
+			subdivisionId: null,
 			role: 'user'
 		},
 		{
-			id: 5,
+			id: 42,
 			username: 'sofia_herrera',
 			displayName: 'Sofía Herrera',
 			email: 'sofia@votetok.com',
@@ -68,7 +68,7 @@
 			verified: false,
 			bio: 'Estudiante de ciencias políticas',
 			countryIso3: 'COL',
-			subdivisionId: '5',
+			subdivisionId: null,
 			role: 'user'
 		}
 	];
@@ -113,8 +113,8 @@
 		const user = availableUsers.find(u => u.id === userId);
 		if (user) {
 			// Guardar usuario en localStorage
-			localStorage.setItem('votetok-test-user', JSON.stringify(user));
-			localStorage.setItem('votetok-access', 'granted');
+			localStorage.setItem('voutop-test-user', JSON.stringify(user));
+			localStorage.setItem('voutop-access', 'granted');
 			// Recargar la página
 			window.location.reload();
 		}
@@ -146,7 +146,7 @@
 					</defs>
 				</svg>
 			</div>
-			<h1 class="logo-text">VoteTok</h1>
+			<h1 class="logo-text">VouTop</h1>
 		</div>
 
 		<!-- Título principal -->
@@ -232,7 +232,7 @@
 
 	<!-- Footer -->
 	<footer class="construction-footer">
-		<p>&copy; 2024 VoteTok. Todos los derechos reservados.</p>
+		<p>&copy; 2024 VouTop. Todos los derechos reservados.</p>
 	</footer>
 </div>
 

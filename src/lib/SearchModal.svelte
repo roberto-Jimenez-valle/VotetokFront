@@ -22,7 +22,7 @@
   
   // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
-  let scrollContainer: HTMLElement | null = null;
+  let scrollContainer = $state<HTMLElement | null>(null);
   
   function handleModalSwipeStart(e: TouchEvent) {
     modalTouchStartY = e.touches[0].clientY;
@@ -58,7 +58,7 @@
   // Cargar búsquedas recientes del localStorage
   function loadRecentSearches() {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('votetok-recent-searches');
+      const stored = localStorage.getItem('voutop-recent-searches');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -79,7 +79,7 @@
       const newSearch = { text, type };
       const filtered = recentSearches.filter(s => s.text !== text);
       const updated = [newSearch, ...filtered].slice(0, 5); // Máximo 5
-      localStorage.setItem('votetok-recent-searches', JSON.stringify(updated));
+      localStorage.setItem('voutop-recent-searches', JSON.stringify(updated));
       loadRecentSearches();
     }
   }
@@ -318,7 +318,7 @@
   function closeModal() {
     isOpen = false;
     searchQuery = '';
-    searchResults = { polls: [], users: [], places: [] };
+    searchResults = { polls: [], users: [] };
   }
 </script>
 
@@ -356,7 +356,6 @@
           oninput={handleSearchInput}
           placeholder="Buscar"
           class="search-input-header"
-          autofocus
         />
         {#if searchQuery}
           <button onclick={clearSearch} class="clear-btn-header" aria-label="Limpiar">
@@ -1193,16 +1192,6 @@
     font-weight: bold;
   }
 
-  /* Place specific */
-  .place-item {
-    align-items: center;
-  }
-
-  .place-icon {
-    color: rgba(59, 130, 246, 0.8);
-    flex-shrink: 0;
-  }
-
   /* No results */
   .no-results {
     display: flex;
@@ -1217,127 +1206,6 @@
 
   .no-results p {
     font-size: 15px;
-  }
-
-  /* Búsqueda de lugares (estilo BottomSheet) */
-  .place-search-wrapper {
-    position: relative;
-    padding: 12px 1.5rem;
-    background: #181a20;
-  }
-
-  .place-search-input-container {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .place-search-icon {
-    position: absolute;
-    left: 14px;
-    color: rgb(255, 255, 255);
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .place-search-input {
-    flex: 1;
-    border: none;
-    background: rgba(0, 0, 0, 1);
-    color: #ffffff;
-    font-size: 16px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    outline: none;
-    padding: 10px 100px 10px 44px;
-    border-radius: 20px;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-  }
-
-  .place-search-input::placeholder {
-    color: rgb(255, 255, 255);
-  }
-
-  .place-search-input::-webkit-search-cancel-button {
-    display: none;
-    -webkit-appearance: none;
-  }
-
-  .place-search-clear {
-    position: absolute;
-    right: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 12px;
-    border: none;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .place-search-clear:hover {
-    background: rgba(255, 255, 255, 0.25);
-  }
-
-  /* Dropdown de resultados */
-  .place-search-dropdown {
-    position: absolute;
-    left: 1.5rem;
-    right: 1.5rem;
-    top: calc(100% - 8px);
-    background: rgba(20, 20, 25, 0.98);
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    max-height: 300px;
-    overflow-y: auto;
-    z-index: 100;
-    backdrop-filter: blur(10px);
-  }
-
-  .search-loading {
-    padding: 16px;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
-  }
-
-  .search-result-item {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: none;
-    border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    color: white;
-    text-align: left;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .search-result-item:last-child {
-    border-bottom: none;
-  }
-
-  .search-result-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .result-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-  }
-
-  .result-name {
-    font-size: 15px;
-    font-weight: 500;
   }
 
 </style>

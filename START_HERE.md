@@ -1,4 +1,4 @@
-# 🚀 EMPEZAR AQUÍ - VoteTok
+# 🚀 EMPEZAR AQUÍ - VouTop
 
 ## ⚡ Ejecutar Todo Automáticamente
 
@@ -219,7 +219,7 @@ Si tienes problemas:
 
 ## ✨ ¡Listo!
 
-Tu aplicación VoteTok está configurada con:
+Tu aplicación VouTop está configurada con:
 - 📊 Base de datos SQLite
 - 🔗 API REST funcional
 - 🧹 Código limpio

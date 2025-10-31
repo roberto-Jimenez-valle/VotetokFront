@@ -17,10 +17,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Validaciones básicas
     if (!email || !password) {
-      throw error(400, {
+      return json({
         message: 'Email and password are required',
         code: 'MISSING_CREDENTIALS'
-      })
+      }, { status: 400 })
     }
 
     // Buscar usuario por email o username
@@ -44,10 +44,10 @@ export const POST: RequestHandler = async ({ request }) => {
     })
 
     if (!user) {
-      throw error(401, {
+      return json({
         message: 'Invalid credentials',
         code: 'INVALID_CREDENTIALS'
-      })
+      }, { status: 401 })
     }
 
     // TODO: En producción, verificar password con bcrypt
@@ -101,16 +101,11 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     })
 
-  } catch (err: any) {
-    console.error('[Login Error]', err)
-    
-    if (err.status) {
-      throw err
-    }
-    
-    throw error(500, {
+  } catch (err) {
+    console.error('Login error:', err)
+    return json({
       message: 'Login failed',
       code: 'LOGIN_ERROR'
-    })
+    }, { status: 500 })
   }
 }

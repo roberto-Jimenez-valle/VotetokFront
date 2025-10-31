@@ -34,10 +34,7 @@ export async function requireAuth(event: RequestEvent): Promise<JWTPayload> {
   const user = await extractAuthOptional(event)
   
   if (!user) {
-    throw error(401, {
-      message: 'Authentication required. Please login.',
-      code: 'AUTH_REQUIRED'
-    })
+    throw error(401, 'Authentication required. Please login.');
   }
   
   return user
@@ -53,11 +50,7 @@ export async function requireRole(
   const user = await requireAuth(event)
   
   if (!allowedRoles.includes(user.role)) {
-    throw error(403, {
-      message: `Insufficient permissions. Required roles: ${allowedRoles.join(', ')}`,
-      code: 'FORBIDDEN',
-      required: allowedRoles
-    })
+    throw error(403, `Insufficient permissions. Required roles: ${allowedRoles.join(', ')}`);
   }
   
   return user
@@ -79,10 +72,7 @@ export async function requireOwnership(
   
   // Usuario debe ser el dueño
   if (user.userId !== resourceUserId) {
-    throw error(403, {
-      message: 'You can only access your own resources',
-      code: 'NOT_OWNER'
-    })
+    throw error(403, 'You can only access your own resources');
   }
   
   return user

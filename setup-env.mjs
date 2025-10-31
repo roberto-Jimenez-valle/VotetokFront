@@ -44,6 +44,6 @@ console.log('📋 Configuración aplicada:');
 console.log('   - JWT_SECRET: generado (32 bytes)');
 console.log('   - APP_SECRET: generado (64 bytes)');
 console.log('   - VITE_APP_SECRET: sincronizado con APP_SECRET');
-console.log('   - VITE_APP_ID: votetok-web-v1\n');
+console.log('   - VITE_APP_ID: voutop-web-v1\n');
 console.log('⚡ Siguiente paso: Reinicia el servidor de desarrollo');
 console.log('   npm run dev\n');

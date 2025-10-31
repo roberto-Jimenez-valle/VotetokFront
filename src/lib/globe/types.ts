@@ -6,9 +6,8 @@ export interface GlobeMaterial {
 
 export interface GlobeAPI {
   setTilesEnabled?: (enabled: boolean) => void;
-  // setter
-  pointOfView: (pov: { lat: number; lng: number; altitude: number }, ms?: number) => void;
-  // getter
+  // Combined getter/setter using method overloads
+  pointOfView(pov: { lat: number; lng: number; altitude: number }, ms?: number): void;
   pointOfView(): { lat: number; lng: number; altitude: number } | undefined;
   setPolygonsData: (data: any[]) => void;
   polygonCapColor: (fn: (feat: any) => string) => void;

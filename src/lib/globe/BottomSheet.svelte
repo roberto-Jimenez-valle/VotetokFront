@@ -2913,14 +2913,7 @@
           currentPage={currentPageMain}
           {userVotes}
           {multipleVotes}
-          {voteEffectActive}
-          {voteEffectPollId}
           {displayVotes}
-          {voteClickX}
-          {voteClickY}
-          {voteIconX}
-          {voteIconY}
-          {voteEffectColor}
           pollTitleExpanded={{}}
           pollTitleTruncated={{}}
           pollTitleElements={{}}
@@ -3015,7 +3008,7 @@
         <!-- Insertar anuncios cada 3 encuestas -->
         {#if pollIndex === 2}
           <AdCard 
-            title="VoteTok Premium"
+            title="VouTop Premium"
             description="Accede a encuestas exclusivas y anÃ¡lisis detallados"
             ctaText="Probar gratis"
             imageUrl="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=200&h=200&fit=crop"
@@ -3040,14 +3033,7 @@
           {pollTitleExpanded}
           {pollTitleTruncated}
           {pollTitleElements}
-          {voteEffectActive}
-          {voteEffectPollId}
           {displayVotes}
-          {voteClickX}
-          {voteClickY}
-          {voteIconX}
-          {voteIconY}
-          {voteEffectColor}
           on:optionClick={(e) => {
             const { event, optionKey, pollId, optionColor } = e.detail;
             voteClickX = event.clientX;

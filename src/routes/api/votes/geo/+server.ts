@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -7,7 +7,7 @@ export const GET: RequestHandler = async ({ url }) => {
   const subdivisionLevel = url.searchParams.get('subdivision');
 
   if (!pollId) {
-    throw error(400, 'Poll ID is required');
+    return json({ message: 'Poll ID is required' }, { status: 400 });
   }
 
   // Construir filtros
@@ -57,15 +57,17 @@ export const GET: RequestHandler = async ({ url }) => {
   });
 
   // Formatear para compatibilidad con el formato anterior
-  const formattedVotes = votes.map((vote) => ({
-    id: `VOTE-${vote.id}`,
-    iso3: vote.subdivision.subdivisionId.split('.')[0],  // Extraer país
-    lat: vote.latitude,
-    lng: vote.longitude,
-    tag: vote.option.optionKey,
-    subdivisionName: vote.subdivision.name,
-    subdivisionLevel: vote.subdivision.level,
-    timestamp: vote.createdAt.toISOString(),
+  const formattedVotes = votes
+    .filter(vote => vote.subdivision !== null)
+    .map((vote) => ({
+      id: `VOTE-${vote.id}`,
+      iso3: vote.subdivision!.subdivisionId.split('.')[0],  // Extraer país
+      lat: vote.latitude,
+      lng: vote.longitude,
+      tag: vote.option.optionKey,
+      subdivisionName: vote.subdivision!.name,
+      subdivisionLevel: vote.subdivision!.level,
+      timestamp: vote.createdAt.toISOString(),
     option: {
       key: vote.option.optionKey,
       label: vote.option.optionLabel,

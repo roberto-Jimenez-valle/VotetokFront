@@ -898,6 +898,7 @@
 	<div class="polls-fullscreen-container">
 		<!-- Barra de avatares superior con scroll horizontal -->
 		<div class="top-avatars-bar">
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div 
 				class="modal-avatars-scroll"
 				onmousedown={handleAvatarScrollStart}
@@ -907,7 +908,8 @@
 				ontouchstart={handleAvatarScrollStart}
 				ontouchmove={handleAvatarScrollMove}
 				ontouchend={handleAvatarScrollEnd}
-				role="region"
+				role="group"
+				tabindex="-1"
 				aria-label="Usuarios con actividad"
 			>
 				<div class="modal-avatars-inner">
@@ -1007,13 +1009,6 @@
 							{pollTitleExpanded}
 							{pollTitleTruncated}
 							{pollTitleElements}
-							voteEffectActive={voteEffectStates[currentPoll.id] || false}
-							voteEffectPollId={null}
-							voteClickX={0}
-							voteClickY={0}
-							voteIconX={0}
-							voteIconY={0}
-							voteEffectColor="#10b981"
 							bind:isProfileModalOpen={isProfileModalOpen}
 							bind:selectedProfileUserId={selectedProfileUserId}
 							on:setActive={handleSetActive}
@@ -1033,10 +1028,12 @@
 			</div>
 			
 			<!-- Área de navegación inferior -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div 
 				class="nav-area-bottom"
-				role="navigation"
-				aria-label="Controles de navegación"
+				role="group"
+				tabindex="-1"
+				aria-label="Controles de navegación - desliza para navegar"
 				onmousedown={handleSwipeStart}
 				onmousemove={handleSwipeMove}
 				onmouseup={handleSwipeEnd}

@@ -444,6 +444,6 @@ function isPrivateIP(ip: string): boolean {
 
 ---
 
-**Creado por**: Sistema de Preview de Enlaces VoteTok  
+**Creado por**: Sistema de Preview de Enlaces VouTop  
 **Versión**: 1.0.0  
 **Última actualización**: 2024

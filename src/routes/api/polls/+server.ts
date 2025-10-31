@@ -1,4 +1,4 @@
-import { json, error, type RequestHandler } from '@sveltejs/kit';
+import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 import { requireAuth } from '$lib/server/middleware/auth';
 import { rateLimitByUser } from '$lib/server/middleware/rateLimit';
@@ -49,11 +49,11 @@ export const POST: RequestHandler = async (event) => {
 
     // Validaciones
     if (!title || title.trim().length === 0) {
-      throw error(400, { message: 'El título es requerido', code: 'MISSING_TITLE' });
+      return json({ message: 'El título es requerido', code: 'MISSING_TITLE' }, { status: 400 });
     }
     
     if (!options || options.length < 2) {
-      throw error(400, { message: 'Se requieren al menos 2 opciones', code: 'INVALID_OPTIONS' });
+      return json({ message: 'Se requieren al menos 2 opciones', code: 'INVALID_OPTIONS' }, { status: 400 });
     }
 
     // Calcular closedAt basado en duration
@@ -141,7 +141,7 @@ export const POST: RequestHandler = async (event) => {
 
   } catch (err: any) {
     console.error('Error creating poll:', err);
-    return error(500, { message: err.message || 'Error al crear la encuesta' });
+    return json({ message: err.message || 'Error al crear la encuesta' }, { status: 500 });
   }
 };
 
