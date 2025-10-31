@@ -75,18 +75,21 @@
 
 	function handleLogoClick() {
 		clickCount++;
+		console.log('🖱️ Click en logo - Contador:', clickCount);
 		
 		if (clickTimer) {
 			clearTimeout(clickTimer);
 		}
 
 		if (clickCount >= 3) {
+			console.log('✅ Triple click detectado - Mostrando campo de código');
 			showCodeInput = true;
 			clickCount = 0;
 			return;
 		}
 
 		clickTimer = setTimeout(() => {
+			console.log('⏱️ Timeout - Reiniciando contador');
 			clickCount = 0;
 		}, 800);
 	}
