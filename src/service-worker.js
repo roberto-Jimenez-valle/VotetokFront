@@ -1,13 +1,15 @@
 /// <reference types="@sveltejs/kit" />
-import { build, files, version } from '$service-worker';
+// Temporalmente simplificado para diagnóstico
+const build = [];
+const files = [];
+const version = '1.0.0';
 
 // Nombre único del cache
 const CACHE_NAME = `voutop-v${version}`;
 
 // Assets a cachear
 const ASSETS = [
-  ...build, // archivos generados por SvelteKit
-  ...files  // archivos estáticos
+  // Temporalmente vacío para diagnóstico
 ];
 
 // Patrones de URLs a cachear dinámicamente

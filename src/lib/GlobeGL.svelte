@@ -101,6 +101,7 @@
   export const loadRegionData: null | ((bbox: { minLat: number; minLng: number; maxLat: number; maxLng: number }) => Promise<any>) = null;
 
   let globe: any = null; // ref al componente GlobeCanvas
+  let globeReady = false; // Bandera para saber si el globo está completamente inicializado
   let answersData: Record<string, Record<string, number>> = {};
   let colorMap: Record<string, string> = {};
   let isoIntensity: Record<string, number> = {};
@@ -487,12 +488,17 @@
       }
     } catch {}
     try {
-      globe && globe.setPolygonsData && globe.setPolygonsData(vm.polygons);
-      polygonsVisible = true;
-      setTilesEnabled(false);
-      globe?.refreshPolyColors?.();
-      globe?.refreshPolyAltitudes?.();
-      globe?.refreshPolyLabels?.();
+      // IMPORTANTE: Solo actualizar polígonos si el globo está listo
+      if (globe && globeReady && globe.setPolygonsData) {
+        globe.setPolygonsData(vm.polygons);
+        polygonsVisible = true;
+        setTilesEnabled(false);
+        globe?.refreshPolyColors?.();
+        globe?.refreshPolyAltitudes?.();
+        globe?.refreshPolyLabels?.();
+      } else {
+        console.warn('[initFrom] ⏳ Globo no está listo aún, polígonos se cargarán después');
+      }
     } catch {}
     // Solo establecer POV inicial la primera vez
     if (_initVersion === 0) {
@@ -4989,6 +4995,15 @@
   on:movementEnd={onMapMovementEnd}
   on:ready={() => {
     try {
+      console.log('[GlobeGL] 🎯 Globo listo - Inicializando...');
+      globeReady = true; // Marcar globo como listo
+      
+      // Si ya hay polígonos mundiales cargados, aplicarlos ahora
+      if (worldPolygons && worldPolygons.length > 0 && globe?.setPolygonsData) {
+        console.log('[GlobeGL] 🗺️ Cargando polígonos mundiales que estaban pendientes');
+        globe.setPolygonsData(worldPolygons);
+        polygonsVisible = true;
+      }
                   
       // DISABLED: Auto-loading world polygons on ready - now controlled by NavigationManager
       // Only initialize NavigationManager to world view

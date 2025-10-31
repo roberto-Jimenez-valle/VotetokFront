@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	
 	let showCodeInput = $state(false);
 	let showUserSelection = $state(false);
 	let codeValue = $state('');
@@ -6,6 +8,7 @@
 	let clickCount = $state(0);
 	let clickTimer: NodeJS.Timeout | null = null;
 	let selectedUserId = $state<number | null>(null);
+	let logoContainer: HTMLDivElement;
 
 	const SECRET_CODE = '031188';
 
@@ -113,15 +116,37 @@
 
 	function selectUser(userId: number) {
 		selectedUserId = userId;
+		
+		// Guardar en localStorage
 		const user = availableUsers.find(u => u.id === userId);
 		if (user) {
-			// Guardar usuario en localStorage
 			localStorage.setItem('voutop-test-user', JSON.stringify(user));
 			localStorage.setItem('voutop-access', 'granted');
-			// Recargar la página
+			
+			// Recargar la página para aplicar cambios
 			window.location.reload();
+		} else {
+			errorMessage = '';
 		}
 	}
+
+	// Configurar event listener en onMount para mayor robustez en producción
+	onMount(() => {
+		if (logoContainer) {
+			console.log('🎯 Event listener del logo configurado');
+			
+			const clickHandler = () => {
+				handleLogoClick();
+			};
+			
+			logoContainer.addEventListener('click', clickHandler);
+			
+			// Cleanup
+			return () => {
+				logoContainer?.removeEventListener('click', clickHandler);
+			};
+		}
+	});
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
@@ -135,7 +160,7 @@
 <div class="construction-page">
 	<div class="construction-content">
 		<!-- Logo animado -->
-		<div class="logo-container" role="button" tabindex="0" onclick={handleLogoClick} onkeydown={(e) => e.key === 'Enter' && handleLogoClick()}>
+		<div class="logo-container" role="button" tabindex="0" bind:this={logoContainer} onkeydown={(e) => e.key === 'Enter' && handleLogoClick()}>
 			<div class="logo-circle">
 				<svg width="80" height="80" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
 					<circle cx="50" cy="50" r="45" stroke="url(#gradient)" stroke-width="3" fill="none" />

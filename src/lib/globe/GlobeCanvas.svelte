@@ -30,6 +30,7 @@
   let controls: any = null;
   let ro: ResizeObserver | null = null;
   let windowResizeHandler: (() => void) | null = null;
+  let isGlobeReady = false; // Bandera para saber si el globo está completamente inicializado
   
   // Cache para evitar recalcular geometrías cada frame
   let geometryCache = new Map<string, any>();
@@ -66,7 +67,10 @@
   
   // Public API for parent via bind:this (OPTIMIZADO)
   export function setPolygonsData(data: any[]) {
-    if (!world) return;
+    if (!world || !isGlobeReady) {
+      console.warn('[GlobeCanvas] Globo no está listo aún');
+      return;
+    }
     try {
       // Evitar recalcular si los datos no cambiaron
       const newHash = hashData(data);
@@ -77,13 +81,18 @@
       lastPolygonDataHash = newHash;
       lastPolygonData = data;
       
-      // Aplicar datos en requestAnimationFrame para no bloquear
       requestAnimationFrame(() => {
-        if (!world) return; // Verificar que world siga disponible
+        if (!world || !isGlobeReady) return; // Verificar que world siga disponible
+        if (typeof world.polygonsData !== 'function') {
+          console.warn('[GlobeCanvas] polygonsData no está disponible');
+          return;
+        }
         const filteredData = applyLODFiltering(data);
         world.polygonsData(filteredData);
       });
-    } catch {}
+    } catch (error) {
+      console.error('[GlobeCanvas] Error en setPolygonsData:', error);
+    }
   }
   export function setTilesEnabled(enabled: boolean) {
     world.globeTileEngineUrl(null);
@@ -91,13 +100,21 @@
         world.globeMaterial().color.set(sphereBaseColor);
   }
   export function pointOfView(arg?: any, duration?: number) {
-    if (!world) return;
+    if (!world) return null;
+    if (typeof world.pointOfView !== 'function') {
+      console.warn('[GlobeCanvas] pointOfView no está disponible');
+      return null;
+    }
     try {
       if (arg) {
-        return world.pointOfView(arg, duration ?? 0);
+        return world.pointOfView(arg, duration);
+      } else {
+        return world.pointOfView();
       }
-      return world.pointOfView();
-    } catch {}
+    } catch (error) {
+      console.error('[GlobeCanvas] Error en pointOfView:', error);
+      return null;
+    }
   }
 
   // HTML overlay proxies (markers)
@@ -423,8 +440,10 @@
   export function setTextLabels(labels: any[]) {
     try {
       if (!world) return;
-            
-      // Use HTML elements for fixed geographic positioning
+      if (typeof world.htmlElementsData !== 'function') {
+        console.warn('[GlobeCanvas] htmlElementsData no está disponible');
+        return;
+      }
       if (labels.length > 0) {
         // Configure HTML elements for labels
         world.htmlElementsData(labels);
@@ -706,7 +725,32 @@
   const dispatch = createEventDispatcher();
 
   onMount(async () => {
-    const { default: Globe } = await import('globe.gl');
+    // Importación dinámica con manejo de errores mejorado
+    let Globe;
+    try {
+      const globeModule = await import('globe.gl');
+      Globe = globeModule.default || globeModule;
+      
+      // Verificar que Globe es una función constructor
+      if (typeof Globe !== 'function') {
+        console.error('[GlobeCanvas] Globe no es una función constructor:', Globe);
+        throw new Error('Globe.gl no se cargó correctamente');
+      }
+    } catch (error) {
+      console.error('[GlobeCanvas] Error al importar globe.gl:', error);
+      if (rootEl) {
+        rootEl.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white; text-align: center; font-family: sans-serif;">
+            <div>
+              <h3>Error Loading 3D Globe</h3>
+              <p>Failed to load the 3D visualization library.</p>
+              <p>Please refresh the page or try again later.</p>
+            </div>
+          </div>
+        `;
+      }
+      return;
+    }
     
     // Detectar Safari
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -1045,16 +1089,19 @@
     // En Safari, esperar un poco antes de notificar
     if (isSafari) {
       setTimeout(() => {
+        isGlobeReady = true; // Marcar globo como listo
         dispatch('ready');
         try { setTilesEnabled(true); } catch {}
       }, 100);
     } else {
+      isGlobeReady = true; // Marcar globo como listo
       dispatch('ready');
       try { setTilesEnabled(true); } catch {}
     }
   });
 
   onDestroy(() => {
+    isGlobeReady = false; // Marcar como no listo
     try {
       if (rootEl) while (rootEl.firstChild) rootEl.removeChild(rootEl.firstChild);
     } catch {}
