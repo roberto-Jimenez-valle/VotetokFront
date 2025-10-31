@@ -4510,6 +4510,9 @@
         return;
       }
       console.log('[GlobeGL] ✅ Globe.gl cargado desde CDN');
+      
+      // Delay adicional para asegurar que stores están listos
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     // ============================================
@@ -4702,29 +4705,42 @@
     // Si no hay props, cargar desde stores (modo auto)
     if (!geo || !dataJson) {
       if (autoLoad) {
-        await loadGlobeData();
-        try { await tick(); } catch {}
-        const g = getStore(worldMap$);
-        const dj = getStore(worldData$);
-        if (!g || !dj) {
-          console.error('No se pudo cargar datos del globo');
-        } else {
-          // Inicializar con datos vacíos primero para cargar polígonos
-          await initFrom(g, { ANSWERS: {}, colors: {} });
+        try {
+          await loadGlobeData();
+          try { await tick(); } catch {}
           
-          // Esperar un momento para que los polígonos se rendericen
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // AHORA cargar trending si NO hay encuesta activa
-          if (!activePoll) {
-            console.log('[Init] 🌍 Cargando trending inicial...');
-            await loadTrendingData();
-            
-            // Forzar actualización de colores después de cargar trending
-            await new Promise(resolve => requestAnimationFrame(resolve));
-            await updateGlobeColors();
+          // Proteger acceso a stores
+          let g = null;
+          let dj = null;
+          try {
+            g = getStore(worldMap$);
+            dj = getStore(worldData$);
+          } catch (e) {
+            console.error('[GlobeGL] Error al acceder stores:', e);
           }
-                  }
+          
+          if (!g || !dj) {
+            console.error('No se pudo cargar datos del globo');
+          } else {
+            // Inicializar con datos vacíos primero para cargar polígonos
+            await initFrom(g, { ANSWERS: {}, colors: {} });
+            
+            // Esperar un momento para que los polígonos se rendericen
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // AHORA cargar trending si NO hay encuesta activa
+            if (!activePoll) {
+              console.log('[Init] 🌍 Cargando trending inicial...');
+              await loadTrendingData();
+              
+              // Forzar actualización de colores después de cargar trending
+              await new Promise(resolve => requestAnimationFrame(resolve));
+              await updateGlobeColors();
+            }
+          }
+        } catch (e) {
+          console.error('[GlobeGL] Error en inicialización:', e);
+        }
       }
     } else {
       // Si hay props, inicializar desde ellas inmediatamente
