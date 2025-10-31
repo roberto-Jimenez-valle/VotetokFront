@@ -1,5 +1,5 @@
 # ===============================================
-# MULTI-STAGE DOCKER BUILD FOR VOTETOK
+# MULTI-STAGE DOCKER BUILD FOR PRODUCTION
 # ===============================================
 
 # Stage 1: Dependencies
@@ -19,14 +19,14 @@ RUN apk add --no-cache \
 
 # Copy package files
 COPY package*.json ./
-COPY pnpm-lock.yaml* ./
+COPY pnpm-lock.yaml ./
 
 # Install pnpm
 RUN npm install -g pnpm@8
 
-# Install dependencies
-# Use --no-frozen-lockfile for development, switch to --frozen-lockfile for production
-RUN pnpm install --no-frozen-lockfile
+# Install dependencies with frozen lockfile
+# Si falla, asegúrate de que pnpm-lock.yaml esté actualizado
+RUN pnpm install --frozen-lockfile
 
 # ===============================================
 # Stage 2: Builder
@@ -53,10 +53,7 @@ COPY . .
 RUN npx prisma generate
 
 # Build application
-RUN pnpm build:optimized
-
-# Optimize assets
-RUN pnpm optimize:assets || true
+RUN pnpm build
 
 # Prune dev dependencies
 RUN pnpm prune --prod

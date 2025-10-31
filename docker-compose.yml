@@ -157,7 +157,7 @@ services:
     container_name: voutop-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
@@ -202,11 +202,11 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: voutop-app
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${DB_USER:-voutop}:${DB_PASSWORD:-voutop_pass}@postgres:5432/${DB_NAME:-voutop_db}
