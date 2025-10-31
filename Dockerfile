@@ -92,12 +92,11 @@ RUN mkdir -p /app/logs && \
 
 # Set environment
 ENV NODE_ENV=production \
-    PORT=3000 \
     HOST=0.0.0.0
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/api/health || exit 1
+# Health check - Railway asigna PORT dinámicamente
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-3000}/api/healthz || exit 1
 
 # Switch to non-root user
 USER nodejs

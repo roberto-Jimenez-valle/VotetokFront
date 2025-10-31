@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "start": "sirv build --port ${PORT:-3000} --host 0.0.0.0 --single",
+    "start": "node build/index.js",
     "dev:local": "powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "build:clusters": "node scripts/generate-clusters.mjs",
     "dev": "vite dev --host",
