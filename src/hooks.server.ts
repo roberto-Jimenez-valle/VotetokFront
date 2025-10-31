@@ -11,12 +11,12 @@ import { rateLimitByIP, rateLimitByUser, rateLimitGlobal } from '$lib/server/mid
 export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url
   
-  // Durante prerendering (adapter-static), getClientAddress no está disponible
+  // Obtener IP del cliente (puede fallar en ciertos entornos)
   let ip = '0.0.0.0';
   try {
     ip = event.getClientAddress();
   } catch (e) {
-    // Prerendering - ignorar
+    // Fallback a IP por defecto si falla
   }
 
   // DESARROLLO: Deshabilitar rate limiting solo en IPs locales (testing móvil)

@@ -4898,7 +4898,7 @@
   let paletteChangeHandler: ((event: Event) => void) | null = null;
   
   // CRÍTICO: Forzar actualización de polígonos cuando cambia isDarkTheme
-  $: if (isGlobeLibraryReady && globe && isDarkTheme !== undefined) {
+  $: if (isGlobeLibraryReady && globe && globe.refreshPolyColors && isDarkTheme !== undefined) {
     try {
       // Usar el método existente refreshPolyColors para forzar re-render
       console.log('[GlobeGL] isDarkTheme cambió a:', isDarkTheme, '- forzando actualización de polígonos');
