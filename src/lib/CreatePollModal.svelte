@@ -103,6 +103,7 @@
   
   // DEBUG: Monitorear el estado de currentUser
   $effect(() => {
+    if (typeof window === 'undefined') return;
     console.log('[CreatePollModal] currentUser cambió:', $currentUser);
     console.log('[CreatePollModal] showAuthModal:', showAuthModal);
   });

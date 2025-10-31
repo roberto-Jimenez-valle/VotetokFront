@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Header from '$lib/header.svelte';
 	// Usamos un componente dedicado GlobeGL basado en Globe.gl
 	import GlobeGL from '$lib/GlobeGL.svelte';
@@ -25,8 +26,15 @@
 	let isProfileModalOpen = $state(false);
 	let selectedProfileUserId = $state<number | null>(null);
 	
+	// Escuchar cambios en la variable global - solo en el cliente
+	let mounted = $state(false);
+	onMount(() => {
+		mounted = true;
+	});
+	
 	// Debug: observar cambios
 	$effect(() => {
+		if (!mounted) return;
 		console.log('[+page] Profile modal state changed:', { isProfileModalOpen, selectedProfileUserId });
 	});
 	
@@ -98,17 +106,16 @@
 	
 	// handlePollSelected eliminado - ya no se necesita
 	
-	// Escuchar cambios en la variable global
 	$effect(() => {
+		if (!mounted || typeof window === 'undefined') return;
+		
 		const checkGlobalState = () => {
-			if (typeof window !== 'undefined') {
-				const globalState = (window as any).globalNavDropdownOpen;
-				if (globalState !== undefined && globalState !== forceHideNav) {
-					console.log(`[+page] 🌐 Variable global cambió a: ${globalState}`);
-					forceHideNav = globalState;
-					hideNav = globalState;
-					dropdownOpen = globalState;
-				}
+			const globalState = (window as any).globalNavDropdownOpen;
+			if (globalState !== undefined && globalState !== forceHideNav) {
+				console.log(`[+page] 🌐 Variable global cambió a: ${globalState}`);
+				forceHideNav = globalState;
+				hideNav = globalState;
+				dropdownOpen = globalState;
 			}
 		};
 		
