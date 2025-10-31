@@ -101,8 +101,22 @@ export const handle: Handle = async ({ event, resolve }) => {
     const response = await resolve(event)
     const duration = Date.now() - startTime
 
-    // Log de request exitoso
-    console.log(`[${new Date().toISOString()}] ${event.request.method} ${pathname} - ${response.status} (${duration}ms)${user ? ` - User ${user.userId}` : ' - Anonymous'}`)
+    // Excluir del logging: archivos estáticos y peticiones 304 (caché)
+    const isStaticFile = pathname.includes('/geojson/') || 
+                         pathname.includes('.topojson') || 
+                         pathname.includes('.json') ||
+                         pathname.includes('.svg') ||
+                         pathname.includes('.png') ||
+                         pathname.includes('.jpg') ||
+                         pathname.includes('.webp')
+    
+    const isCached = response.status === 304
+    const shouldLog = !isStaticFile || (!isCached && duration > 100) // Solo loguear archivos estáticos si tardan >100ms
+
+    // Log de request exitoso (solo APIs y páginas importantes)
+    if (shouldLog) {
+      console.log(`[${new Date().toISOString()}] ${event.request.method} ${pathname} - ${response.status} (${duration}ms)${user ? ` - User ${user.userId}` : ' - Anonymous'}`)
+    }
 
     // Agregar headers de rate limit a la response
     if (user) {
@@ -113,7 +127,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   } catch (err: any) {
     const duration = Date.now() - startTime
 
-    // Log de error
+    // Log de error (siempre loguear errores)
     console.error(`[${new Date().toISOString()}] ${event.request.method} ${pathname} - ERROR (${duration}ms)`, err.message)
 
     throw err
