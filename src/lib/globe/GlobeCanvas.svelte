@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { clamp, hexToRgba } from '$lib/utils/colors';
+  import Globe from 'globe.gl';
 
   export let bgColor = '#0a0a0a';        // Fondo: Casi negro
   export let sphereBaseColor = '#0a0a0a'; // Esfera: Negro #0a0a0a
@@ -725,24 +726,8 @@
   const dispatch = createEventDispatcher();
 
   onMount(async () => {
-    // Usar Globe.gl desde CDN (cargado en app.html)
-    const Globe = (window as any).Globe;
-    
-    if (!Globe || typeof Globe !== 'function') {
-      console.error('[GlobeCanvas] Globe.gl no está disponible desde CDN');
-      if (rootEl) {
-        rootEl.innerHTML = `
-          <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white; text-align: center; font-family: sans-serif;">
-            <div>
-              <h3>Error Loading 3D Globe</h3>
-              <p>Globe.gl library failed to load from CDN.</p>
-              <p>Please refresh the page to try again.</p>
-            </div>
-          </div>
-        `;
-      }
-      return;
-    }
+    // Globe.gl importado desde npm en línea 4
+    console.log('[GlobeCanvas] Inicializando Globe.gl desde npm');
     
     // Detectar Safari
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);

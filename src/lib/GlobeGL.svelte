@@ -2,6 +2,7 @@
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
   import { apiGet, apiCall } from '$lib/api/client';
+  import Globe from 'globe.gl';
   
   const dispatch = createEventDispatcher();
   
@@ -4503,36 +4504,24 @@
   // }
 
   onMount(async () => {
-    // Esperar a que Globe.gl se cargue desde CDN
-    if (typeof window !== 'undefined') {
-      let attempts = 0;
-      while (!(window as any).Globe && attempts < 50) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
-      
-      if (!(window as any).Globe) {
-        console.error('[GlobeGL] Globe.gl no se cargó desde CDN después de 5 segundos');
-        return;
-      }
-      console.log('[GlobeGL] ✅ Globe.gl cargado desde CDN');
-      
-      // Delay adicional para asegurar que stores están listos
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Cargar tema guardado ahora que estamos listos
-      const initialColors = getInitialThemeColors();
-      sphereColor = initialColors.sphere;
-      strokeColor = initialColors.stroke;
-      bgColor = initialColors.bg;
-      polygonNoDataColor = initialColors.noData;
-      atmosphereColor = initialColors.atmosphere;
-      isDarkTheme = initialColors.isDark;
-      
-      // Activar renderizado de GlobeCanvas
-      isGlobeLibraryReady = true;
-      console.log('[GlobeGL] ✅ Listo para renderizar GlobeCanvas');
-    }
+    // Globe.gl ya está importado desde npm
+    console.log('[GlobeGL] ✅ Globe.gl importado desde npm');
+    
+    // Delay para asegurar que stores están listos
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Cargar tema guardado ahora que estamos listos
+    const initialColors = getInitialThemeColors();
+    sphereColor = initialColors.sphere;
+    strokeColor = initialColors.stroke;
+    bgColor = initialColors.bg;
+    polygonNoDataColor = initialColors.noData;
+    atmosphereColor = initialColors.atmosphere;
+    isDarkTheme = initialColors.isDark;
+    
+    // Activar renderizado de GlobeCanvas
+    isGlobeLibraryReady = true;
+    console.log('[GlobeGL] ✅ Listo para renderizar GlobeCanvas');
     
     // ============================================
     // HISTORY API - Navegación SPA con botón atrás
