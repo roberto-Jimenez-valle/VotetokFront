@@ -35,8 +35,8 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    // Usar esbuild en lugar de terser - respeta mejor los nombres
-    minify: 'esbuild',
+    // Desactivar minificación completamente para evitar romper globe.gl
+    minify: false,
     commonjsOptions: {
       include: [/three/, /globe\.gl/, /three-globe/, /d3/, /node_modules/],
       transformMixedEsModules: true
@@ -45,8 +45,10 @@ export default defineConfig({
       output: {
         // Preservar nombres en el output
         preserveModules: false,
+        // Aumentar el límite de tamaño de chunk
+        chunkFileNames: 'assets/[name]-[hash].js',
         manualChunks: (id) => {
-          // Separar three.js y globe.gl en chunks específicos
+          // Separar three.js y globe.gl en chunks específicos SIN minificar
           if (id.includes('node_modules/three') && !id.includes('three-globe')) {
             return 'three';
           }
