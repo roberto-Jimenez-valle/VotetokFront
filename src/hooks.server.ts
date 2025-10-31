@@ -109,6 +109,12 @@ export const handle: Handle = async ({ event, resolve }) => {
     const response = await resolve(event)
     const duration = Date.now() - startTime
 
+    // CACHE CONTROL: Forzar revalidación en páginas HTML para evitar servir código antiguo
+    if (pathname === '/' || pathname.endsWith('.html') || !pathname.includes('.')) {
+      response.headers.set('Cache-Control', 'public, max-age=0, must-revalidate')
+      response.headers.set('Expires', '0')
+    }
+
     // Excluir del logging: archivos estáticos y peticiones 304 (caché)
     const isStaticFile = pathname.includes('/geojson/') || 
                          pathname.includes('.topojson') || 
