@@ -757,19 +757,22 @@
     }
         
     try {
-                  
-      // Para Safari, usar inicialización más simple
+      // Para Safari, esperar un frame antes de inicializar
       if (isSafari) {
-                // Esperar un frame antes de inicializar
         await new Promise(resolve => requestAnimationFrame(resolve));
-        world = new Globe(rootEl!);
-      } else {
-        world = new Globe(rootEl!);
       }
+      
+      // CRÍTICO: Globe() retorna una función que necesita ser llamada
+      world = Globe()(rootEl!);
       
       if (!world) {
         throw new Error('Globe instance is null');
       }
+      
+      // Establecer dimensiones iniciales
+      const w = rootEl!.clientWidth || window.innerWidth;
+      const h = rootEl!.clientHeight || window.innerHeight;
+      world.width(w).height(h);
       
       // Aplicar colores iniciales de Carbon
       world.backgroundColor(bgColor);
@@ -792,13 +795,15 @@
       
     } catch (error) {
       const err = error as Error;
+      console.error('[GlobeCanvas] Error al crear Globe:', err);
       
-      // Fallback más agresivo para Safari
+      // Fallback para Safari
       try {
-                await new Promise(resolve => setTimeout(resolve, 100));
-        world = new Globe(rootEl!);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        world = Globe()(rootEl!);
         world.backgroundColor(bgColor);
-              } catch (fallbackError) {
+      } catch (fallbackError) {
+        console.error('[GlobeCanvas] Fallback falló:', fallbackError);
         // Mostrar error visible al usuario
         if (rootEl) {
           rootEl.innerHTML = `
@@ -1165,6 +1170,15 @@
 <div bind:this={rootEl} class="globe-wrap" class:sheet-expanded={bottomSheetState === 'expanded'}></div>
 
 <style>
+  .globe-wrap {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 1;
+  }
+
   :global {
     @keyframes fadeInRight {
       from {

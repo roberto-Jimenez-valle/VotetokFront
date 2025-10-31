@@ -4503,7 +4503,7 @@
   // }
 
   onMount(async () => {
-    // Esperar a que Globe.gl se cargue desde CDN (defer)
+    // Esperar a que Globe.gl se cargue desde CDN
     let attempts = 0;
     while (!(window as any).Globe && attempts < 100) {
       await new Promise(resolve => setTimeout(resolve, 50));

@@ -19,9 +19,10 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Fallback a IP por defecto si falla
   }
 
-  // DESARROLLO: Deshabilitar rate limiting solo en IPs locales (testing móvil)
-  // localhost mantiene el flujo normal
-  const isLocalIP = event.url.hostname.startsWith('192.168.') ||
+  // DESARROLLO: Deshabilitar rate limiting y app auth en desarrollo
+  const isLocalIP = event.url.hostname === 'localhost' ||
+                    event.url.hostname === '127.0.0.1' ||
+                    event.url.hostname.startsWith('192.168.') ||
                     event.url.hostname.startsWith('172.') ||
                     event.url.hostname.startsWith('10.')
 
