@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Header from '$lib/header.svelte';
 	// Usamos un componente dedicado GlobeGL basado en Globe.gl
 	import GlobeGL from '$lib/GlobeGL.svelte';
@@ -98,23 +99,24 @@
 	
 	// handlePollSelected eliminado - ya no se necesita
 	
-	// Escuchar cambios en la variable global
-	$effect(() => {
+	// Escuchar cambios en la variable global - solo en browser
+	onMount(() => {
 		const checkGlobalState = () => {
-			if (typeof window !== 'undefined') {
-				const globalState = (window as any).globalNavDropdownOpen;
-				if (globalState !== undefined && globalState !== forceHideNav) {
-					console.log(`[+page] 🌐 Variable global cambió a: ${globalState}`);
-					forceHideNav = globalState;
-					hideNav = globalState;
-					dropdownOpen = globalState;
-				}
+			const globalState = (window as any).globalNavDropdownOpen;
+			if (globalState !== undefined && globalState !== forceHideNav) {
+				console.log(`[+page] 🌐 Variable global cambió a: ${globalState}`);
+				forceHideNav = globalState;
+				hideNav = globalState;
+				dropdownOpen = globalState;
 			}
 		};
 		
 		// Verificar cada 100ms (rápido pero no excesivo)
 		const interval = setInterval(checkGlobalState, 100);
-		return () => clearInterval(interval);
+		
+		return () => {
+			clearInterval(interval);
+		};
 	});
 
 </script>
