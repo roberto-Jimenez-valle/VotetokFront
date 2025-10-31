@@ -35,25 +35,16 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        // Preservar nombres de clases y constructores
-        keep_classnames: true,
-        keep_fnames: true
-      },
-      mangle: {
-        // No modificar nombres de clases
-        keep_classnames: true,
-        keep_fnames: true
-      }
-    },
+    // Usar esbuild en lugar de terser - respeta mejor los nombres
+    minify: 'esbuild',
     commonjsOptions: {
       include: [/three/, /globe\.gl/, /three-globe/, /d3/, /node_modules/],
       transformMixedEsModules: true
     },
     rollupOptions: {
       output: {
+        // Preservar nombres en el output
+        preserveModules: false,
         manualChunks: (id) => {
           // Separar three.js y globe.gl en chunks específicos
           if (id.includes('node_modules/three') && !id.includes('three-globe')) {
