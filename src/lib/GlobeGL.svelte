@@ -78,8 +78,8 @@
   }
   import TopTabs from './TopTabs.svelte';
   import './GlobeGL.css';
-  import { worldMap$, worldData$, loadGlobeData } from './stores/globeData';
-  import { currentUser } from './stores';
+  // NO importar stores aquí - causa problemas de inicialización
+  // Se importarán dinámicamente en onMount
   import { get as getStore } from 'svelte/store';
   import { clamp, hexToRgba } from './utils/colors';
   import { centroidOf, isoOf, pointInFeature } from './utils/geo';
@@ -2904,7 +2904,8 @@
     console.log('[loadTrendingData] 🚀 Iniciando carga de datos...');
     console.log('[loadTrendingData] Tab activo:', activeTopTab);
     
-    // Obtener usuario actual de forma segura
+    // Obtener usuario actual de forma segura - importar dinámicamente
+    const { currentUser } = await import('./stores');
     const userData = getStore(currentUser);
     console.log('[loadTrendingData] Usuario:', userData?.username, 'ID:', userData?.id);
     
@@ -4724,6 +4725,9 @@
     if (!geo || !dataJson) {
       if (autoLoad) {
         try {
+          // Importar stores dinámicamente para evitar problemas de inicialización
+          const { worldMap$, worldData$, loadGlobeData } = await import('./stores/globeData');
+          
           await loadGlobeData();
           try { await tick(); } catch {}
           
