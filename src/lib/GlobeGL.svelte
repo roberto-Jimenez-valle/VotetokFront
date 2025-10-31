@@ -157,9 +157,8 @@
   // Por defecto "Tendencias" hasta que Prisma se regenere correctamente
   let activeTopTab: 'Para ti' | 'Tendencias' | 'Live' = 'Tendencias';
   
-  // Obtener usuario actual del store
-  let userData: typeof $currentUser = null;
-  $: userData = $currentUser;
+  // Usuario actual - se obtiene con getStore(currentUser) cuando se necesite
+  // NO usar suscripción reactiva aquí porque causa error en inicialización
   // Visibilidad de polígonos (capa coroplética)
   let polygonsVisible = true;
   // Polígonos del dataset global (choropleth): se preservan siempre
@@ -2902,6 +2901,9 @@
   async function loadTrendingData() {
     console.log('[loadTrendingData] 🚀 Iniciando carga de datos...');
     console.log('[loadTrendingData] Tab activo:', activeTopTab);
+    
+    // Obtener usuario actual de forma segura
+    const userData = getStore(currentUser);
     console.log('[loadTrendingData] Usuario:', userData?.username, 'ID:', userData?.id);
     
     try {
