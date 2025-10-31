@@ -1,6 +1,0 @@
-// Service Worker desactivado temporalmente
-// El import from '$service-worker' causaba errores en producción
-// Para reactivar: renombrar este archivo a service-worker.js
-// y descomentar el registro en app.html
-
-console.log('[ServiceWorker] Desactivado temporalmente');

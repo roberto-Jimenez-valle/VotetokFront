@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "start": "node build/index.js",
+    "start": "node server.js",
     "dev:local": "powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "build:clusters": "node scripts/generate-clusters.mjs",
     "dev": "vite dev --host",
@@ -47,6 +47,7 @@
   "devDependencies": {
     "@sveltejs/adapter-auto": "^6.0.0",
     "@sveltejs/adapter-node": "^5.4.0",
+    "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.16.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tailwindcss/vite": "^4.0.0",
