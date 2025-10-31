@@ -3552,6 +3552,9 @@
   }
   
   const initialColors = getInitialThemeColors();
+  
+  // Flag para controlar cuándo renderizar GlobeCanvas
+  let isGlobeLibraryReady = false;
 
   // Controles de color (color pickers) y opacidad (sliders) - Inicializados con tema guardado o Carbon
   let capColor = themeConfig.theme.colors.accent.blue;
@@ -4513,6 +4516,10 @@
       
       // Delay adicional para asegurar que stores están listos
       await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Activar renderizado de GlobeCanvas
+      isGlobeLibraryReady = true;
+      console.log('[GlobeGL] ✅ Listo para renderizar GlobeCanvas');
     }
     
     // ============================================
@@ -4915,6 +4922,7 @@
 <!-- Fondo dinámico que cubre toda la pantalla con el color actual del tema -->
 <div class="dynamic-background" style="background-color: {bgColor};"></div>
 
+{#if isGlobeLibraryReady}
 <GlobeCanvas
   bind:this={globe}
   {bgColor}
@@ -5799,6 +5807,8 @@
     }
   }}
 />
+{/if}
+
 <!-- Degradado superior usando el color de fondo actual -->
 <div
   class="globe-top-fade"
@@ -6029,9 +6039,8 @@
           selectedCountryIso = null;
           selectedSubdivisionName = null;
         } else if (newLevel === 'country') {
-          globe?.pointOfView({ lat: globe?.pointOfView()?.lat || 0, lng: globe?.pointOfView()?.lng || 0, altitude: 0.3 }, 700);
-        } else if (newLevel === 'subdivision') {
-          // Volver a subdivisión
+          // Back to country: zoom to country centroid
+          selectedSubdivisionName = null;
         }
       }
     }
