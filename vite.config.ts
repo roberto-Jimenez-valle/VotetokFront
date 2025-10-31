@@ -25,7 +25,9 @@ export default defineConfig({
     exclude: ['globe.gl', 'three-globe'], // Excluir porque se carga desde CDN
     esbuildOptions: {
       // Evitar minificación agresiva que puede romper constructores
-      keepNames: true
+      keepNames: true,
+      // Eliminar console.logs también en dependencias
+      drop: ['console', 'debugger']
     }
   },
   ssr: {
