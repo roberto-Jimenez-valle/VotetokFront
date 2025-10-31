@@ -2136,7 +2136,7 @@
 
   // Initialize navigation manager
   let navigationManager: NavigationManager | null = null;
-  $: if (globe && !navigationManager) {
+  $: if (isGlobeLibraryReady && globe && !navigationManager) {
     navigationManager = new NavigationManager(globe);
   }
   
@@ -2432,7 +2432,7 @@
   const ALWAYS_SHOW_ONLY_ACTIVE = true;
   
   // Watcher reactivo: cuando termina el zoom, actualizar etiquetas
-  $: if (!isZooming && pendingLabelUpdate) {
+  $: if (isGlobeLibraryReady && !isZooming && pendingLabelUpdate) {
     const pov = pendingLabelUpdate;
     pendingLabelUpdate = null;
     // Usar requestAnimationFrame para sincronizar con el navegador
@@ -2444,13 +2444,15 @@
   // Watcher reactivo optimizado: actualizar etiquetas cuando answersData cambia
   let lastAnswersDataLength = 0;
   $: {
-    const currentLength = Object.keys(answersData || {}).length;
-    if (currentLength > 0 && currentLength !== lastAnswersDataLength && globe && !isZooming) {
-      lastAnswersDataLength = currentLength;
-      requestAnimationFrame(() => {
-        const pov = globe?.pointOfView();
-        if (pov) updateLabelsForCurrentView(pov, true);
-      });
+    if (isGlobeLibraryReady) {
+      const currentLength = Object.keys(answersData || {}).length;
+      if (currentLength > 0 && currentLength !== lastAnswersDataLength && globe && !isZooming) {
+        lastAnswersDataLength = currentLength;
+        requestAnimationFrame(() => {
+          const pov = globe?.pointOfView();
+          if (pov) updateLabelsForCurrentView(pov, true);
+        });
+      }
     }
   }
   
@@ -2789,7 +2791,7 @@
   }
 
   // Reaccionar a cambios de props (modo data-in)
-  $: if (geo && dataJson) {
+  $: if (isGlobeLibraryReady && geo && dataJson) {
     initFrom(geo, dataJson);
   }
 
@@ -4892,7 +4894,7 @@
   let paletteChangeHandler: ((event: Event) => void) | null = null;
   
   // CRÍTICO: Forzar actualización de polígonos cuando cambia isDarkTheme
-  $: if (globe && isDarkTheme !== undefined) {
+  $: if (isGlobeLibraryReady && globe && isDarkTheme !== undefined) {
     try {
       // Usar el método existente refreshPolyColors para forzar re-render
       console.log('[GlobeGL] isDarkTheme cambió a:', isDarkTheme, '- forzando actualización de polígonos');
