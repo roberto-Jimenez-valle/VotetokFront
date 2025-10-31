@@ -49,7 +49,6 @@
 		
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<link rel="apple-touch-icon" href="/favicon.png" />
-		<link rel="manifest" href="/manifest.webmanifest" crossorigin="anonymous" />
 		
 		<!-- Viewport optimizado para iOS y Android -->
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -112,6 +111,9 @@
 		</script>
 		
 		%sveltekit.head%
+		
+		<!-- Cargar globe.gl desde CDN con defer -->
+		<script defer src="https://unpkg.com/globe.gl@2.31.0/dist/globe.gl.min.js"></script>
 		
 		<!-- Estilos de modo claro - DESPUÉS de sveltekit.head para tener prioridad final -->
 		<style>

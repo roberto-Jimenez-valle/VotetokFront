@@ -2,7 +2,6 @@
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
   import { apiGet, apiCall } from '$lib/api/client';
-  import Globe from 'globe.gl';
   
   const dispatch = createEventDispatcher();
   
@@ -4504,8 +4503,18 @@
   // }
 
   onMount(async () => {
-    // Globe.gl ya está importado desde npm
-    console.log('[GlobeGL] ✅ Globe.gl importado desde npm');
+    // Esperar a que Globe.gl se cargue desde CDN (defer)
+    let attempts = 0;
+    while (!(window as any).Globe && attempts < 100) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      attempts++;
+    }
+    
+    if (!(window as any).Globe) {
+      console.error('[GlobeGL] Globe.gl no se cargó desde CDN después de 5 segundos');
+      return;
+    }
+    console.log('[GlobeGL] ✅ Globe.gl cargado desde CDN');
     
     // Delay para asegurar que stores están listos
     await new Promise(resolve => setTimeout(resolve, 100));

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { clamp, hexToRgba } from '$lib/utils/colors';
-  import Globe from 'globe.gl';
 
   export let bgColor = '#0a0a0a';        // Fondo: Casi negro
   export let sphereBaseColor = '#0a0a0a'; // Esfera: Negro #0a0a0a
@@ -726,8 +725,15 @@
   const dispatch = createEventDispatcher();
 
   onMount(async () => {
-    // Globe.gl importado desde npm en línea 4
-    console.log('[GlobeCanvas] Inicializando Globe.gl desde npm');
+    // Obtener Globe desde CDN (window.Globe)
+    const Globe = (window as any).Globe;
+    
+    if (!Globe || typeof Globe !== 'function') {
+      console.error('[GlobeCanvas] Globe.gl no está disponible');
+      return;
+    }
+    
+    console.log('[GlobeCanvas] Inicializando Globe.gl desde CDN');
     
     // Detectar Safari
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
