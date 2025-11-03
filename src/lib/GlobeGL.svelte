@@ -901,22 +901,17 @@
     
     // Solo cargar si hay encuesta activa
     if (!activePoll || !activePoll.id) {
-            return byId;
+      return byId;
     }
     
-                
     try {
-      // Cargar votos reales por subdivisión desde la API
-      const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-subdivisions?country=${countryIso}`);
+      // Cargar votos reales por subdivisión usando PollDataService
+      const data = await pollDataService.loadVotesBySubdivisions(activePoll.id, countryIso);
       
-      if (!response.ok) {
+      if (!data || Object.keys(data).length === 0) {
         return byId;
       }
       
-      const { data } = await response.json() as { data: Record<string, Record<string, number>> };
-      // data puede tener IDs granulares: { "ESP.1.1": {...}, "ESP.1.2": {...}, "ESP.2.1": {...} }
-      
-                  
       // NO AGREGAR - usar solo datos directos del nivel 1
       // Si la BD tiene ARG.7.1, NO colorear ARG.7
       const level1Votes: Record<string, Record<string, number>> = {};
@@ -950,13 +945,11 @@
             // Coincidir por ID_1 normalizado o por nombre
             if (normalizedId1 === normalizedSubKey || name1 === subdivisionKey) {
               byId[String(id1)] = color;
-                            break;
+              break;
             }
           }
         }
       }
-      
-            
     } catch (error) {
       console.error('[Colors] ❌ Error loading subdivision votes from database:', error);
     }
@@ -1720,17 +1713,13 @@
             answersData = worldLevelAnswers;
             console.log('[Navigation] 📦 Datos mundiales restaurados desde cache:', Object.keys(worldLevelAnswers).length);
           } else {
-            // Si no hay cache, cargar desde API
-            const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-country`);
-            if (response.ok) {
-              const { data } = await response.json();
-              
-              // Guardar en cache
-              worldLevelAnswers = data;
-              answersData = data;
-              
-              console.log('[Navigation] 📊 Datos mundiales cargados desde API:', Object.keys(data).length);
-            }
+            // Si no hay cache, cargar desde API usando PollDataService
+            console.log('[Navigation] 📡 Cargando votos por país con PollDataService...');
+            const data = await pollDataService.loadVotesByCountry(activePoll.id);
+            
+            worldLevelAnswers = data;
+            answersData = data;
+            console.log('[Navigation] ✅ Datos mundiales cargados:', Object.keys(answersData).length, 'países');
           }
           
           // Recalcular isoDominantKey y legendItems
@@ -3001,25 +2990,21 @@
           pollData: poll // IMPORTANTE: Guardar datos completos de la encuesta
         });
         
-        // Cargar datos de votos por país para cada encuesta trending
+        // Cargar datos de votos por país usando PollDataService
         try {
-          const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-country`);
-          if (pollResponse.ok) {
-            const { data: pollData } = await pollResponse.json();
-            
-            // Sumar TODOS los votos de esta encuesta por país
-            for (const [iso, votes] of Object.entries(pollData as Record<string, Record<string, number>>)) {
-              if (!aggregatedData[iso]) {
-                aggregatedData[iso] = {};
-              }
-              
-              // Sumar todos los votos de todas las opciones de esta encuesta
-              const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
-              aggregatedData[iso][pollKey] = totalVotes;
+          const pollData = await pollDataService.loadVotesByCountry(poll.id);
+          
+          // Sumar TODOS los votos de esta encuesta por país
+          for (const [countryIso, votes] of Object.entries(pollData)) {
+            if (!aggregatedData[countryIso]) {
+              aggregatedData[countryIso] = {};
             }
+            
+            const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
+            aggregatedData[countryIso][pollKey] = totalVotes;
           }
         } catch (error) {
-          // Error loading poll data - continuar con siguiente encuesta
+          console.warn('[processTrendingPolls] Error loading poll data:', error);
         }
       });
       
@@ -3344,17 +3329,11 @@
     const newAnswersData: Record<string, Record<string, number>> = {};
     
     try {
-      const response = await apiCall(`/api/polls/${poll.id}/votes-by-country`);
-      if (response.ok) {
-        const { data } = await response.json();
-        Object.assign(newAnswersData, data);
-      } else {
-        // NO generar datos fallback MOCK - solo usar datos reales
-        console.warn('[OpenPoll] ⚠️ No hay datos de votos para esta encuesta');
-      }
+      // Cargar votos usando PollDataService
+      const data = await pollDataService.loadVotesByCountry(poll.id);
+      Object.assign(newAnswersData, data);
     } catch (error) {
-      console.error('[GlobeGL] ❌ Error loading poll data from API:', error);
-      // NO generar datos fallback MOCK - solo usar datos reales
+      // Si falla la carga de datos, continuar
     }
     
     // Guardar en cache mundial

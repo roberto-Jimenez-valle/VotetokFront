@@ -41,12 +41,34 @@ onDestroy(() => {
 
 ---
 
+## ✅ COMPLETADO (Continuación)
+
+### 3. GeocodeService Integrado ✅
+**Ubicación:** Línea ~4207
+**Antes:** `navigator.geolocation.getCurrentPosition()`
+**Ahora:** `geocodeService.getLocationAndGeocode()`
+**Beneficio:** Fallbacks automáticos (GPS → IP → Default)
+
+### 4. PollDataService - 3 Migraciones Completadas ✅
+**A) navigateToWorld() - Línea ~1723**
+- Antes: `apiCall('/api/polls/${id}/votes-by-country')`
+- Ahora: `pollDataService.loadVotesByCountry(id)`
+
+**B) processTrendingPolls() - Línea ~3000**
+- Antes: `apiCall('/api/polls/${id}/votes-by-country')`
+- Ahora: `pollDataService.loadVotesByCountry(id)`
+
+**C) handleOpenPollInGlobe() - Línea ~3339**
+- Antes: `apiCall('/api/polls/${id}/votes-by-country')`
+- Ahora: `pollDataService.loadVotesByCountry(id)`
+
 ## 🔄 EN PROGRESO
 
-### 3. Reemplazar Geolocalización con GeocodeService
-**Ubicación:** Línea ~4217
-**Función actual:** `navigator.geolocation.getCurrentPosition()`
-**Reemplazo:** `geocodeService.getLocationAndGeocode()`
+### 5. Más migraciones pendientes
+- votes-by-subdivisions (4 llamadas)
+- votes-by-subsubdivisions (2 llamadas)
+- trending-by-region (2 llamadas)
+- /api/polls/[id] (2 llamadas)
 
 ---
 
