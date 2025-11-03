@@ -3,6 +3,7 @@
   import SinglePollSection from './globe/cards/sections/SinglePollSection.svelte';
   import { currentUser } from '$lib/stores';
   import { apiCall, apiPost } from '$lib/api/client';
+  import { createEventListenerManager } from '$lib/utils/eventListenerCleanup';
   import '$lib/styles/trending-ranking.css';
   
   const dispatch = createEventDispatcher();
@@ -63,6 +64,9 @@
   let pollTitleElements = $state<Record<string, HTMLElement>>({});
   let voteEffectStates = $state<Record<string, boolean>>({});
 
+  // Event Listener Manager para cleanup automático
+  const eventListeners = createEventListenerManager();
+
   onMount(async () => {
     console.log('[Header] 🚀 Componente montado, cargando usuarios trending...');
     
@@ -105,18 +109,15 @@
   });
   
   onDestroy(() => {
-    // Limpiar listeners SIEMPRE, no solo si hay currentDragGrid
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('pointermove', handleCardDragMove as EventListener);
-      document.removeEventListener('pointerup', handleCardDragEnd);
-      document.removeEventListener('touchmove', handleCardDragMove as EventListener);
-      document.removeEventListener('touchend', handleCardDragEnd);
-      
-      // Limpiar estado
-      currentDragGrid = null;
-      isDragging = false;
-      currentDragPollId = null;
-    }
+    console.log('[Header] 🧹 Limpiando event listeners:', eventListeners.count);
+    
+    // Cleanup automático de TODOS los listeners registrados
+    eventListeners.cleanup();
+    
+    // Limpiar estado
+    currentDragGrid = null;
+    isDragging = false;
+    currentDragPollId = null;
   });
 
   async function handleAvatarClick(user: TrendingUser) {
@@ -282,17 +283,14 @@
       return; // No capturar eventos si no es en una tarjeta
     }
     
-    // PRIMERO remover listeners existentes para evitar duplicados
-    document.removeEventListener('pointermove', handleCardDragMove as EventListener);
-    document.removeEventListener('pointerup', handleCardDragEnd);
-    document.removeEventListener('touchmove', handleCardDragMove as EventListener);
-    document.removeEventListener('touchend', handleCardDragEnd);
+    // Agregar listeners globales con manager (cleanup automático)
+    // El manager previene duplicados automáticamente
+    eventListeners.add(document, 'pointermove', handleCardDragMove as EventListener, { passive: true });
+    eventListeners.add(document, 'pointerup', handleCardDragEnd);
+    eventListeners.add(document, 'touchmove', handleCardDragMove as EventListener, { passive: true });
+    eventListeners.add(document, 'touchend', handleCardDragEnd);
     
-    // LUEGO agregar listeners globales
-    document.addEventListener('pointermove', handleCardDragMove as EventListener, { passive: true });
-    document.addEventListener('pointerup', handleCardDragEnd);
-    document.addEventListener('touchmove', handleCardDragMove as EventListener, { passive: true });
-    document.addEventListener('touchend', handleCardDragEnd);
+    console.log('[Header] 📌 Event listeners activos:', eventListeners.count);
   }
   
   function handleCardDragMove(e: PointerEvent | TouchEvent) {
