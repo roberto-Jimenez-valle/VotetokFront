@@ -1,0 +1,5 @@
+# Railway ignore file
+# Evita que Railway use el Dockerfile y use detección automática
+
+Dockerfile.backup
+Dockerfile.dev
