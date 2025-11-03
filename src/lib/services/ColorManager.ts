@@ -275,6 +275,62 @@ export class ColorManager {
 
     return byId;
   }
+
+  /**
+   * Calcular colores desde datos agregados de trending
+   * Usado cuando no hay una encuesta específica activa pero hay datos de múltiples encuestas
+   */
+  computeColorsFromAggregatedData(
+    countryIso: string,
+    polygons: any[],
+    aggregatedData: Record<string, Record<string, number>>,
+    colorMap: Record<string, string>
+  ): ColorResult {
+    const byId: ColorResult = {};
+
+    if (!aggregatedData || Object.keys(aggregatedData).length === 0) {
+      return byId;
+    }
+
+    // Para cada polígono, encontrar su ID y asignar color de la opción ganadora
+    for (const poly of polygons) {
+      const props = poly?.properties || {};
+      const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+      
+      if (!id1) continue;
+
+      // Normalizar el ID para búsqueda
+      const normalizedId = String(id1).includes('.')
+        ? id1
+        : `${countryIso}.${id1}`;
+
+      // Buscar datos para este ID (probar ambas formas)
+      const votes = aggregatedData[normalizedId] || aggregatedData[String(id1)];
+
+      if (votes && Object.keys(votes).length > 0) {
+        // Encontrar la encuesta (poll) con más votos
+        let maxVotes = 0;
+        let winningPoll = '';
+
+        for (const [pollKey, count] of Object.entries(votes)) {
+          if (count > maxVotes) {
+            maxVotes = count;
+            winningPoll = pollKey;
+          }
+        }
+
+        if (winningPoll && colorMap?.[winningPoll]) {
+          byId[String(id1)] = colorMap[winningPoll];
+        }
+      }
+    }
+
+    console.log(
+      `[ColorManager] ✅ ${Object.keys(byId).length} subdivisiones coloreadas desde datos agregados`
+    );
+
+    return byId;
+  }
 }
 
 // Singleton instance

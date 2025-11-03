@@ -1077,6 +1077,10 @@
           console.log('[History] 🔄 Restaurando país desde historial:', countryName);
         }
 
+        // LIMPIAR answersData ANTES de renderizar para evitar que autoSelect use datos mundiales
+        answersData = {};
+        console.log('[Navigation] 🧹 answersData limpiado antes de renderizar país');
+
         // Render country view PRIMERO
         await this.renderCountryView(iso, countryPolygons);
         
@@ -1218,6 +1222,25 @@
                         const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
                         aggregatedData[subdivisionId][pollKey] = totalVotes;
                       }
+                      
+                      // 🎨 ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de cada respuesta
+                      answersData = { ...aggregatedData };
+                      colorMap = { ...aggregatedColors };
+                      
+                      // Recalcular y refrescar colores progresivamente
+                      const subdivisionPolygons = countryPolygons.filter((p: any) => !p.properties?._isParent);
+                      if (subdivisionPolygons.length > 0) {
+                        const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
+                        const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
+                        isoDominantKey = vm.isoDominantKey;
+                        legendItems = vm.legendItems;
+                        isoIntensity = vm.isoIntensity;
+                        
+                        // Refrescar colores inmediatamente
+                        this.globe?.refreshPolyColors?.();
+                      }
+                      
+                      console.log(`[Trending] 🎨 Encuesta ${i + 1}/${trendingPolls.length} cargada - colores actualizados`);
                     }
                   } catch (error) {
                     console.warn(`[Trending] ⚠️ Error loading data for poll ${poll.id}:`, error);
@@ -1771,19 +1794,23 @@
                 
         // PRIORIDAD 1: Cargar colores REALES desde la base de datos (si hay encuesta activa)
         if (activePoll && activePoll.id) {
-                    subdivisionColorById = await computeSubdivisionColorsFromDatabase(iso, childMarked);
+          subdivisionColorById = await computeSubdivisionColorsFromDatabase(iso, childMarked);
+        } else if (answersData && Object.keys(answersData).length > 0 && colorMap && Object.keys(colorMap).length > 0) {
+          // MODO TRENDING: Usar datos agregados de múltiples encuestas
+          console.log('[Navigation] 🎨 Modo trending: usando datos agregados para colorear subdivisiones');
+          subdivisionColorById = colorManager.computeColorsFromAggregatedData(iso, childMarked, answersData, colorMap);
         }
         
         // PRIORIDAD 2: Fallback a marcadores simulados (legacy)
         if (Object.keys(subdivisionColorById).length === 0) {
-                    subdivisionColorById = computeSubdivisionColorsFromVotes(iso, childMarked);
+          subdivisionColorById = computeSubdivisionColorsFromVotes(iso, childMarked);
         }
         
         // PRIORIDAD 3: Fallback a distribución proporcional (último recurso)
         if (Object.keys(subdivisionColorById).length === 0 && countryChartSegments?.length) {
-                    const byId = computeSubdivisionColorsProportional(childMarked, countryChartSegments);
+          const byId = computeSubdivisionColorsProportional(childMarked, countryChartSegments);
           subdivisionColorById = byId;
-                  }
+        }
         
         // Propagar _forcedColor a cada polígono hijo
                         
@@ -1987,7 +2014,8 @@
         // Return ONLY countries with active data
         if (worldPolygons?.length) {
           const countryMap = new Map<string, string>();
-          worldPolygons.forEach(poly => {
+          // Filtrar polígonos nulos antes de iterar
+          worldPolygons.filter(poly => poly !== null && poly !== undefined).forEach(poly => {
             const iso = isoOf(poly);
             const name = nameOf(poly);
             
@@ -2008,7 +2036,8 @@
         try {
           const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(this.state.countryIso, this.state.countryIso);
           const subdivisionMap = new Map<string, string>();
-          subdivisionPolygons.forEach(poly => {
+          // Filtrar polígonos nulos antes de iterar
+          subdivisionPolygons.filter(poly => poly !== null && poly !== undefined).forEach(poly => {
             const props = poly?.properties || {};
             const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
             const name1 = props.NAME_1 || props.name_1 || props.VARNAME_1 || props.varname_1;
@@ -2035,7 +2064,8 @@
             const subdivisionFile = `${this.state.countryIso}.${numericPart}`;
             const subSubPolygons = await loadSubregionTopoAsGeoFeatures(this.state.countryIso, subdivisionFile);
             const subSubMap = new Map<string, string>();
-            subSubPolygons.forEach(poly => {
+            // Filtrar polígonos nulos antes de iterar
+            subSubPolygons.filter(poly => poly !== null && poly !== undefined).forEach(poly => {
               const props = poly?.properties || {};
               const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
               const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
@@ -2273,7 +2303,7 @@
           const subdivisionKey = `${state.countryIso}/${option.id}`;
           const loadedPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
           if (loadedPolygons?.length) {
-            loadedPolygons.forEach((poly: any) => {
+            loadedPolygons.filter((poly: any) => poly !== null && poly !== undefined).forEach((poly: any) => {
               if (poly.properties) {
                 poly.properties._elevation = 0.05;
               }
@@ -3649,7 +3679,10 @@
         const polyId = getFeatureId(poly);
         
         if (checkedCount <= 5) {
-          console.log(`[FirstLabel] Polígono #${checkedCount}: ID="${polyId}", tiene datos=${!!answersData?.[polyId]}, NAME_1=${props.NAME_1}, NAME_2=${props.NAME_2}, NAME=${props.NAME}`);
+          const name1 = props.NAME_1 || props.name_1 || props.VARNAME_1 || props.varname_1;
+          const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
+          const name = props.NAME || props.name || props.ADMIN || props.admin;
+          console.log(`[FirstLabel] Polígono #${checkedCount}: ID="${polyId}", tiene datos=${!!answersData?.[polyId]}, nombre="${name1 || name2 || name || 'Sin nombre'}"`);
         }
         
         // Verificar si tiene datos
