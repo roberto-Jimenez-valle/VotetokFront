@@ -36,6 +36,11 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	}
 
 	try {
+		// Validar pollId
+		if (isNaN(pollId) || pollId <= 0) {
+			return json({ error: 'Invalid poll ID' }, { status: 400 });
+		}
+
 		// Normalizar subdivisionId para construir el patrón de búsqueda
 		// Si viene "1", convertir a "ESP.1"
 		// Si viene "ESP.1", mantener
@@ -43,6 +48,12 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			? subdivisionId 
 			: `${countryIso}.${subdivisionId}`;
 		
+		console.log('[API votes-by-subsubdivisions] Buscando votos:', {
+			pollId,
+			countryIso,
+			subdivisionId,
+			normalizedSubdivisionId
+		});
 		
 		// Obtener todas las opciones de la encuesta
 		const pollOptions = await prisma.pollOption.findMany({
@@ -54,19 +65,24 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		});
 
 		if (pollOptions.length === 0) {
+			console.log('[API votes-by-subsubdivisions] No se encontraron opciones para poll:', pollId);
 			return json({ data: {} });
 		}
 
-		// 🔥 NUEVO: Buscar votos con subdivisionId que empiece con el patrón
-		// Ejemplo: Si normalizedSubdivisionId = "ESP.1", buscar "ESP.1.1", "ESP.1.2", etc.
-		// Usamos SQL LIKE para buscar IDs jerárquicos
+		// 🔥 CORREGIDO: JOIN con subdivisions para obtener el subdivision_id jerárquico
+		// votes.subdivision_id es INTEGER (FK)
+		// subdivisions.subdivision_id es STRING jerárquico ("ESP.1.2")
+		const searchPattern = normalizedSubdivisionId + '.%';
+		
 		const votes = await prisma.$queryRaw<Array<{ subdivisionId: string; optionId: number }>>`
-			SELECT subdivision_id as subdivisionId, option_id as optionId
-			FROM votes
-			WHERE poll_id = ${pollId}
-			  AND country_iso3 = ${countryIso}
-			  AND subdivision_id LIKE ${normalizedSubdivisionId + '.%'}
+			SELECT s.subdivision_id as "subdivisionId", v.option_id as "optionId"
+			FROM votes v
+			INNER JOIN subdivisions s ON v.subdivision_id = s.id
+			WHERE v.poll_id = ${pollId}
+			  AND s.subdivision_id LIKE ${searchPattern}
 		`;
+		
+		console.log('[API votes-by-subsubdivisions] Votos encontrados:', votes.length);
 
 		
 		// Crear mapa de optionId -> optionKey
@@ -98,7 +114,17 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		return json({ data: subSubdivisionVotes });
 
 	} catch (error) {
-		console.error('[API] Error loading sub-subdivision votes:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
+		console.error('[API votes-by-subsubdivisions] Error completo:', error);
+		console.error('[API votes-by-subsubdivisions] Stack:', error instanceof Error ? error.stack : 'No stack');
+		console.error('[API votes-by-subsubdivisions] Mensaje:', error instanceof Error ? error.message : String(error));
+		
+		// Retornar error detallado en desarrollo
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		const isDev = process.env.NODE_ENV === 'development';
+		
+		return json({ 
+			error: 'Internal server error',
+			...(isDev && { details: errorMessage, stack: error instanceof Error ? error.stack : undefined })
+		}, { status: 500 });
 	}
 };
