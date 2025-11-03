@@ -173,6 +173,41 @@ export class PollDataService {
   }
 
   /**
+   * Cargar encuestas trending con votos agregados en UNA sola petición
+   * OPTIMIZACIÓN: En lugar de 21 peticiones, hace 1 sola
+   */
+  async loadTrendingAggregatedData(
+    region: string,
+    countryIso: string,
+    limit: number = 20
+  ): Promise<{
+    polls: Poll[];
+    aggregatedVotes: VotesBySubdivision;
+  }> {
+    try {
+      const response = await apiCall(
+        `/api/polls/trending-aggregated-data?region=${encodeURIComponent(region)}&country=${countryIso}&limit=${limit}`
+      );
+      
+      if (!response.ok) {
+        console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando trending agregado`);
+        return { polls: [], aggregatedVotes: {} };
+      }
+
+      const { data } = await response.json();
+      console.log(`[PollDataService] ✅ Trending agregado cargado:`, data?.polls?.length || 0, 'encuestas');
+      
+      return {
+        polls: data?.polls || [],
+        aggregatedVotes: data?.aggregatedVotes || {}
+      };
+    } catch (error) {
+      console.error('[PollDataService] ❌ Error loading trending aggregated data:', error);
+      return { polls: [], aggregatedVotes: {} };
+    }
+  }
+
+  /**
    * Cargar datos completos de una encuesta
    */
   async loadPoll(pollId: number | string): Promise<Poll | null> {

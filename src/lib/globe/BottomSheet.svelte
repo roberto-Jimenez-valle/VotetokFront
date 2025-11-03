@@ -955,6 +955,10 @@
   export let tagQuery: string = '';
   export let onToggleSearch: () => void = () => {};
   
+  // Profile modal props
+  export let isProfileModalOpen: boolean = false;
+  export let selectedProfileUserId: number | null = null;
+  
   // Search results for countries/subdivisions
   let searchResults: Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision' }> = [];
   let isSearching = false;

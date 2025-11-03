@@ -1275,7 +1275,7 @@
               activePollOptions = [];
               
               // Verificar cache de trending polls para este país
-              const pollIds = trendingPolls.map(p => p.id).join(',');
+              const pollIds = trendingPolls.map((p : any) => p.id).join(',');
               const cacheKey = `${iso}_${pollIds}`;
               const now = Date.now();
               const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
