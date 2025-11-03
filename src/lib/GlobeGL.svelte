@@ -21,6 +21,7 @@
   import { geocodeService } from '$lib/services/GeocodeService';
   import { pollDataService } from '$lib/services/PollDataService';
   import { labelManager } from '$lib/services/LabelManager';
+  import { colorManager } from '$lib/services/ColorManager';
   
   // ========================================
   // EVENT LISTENER MANAGEMENT (Fase 3 - Refactorización)
@@ -901,66 +902,21 @@
     return winningOption ? { option: winningOption, count: maxVotes } : null;
   }
 
+  // ========================================
+  // FASE 3: COLORES - Migrado a ColorManager
+  // ========================================
   // NUEVA FUNCIÓN: Cargar colores reales desde la base de datos (nivel 1: subdivisiones)
   async function computeSubdivisionColorsFromDatabase(countryIso: string, polygons: any[]): Promise<Record<string, string>> {
-    const byId: Record<string, string> = {};
-    
-    // Solo cargar si hay encuesta activa
     if (!activePoll || !activePoll.id) {
-      return byId;
+      return {};
     }
     
-    try {
-      // Cargar votos reales por subdivisión usando PollDataService
-      const data = await pollDataService.loadVotesBySubdivisions(activePoll.id, countryIso);
-      
-      if (!data || Object.keys(data).length === 0) {
-        return byId;
-      }
-      
-      // NO AGREGAR - usar solo datos directos del nivel 1
-      // Si la BD tiene ARG.7.1, NO colorear ARG.7
-      const level1Votes: Record<string, Record<string, number>> = {};
-      
-      // Filtrar solo los IDs que son EXACTAMENTE nivel 1 (ARG.1, ARG.7, etc.)
-      for (const [subdivisionId, votes] of Object.entries(data)) {
-        const parts = subdivisionId.split('.');
-        // Solo incluir si tiene exactamente 2 partes (ARG.7, no ARG.7.1)
-        if (parts.length === 2) {
-          level1Votes[subdivisionId] = votes;
-        }
-      }
-            
-      // Para cada subdivisión nivel 1, calcular la opción ganadora
-      for (const [subdivisionKey, votes] of Object.entries(level1Votes)) {
-        const winner = findWinningOption(votes);
-        
-        if (winner && colorMap?.[winner.option]) {
-          const color = colorMap[winner.option];
-          
-          // Buscar el polígono que coincida con esta subdivisión
-          for (const poly of polygons) {
-            const props = poly?.properties || {};
-            const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
-            const name1 = props.NAME_1 || props.name_1 || props.VARNAME_1 || props.varname_1;
-            
-            // Normalizar ID para comparación (ESP.1 o solo "1")
-            const normalizedId1 = String(id1).includes('.') ? id1 : `${countryIso}.${id1}`;
-            const normalizedSubKey = subdivisionKey.includes('.') ? subdivisionKey : `${countryIso}.${subdivisionKey}`;
-            
-            // Coincidir por ID_1 normalizado o por nombre
-            if (normalizedId1 === normalizedSubKey || name1 === subdivisionKey) {
-              byId[String(id1)] = color;
-              break;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('[Colors] ❌ Error loading subdivision votes from database:', error);
-    }
-    
-    return byId;
+    return await colorManager.loadSubdivisionColors(
+      activePoll.id,
+      countryIso,
+      polygons,
+      colorMap
+    );
   }
 
   // NUEVA FUNCIÓN: Cargar colores reales de sub-subdivisiones (nivel 2)
@@ -969,93 +925,17 @@
     subdivisionId: string, 
     polygons: any[]
   ): Promise<Record<string, string>> {
-    const byId: Record<string, string> = {};
-    
-    // Solo cargar si hay encuesta activa
     if (!activePoll || !activePoll.id) {
-      return byId;
+      return {};
     }
     
-    // Normalizar subdivisionId para la API (debe ser solo el número, ej: "1" no "ESP.1")
-    const cleanSubdivisionId = subdivisionId.includes('.') ? subdivisionId.split('.').pop() : subdivisionId;
-    
-                    
-    try {
-      // Cargar votos reales por sub-subdivisión desde la API
-      const apiUrl = `/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`;
-            
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        // Si no hay endpoint, usar datos del nivel superior como fallback
-                return await computeSubdivisionColorsFromVotesLevel3(countryIso, subdivisionId, polygons);
-      }
-      
-      const { data } = await response.json();
-                        
-      // Si no hay datos, usar fallback
-      if (!data || Object.keys(data).length === 0) {
-                return await computeSubdivisionColorsFromVotesLevel3(countryIso, subdivisionId, polygons);
-      }
-      
-      // NO AGREGAR - usar solo datos directos del nivel 2
-      // Si la BD tiene ARG.7.1.5, NO colorear ARG.7.1
-      const level2Votes: Record<string, Record<string, number>> = {};
-      
-      // Filtrar solo los IDs que son EXACTAMENTE nivel 2 (ARG.7.1, no ARG.7.1.5)
-      for (const [subdivisionId, votes] of Object.entries(data)) {
-        const parts = subdivisionId.split('.');
-        // Solo incluir si tiene exactamente 3 partes (ARG.7.1, no ARG.7.1.5)
-        if (parts.length === 3) {
-          level2Votes[subdivisionId] = votes as Record<string, number>;
-        }
-      }
-            
-      // Para cada sub-subdivisión nivel 2, calcular la opción ganadora
-      for (const [subSubdivisionKey, votes] of Object.entries(level2Votes)) {
-        const winner = findWinningOption(votes);
-        
-        if (winner && colorMap?.[winner.option]) {
-          const color = colorMap[winner.option];
-          
-          // Buscar el polígono que coincida con esta sub-subdivisión
-          // Ahora ID_2 del polígono coincide directamente con subSubdivisionKey de la BD (ej: ARG.5.1)
-          for (const poly of polygons) {
-            const props = poly?.properties || {};
-            const id2 = props.ID_2 || props.id_2;
-            const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
-            
-            // Coincidencia directa de ID_2 con subSubdivisionKey
-            if (String(id2) === subSubdivisionKey) {
-              byId[String(id2)] = color;
-              break;
-            }
-            
-            // Fallback: Coincidencia por nombre
-            if (name2 === subSubdivisionKey) {
-              byId[String(id2)] = color;
-              break;
-            }
-            
-            // Fallback: Comparar última parte del ID
-            const id2Parts = String(id2).split('.');
-            const keyParts = subSubdivisionKey.split('.');
-            if (id2Parts[id2Parts.length - 1] === keyParts[keyParts.length - 1]) {
-              byId[String(id2)] = color;
-              break;
-            }
-          }
-        }
-      }
-      
-            
-    } catch (error) {
-      console.error('[Colors L3] ❌ Error loading sub-subdivision votes from database:', error);
-      // Fallback en caso de error
-      return await computeSubdivisionColorsFromVotesLevel3(countryIso, subdivisionId, polygons);
-    }
-    
-    return byId;
+    return await colorManager.loadSubSubdivisionColors(
+      activePoll.id,
+      countryIso,
+      subdivisionId,
+      polygons,
+      colorMap
+    );
   }
 
   // Fallback: Usar datos de la subdivisión padre para colorear proporcionalmente
@@ -4080,26 +3960,9 @@
   }
 
   
-  // FUNCIÓN LEGACY: Usar marcadores (datos simulados) - mantener como fallback
+  // FUNCIÓN LEGACY: Usar marcadores (datos simulados) - Migrado a ColorManager
   function computeSubdivisionColorsFromVotes(countryIso: string, polygons: any[]): Record<string, string> {
-    const byId: Record<string, string> = {};
-    const pts = regionVotes?.length ? regionVotes.filter(p => p.iso3 === countryIso) : [];
-    if (!pts.length) return byId;
-    for (const poly of polygons) {
-      const props = poly?.properties || {};
-      const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1 || props.NAME_1 || props.name_1 || null;
-      if (!id1) continue;
-      const counts: Record<string, number> = {};
-      for (const p of pts) {
-        if (!p.tag) continue;
-        if (pointInFeature(p.lat, p.lng, poly)) {
-          counts[p.tag] = (counts[p.tag] || 0) + 1;
-        }
-      }
-      const dom = pickDominantTag(counts);
-      if (dom && colorMap?.[dom]) byId[String(id1)] = colorMap[dom];
-    }
-    return byId;
+    return colorManager.computeColorsFromVotes(countryIso, polygons, regionVotes, colorMap);
   }
 
   function computeSubdivisionColorsProportional(polygons: any[], segs: Array<{ key: string; pct: number; color: string }>): Record<string, string> {
