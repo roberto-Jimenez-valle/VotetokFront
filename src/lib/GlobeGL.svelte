@@ -126,14 +126,20 @@
   export const loadRegionData: null | ((bbox: { minLat: number; minLng: number; maxLat: number; maxLng: number }) => Promise<any>) = null;
 
   let globe: any = null; // ref al componente GlobeCanvas
-  let answersData: Record<string, Record<string, number>> = {};
-  let colorMap: Record<string, string> = {};
+  
+  // ========================================
+  // FASE 3: MIGRACIÓN A STORES CENTRALIZADOS
+  // ========================================
+  // Subscripciones a stores globales (auto-reactive con $)
+  $: answersData = $globalAnswersData;
+  $: colorMap = $globalColorMap;
+  
   let isoIntensity: Record<string, number> = {};
   
-  // Cache de datos por nivel para mantener contexto de encuesta
-  let worldLevelAnswers: Record<string, Record<string, number>> = {};
-  let countryLevelAnswers: Record<string, Record<string, number>> = {};
-  let subdivisionLevelAnswers: Record<string, Record<string, number>> = {};
+  // Cache de datos por nivel - migrado a stores
+  $: worldLevelAnswers = $globalAnswersData; // Temporal: mantener compatibilidad
+  $: countryLevelAnswers = $globalAnswersData;
+  $: subdivisionLevelAnswers = $globalAnswersData;
   
   // Cache de colorMap por nivel para trending
   let worldLevelColorMap: Record<string, string> = {};
@@ -2837,13 +2843,27 @@
 
 
   
-  // Bottom sheet (tipo Google Maps)
+  // ========================================
+  // FASE 3: NAVEGACIÓN - Migrado a Store
+  // ========================================
+  // Bottom sheet (tipo Google Maps) - Ahora usa globalNavigationState
+  // Mantener variables locales para compatibilidad, pero sincronizar con store
   let selectedCountryName: string | null = null;
   let selectedCountryIso: string | null = null;
   let selectedSubdivisionName: string | null = null;
-  let selectedSubdivisionId: string | null = null; // ID de la subdivisión seleccionada
+  let selectedSubdivisionId: string | null = null;
   let selectedCityName: string | null = null;
-  let selectedCityId: string | null = null; // ID de la ciudad/provincia seleccionada para resaltado (nivel 4)
+  let selectedCityId: string | null = null;
+  
+  // Sincronizar estado local con store
+  $: {
+    const nav = $globalNavigationState;
+    selectedCountryIso = nav.countryIso;
+    selectedCountryName = nav.countryName;
+    selectedSubdivisionId = nav.subdivisionId;
+    selectedSubdivisionName = nav.subdivisionName;
+    selectedCityName = nav.cityName;
+  }
   
   // Sistema de detección de polígono centrado al arrastrar
   let centerPolygon: any | null = null; // Polígono actualmente centrado
@@ -2852,15 +2872,19 @@
   
   let SHEET_STATE: SheetState = 'peek'; // Mostrar información mundial por defecto
   
+  // ========================================
+  // FASE 3: ENCUESTA ACTIVA - Migrado a Store
+  // ========================================
   // CONTEXTO DE ENCUESTA ACTIVA
   // MODO EXCLUSIVO: El globo trabaja en modo trending O en modo encuesta específica (NUNCA ambos)
-  let activePoll: any = null; // Encuesta actualmente abierta (null = modo trending)
-  let activePollOptions: Array<{ key: string; label: string; color: string; votes: number; pollData?: any }> = []; // Opciones de la encuesta activa
+  // Usar stores centralizados pero mantener variables locales para compatibilidad gradual
+  $: activePoll = $globalActivePoll;
+  let activePollOptions: Array<{ key: string; label: string; color: string; votes: number; pollData?: any }> = [];
   
   // Watcher para detectar cambios inesperados en activePoll y loggear el modo actual
-  let lastActivePollId: string | null = null;
+  let lastActivePollId: string | number | null = null;
   $: {
-    const currentId = activePoll?.id || null;
+    const currentId: string | number | null = activePoll?.id || null;
     if (currentId !== lastActivePollId) {
       
       lastActivePollId = currentId;
@@ -2880,11 +2904,13 @@
       console.log('[History] 🔄 Volviendo a modo trending');
     }
     
-    // Limpiar contexto de encuesta
-    activePoll = null;
+    // FASE 3: Limpiar contexto de encuesta usando store
+    globalActivePoll.close();
     activePollOptions = [];
     
-    // Limpiar caches de datos por nivel
+    // Limpiar caches de datos por nivel usando stores
+    globalAnswersData.set({});
+    globalColorMap.set({});
     worldLevelAnswers = {};
     countryLevelAnswers = {};
     subdivisionLevelAnswers = {};
@@ -2894,8 +2920,6 @@
     
     // Limpiar datos y colores
     isoDominantKey = {};
-    colorMap = {};
-    answersData = {};
     legendItems = [];
     regionVotes = [];
     worldChartSegments = [];
@@ -3332,7 +3356,8 @@
       ({ label: o.label, votes: o.votes, pct: Math.round(o.pct) })
     ));
     
-    activePoll = formattedPoll;
+    // FASE 3: Usar store para abrir encuesta
+    globalActivePoll.open(formattedPoll);
     activePollOptions = formattedPoll.options;
     
     // HISTORY API: Guardar estado de encuesta en el historial
@@ -4190,8 +4215,8 @@
     if (navigationState.level === 'world') {
       console.log('[GlobeGL] 🔃 Recargando encuestas para nuevo tab...');
       
-      // Limpiar la encuesta activa para forzar modo trending
-      activePoll = null;
+      // FASE 3: Limpiar la encuesta activa usando store para forzar modo trending
+      globalActivePoll.close();
       
       // Recargar datos según el nuevo tab
       await loadTrendingData();
