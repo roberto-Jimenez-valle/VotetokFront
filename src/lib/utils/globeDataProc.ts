@@ -38,12 +38,18 @@ export function getFeatureId(f: any): string {
     return String(p.ID_1 || p.id_1 || p.GID_1 || p.gid_1);
   }
   
-  // Nivel 1 (países): ISO_A3 - MENOS ESPECÍFICO
-  if (p.ISO_A3) {
-    return p.ISO_A3.toString().toUpperCase();
+  // Nivel 1 (países): ISO_A3, ISO3_CODE, iso_a3, ADM0_A3 - MENOS ESPECÍFICO
+  const iso_a3 = p.ISO_A3 || p.ISO3_CODE || p.iso_a3;
+  const adm0_a3 = p.ADM0_A3 || p.adm0_a3;
+  
+  // Si ISO_A3 es "-99" (código inválido), usar ADM0_A3
+  if (iso_a3 && iso_a3 !== '-99') {
+    return iso_a3.toString().toUpperCase();
+  }
+  if (adm0_a3 && adm0_a3 !== '-99') {
+    return adm0_a3.toString().toUpperCase();
   }
   
-  // Sin ID válido
   return '';
 }
 
@@ -56,7 +62,7 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
   // Filtra Antártida si aparece como ISO3 ATA o nombre
   const data = features.filter((f) => {
     const p = f?.properties ?? {};
-    const iso3 = (p.ISO_A3 ?? '').toString().toUpperCase();
+    const iso3 = (p.ISO_A3 || p.ISO3_CODE || p.iso_a3 || '').toString().toUpperCase();
     const name = (p.ADMIN ?? p.NAME ?? p.name ?? '').toString().toUpperCase();
     return iso3 !== 'ATA' && name !== 'ANTARCTICA';
   });
@@ -66,17 +72,45 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
   const isoDominantKey: Record<string, string> = {};
   const counts: Record<string, number> = {};
   
+  // DEBUG: Verificar países con datos
+  let matchedCount = 0;
+  let unmatchedCount = 0;
+  const unmatchedCountries: string[] = [];
+  
   for (const f of data) {
     // Usar getFeatureId en lugar de isoOf para soportar todos los niveles
     const featureId = getFeatureId(f);
     
     if (!featureId) {
+      unmatchedCount++;
+      unmatchedCountries.push('[EMPTY_ID]');
       continue;
+    }
+    
+    const hasData = answersData[featureId];
+    if (hasData) {
+      matchedCount++;
+    } else {
+      unmatchedCount++;
+      unmatchedCountries.push(featureId);
     }
     
     const key = getDominantKeyUtil(featureId, answersData);
     isoDominantKey[featureId] = key;
     counts[key] = (counts[key] ?? 0) + 1;
+  }
+  
+  console.log(`[computeGlobeViewModel] Polígonos procesados: ${data.length}`);
+  console.log(`[computeGlobeViewModel] ✅ Con datos: ${matchedCount}`);
+  console.log(`[computeGlobeViewModel] ❌ Sin datos: ${unmatchedCount}`);
+  console.log(`[computeGlobeViewModel] TODOS los sin datos (${unmatchedCountries.length}):`, unmatchedCountries);
+  console.log(`[computeGlobeViewModel] answersData total keys:`, Object.keys(answersData).length);
+  
+  // Verificar si hay algún país en answersData que NO esté en el archivo mundial
+  const worldCountries = new Set(data.map(f => getFeatureId(f)).filter(id => id));
+  const missingInWorld = Object.keys(answersData).filter(iso => !worldCountries.has(iso));
+  if (missingInWorld.length > 0) {
+    console.log(`[computeGlobeViewModel] ⚠️ Países con datos pero NO en archivo mundial:`, missingInWorld);
   }
   
     const legendItems = Object.keys(colorMap || {})

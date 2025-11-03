@@ -2,7 +2,18 @@
 
 export function isoOf(d: any): string {
   const p = d?.properties ?? {};
-  return (p.ISO_A3 ?? '').toString().toUpperCase();
+  const iso_a3 = p.ISO_A3 || p.ISO3_CODE || p.iso_a3;
+  const adm0_a3 = p.ADM0_A3 || p.adm0_a3;
+  
+  // Si ISO_A3 es "-99" (código inválido), usar ADM0_A3
+  if (iso_a3 && iso_a3 !== '-99') {
+    return iso_a3.toString().toUpperCase();
+  }
+  if (adm0_a3 && adm0_a3 !== '-99') {
+    return adm0_a3.toString().toUpperCase();
+  }
+  
+  return '';
 }
 
 export function centroidOf(feat: any): { lat: number; lng: number } {
