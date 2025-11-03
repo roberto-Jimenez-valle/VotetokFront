@@ -1115,6 +1115,11 @@
     private history: Array<{level: NavigationLevel; name: string; iso?: string; id?: string;}>;
     private polygonCache: Map<string, any[]> = new Map();
     private labelCache: Map<string, SubdivisionLabel[]> = new Map();
+    private trendingPollsDataCache: Record<string, {
+      data: Record<string, Record<string, number>>;
+      timestamp: number;
+      pollIds: string;
+    }> = {};
 
     constructor(globeRef: any) {
       this.globe = globeRef;
@@ -1262,12 +1267,28 @@
               const { data: trendingPolls } = await response.json();
               
               // Agregar datos de trending por subdivisión
-              const aggregatedData: Record<string, Record<string, number>> = {};
+              let aggregatedData: Record<string, Record<string, number>> = {};
               const aggregatedColors: Record<string, string> = {};
               const pollColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
               
               // Actualizar activePollOptions con las encuestas trending
               activePollOptions = [];
+              
+              // Verificar cache de trending polls para este país
+              const pollIds = trendingPolls.map(p => p.id).join(',');
+              const cacheKey = `${iso}_${pollIds}`;
+              const now = Date.now();
+              const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+              
+              const cachedData = this.trendingPollsDataCache[cacheKey];
+              const isCacheValid = cachedData && (now - cachedData.timestamp) < CACHE_TTL;
+              
+              if (isCacheValid) {
+                console.log('[Trending] ♻️ Usando datos cacheados para', iso);
+                aggregatedData = cachedData.data;
+              } else {
+                console.log('[Trending] 📡 Cargando datos frescos para', iso, `(${trendingPolls.length} encuestas)`);
+              }
               
               for (let i = 0; i < trendingPolls.length; i++) {
                 const poll = trendingPolls[i];
@@ -1286,34 +1307,46 @@
                   pollData: poll
                 });
                 
-                // Cargar datos de votos por subdivisión para cada encuesta trending
-                try {
-                  const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`);
-                  if (pollResponse.ok) {
-                    const { data: pollData } = await pollResponse.json() as { data: Record<string, Record<string, number>> };
-                    
-                    // FILTRAR solo nivel 1 exacto - NO agregar
-                    const level1Data: Record<string, Record<string, number>> = {};
-                    for (const [subdivisionId, votes] of Object.entries(pollData)) {
-                      const parts = subdivisionId.split('.');
-                      if (parts.length === 2) {
-                        level1Data[subdivisionId] = votes;
-                      }
-                    }
-                    
-                    // Sumar TODOS los votos de esta encuesta por subdivisión
-                    for (const [subdivisionId, votes] of Object.entries(level1Data as Record<string, Record<string, number>>)) {
-                      if (!aggregatedData[subdivisionId]) {
-                        aggregatedData[subdivisionId] = {};
+                // Solo cargar datos si NO están en cache
+                if (!isCacheValid) {
+                  try {
+                    const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`);
+                    if (pollResponse.ok) {
+                      const { data: pollData } = await pollResponse.json() as { data: Record<string, Record<string, number>> };
+                      
+                      // FILTRAR solo nivel 1 exacto - NO agregar
+                      const level1Data: Record<string, Record<string, number>> = {};
+                      for (const [subdivisionId, votes] of Object.entries(pollData)) {
+                        const parts = subdivisionId.split('.');
+                        if (parts.length === 2) {
+                          level1Data[subdivisionId] = votes;
+                        }
                       }
                       
-                      const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
-                      aggregatedData[subdivisionId][pollKey] = totalVotes;
+                      // Sumar TODOS los votos de esta encuesta por subdivisión
+                      for (const [subdivisionId, votes] of Object.entries(level1Data as Record<string, Record<string, number>>)) {
+                        if (!aggregatedData[subdivisionId]) {
+                          aggregatedData[subdivisionId] = {};
+                        }
+                        
+                        const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
+                        aggregatedData[subdivisionId][pollKey] = totalVotes;
+                      }
                     }
+                  } catch (error) {
+                    console.warn(`[Trending] ⚠️ Error loading data for poll ${poll.id}:`, error);
                   }
-                } catch (error) {
-                  console.warn(`[Trending] ⚠️ Error loading data for poll ${poll.id}:`, error);
                 }
+              }
+              
+              // Guardar en cache si se cargaron datos frescos
+              if (!isCacheValid) {
+                this.trendingPollsDataCache[cacheKey] = {
+                  data: aggregatedData,
+                  timestamp: now,
+                  pollIds: pollIds
+                };
+                console.log('[Trending] 💾 Datos guardados en cache para', iso);
               }
               
               // Actualizar votos totales en activePollOptions
