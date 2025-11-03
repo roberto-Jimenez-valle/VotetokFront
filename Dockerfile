@@ -56,11 +56,8 @@ COPY . .
 # Generate Prisma Client
 RUN npx prisma generate
 
-# Build application
-RUN pnpm build:optimized
-
-# Optimize assets
-RUN pnpm optimize:assets || true
+# Build application (CORREGIDO: usa el comando correcto de package.json)
+RUN pnpm build
 
 # Prune dev dependencies
 RUN pnpm prune --prod

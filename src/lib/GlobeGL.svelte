@@ -3,7 +3,32 @@
   import { fade } from 'svelte/transition';
   import { apiGet, apiCall } from '$lib/api/client';
   
+  // ========================================
+  // STORES CENTRALIZADOS (Fase 3 - Refactorización)
+  // ========================================
+  import { 
+    navigationState as globalNavigationState,
+    activePoll as globalActivePoll,
+    answersData as globalAnswersData,
+    colorMap as globalColorMap,
+    themeState as globalThemeState,
+    isDarkTheme as globalIsDarkTheme
+  } from '$lib/stores/globalState';
+  
+  // ========================================
+  // SERVICIOS REUTILIZABLES (Fase 3 - Refactorización)
+  // ========================================
+  import { geocodeService } from '$lib/services/GeocodeService';
+  import { pollDataService } from '$lib/services/PollDataService';
+  import { labelManager } from '$lib/services/LabelManager';
+  
+  // ========================================
+  // EVENT LISTENER MANAGEMENT (Fase 3 - Refactorización)
+  // ========================================
+  import { createEventListenerManager } from '$lib/utils/eventListenerCleanup';
+  
   const dispatch = createEventDispatcher();
+  const eventListeners = createEventListenerManager(); // Gestión automática de listeners
   
   // Helper para delays con Promesas
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -4178,32 +4203,42 @@
 
 
   // Volar a mi ubicación
+  // FASE 3: Refactorizado para usar GeocodeService
   async function locateMe() {
     try {
-      if (!('geolocation' in navigator)) {
-        alert('Geolocalización no disponible en este dispositivo/navegador.');
-        return;
-      }
-      if (!(window.isSecureContext)) {
-        alert('La geolocalización requiere conexión segura (https) en móviles. Abre el sitio con https.');
-        return;
-      }
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+      console.log('[GlobeGL] 📍 Obteniendo ubicación con GeocodeService...');
+      
+      // Usar el servicio de geolocalización con fallbacks automáticos
+      const { location, geocode } = await geocodeService.getLocationAndGeocode();
+      
+      console.log('[GlobeGL] ✅ Ubicación obtenida:', {
+        source: location.source,
+        lat: location.latitude,
+        lon: location.longitude,
+        accuracy: location.accuracy,
+        subdivision: geocode.subdivisionName
       });
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
+      
+      const lat = location.latitude;
+      const lng = location.longitude;
+      
       // Detener cualquier rotación automática antes de mover la cámara
-     
       const targetAltitude = MIN_ZOOM_ALTITUDE; // límite mínimo permitido
+      
       if (polygonsVisible && targetAltitude < ALT_THRESHOLD) {
         globe?.setPolygonsData([]);
         polygonsVisible = false;
         setTilesEnabled(true);
       }
+      
       scheduleZoom(lat, lng, targetAltitude, 1000);
+      
+      // Mostrar mensaje amigable según la fuente
+      if (location.source === 'default') {
+        alert('No se pudo obtener tu ubicación exacta. Mostrando ubicación por defecto (Madrid).');
+      }
     } catch (e) {
-      console.warn('No se pudo obtener la ubicación:', e);
+      console.error('[GlobeGL] ❌ Error en locateMe:', e);
       alert('No se pudo obtener tu ubicación. Revisa permisos de ubicación del navegador.');
     }
   }
@@ -4853,6 +4888,12 @@
   let popstateHandler: ((event: PopStateEvent) => Promise<void>) | null = null;
   
   onDestroy(() => {
+    console.log('[GlobeGL] 🧹 Cleanup iniciado...');
+    
+    // FASE 3: Cleanup automático de event listeners
+    console.log('[GlobeGL] 📌 Event listeners activos:', eventListeners.count);
+    eventListeners.cleanup();
+    
     try {
       window.removeEventListener('resize', resize);
       window.removeEventListener('resize', onWindowResizeForSheet);
