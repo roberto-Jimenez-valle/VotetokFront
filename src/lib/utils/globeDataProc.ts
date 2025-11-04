@@ -63,7 +63,7 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
   const data = features.filter((f) => {
     const p = f?.properties ?? {};
     const iso3 = (p.ISO_A3 || p.ISO3_CODE || p.iso_a3 || '').toString().toUpperCase();
-    const name = (p.ADMIN ?? p.NAME ?? p.name ?? '').toString().toUpperCase();
+    const name = (p.NAME_ENGL ?? p.CNTR_NAME ?? p.ADMIN ?? p.NAME ?? p.name ?? '').toString().toUpperCase();
     return iso3 !== 'ATA' && name !== 'ANTARCTICA';
   });
 

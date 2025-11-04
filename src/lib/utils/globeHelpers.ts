@@ -3,11 +3,13 @@
 export function nameOf(d: any): string {
   const p = d?.properties ?? {};
   return (
-    p.ADMIN ??
-    p.NAME ??
-    p.name ??
-    p.SOVEREIGNT ??
-    p.ISO3_CODE ??
+    p.NAME_ENGL ??      // countries-110m-iso-geojson-fixed.json
+    p.CNTR_NAME ??      // countries-110m-iso-geojson-fixed.json
+    p.ADMIN ??          // Algunos TopoJSON
+    p.NAME ??           // Genérico
+    p.name ??           // Minúsculas
+    p.SOVEREIGNT ??     // Soberanía
+    p.ISO3_CODE ??      // Código ISO3 como último recurso
     p.ISO_A3 ??
     p.ISO_A2 ??
     'Country'
