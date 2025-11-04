@@ -1084,8 +1084,10 @@
         // Render country view PRIMERO
         await this.renderCountryView(iso, countryPolygons);
         
-        // Try to load subdivisions automatically
-        await this.loadSubdivisions(iso);
+        // REMOVIDO: No cargar subdivisiones automáticamente
+        // Las subdivisiones de nivel 3 (UKR.1, UKR.2, etc.) solo se cargan cuando
+        // el usuario hace click en una subdivisión específica del nivel 2
+        // await this.loadSubdivisions(iso);
         
         // Cargar datos de subdivisiones y actualizar answersData DESPUÉS de renderizar
         if (activePoll && activePoll.id) {
