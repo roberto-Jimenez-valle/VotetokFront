@@ -101,6 +101,8 @@ export class ColorManager {
             const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
             const name1 = props.NAME_1 || props.name_1 || props.VARNAME_1 || props.varname_1;
 
+            if (!id1) continue;
+
             // Normalizar ID para comparación
             const normalizedId1 = String(id1).includes('.')
               ? id1
@@ -180,6 +182,8 @@ export class ColorManager {
             const props = poly?.properties || {};
             const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
             const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
+
+            if (!id2) continue;
 
             // Normalizar ID para comparación
             const normalizedId2 = String(id2).includes('.')
