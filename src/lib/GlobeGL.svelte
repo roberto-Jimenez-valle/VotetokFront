@@ -660,7 +660,18 @@
     if (!firstKey) return [];
     const fc = (mod as any).feature(topo, objects[firstKey]);
     const feats: any[] = Array.isArray(fc?.features) ? fc.features : [];
-    for (const f of feats) {
+    
+    // FILTRAR features nulos o mal formados ANTES de procesarlos
+    const validFeats = feats.filter(f => 
+      f !== null && 
+      f !== undefined && 
+      f.type === 'Feature' &&
+      f.geometry !== null && 
+      f.geometry !== undefined &&
+      f.geometry.type !== null
+    );
+    
+    for (const f of validFeats) {
       if (!f.properties) f.properties = {};
       if (!f.properties.ISO_A3) f.properties.ISO_A3 = iso;
       // NO sobrescribir ID_1 si ya existe (viene del GeoJSON)
@@ -678,7 +689,8 @@
                    `Subdivisión ${id1}`;
       f.properties._subdivisionName = name;
     }
-    return feats;
+    
+    return validFeats;
   }
 
   // Generar etiquetas SOLO para polígonos con datos activos (votos)
@@ -4303,15 +4315,25 @@
     const fc = (mod as any).feature(topo, objects[firstKey]);
     const feats: any[] = Array.isArray(fc?.features) ? fc.features : [];
     
-    console.log(`[LoadTopo] ✅ ${feats.length} features cargadas para ${iso}`);
+    // FILTRAR features nulos o mal formados ANTES de procesarlos
+    const validFeats = feats.filter(f => 
+      f !== null && 
+      f !== undefined && 
+      f.type === 'Feature' &&
+      f.geometry !== null && 
+      f.geometry !== undefined &&
+      f.geometry.type !== null
+    );
+    
+    console.log(`[LoadTopo] ✅ ${validFeats.length} features válidas de ${feats.length} totales para ${iso}`);
     
     // Añadir propiedades necesarias
-    for (const f of feats) {
+    for (const f of validFeats) {
       if (!f.properties) f.properties = {};
       if (!f.properties.ISO_A3) f.properties.ISO_A3 = iso;
     }
     
-    return feats;
+    return validFeats;
   }
 
   // Old handlePolygonClick function removed - now using new click-based navigation system
