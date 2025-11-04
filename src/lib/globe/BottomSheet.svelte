@@ -1089,6 +1089,57 @@
     }, 300);
   }
   
+  // Helper function to get country name from ISO code
+  function getCountryName(iso: string): string {
+    // Map of common country codes to names (expandable)
+    const countryNames: Record<string, string> = {
+      'ESP': 'España',
+      'COL': 'Colombia',
+      'MEX': 'México',
+      'ARG': 'Argentina',
+      'USA': 'United States',
+      'CAN': 'Canada',
+      'FRA': 'France',
+      'DEU': 'Germany',
+      'ITA': 'Italy',
+      'GBR': 'United Kingdom',
+      'PRT': 'Portugal',
+      'BRA': 'Brazil',
+      'CHL': 'Chile',
+      'PER': 'Peru',
+      'VEN': 'Venezuela',
+      'ECU': 'Ecuador',
+      'BOL': 'Bolivia',
+      'URY': 'Uruguay',
+      'PRY': 'Paraguay',
+      'CRI': 'Costa Rica',
+      'PAN': 'Panama',
+      'NIC': 'Nicaragua',
+      'HND': 'Honduras',
+      'GTM': 'Guatemala',
+      'SLV': 'El Salvador',
+      'CUB': 'Cuba',
+      'DOM': 'Dominican Republic',
+      'PRI': 'Puerto Rico',
+      'PHL': 'Philippines',
+      'CHN': 'China',
+      'JPN': 'Japan',
+      'KOR': 'South Korea',
+      'IND': 'India',
+      'RUS': 'Russia',
+      'AUS': 'Australia',
+      'NZL': 'New Zealand',
+      'ZAF': 'South Africa',
+      'EGY': 'Egypt',
+      'MAR': 'Morocco',
+      'NGA': 'Nigeria',
+      'KEN': 'Kenya',
+      'ETH': 'Ethiopia'
+    };
+    
+    return countryNames[iso] || iso;
+  }
+  
   // Function to select a search result
   async function selectSearchResult(result: { id: string; name: string; iso?: string; type: 'country' | 'subdivision' }) {
         
@@ -2831,6 +2882,9 @@
                   {/if}
                 </span>
                 <span class="result-name">{result.name}</span>
+                {#if result.id && result.id.includes('.')}
+                  <span class="result-country">{getCountryName(result.id.split('.')[0])}</span>
+                {/if}
               </button>
             {/each}
           {/if}
@@ -3445,4 +3499,32 @@
 
   <style>
     /* Los estilos ya están importados globalmente en el <script> */
+    
+    /* Estilos para el badge del país en resultados de búsqueda */
+    :global(.search-result-item) {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+    }
+    
+    :global(.result-name) {
+      flex: 1;
+    }
+    
+    :global(.result-country) {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.3px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      white-space: nowrap;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   </style>

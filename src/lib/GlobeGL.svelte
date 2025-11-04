@@ -2243,6 +2243,76 @@
     }
   }
   
+  // Helper function to get country name from ISO code
+  function getCountryNameFromISO(iso: string): string {
+    if (!iso) return '?';
+    
+    // Map of common country codes to names
+    const countryNames: Record<string, string> = {
+      'ESP': 'España',
+      'COL': 'Colombia',
+      'MEX': 'México',
+      'ARG': 'Argentina',
+      'USA': 'United States',
+      'CAN': 'Canada',
+      'FRA': 'France',
+      'DEU': 'Germany',
+      'ITA': 'Italy',
+      'GBR': 'United Kingdom',
+      'PRT': 'Portugal',
+      'BRA': 'Brazil',
+      'CHL': 'Chile',
+      'PER': 'Peru',
+      'VEN': 'Venezuela',
+      'ECU': 'Ecuador',
+      'BOL': 'Bolivia',
+      'URY': 'Uruguay',
+      'PRY': 'Paraguay',
+      'CRI': 'Costa Rica',
+      'PAN': 'Panama',
+      'NIC': 'Nicaragua',
+      'HND': 'Honduras',
+      'GTM': 'Guatemala',
+      'SLV': 'El Salvador',
+      'CUB': 'Cuba',
+      'DOM': 'Dominican Republic',
+      'PRI': 'Puerto Rico',
+      'PHL': 'Philippines',
+      'CHN': 'China',
+      'JPN': 'Japan',
+      'KOR': 'South Korea',
+      'IND': 'India',
+      'RUS': 'Russia',
+      'AUS': 'Australia',
+      'NZL': 'New Zealand',
+      'ZAF': 'South Africa',
+      'EGY': 'Egypt',
+      'MAR': 'Morocco',
+      'NGA': 'Nigeria',
+      'KEN': 'Kenya',
+      'ETH': 'Ethiopia'
+    };
+    
+    // Primero usar el mapa estático
+    if (countryNames[iso]) {
+      return countryNames[iso];
+    }
+    
+    // Luego intentar obtener desde worldPolygons
+    if (worldPolygons && worldPolygons.length > 0) {
+      const countryFeature = worldPolygons.find(p => isoOf(p) === iso);
+      if (countryFeature) {
+        const name = countryFeature.properties?.NAME || countryFeature.properties?.ADMIN;
+        if (name) {
+          return name;
+        }
+      }
+    }
+    
+    // Fallback: devolver el código ISO
+    return iso;
+  }
+  
   // Function to select an option from dropdown
   async function selectDropdownOption(option: { id: string; name: string; type?: string }) {
     console.log('[selectDropdownOption] Navegando a:', option);
@@ -2323,112 +2393,176 @@
           globe?.refreshPolyStrokes?.();
         })();
       }
-    } else if (currentLevel === 'country') {
-      // Navigate to subdivision
-      const state = navigationManager!.getState();
-      if (state.countryIso) {
-        const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(state.countryIso, state.countryIso);
+    } else {
+      // NAVEGAR A SUBDIVISIÓN (sin importar nivel actual)
+      // Detectar si es nivel 2 o nivel 3
+      const parts = option.id.split('.');
+      const countryIso = parts[0]; // "ESP"
+      const isLevel3 = parts.length === 3; // "ESP.1.29" tiene 3 partes
+      
+      console.log('[selectDropdownOption] Navegando a subdivisión nivel', isLevel3 ? 3 : 2, 'ID:', option.id);
+      
+      if (isLevel3) {
+        // NIVEL 3: Navegación simplificada y directa
+        const parentSubdivisionId = `${parts[0]}.${parts[1]}`; // "ESP.1"
+        const subdivisionFile = `${parts[0]}.${parts[1]}`; // Archivo "ESP.1"
+        
+        console.log('[selectDropdownOption] 🎯 Nivel 3 - Destino:', option.name, '(', option.id, ')');
+        
+        try {
+          // 1. Cargar polígonos de nivel 3 (provincias)
+          const level3Polygons = await loadSubregionTopoAsGeoFeatures(countryIso, subdivisionFile);
+          console.log('[selectDropdownOption] 📦 Nivel 3 cargados:', level3Polygons.length);
+          
+          // 2. Buscar el polígono objetivo (Málaga)
+          let targetFeature = null;
+          for (const poly of level3Polygons) {
+            const props = poly?.properties || {};
+            let id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
+            const name2 = props.NAME_2 || props.name_2;
+            
+            // Limpiar IDs duplicados
+            if (id2 && String(id2).includes('.')) {
+              id2 = String(id2).split('.').pop();
+            }
+            
+            const fullId = `${countryIso}.${parts[1]}.${id2}`;
+            
+            if (option.id === fullId || String(id2) === parts[2] || name2 === option.name) {
+              targetFeature = poly;
+              console.log('[selectDropdownOption] ✅ Encontrado:', name2, fullId);
+              break;
+            }
+          }
+          
+          if (!targetFeature) {
+            throw new Error('No se encontró el polígono de nivel 3');
+          }
+          
+          // 3. Cargar polígonos de nivel 2 para obtener info del padre
+          const level2Polygons = await loadSubregionTopoAsGeoFeatures(countryIso, countryIso);
+          const parentFeature = level2Polygons.find(poly => {
+            const props = poly?.properties || {};
+            let id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+            if (id1 && String(id1).includes('.')) {
+              id1 = String(id1).split('.').pop();
+            }
+            return parentSubdivisionId === `${countryIso}.${id1}`;
+          });
+          
+          if (!parentFeature) {
+            throw new Error('No se encontró la subdivisión padre');
+          }
+          
+          const parentName = parentFeature.properties?.NAME_1 || parentFeature.properties?.name_1 || option.name.split(',')[0] || 'Subdivision';
+          const parentIdRaw = String(parentFeature.properties?.ID_1 || parentFeature.properties?.id_1 || parts[1]);
+          const parentIdClean = parentIdRaw.split('.').pop() || parts[1];
+          
+          console.log('[selectDropdownOption] 📍 Padre:', parentName, '(', parentSubdivisionId, ')');
+          
+          // 4. Actualizar estado de navegación
+          selectedCountryIso = countryIso;
+          selectedCountryName = worldPolygons?.find(p => isoOf(p) === countryIso)?.properties?.NAME || countryIso;
+          selectedSubdivisionId = parentSubdivisionId;
+          selectedSubdivisionName = parentName;
+          selectedCityName = option.name;
+          selectedCityId = option.id;
+          
+          // 5. Actualizar navigationManager internamente
+          await navigationManager!.navigateToSubdivision(countryIso, parentIdClean, parentName);
+          
+          // 6. Cargar los polígonos de nivel 3 en el globo
+          globe?.polygonsData?.(level3Polygons);
+          console.log('[selectDropdownOption] 🗺️ Globo actualizado con', level3Polygons.length, 'polígonos nivel 3');
+          
+          // 7. Zoom al destino
+          const centroid = centroidOf(targetFeature);
+          const targetAlt = Math.max(0.08, calculateAdaptiveZoomSubdivision(targetFeature));
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+          
+          // 8. Refresh visual
+          setTimeout(() => {
+            globe?.refreshPolyStrokes?.();
+            globe?.refreshPolyAltitudes?.();
+          }, 150);
+          
+          console.log('[selectDropdownOption] ✅ Navegación nivel 3 completada:', option.name);
+          
+        } catch (error) {
+          console.error('[selectDropdownOption] ❌ Error en navegación nivel 3:', error);
+          
+          // FALLBACK: Navegar al país
+          const countryFeature = worldPolygons?.find(p => isoOf(p) === countryIso);
+          if (countryFeature) {
+            const countryName = countryFeature.properties?.NAME || countryIso;
+            await navigationManager!.navigateToCountry(countryIso, countryName);
+            console.log('[selectDropdownOption] 🔄 Fallback a país:', countryName);
+          }
+        }
+        
+      } else {
+        // NIVEL 2: Cargar polígonos del país
+        const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(countryIso, countryIso);
         const subdivisionFeature = subdivisionPolygons.find(poly => {
           const props = poly?.properties || {};
           const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
-          return option.id === `${state.countryIso}.${id1}`;
+          return option.id === `${countryIso}.${id1}`;
         });
         
         if (subdivisionFeature) {
-          const centroid = centroidOf(subdivisionFeature);
-          const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subdivisionFeature);
-          
-          // Extract just the subdivision ID (the part after the country ISO)
-          // option.id is like "ESP.3", we need just "3"
-          const subdivisionId = subdivisionFeature.properties?.ID_1 || 
-                               subdivisionFeature.properties?.id_1 || 
-                               subdivisionFeature.properties?.GID_1 || 
-                               subdivisionFeature.properties?.gid_1;
-          
-          
-          // Update subdivision data for bottom sheet
-          const countryRecord = answersData?.[state.countryIso];
-          if (countryRecord) {
-            const subdivisionData = [countryRecord];
-            countryChartSegments = generateCountryChartSegments(subdivisionData);
-          } else {
-            countryChartSegments = [];
-          }
-          
-          // LIMPIAR ETIQUETAS INMEDIATAMENTE antes de navegar
-          subdivisionLabels = [];
-          updateSubdivisionLabels(false);
-          
-          // Navigate using manager PRIMERO
-          await navigationManager!.navigateToSubdivision(state.countryIso, subdivisionId, option.name);
-          
-          // LUEGO hacer zoom adaptativo basado en el tamaño de la subdivisión (sin delay, más rápido)
-          const targetAlt = Math.max(0.12, adaptiveAltitude); // Altitud mínima 0.12 para evitar acercamiento excesivo
-          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
-          
-          // Update selected subdivision name and ID
-          selectedSubdivisionName = option.name;
-          selectedSubdivisionId = option.id;
-          selectedCityId = null;
-          
-          // Elevate level 3 polygons
-          const subdivisionKey = `${state.countryIso}/${option.id}`;
-          const loadedPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
-          if (loadedPolygons?.length) {
-            loadedPolygons.filter((poly: any) => poly !== null && poly !== undefined).forEach((poly: any) => {
-              if (poly.properties) {
-                poly.properties._elevation = 0.05;
-              }
-            });
-          }
-          
-          // Refresh altitudes
-          setTimeout(() => {
-            globe?.refreshPolyAltitudes?.();
-          }, 100);
+        const centroid = centroidOf(subdivisionFeature);
+        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subdivisionFeature);
+        
+        // Extract just the subdivision ID (the part after the country ISO)
+        // option.id is like "ESP.3", we need just "3"
+        const subdivisionId = subdivisionFeature.properties?.ID_1 || 
+                             subdivisionFeature.properties?.id_1 || 
+                             subdivisionFeature.properties?.GID_1 || 
+                             subdivisionFeature.properties?.gid_1;
+        
+        
+        // Update subdivision data for bottom sheet
+        const countryRecord = answersData?.[countryIso];
+        if (countryRecord) {
+          const subdivisionData = [countryRecord];
+          countryChartSegments = generateCountryChartSegments(subdivisionData);
+        } else {
+          countryChartSegments = [];
         }
-      }
-    } else if (currentLevel === 'subdivision') {
-      // Navigate to sub-subdivision (level 4)
-      const state = navigationManager!.getState();
-      if (state.countryIso && state.subdivisionId) {
-        const numericPart = state.subdivisionId.split('.').pop();
-        if (numericPart) {
-          const subdivisionFile = `${state.countryIso}.${numericPart}`;
-          try {
-            const subSubPolygons = await loadSubregionTopoAsGeoFeatures(state.countryIso, subdivisionFile);
-            const subSubFeature = subSubPolygons.find(poly => {
-              const props = poly?.properties || {};
-              const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
-              return option.id === `${state.countryIso}.${numericPart}.${id2}`;
-            });
-            
-            if (subSubFeature) {
-              const centroid = centroidOf(subSubFeature);
-              const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subSubFeature);
-              
-              
-              // Activar nivel 4
-              selectedCityName = option.name;
-              selectedSubdivisionName = state.subdivisionId ? (subSubFeature.properties?.NAME_1 || selectedSubdivisionName) : selectedSubdivisionName;
-              selectedCityId = subSubFeature.properties?.ID_2;
-              
-              // Navigate and zoom (sin delay, más rápido)
-              scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
-              
-              // Refresh visual (igual que en polygonClick)
-              setTimeout(() => {
-                globe?.refreshPolyStrokes?.();
-                globe?.refreshPolyAltitudes?.();
-              }, 100);
-              
-              // Generate city chart segments
-              generateCityChartSegments(option.name);
-              
+        
+        // LIMPIAR ETIQUETAS INMEDIATAMENTE antes de navegar
+        subdivisionLabels = [];
+        updateSubdivisionLabels(false);
+        
+        // Navigate using manager PRIMERO
+        await navigationManager!.navigateToSubdivision(countryIso, subdivisionId, option.name);
+        
+        // LUEGO hacer zoom adaptativo basado en el tamaño de la subdivisión (sin delay, más rápido)
+        const targetAlt = Math.max(0.12, adaptiveAltitude); // Altitud mínima 0.12 para evitar acercamiento excesivo
+        scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+        
+        // Update selected subdivision name and ID
+        selectedSubdivisionName = option.name;
+        selectedSubdivisionId = option.id;
+        selectedCityId = null;
+        selectedCountryName = option.name.split(',')[0]; // Intenta extraer el nombre del país si está en el formato "Región, País"
+        selectedCountryIso = countryIso;
+        
+        // Elevate level 3 polygons
+        const subdivisionKey = `${countryIso}/${option.id}`;
+        const loadedPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
+        if (loadedPolygons?.length) {
+          loadedPolygons.filter((poly: any) => poly !== null && poly !== undefined).forEach((poly: any) => {
+            if (poly.properties) {
+              poly.properties._elevation = 0.05;
             }
-          } catch (e) {
-            console.warn('[Dropdown] Could not load sub-subdivision:', e);
-          }
+          });
+        }
+        
+        // Refresh altitudes
+        setTimeout(() => {
+          globe?.refreshPolyAltitudes?.();
+        }, 100);
         }
       }
     }
@@ -5857,7 +5991,10 @@
                   {:else}
                     {#each filteredDropdownOptions as option}
                       <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
-                        {option.name}
+                        <span class="option-name">{option.name}</span>
+                        {#if option.id.includes('.')}
+                          <span class="option-country">{getCountryNameFromISO(option.id.split('.')[0])}</span>
+                        {/if}
                       </button>
                     {/each}
                   {/if}
@@ -5916,7 +6053,10 @@
                   {:else}
                     {#each filteredDropdownOptions as option}
                       <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
-                        {option.name}
+                        <span class="option-name">{option.name}</span>
+                        {#if option.id.includes('.')}
+                          <span class="option-country">{getCountryNameFromISO(option.id.split('.')[0])}</span>
+                        {/if}
                       </button>
                     {/each}
                   {/if}
@@ -5974,7 +6114,10 @@
                   {:else}
                     {#each filteredDropdownOptions as option}
                       <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
-                        {option.name}
+                        <span class="option-name">{option.name}</span>
+                        {#if option.id.includes('.')}
+                          <span class="option-country">{getCountryNameFromISO(option.id.split('.')[0])}</span>
+                        {/if}
                       </button>
                     {/each}
                   {/if}
@@ -6222,7 +6365,10 @@
           {:else}
             {#each filteredDropdownOptions as option}
               <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
-                {option.name}
+                <span class="option-name">{option.name}</span>
+                {#if option.id.includes('.')}
+                  <span class="option-country">{getCountryNameFromISO(option.id.split('.')[0])}</span>
+                {/if}
               </button>
             {/each}
           {/if}
@@ -6260,6 +6406,38 @@
     z-index: 9998;
     pointer-events: all;
     cursor: wait;
+  }
+
+  /* Estilos para el dropdown con código de país */
+  :global(.dropdown-option) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px !important;
+  }
+
+  :global(.option-name) {
+    flex: 1;
+    text-align: left;
+    font-size: 15px;
+  }
+
+  :global(.option-country) {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.9;
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    padding: 4px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.3px;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    white-space: nowrap;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
 </style>
