@@ -1006,6 +1006,13 @@
             return byId;
   }
 
+  // Token para cancelar operaciones asíncronas cuando se navega
+  let currentNavigationToken = 0;
+  
+  function getNewNavigationToken(): number {
+    return ++currentNavigationToken;
+  }
+
   // Professional Navigation Manager Class
   class NavigationManager {
     private globe: any;
@@ -1033,9 +1040,20 @@
     // Public API
     async navigateToCountry(iso: string, countryName: string, skipHistoryPush = false) {
       
+      // Generar nuevo token para esta navegación
+      const navToken = getNewNavigationToken();
+      console.log('[Navigation] 🔑 Token de navegación:', navToken, 'para país:', iso);
+      
       try {
         // Load country data
         const countryPolygons = await this.loadCountryPolygons(iso);
+        
+        // Verificar si esta navegación sigue siendo válida
+        if (navToken !== currentNavigationToken) {
+          console.log('[Navigation] ❌ Navegación cancelada (token:', navToken, 'vs actual:', currentNavigationToken, ')');
+          return;
+        }
+        
         if (!countryPolygons?.length) {
           throw new Error(`No polygons found for country ${iso}`);
         }
@@ -1106,6 +1124,13 @@
           // MODO ENCUESTA ESPECÍFICA: Cargar datos de esa encuesta
           try {
             const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-subdivisions?country=${iso}`);
+            
+            // Verificar si la navegación sigue siendo válida
+            if (navToken !== currentNavigationToken) {
+              console.log('[Navigation] ❌ Carga de datos cancelada (token:', navToken, 'vs actual:', currentNavigationToken, ')');
+              return;
+            }
+            
             if (response.ok) {
               const { data } = await response.json();
                             
@@ -1167,6 +1192,13 @@
           // MODO TRENDING: Cargar datos de trending para este país
           try {
             const response = await apiCall(`/api/polls/trending-by-region?region=${encodeURIComponent(selectedCountryName || iso)}&limit=20`);
+            
+            // Verificar si la navegación sigue siendo válida
+            if (navToken !== currentNavigationToken) {
+              console.log('[Navigation] ❌ Carga de trending cancelada (token:', navToken, 'vs actual:', currentNavigationToken, ')');
+              return;
+            }
+            
             if (response.ok) {
               const { data: trendingPolls } = await response.json();
               
@@ -1215,6 +1247,13 @@
                 if (!isCacheValid) {
                   try {
                     const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`);
+                    
+                    // Verificar si la navegación sigue siendo válida después de cada poll
+                    if (navToken !== currentNavigationToken) {
+                      console.log('[Navigation] ❌ Carga de poll trending cancelada (token:', navToken, 'vs actual:', currentNavigationToken, ')');
+                      return;
+                    }
+                    
                     if (pollResponse.ok) {
                       const { data: pollData } = await pollResponse.json() as { data: Record<string, Record<string, number>> };
                       
@@ -1619,6 +1658,10 @@
 
     async navigateToWorld() {
       
+      // Generar nuevo token para esta navegación
+      const navToken = getNewNavigationToken();
+      console.log('[Navigation] 🔑 Token de navegación:', navToken, 'para mundo');
+      
       this.state = {
         level: 'world',
         countryIso: null,
@@ -1672,6 +1715,12 @@
             // Si no hay cache, cargar desde API usando PollDataService
             console.log('[Navigation] 📡 Cargando votos por país con PollDataService...');
             const data = await pollDataService.loadVotesByCountry(activePoll.id);
+            
+            // Verificar si la navegación sigue siendo válida
+            if (navToken !== currentNavigationToken) {
+              console.log('[Navigation] ❌ Carga de datos mundiales cancelada (token:', navToken, 'vs actual:', currentNavigationToken, ')');
+              return;
+            }
             
             worldLevelAnswers = data;
             answersData = data;
