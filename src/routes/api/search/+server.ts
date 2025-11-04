@@ -192,9 +192,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			let whereClausePlaces: any = query.trim()
 				? {
 						OR: [
-							{ name: { contains: query } },
-							{ nameLocal: { contains: query } },
-							{ nameVariant: { contains: query } }
+							{ name: { contains: query, mode: 'insensitive' } },
+							{ nameLocal: { contains: query, mode: 'insensitive' } },
+							{ nameVariant: { contains: query, mode: 'insensitive' } }
 						]
 					}
 				: {};

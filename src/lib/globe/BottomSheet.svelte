@@ -911,7 +911,7 @@
   export const onMoreOption: (optionKey: string) => void = () => {};
   export let onPointerDown: (e: PointerEvent | TouchEvent) => void = () => {};
   export let onScroll: (e: Event) => void = () => {};
-  export const navigationManager: any = null; // Used by parent component
+  export let navigationManager: any = null; // Used by parent component
   export let onNavigateToView: (level: 'world' | 'country' | 'subdivision' | 'city') => void = () => {};
   // onVote eliminado - BottomSheet maneja votos internamente
   export let currentAltitude: number = 0; // Altitud actual del globo
@@ -1016,7 +1016,10 @@
   
   // Function to search countries and subdivisions
   async function handleSearch(query: string) {
+    console.log('[BottomSheet Search] handleSearch llamado con query:', query);
+    
     if (!query || query.trim().length < 2) {
+      console.log('[BottomSheet Search] Query demasiado corta, limpiando resultados');
       searchResults = [];
       return;
     }
@@ -1027,32 +1030,43 @@
       clearTimeout(searchDebounceTimer);
     }
     
+    console.log('[BottomSheet Search] Iniciando debounce de 300ms...');
+    
     // Debounce search usando Promise
     searchDebounceTimer = setTimeout(async () => {
+      console.log('[BottomSheet Search] Debounce completado, ejecutando búsqueda...');
       isSearching = true;
       const results = [] as Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision' }>;
       const lowerQuery = query.toLowerCase().trim();
       
       try {
-        // Get available options from navigation manager
-        if (navigationManager) {
-                    const options = await navigationManager.getAvailableOptions();
-                    
-          // Filter options based on query
-          for (const option of options) {
-            if (option.name.toLowerCase().includes(lowerQuery)) {
-              const currentLevel = navigationManager.getCurrentLevel();
-              results.push({
-                id: option.id,
-                name: option.name,
-                iso: option.iso,
-                type: currentLevel === 'world' ? 'country' : 'subdivision'
-              });
-            }
-          }
+        const url = `/api/search?q=${encodeURIComponent(query)}&filter=places&limit=20`;
+        console.log('[BottomSheet Search] Llamando API:', url);
+        
+        // Buscar en TODOS los niveles usando la API
+        const response = await fetch(url);
+        
+        console.log('[BottomSheet Search] Response status:', response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[BottomSheet Search] Data recibida:', data);
           
-                  } else {
-          console.warn('[Search] NavigationManager not available');
+          // La API retorna { success, data: { places: [] } }
+          const places = data.data?.places || [];
+          console.log('[BottomSheet Search] Places encontrados:', places.length);
+          
+          for (const place of places) {
+            // Determinar el tipo basado en el nivel
+            const type = place.level === 1 ? 'country' : 'subdivision';
+            
+            results.push({
+              id: place.subdivisionId,
+              name: place.name,
+              iso: place.level === 1 ? place.subdivisionId : undefined,
+              type: type
+            });
+          }
         }
         
         // Sort by relevance (starts with query first)
@@ -1064,9 +1078,10 @@
           return a.name.localeCompare(b.name);
         });
         
-        searchResults = results.slice(0, 20); // Limit to 20 results
+        console.log('[BottomSheet Search] Resultados finales:', results.length);
+        searchResults = results;
               } catch (error) {
-        console.error('[Search] Error searching:', error);
+        console.error('[BottomSheet Search] Error searching:', error);
         searchResults = [];
       } finally {
         isSearching = false;

@@ -2196,6 +2196,8 @@
   
   // Function to select an option from dropdown
   async function selectDropdownOption(option: { id: string; name: string; type?: string }) {
+    console.log('[selectDropdownOption] Navegando a:', option);
+    
     // BLOQUEAR durante animaciones de zoom
     if (isZooming) {
       console.log('[Dropdown] Selección bloqueada durante animación de zoom');
@@ -2204,7 +2206,6 @@
     
     if (!navigationManager) return;
     
-    const currentLevel = navigationManager!.getCurrentLevel();
     showDropdown = false;
     dropdownOptions = [];
     dropdownSearchQuery = '';
@@ -2227,7 +2228,15 @@
     // Show bottom sheet
     setSheetState('collapsed');
     
-    if (currentLevel === 'world') {
+    // Detectar automáticamente si es país o subdivisión por el ID
+    // País: "ESP", "USA", "FRA" (sin puntos)
+    // Subdivisión: "ESP.1", "USA.CA", "ESP.1.2" (con puntos)
+    const isCountry = !option.id.includes('.') || option.type === 'country';
+    
+    console.log('[selectDropdownOption] Es país?', isCountry, 'ID:', option.id);
+    
+    if (isCountry) {
+      // NAVEGAR A PAÍS (sin importar nivel actual)
       // Navigate to country
       const countryFeature = worldPolygons?.find(p => isoOf(p) === option.id);
       if (countryFeature) {
