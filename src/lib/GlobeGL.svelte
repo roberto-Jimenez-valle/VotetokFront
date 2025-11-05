@@ -3195,7 +3195,7 @@
           // SIEMPRE establecer contexto de país primero para navegación correcta
           // selectedCountryName ya fue actualizado en el paso 6
           console.log('[selectDropdownOption] 🌍 Navegando primero al país:', countryIso, selectedCountryName);
-          let countryNameFallback = selectedCountryName;
+          let countryNameFallback: string = selectedCountryName || countryIso;
           if (!countryNameFallback) {
             const cf = worldPolygons?.find(p => isoOf(p) === countryIso);
             if (cf) {
@@ -3214,7 +3214,7 @@
           // Solo navegar al país y activar polígono centrado
           // selectedCountryName ya fue actualizado en el paso 6
           console.log('[selectDropdownOption] ➡️ Navegando a país (sin subdivisiones):', countryIso, selectedCountryName);
-          let countryNameFallback = selectedCountryName;
+          let countryNameFallback: string = selectedCountryName || countryIso;
           if (!countryNameFallback) {
             const cf = worldPolygons?.find(p => isoOf(p) === countryIso);
             if (cf) {
