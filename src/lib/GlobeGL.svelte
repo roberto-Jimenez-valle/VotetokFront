@@ -411,6 +411,34 @@
   let citiesData: Record<string, any> = {};
 
 
+  // 🔧 FUNCIÓN CENTRALIZADA: Actualizar votos y barra para cualquier nivel
+  function updateVoteDataForLevel(voteData: Record<string, number>, levelName: string) {
+    if (!voteData || !activePollOptions.length) return;
+    
+    console.log(`[updateVoteData] Actualizando ${levelName}:`, voteData);
+    
+    // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen horizontal
+    legendItems = activePollOptions.map(opt => ({
+      key: opt.key,
+      color: opt.color,
+      count: voteData[opt.key] || 0
+    }));
+    
+    // ✅ ACTUALIZAR VOTOS en las opciones
+    const updatedOptions = activePollOptions.map(opt => ({
+      ...opt,
+      votes: voteData[opt.key] || 0
+    }));
+    
+    activePollOptions = [...updatedOptions];
+    voteOptions = [...updatedOptions];
+    voteOptionsUpdateTrigger++;
+    
+    tick().then(() => {
+      console.log(`[updateVoteData] ✅ ${levelName} actualizado`);
+    });
+  }
+
   // Generar datos específicos para una ciudad desde answersData
   function generateCityChartSegments(cityName: string, cityId?: string) {
     console.log('[CityChart] 🔍 Generando datos para:', { cityName, cityId });
@@ -2956,30 +2984,8 @@
             cityChartSegments = [...generateCountryChartSegments([cityVoteData])];
             console.log('[selectDropdownOption] 📊 cityChartSegments generado:', cityChartSegments);
             
-            // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen
-            legendItems = activePollOptions.map(opt => ({
-              key: opt.key,
-              color: opt.color,
-              count: cityVoteData[opt.key] || 0
-            }));
-            console.log('[selectDropdownOption] 📊 legendItems actualizado:', legendItems);
-            
-            // Actualizar votos en las opciones
-            if (activePollOptions.length > 0) {
-              const updatedOptions = activePollOptions.map(opt => {
-                const votesForOption = cityVoteData[opt.key] || 0;
-                console.log(`[selectDropdownOption]   ${opt.label}: ${votesForOption} votos`);
-                return { ...opt, votes: votesForOption };
-              });
-              
-              activePollOptions = [...updatedOptions];
-              voteOptions = [...updatedOptions];
-              voteOptionsUpdateTrigger++;
-              
-              tick().then(() => {
-                console.log('[selectDropdownOption] ✅ Votos actualizados en nivel 4 - UI debería actualizarse');
-              });
-            }
+            // 🔧 USAR FUNCIÓN CENTRALIZADA
+            updateVoteDataForLevel(cityVoteData, 'Nivel 4 - Ciudad (dropdown)');
           } else {
             console.log('[selectDropdownOption] ⚠️ No se encontraron datos de votos. Intentado:', possibleIds);
             console.log('[selectDropdownOption] 📊 answersData keys:', Object.keys(answersData || {}).slice(0, 10));
@@ -6313,35 +6319,8 @@
         if (cityVoteData && activePollOptions.length > 0) {
           console.log('[Click] ✅ Datos encontrados con ID:', foundId);
           
-          // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen
-          legendItems = activePollOptions.map(opt => ({
-            key: opt.key,
-            color: opt.color,
-            count: cityVoteData[opt.key] || 0
-          }));
-          console.log('[Click] 📊 legendItems actualizado:', legendItems);
-          
-          // Actualizar votos totales en activePollOptions
-          // 🔧 FORZAR REACTIVIDAD: Crear array completamente nuevo
-          const updatedOptions = activePollOptions.map(option => {
-            const votesForOption = cityVoteData[option.key] || 0;
-            console.log(`[Click]   ${option.label}: ${votesForOption} votos`);
-            return { ...option, votes: votesForOption };
-          });
-          
-          // Asignar como array nuevo para forzar reactividad
-          activePollOptions = [...updatedOptions];
-          
-          // ⚡ FORZAR ACTUALIZACIÓN DIRECTA de voteOptions para el BottomSheet
-          voteOptions = [...updatedOptions];
-          
-          // ⚡⚡ TRIGGER: Incrementar para forzar bloque reactivo
-          voteOptionsUpdateTrigger++;
-          
-          // Forzar actualización del BottomSheet
-          tick().then(() => {
-            console.log('[Click] ✅ Votos actualizados en nivel 4 - UI debería actualizarse');
-          });
+          // 🔧 USAR FUNCIÓN CENTRALIZADA
+          updateVoteDataForLevel(cityVoteData, 'Nivel 4 - Ciudad (click directo)');
         } else {
           console.log('[Click] ⚠️ No se encontraron datos de votos. Intentado:', possibleIds);
           console.log('[Click] 📊 answersData keys disponibles:', Object.keys(answersData || {}).slice(0, 10));
