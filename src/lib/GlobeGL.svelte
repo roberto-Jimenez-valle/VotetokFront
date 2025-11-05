@@ -3145,6 +3145,14 @@
         
         // 6. Actualizar datos y votos (si existen)
         selectedCountryIso = countryIso;
+        // Actualizar el nombre del país desde worldPolygons
+        const countryFeature = worldPolygons?.find(p => isoOf(p) === countryIso);
+        if (countryFeature) {
+          const props = countryFeature.properties || {};
+          selectedCountryName = props.NAME_ENGL || props.CNTR_NAME || props.ADMIN || props.NAME || props.name || countryIso;
+        } else {
+          selectedCountryName = countryIso;
+        }
         selectedSubdivisionId = subdivisionKey;
         selectedSubdivisionName = subdivisionName;
         
@@ -3183,17 +3191,40 @@
         if (hasSubdivisions) {
           // Navegar a subdivisión
           console.log('[selectDropdownOption] ➡️ Navegando a subdivisión:', subdivisionName);
-          // Si viene de búsqueda directa, establecer contexto de país primero
-          if (isDirectSearch) {
-            console.log('[selectDropdownOption] 🔍 Búsqueda directa: navegando primero al país:', countryIso);
-            await navigationManager!.navigateToCountry(countryIso, subdivisionName, true, true);
+          
+          // SIEMPRE establecer contexto de país primero para navegación correcta
+          // selectedCountryName ya fue actualizado en el paso 6
+          console.log('[selectDropdownOption] 🌍 Navegando primero al país:', countryIso, selectedCountryName);
+          let countryNameFallback = selectedCountryName;
+          if (!countryNameFallback) {
+            const cf = worldPolygons?.find(p => isoOf(p) === countryIso);
+            if (cf) {
+              const props = cf.properties || {};
+              countryNameFallback = props.NAME_ENGL || props.CNTR_NAME || props.ADMIN || props.NAME || props.name || countryIso;
+            } else {
+              countryNameFallback = countryIso;
+            }
           }
+          await navigationManager!.navigateToCountry(countryIso, countryNameFallback, true, true);
+          
+          // Luego navegar a la subdivisión
           // skipPolygonLoad = true cuando viene de búsqueda directa
           await navigationManager!.navigateToSubdivision(countryIso, subdivisionId, subdivisionName, true, isDirectSearch);
         } else {
           // Solo navegar al país y activar polígono centrado
-          console.log('[selectDropdownOption] ➡️ Navegando a país (sin subdivisiones):', countryIso);
-          await navigationManager!.navigateToCountry(countryIso, option.name.split(',')[0] || countryIso, true);
+          // selectedCountryName ya fue actualizado en el paso 6
+          console.log('[selectDropdownOption] ➡️ Navegando a país (sin subdivisiones):', countryIso, selectedCountryName);
+          let countryNameFallback = selectedCountryName;
+          if (!countryNameFallback) {
+            const cf = worldPolygons?.find(p => isoOf(p) === countryIso);
+            if (cf) {
+              const props = cf.properties || {};
+              countryNameFallback = props.NAME_ENGL || props.CNTR_NAME || props.ADMIN || props.NAME || props.name || countryIso;
+            } else {
+              countryNameFallback = countryIso;
+            }
+          }
+          await navigationManager!.navigateToCountry(countryIso, countryNameFallback, true);
           centerPolygon = subdivisionFeature;
           centerPolygonId = subdivisionKey;
           isCenterPolygonActive = true;
@@ -3211,10 +3242,32 @@
         await new Promise(resolve => setTimeout(resolve, 100));
         
         try {
-          console.log('[selectDropdownOption] 🗺️ Cargando polígonos nivel 2 DURANTE el zoom...');
+          // Determinar qué polígonos cargar según si tiene subdivisiones
+          let polygonsToLoad = subdivisionPolygons;
+          
+          if (hasSubdivisions) {
+            // TIENE SUBDIVISIONES (ej: Andalucía tiene provincias)
+            // Cargar polígonos de nivel 3
+            console.log('[selectDropdownOption] 🗺️ Cargando polígonos nivel 3 (subdivisión con subdivisiones)...');
+            try {
+              const level3Polygons = await loadSubregionTopoAsGeoFeatures(countryIso, subdivisionId);
+              if (level3Polygons && level3Polygons.length > 0) {
+                polygonsToLoad = level3Polygons;
+                console.log('[selectDropdownOption] ✅', level3Polygons.length, 'polígonos nivel 3 cargados');
+              } else {
+                console.log('[selectDropdownOption] ⚠️ No hay polígonos nivel 3, usando nivel 2');
+              }
+            } catch (error) {
+              console.warn('[selectDropdownOption] ⚠️ Error cargando nivel 3, usando nivel 2:', error);
+            }
+          } else {
+            // NO TIENE SUBDIVISIONES
+            // Usar solo los polígonos de nivel 2
+            console.log('[selectDropdownOption] 🗺️ Cargando polígonos nivel 2 DURANTE el zoom...');
+          }
           
           // Actualizar localPolygons
-          localPolygons = subdivisionPolygons;
+          localPolygons = polygonsToLoad;
           
           // Esperar un frame
           await new Promise(resolve => requestAnimationFrame(resolve));
@@ -3226,8 +3279,8 @@
             await new Promise(resolve => requestAnimationFrame(resolve));
             
             // Cargar nuevos polígonos
-            globe.setPolygonsData(subdivisionPolygons);
-            console.log('[selectDropdownOption] ✅ Globo actualizado con', subdivisionPolygons.length, 'polígonos nivel 2');
+            globe.setPolygonsData(polygonsToLoad);
+            console.log('[selectDropdownOption] ✅ Globo actualizado con', polygonsToLoad.length, 'polígonos');
             
             // CRÍTICO: Esperar 2 frames para que los polígonos se rendericen completamente
             await new Promise(resolve => requestAnimationFrame(resolve));
@@ -3238,10 +3291,10 @@
             globe?.refreshPolyAltitudes?.();
             
             // ⚡ CRÍTICO: Recalcular isoDominantKey con los nuevos polígonos
-            const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
+            const geoData = { type: 'FeatureCollection', features: polygonsToLoad };
             const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
             isoDominantKey = vm.isoDominantKey;
-            console.log('[selectDropdownOption] 🔑 isoDominantKey recalculado (nivel 2):', Object.keys(isoDominantKey).length, 'claves');
+            console.log('[selectDropdownOption] 🔑 isoDominantKey recalculado:', Object.keys(isoDominantKey).length, 'claves');
             
             // Actualizar colores DESPUÉS de que los polígonos estén renderizados
             await updateGlobeColors(true);
