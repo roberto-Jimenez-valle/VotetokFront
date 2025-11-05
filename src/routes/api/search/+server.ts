@@ -236,17 +236,61 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				take: limit
 			});
 
-			results.places = places.map(place => ({
-				id: place.id,
-				subdivisionId: place.subdivisionId,
-				name: place.name,
-				nameLocal: place.nameLocal,
-				level: place.level,
-				type: place.typeEnglish,
-				latitude: place.latitude,
-				longitude: place.longitude,
-				votesCount: place._count.votes
-			}));
+			// Para nivel 3, obtener los nombres de los padres
+			const parentIds = places
+				.filter(p => p.level === 3 && p.subdivisionId)
+				.map(p => {
+					const parts = p.subdivisionId.split('.');
+					return parts.length >= 2 ? `${parts[0]}.${parts[1]}` : null;
+				})
+				.filter(Boolean) as string[];
+
+			// Obtener nombres de padres si existen
+			const parents = parentIds.length > 0
+				? await prisma.subdivision.findMany({
+						where: {
+							subdivisionId: { in: parentIds }
+						},
+						select: {
+							subdivisionId: true,
+							name: true,
+							nameLocal: true
+						}
+					})
+				: [];
+
+			const parentMap = new Map(parents.map(p => [p.subdivisionId, p]));
+
+			results.places = places.map(place => {
+				let parentName = null;
+				let parentNameLocal = null;
+
+				if (place.level === 3 && place.subdivisionId) {
+					const parts = place.subdivisionId.split('.');
+					if (parts.length >= 2) {
+						const parentId = `${parts[0]}.${parts[1]}`;
+						const parent = parentMap.get(parentId);
+						if (parent) {
+							parentName = parent.name;
+							parentNameLocal = parent.nameLocal;
+						}
+					}
+				}
+
+				return {
+					id: place.id,
+					subdivisionId: place.subdivisionId,
+					name: place.name,
+					nameLocal: place.nameLocal,
+					level: place.level,
+					type: place.typeEnglish,
+					latitude: place.latitude,
+					longitude: place.longitude,
+					votesCount: place._count.votes,
+					parentName,
+					parentNameLocal
+				};
+			});
 		}
 
 		return json({

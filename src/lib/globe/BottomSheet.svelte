@@ -1064,7 +1064,11 @@
               id: place.subdivisionId,
               name: place.name,
               iso: place.level === 1 ? place.subdivisionId : undefined,
-              type: type
+              type: type,
+              // ✅ Agregar parentName y parentNameLocal para nivel 3
+              parentName: place.parentName || null,
+              parentNameLocal: place.parentNameLocal || null,
+              subdivisionId: place.subdivisionId
             });
           }
         }
@@ -2883,10 +2887,32 @@
                     📍
                   {/if}
                 </span>
-                <span class="result-name">{result.name}</span>
-                {#if result.id && result.id.includes('.')}
-                  <span class="result-country">{getCountryName(result.id.split('.')[0])}</span>
-                {/if}
+                <span class="result-name">
+                  {#if result.id && result.id.includes('.')}
+                    {@const parts = result.id.split('.')}
+                    {@const hasLevel3 = parts.length === 3}
+                    {#if hasLevel3}
+                      <!-- Nivel 3: Mostrar jerarquía completa -->
+                      <span class="hierarchy">
+                        <span class="hierarchy-country">{getCountryName(parts[0])}</span>
+                        <span class="hierarchy-separator">→</span>
+                        <span class="hierarchy-subdivision">{result.parentName || 'Subdivisión'}</span>
+                        <span class="hierarchy-separator">→</span>
+                        <span class="hierarchy-city">{result.name}</span>
+                      </span>
+                    {:else}
+                      <!-- Nivel 2: Mostrar país y subdivisión -->
+                      <span class="hierarchy">
+                        <span class="hierarchy-country">{getCountryName(parts[0])}</span>
+                        <span class="hierarchy-separator">→</span>
+                        <span class="hierarchy-subdivision">{result.name}</span>
+                      </span>
+                    {/if}
+                  {:else}
+                    <!-- País: Solo nombre -->
+                    {result.name}
+                  {/if}
+                </span>
               </button>
             {/each}
           {/if}
@@ -3512,6 +3538,36 @@
     
     :global(.result-name) {
       flex: 1;
+    }
+    
+    :global(.hierarchy) {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+    
+    :global(.hierarchy-country) {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    
+    :global(.hierarchy-separator) {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 11px;
+    }
+    
+    :global(.hierarchy-subdivision) {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    :global(.hierarchy-city) {
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 13px;
+      font-weight: 600;
     }
     
     :global(.result-country) {
