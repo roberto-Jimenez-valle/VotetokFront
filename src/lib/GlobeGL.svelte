@@ -2342,19 +2342,29 @@
           // Filtrar polígonos nulos antes de iterar
           subdivisionPolygons.filter(poly => poly !== null && poly !== undefined).forEach(poly => {
             const props = poly?.properties || {};
-            const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+            let id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
             const name1 = props.NAME_1 || props.name_1 || props.VARNAME_1 || props.varname_1;
             
-            // FILTRO: Solo agregar si tiene datos activos
-            if (id1 && name1 && !subdivisionMap.has(String(id1))) {
-              const hasData = Boolean(answersData?.[id1]);
-              if (hasData) {
-                subdivisionMap.set(String(id1), String(name1));
+            if (id1 && name1) {
+              // Convertir a string para manipulación
+              id1 = String(id1);
+              
+              // 🔧 Si el ID ya incluye el país (ej: "ESP.1"), usarlo tal cual
+              // Si no (ej: "1"), agregar el countryIso
+              const fullId = id1.includes('.') ? id1 : `${this.state.countryIso}.${id1}`;
+              
+              // FILTRO: Solo agregar si tiene datos activos
+              if (!subdivisionMap.has(fullId)) {
+                const hasData = Boolean(answersData?.[fullId]);
+                if (hasData) {
+                  subdivisionMap.set(fullId, String(name1));
+                  console.log('[getAvailableOptions] ✅ Subdivisión con datos:', name1, '=', fullId);
+                }
               }
             }
           });
           subdivisionMap.forEach((name, id) => {
-            options.push({ id: `${this.state.countryIso}.${id}`, name });
+            options.push({ id, name });
           });
         } catch (e) {
           console.warn('[Navigation] Could not load subdivisions for dropdown:', e);
@@ -2624,53 +2634,165 @@
     // Show bottom sheet
     setSheetState('collapsed');
     
-    // Detectar automáticamente si es país o subdivisión por el ID
-    // País: "ESP", "USA", "FRA" (sin puntos)
-    // Subdivisión: "ESP.1", "USA.CA", "ESP.1.2" (con puntos)
-    const isCountry = !option.id.includes('.') || option.type === 'country';
+    // 🔧 NUEVA ESTRATEGIA: Buscar el feature correspondiente y simular un click en él
+    // Esto garantiza que use exactamente la misma lógica que el click directo
     
-    console.log('[selectDropdownOption] Es país?', isCountry, 'ID:', option.id);
+    const isCountry = !option.id.includes('.') || option.type === 'country';
+    const parts = option.id.split('.');
+    const currentLevel = navigationManager.getCurrentLevel();
+    
+    console.log('[selectDropdownOption] Buscando feature para:', option.id, '| Nivel actual:', currentLevel);
+    
+    // Buscar el feature correspondiente según el tipo
+    let targetFeature = null;
     
     if (isCountry) {
-      // NAVEGAR A PAÍS (sin importar nivel actual)
-      // Navigate to country
-      const countryFeature = worldPolygons?.find(p => isoOf(p) === option.id);
-      if (countryFeature) {
-        
-        // Set selected country info for bottom sheet
-        selectedCountryName = option.name;
-        selectedCountryIso = option.id;
-        
-        // Update country chart segments for bottom sheet
-        const countryRecord = answersData?.[option.id];
-        if (countryRecord) {
-          const countryData = [countryRecord];
-          countryChartSegments = generateCountryChartSegments(countryData);
-        } else {
-          countryChartSegments = [];
-        }
-        
-        // LIMPIAR ETIQUETAS INMEDIATAMENTE antes de navegar
-        subdivisionLabels = [];
-        updateSubdivisionLabels(false);
-        
-        // Navigate using manager PRIMERO
-        await navigationManager!.navigateToCountry(option.id, option.name);
-        
-        // LUEGO hacer zoom con adaptación al tamaño del país (sin delay, más rápido)
-        const centroid = centroidOf(countryFeature);
-        const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
-        scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
-        
-        // Force refreshes to ensure polygons are visible (NO labels - se actualizan después del zoom)
-        (async () => {
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          globe?.refreshPolyColors?.();
-          globe?.refreshPolyAltitudes?.();
-          globe?.refreshPolyStrokes?.();
-        })();
+      // Buscar país en worldPolygons
+      targetFeature = worldPolygons?.find(p => isoOf(p) === option.id);
+      if (!targetFeature) {
+        console.error('[selectDropdownOption] No se encontró el país:', option.id);
+        return;
       }
     } else {
+      // Buscar subdivisión en localPolygons (si estamos en nivel país o superior)
+      if (parts.length === 2) {
+        // Nivel 2: buscar en localPolygons del país actual
+        if (localPolygons && localPolygons.length > 0) {
+          targetFeature = localPolygons.find(poly => {
+            const props = poly?.properties || {};
+            const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+            return option.id === `${parts[0]}.${id1}` || String(id1) === option.id;
+          });
+        }
+        
+        if (!targetFeature) {
+          console.log('[selectDropdownOption] Polígonos de subdivisión no cargados, cargando...');
+          const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(parts[0], parts[0]);
+          targetFeature = subdivisionPolygons.find(poly => {
+            const props = poly?.properties || {};
+            const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+            return option.id === `${parts[0]}.${id1}` || String(id1) === parts[1];
+          });
+          if (targetFeature) {
+            localPolygons = subdivisionPolygons;
+          }
+        }
+      } else if (parts.length === 3) {
+        // Nivel 3: cargar polígonos de la subdivisión padre
+        const subdivisionFile = `${parts[0]}.${parts[1]}`;
+        const level3Polygons = await loadSubregionTopoAsGeoFeatures(parts[0], subdivisionFile);
+        targetFeature = level3Polygons.find(poly => {
+          const props = poly?.properties || {};
+          let id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
+          if (id2 && String(id2).includes('.')) {
+            id2 = String(id2).split('.').pop();
+          }
+          const fullId = `${parts[0]}.${parts[1]}.${id2}`;
+          return option.id === fullId || String(id2) === parts[2];
+        });
+        if (targetFeature) {
+          localPolygons = level3Polygons;
+        }
+      }
+      
+      if (!targetFeature) {
+        console.error('[selectDropdownOption] No se encontró la subdivisión:', option.id);
+        return;
+      }
+    }
+    
+    // 🔧 USAR LA MISMA LÓGICA que on:polygonClick
+    // Crear un evento sintético y disparar la lógica del click
+    console.log('[selectDropdownOption] Feature encontrado, simulando click...');
+    
+    // Simular el evento de click en polígono
+    const syntheticEvent = {
+      detail: { feat: targetFeature }
+    };
+    
+    // 🚀 EJECUTAR LA MISMA LÓGICA QUE on:polygonClick
+    // Esto garantiza comportamiento idéntico entre click directo y dropdown
+    
+    const feat = targetFeature;
+    const iso = isoOf(feat);
+    let featureName = nameOf(feat);
+    
+    // Mejorar nombre si es necesario
+    if (isCountry && (featureName === iso || featureName.length <= 3 || !featureName || featureName === 'Country')) {
+      const countryFeature = worldPolygons?.find(p => isoOf(p) === iso);
+      if (countryFeature) {
+        const props = countryFeature.properties || {};
+        featureName = props.NAME_ENGL || props.CNTR_NAME || props.ADMIN || props.NAME || props.name || iso;
+      }
+    }
+    
+    if (isCountry && iso) {
+      // ===== LÓGICA IDÉNTICA A on:polygonClick PARA PAÍS =====
+      const countryRecord = answersData?.[iso];
+      if (!countryRecord) {
+        console.log('[selectDropdownOption] País sin datos:', iso);
+        return;
+      }
+      
+      // Limpiar etiquetas
+      subdivisionLabels = [];
+      updateSubdivisionLabels(false);
+      
+      // Calcular zoom
+      const centroid = centroidOf(feat);
+      const adaptiveAltitude = calculateAdaptiveZoom(feat);
+      scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
+      
+      // Actualizar datos del país
+      const countryData = [countryRecord];
+      countryChartSegments = generateCountryChartSegments(countryData);
+      
+      // Actualizar votos
+      if (countryRecord && activePollOptions.length > 0) {
+        const updatedOptions = activePollOptions.map(option => {
+          const votesForOption = countryRecord[option.key] || 0;
+          return { ...option, votes: votesForOption };
+        });
+        activePollOptions = [...updatedOptions];
+        voteOptions = [...updatedOptions];
+        voteOptionsUpdateTrigger++;
+        tick().then(() => console.log('[selectDropdownOption] ✅ Votos actualizados país'));
+      }
+      
+      // Pre-cargar subdivisiones
+      const preloadPromise = (async () => {
+        try {
+          if (preloadedCountryIso !== iso) {
+            const polys = await loadCountryTopoAsGeoFeatures(iso);
+            preloadedPolygons = polys;
+            preloadedCountryIso = iso;
+          }
+        } catch (e) {
+          preloadedPolygons = null;
+          preloadedCountryIso = null;
+        }
+      })();
+      
+      // Navegar
+      setTimeout(async () => {
+        try {
+          await tick();
+          await preloadPromise;
+          if (preloadedPolygons && preloadedCountryIso === iso) {
+            localPolygons = preloadedPolygons;
+            await navigationManager!.navigateToCountry(iso, featureName);
+          } else {
+            await navigationManager!.navigateToCountry(iso, featureName);
+          }
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await updateGlobeColors(true);
+        } catch (navError) {
+          console.error('[selectDropdownOption] Error navegando:', navError);
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+        }
+      }, 200);
+    } else if (!isCountry && feat.properties?.ID_1) {
       // NAVEGAR A SUBDIVISIÓN (sin importar nivel actual)
       // Detectar si es nivel 2 o nivel 3
       const parts = option.id.split('.');
@@ -2739,7 +2861,16 @@
           
           // 4. Actualizar estado de navegación
           selectedCountryIso = countryIso;
-          selectedCountryName = worldPolygons?.find(p => isoOf(p) === countryIso)?.properties?.NAME || countryIso;
+          
+          // 🔧 MEJORAR NOMBRE: Buscar el nombre completo del país desde worldPolygons
+          const countryFeature = worldPolygons?.find(p => isoOf(p) === countryIso);
+          if (countryFeature) {
+            const props = countryFeature.properties || {};
+            selectedCountryName = props.NAME_ENGL || props.CNTR_NAME || props.ADMIN || props.NAME || props.name || countryIso;
+          } else {
+            selectedCountryName = countryIso;
+          }
+          
           selectedSubdivisionId = parentSubdivisionId;
           selectedSubdivisionName = parentName;
           selectedCityName = option.name;
@@ -2864,68 +2995,77 @@
         }
         
       } else {
-        // NIVEL 2: Cargar polígonos del país
-        const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(countryIso, countryIso);
-        const subdivisionFeature = subdivisionPolygons.find(poly => {
-          const props = poly?.properties || {};
-          const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
-          return option.id === `${countryIso}.${id1}`;
-        });
+        // ===== NIVEL 2: LÓGICA IDÉNTICA A on:polygonClick =====
+        const subdivisionId = feat.properties.ID_1;
+        const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1 || option.name;
         
-        if (subdivisionFeature) {
-        const centroid = centroidOf(subdivisionFeature);
-        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subdivisionFeature);
+        // Verificar si hay datos
+        const subdivisionKey = subdivisionId;
+        const subdivisionRecord = answersData?.[subdivisionKey];
         
-        // Extract just the subdivision ID (the part after the country ISO)
-        // option.id is like "ESP.3", we need just "3"
-        const subdivisionId = subdivisionFeature.properties?.ID_1 || 
-                             subdivisionFeature.properties?.id_1 || 
-                             subdivisionFeature.properties?.GID_1 || 
-                             subdivisionFeature.properties?.gid_1;
-        
-        
-        // Update subdivision data for bottom sheet
-        const countryRecord = answersData?.[countryIso];
-        if (countryRecord) {
-          const subdivisionData = [countryRecord];
-          countryChartSegments = generateCountryChartSegments(subdivisionData);
-        } else {
-          countryChartSegments = [];
+        if (!subdivisionRecord) {
+          console.log('[selectDropdownOption] Subdivisión sin datos:', subdivisionKey);
+          return;
         }
         
-        // LIMPIAR ETIQUETAS INMEDIATAMENTE antes de navegar
-        subdivisionLabels = [];
-        updateSubdivisionLabels(false);
+        // Actualizar datos en el bottom sheet
+        subdivisionChartSegments = generateCountryChartSegments([subdivisionRecord]);
+        selectedCountryIso = parts[0];
         
-        // Navigate using manager PRIMERO
-        await navigationManager!.navigateToSubdivision(countryIso, subdivisionId, option.name);
-        
-        // LUEGO hacer zoom adaptativo basado en el tamaño de la subdivisión (sin delay, más rápido)
-        const targetAlt = Math.max(0.12, adaptiveAltitude); // Altitud mínima 0.12 para evitar acercamiento excesivo
-        scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
-        
-        // Update selected subdivision name and ID
-        selectedSubdivisionName = option.name;
-        selectedSubdivisionId = option.id;
-        selectedCityId = null;
-        selectedCountryName = option.name.split(',')[0]; // Intenta extraer el nombre del país si está en el formato "Región, País"
-        selectedCountryIso = countryIso;
-        
-        // Elevate level 3 polygons
-        const subdivisionKey = `${countryIso}/${option.id}`;
-        const loadedPolygons = navigationManager?.['polygonCache']?.get(subdivisionKey);
-        if (loadedPolygons?.length) {
-          loadedPolygons.filter((poly: any) => poly !== null && poly !== undefined).forEach((poly: any) => {
-            if (poly.properties) {
-              poly.properties._elevation = 0.05;
-            }
+        // Actualizar votos
+        if (subdivisionRecord && activePollOptions.length > 0) {
+          const updatedOptions = activePollOptions.map(option => {
+            const votesForOption = subdivisionRecord[option.key] || 0;
+            return { ...option, votes: votesForOption };
           });
+          activePollOptions = [...updatedOptions];
+          voteOptions = [...updatedOptions];
+          voteOptionsUpdateTrigger++;
+          tick().then(() => console.log('[selectDropdownOption] ✅ Votos actualizados nivel 2'));
         }
         
-        // Refresh altitudes
-        setTimeout(() => {
-          globe?.refreshPolyAltitudes?.();
-        }, 100);
+        // Verificar si tiene subdivisiones (nivel 3)
+        const hasSubdivisions = await (async () => {
+          try {
+            const resp = await fetch(getCountryPath(parts[0], subdivisionId), { method: 'HEAD' });
+            return resp.ok;
+          } catch {
+            return false;
+          }
+        })();
+        
+        // Calcular zoom y centrar
+        const centroid = centroidOf(feat);
+        const adaptiveAltitude = calculateAdaptiveZoomSubdivision(feat);
+        const targetAlt = Math.max(0.12, adaptiveAltitude);
+        
+        if (hasSubdivisions) {
+          // TIENE subdivisiones: navegar al siguiente nivel
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+          
+          setTimeout(async () => {
+            subdivisionLabels = [];
+            updateSubdivisionLabels(false);
+            await navigationManager!.navigateToSubdivision(parts[0], subdivisionId, subdivisionName);
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await updateGlobeColors(true);
+          }, 200);
+        } else {
+          // NO tiene subdivisiones: solo centrar
+          subdivisionLabels = [];
+          updateSubdivisionLabels(false);
+          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+          
+          // Activar polígono centrado con etiqueta
+          setTimeout(() => {
+            centerPolygon = feat;
+            centerPolygonId = subdivisionKey;
+            isCenterPolygonActive = true;
+            globe?.refreshPolyAltitudes?.();
+            addCenterPolygonLabel();
+          }, 250);
         }
       }
     }
@@ -5817,15 +5957,13 @@
       const feat = e.detail?.feat;
       if (!feat) return;
       
-                  
       // Show bottom sheet with polygon data when clicking on polygons
       setSheetState('collapsed');
       
       const currentLevel = navigationManager!.getCurrentLevel();
       const iso = isoOf(feat);
-      const name = nameOf(feat);
+      let name = nameOf(feat);
       
-            
       if (currentLevel === 'world' && iso) {
         // Click on country from world view
         
@@ -5836,6 +5974,16 @@
           console.log('[PolygonClick] País sin datos, tratando como click fuera');
           // NO HAY DATOS: Tratar como click fuera (no hace nada en nivel mundial)
           return;
+        }
+        
+        // 🔧 MEJORAR NOMBRE: Buscar el nombre completo desde worldPolygons si name es un ISO
+        if (name === iso || name.length <= 3 || !name || name === 'Country') {
+          const countryFeature = worldPolygons?.find(p => isoOf(p) === iso);
+          if (countryFeature) {
+            const props = countryFeature.properties || {};
+            name = props.NAME_ENGL || props.CNTR_NAME || props.ADMIN || props.NAME || props.name || iso;
+            console.log('[PolygonClick] 🔧 Nombre mejorado:', { iso, name });
+          }
         }
         
         // PASO 2: LIMPIAR ETIQUETAS INMEDIATAMENTE antes de cualquier cambio
@@ -6184,8 +6332,7 @@
           console.log('[Click] ⚠️ No se encontraron datos de votos. Intentado:', possibleIds);
           console.log('[Click] 📊 answersData keys disponibles:', Object.keys(answersData || {}).slice(0, 10));
         }
-        
-              }
+      }
     } catch (e) {
       console.error('[Click] Error handling polygon click:', e);
     }
@@ -6487,193 +6634,6 @@
 
 <!-- Zoom out para volver - sin indicador visual -->
 
-<!-- Navigation breadcrumb - DISABLED, using BottomSheet nav-chips instead -->
-{#if false && navigationManager}
-<div class="navigation-breadcrumb">
-  {#each navigationManager!.getHistory() as item, index}
-    {#if index > 0}
-      <span class="breadcrumb-separator">→</span>
-    {/if}
-    
-    {#if item.level === 'world'}
-      {@const isLastItem = index === navigationManager!.getHistory().length - 1}
-      {#if isLastItem && navigationManager!.getCurrentLevel() === 'world'}
-        <!-- World level with dropdown to select countries -->
-        <div class="breadcrumb-dropdown-wrapper">
-          <button on:click={(e) => { console.log('[BREADCRUMB] Click detectado!'); toggleDropdown(e); }} 
-                  class="breadcrumb-item active dropdown-trigger">
-            🌍 {item.name}
-            <span style="margin-left: 6px; display: inline-block; transition: transform 0.2s; {showDropdown ? 'transform: rotate(180deg);' : ''}">
-              ▼
-            </span>
-          </button>
-          
-          {#if showDropdown}
-            <div class="breadcrumb-dropdown">
-              {#if dropdownOptions.length === 0}
-                <div class="dropdown-loading">Cargando...</div>
-              {:else}
-                <div class="dropdown-search">
-                  <input 
-                    type="text" 
-                    placeholder="Buscar país..." 
-                    bind:value={dropdownSearchQuery}
-                    on:click={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <div class="dropdown-options">
-                  {#if filteredDropdownOptions.length === 0}
-                    <div class="dropdown-no-results">No se encontraron resultados</div>
-                  {:else}
-                    {#each filteredDropdownOptions as option}
-                      <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
-                        <span class="option-name">{option.name}</span>
-                        {#if option.id.includes('.')}
-                          <span class="option-country">{getCountryNameFromISO(option.id.split('.')[0])}</span>
-                        {/if}
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <!-- Not last item or not in world level -->
-        <button on:click={() => {
-          if (isZooming) return; // Bloquear durante zoom
-          
-          // Limpiar etiquetas PRIMERO
-          subdivisionLabels = [];
-          updateSubdivisionLabels(false);
-          
-          navigationManager!.navigateToWorld();
-          selectedCountryIso = null;
-          selectedCountryName = null;
-          selectedSubdivisionName = null;
-          showDropdown = false;
-        }} class="breadcrumb-item">
-          🌍 {item.name}
-        </button>
-      {/if}
-    {:else if item.level === 'country'}
-      {@const isLastItem = index === navigationManager!.getHistory().length - 1}
-      {#if isLastItem}
-        <!-- Last item: show as dropdown button -->
-        <div class="breadcrumb-dropdown-wrapper">
-          <button on:click={toggleDropdown} 
-                  class="breadcrumb-item active dropdown-trigger">
-            🏴 {item.name}
-            <span style="margin-left: 6px; display: inline-block; transition: transform 0.2s; {showDropdown ? 'transform: rotate(180deg);' : ''}">
-              ▼
-            </span>
-          </button>
-          
-          {#if showDropdown}
-            <div class="breadcrumb-dropdown">
-              {#if dropdownOptions.length === 0}
-                <div class="dropdown-loading">Cargando...</div>
-              {:else}
-                <div class="dropdown-search">
-                  <input 
-                    type="text" 
-                    placeholder="Buscar..." 
-                    bind:value={dropdownSearchQuery}
-                    on:click={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <div class="dropdown-options">
-                  {#if filteredDropdownOptions.length === 0}
-                    <div class="dropdown-no-results">No se encontraron resultados</div>
-                  {:else}
-                    {#each filteredDropdownOptions as option}
-                      <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
-                        <span class="option-name">{option.name}</span>
-                        {#if option.id.includes('.')}
-                          <span class="option-country">{getCountryNameFromISO(option.id.split('.')[0])}</span>
-                        {/if}
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <!-- Not last item: regular clickable button -->
-        <button on:click={() => {
-          if (isZooming) return; // Bloquear durante zoom
-          
-          // Limpiar etiquetas PRIMERO (volviendo de subdivisión a país)
-          subdivisionLabels = [];
-          updateSubdivisionLabels(false);
-          
-          navigationManager!.navigateToCountry(item.iso || '', item.name);
-          
-          showDropdown = false;
-        }} 
-                class="breadcrumb-item">
-          🏴 {item.name}
-        </button>
-      {/if}
-    {:else if item.level === 'subdivision'}
-      {@const isLastItem = index === navigationManager!.getHistory().length - 1}
-      {#if isLastItem}
-        <!-- Last item: show as dropdown button -->
-        <div class="breadcrumb-dropdown-wrapper">
-          <button on:click={toggleDropdown} 
-                  class="breadcrumb-item active dropdown-trigger">
-            📍 {item.name}
-            <span style="margin-left: 6px; display: inline-block; transition: transform 0.2s; {showDropdown ? 'transform: rotate(180deg);' : ''}">
-              ▼
-            </span>
-          </button>
-          
-          {#if showDropdown}
-            <div class="breadcrumb-dropdown">
-              {#if dropdownOptions.length === 0}
-                <div class="dropdown-loading">Cargando...</div>
-              {:else}
-                <div class="dropdown-search">
-                  <input 
-                    type="text" 
-                    placeholder="Buscar..." 
-                    bind:value={dropdownSearchQuery}
-                    on:click={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <div class="dropdown-options">
-                  {#if filteredDropdownOptions.length === 0}
-                    <div class="dropdown-no-results">No se encontraron resultados</div>
-                  {:else}
-                    {#each filteredDropdownOptions as option}
-                      <button class="dropdown-option" on:click={() => selectDropdownOption(option)}>
-                        <span class="option-name">{option.name}</span>
-                        {#if option.id.includes('.')}
-                          <span class="option-country">{getCountryNameFromISO(option.id.split('.')[0])}</span>
-                        {/if}
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <!-- Not last item: regular span -->
-        <span class="breadcrumb-item">📍 {item.name}</span>
-      {/if}
-    {/if}
-  {/each}
-  
-  <div class="breadcrumb-help">
-    <small>Click to navigate • Last item shows dropdown with available options</small>
-  </div>
-</div>
-{/if}
 <svelte:window
   on:keydown={async (e) => {
     if (e.key === "Escape") {
