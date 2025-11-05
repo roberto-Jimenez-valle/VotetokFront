@@ -61,7 +61,8 @@ export class ColorManager {
     pollId: number | string,
     countryIso: string,
     polygons: any[],
-    colorMap: Record<string, string>
+    colorMap: Record<string, string>,
+    onProgress?: (colors: ColorResult, processed: number, total: number) => void
   ): Promise<ColorResult> {
     const byId: ColorResult = {};
 
@@ -88,8 +89,12 @@ export class ColorManager {
         }
       }
 
+      const entries = Object.entries(level1Votes);
+      const total = entries.length;
+      let processed = 0;
+
       // Para cada subdivisión nivel 1, calcular la opción ganadora
-      for (const [subdivisionKey, votes] of Object.entries(level1Votes)) {
+      for (const [subdivisionKey, votes] of entries) {
         const winner = this.findWinningOption(votes);
 
         if (winner && colorMap?.[winner.option]) {
@@ -118,6 +123,18 @@ export class ColorManager {
             }
           }
         }
+
+        // Reportar progreso después de cada subdivisión procesada
+        processed++;
+        if (onProgress && processed % 5 === 0) {
+          // Reportar cada 5 subdivisiones para no saturar
+          onProgress({ ...byId }, processed, total);
+        }
+      }
+
+      // Reportar progreso final
+      if (onProgress) {
+        onProgress({ ...byId }, processed, total);
       }
 
       console.log(
@@ -138,7 +155,8 @@ export class ColorManager {
     countryIso: string,
     subdivisionId: string,
     polygons: any[],
-    colorMap: Record<string, string>
+    colorMap: Record<string, string>,
+    onProgress?: (colors: ColorResult, processed: number, total: number) => void
   ): Promise<ColorResult> {
     const byId: ColorResult = {};
 
@@ -170,8 +188,12 @@ export class ColorManager {
         }
       }
 
+      const entries = Object.entries(level2Votes);
+      const total = entries.length;
+      let processed = 0;
+
       // Para cada sub-subdivisión nivel 2, calcular la opción ganadora
-      for (const [subSubKey, votes] of Object.entries(level2Votes)) {
+      for (const [subSubKey, votes] of entries) {
         const winner = this.findWinningOption(votes);
 
         if (winner && colorMap?.[winner.option]) {
@@ -200,6 +222,18 @@ export class ColorManager {
             }
           }
         }
+
+        // Reportar progreso después de cada sub-subdivisión procesada
+        processed++;
+        if (onProgress && processed % 5 === 0) {
+          // Reportar cada 5 sub-subdivisiones para no saturar
+          onProgress({ ...byId }, processed, total);
+        }
+      }
+
+      // Reportar progreso final
+      if (onProgress) {
+        onProgress({ ...byId }, processed, total);
       }
 
       console.log(

@@ -917,38 +917,7 @@
   // ========================================
   // FASE 3: COLORES - Migrado a ColorManager
   // ========================================
-  // NUEVA FUNCIÓN: Cargar colores reales desde la base de datos (nivel 1: subdivisiones)
-  async function computeSubdivisionColorsFromDatabase(countryIso: string, polygons: any[]): Promise<Record<string, string>> {
-    if (!activePoll || !activePoll.id) {
-      return {};
-    }
-    
-    return await colorManager.loadSubdivisionColors(
-      activePoll.id,
-      countryIso,
-      polygons,
-      colorMap
-    );
-  }
-
-  // NUEVA FUNCIÓN: Cargar colores reales de sub-subdivisiones (nivel 2)
-  async function computeSubSubdivisionColorsFromDatabase(
-    countryIso: string, 
-    subdivisionId: string, 
-    polygons: any[]
-  ): Promise<Record<string, string>> {
-    if (!activePoll || !activePoll.id) {
-      return {};
-    }
-    
-    return await colorManager.loadSubSubdivisionColors(
-      activePoll.id,
-      countryIso,
-      subdivisionId,
-      polygons,
-      colorMap
-    );
-  }
+  // Las funciones de carga de colores ahora llaman directamente a colorManager con callbacks de progreso
 
   // Fallback: Usar datos de la subdivisión padre para colorear proporcionalmente
   async function computeSubdivisionColorsFromVotesLevel3(
@@ -1226,8 +1195,10 @@
                 console.log('[Trending] 📡 Cargando datos frescos para', iso, `(${trendingPolls.length} encuestas)`);
               }
               
-              for (let i = 0; i < trendingPolls.length; i++) {
-                const poll = trendingPolls[i];
+              // *** CARGA PARALELA con pintado progresivo ***
+              let completedCount = 0;
+              
+              const pollDataPromises = trendingPolls.map(async (poll: any, i: number) => {
                 const pollKey = `poll_${poll.id}`;
                 const pollColor = pollColors[i % pollColors.length];
                 
@@ -1276,7 +1247,10 @@
                         aggregatedData[subdivisionId][pollKey] = totalVotes;
                       }
                       
-                      // 🎨 ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de cada respuesta
+                      // *** ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de que esta encuesta termine ***
+                      completedCount++;
+                      
+                      // Actualizar datos globales progresivamente
                       answersData = { ...aggregatedData };
                       colorMap = { ...aggregatedColors };
                       
@@ -1293,13 +1267,16 @@
                         this.globe?.refreshPolyColors?.();
                       }
                       
-                      console.log(`[Trending] 🎨 Encuesta ${i + 1}/${trendingPolls.length} cargada - colores actualizados`);
+                      console.log(`[Trending] 🎨 Pintado progresivo nivel 2: ${completedCount}/${trendingPolls.length} encuestas completadas`);
                     }
                   } catch (error) {
                     console.warn(`[Trending] ⚠️ Error loading data for poll ${poll.id}:`, error);
                   }
                 }
-              }
+              });
+              
+              // Esperar a que todas las encuestas terminen
+              await Promise.all(pollDataPromises);
               
               // Guardar en cache si se cargaron datos frescos
               if (!isCacheValid) {
@@ -1522,6 +1499,10 @@
                 isoDominantKey = vm.isoDominantKey;
                 legendItems = vm.legendItems;
                 isoIntensity = vm.isoIntensity;
+                
+                // *** FORZAR REPINTADO: Actualizar colores después de cargar datos de la API ***
+                globe?.refreshPolyColors?.();
+                console.log('[Navigation] 🎨 Colores actualizados después de cargar datos de encuesta específica');
               }
               
               // MOSTRAR ETIQUETA después de cargar datos (NIVEL 3/4 - Encuesta específica)
@@ -1552,8 +1533,11 @@
               // Actualizar activePollOptions con las encuestas trending
               activePollOptions = [];
               
-              for (let i = 0; i < trendingPolls.length; i++) {
-                const poll = trendingPolls[i];
+              // *** CARGA PARALELA con pintado progresivo ***
+              let completedCount = 0;
+              const cleanSubdivisionId = subdivisionId.includes('.') ? subdivisionId.split('.').pop() : subdivisionId;
+              
+              const pollDataPromises = trendingPolls.map(async (poll: any, i: number) => {
                 const pollKey = `poll_${poll.id}`;
                 const pollColor = pollColors[i % pollColors.length];
                 
@@ -1571,7 +1555,6 @@
                 
                 // Cargar datos de votos por sub-subdivisión para cada encuesta trending
                 try {
-                  const cleanSubdivisionId = subdivisionId.includes('.') ? subdivisionId.split('.').pop() : subdivisionId;
                   const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`);
                   if (pollResponse.ok) {
                     const { data: pollData } = await pollResponse.json();
@@ -1594,11 +1577,34 @@
                       const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
                       aggregatedData[subsubdivisionId][pollKey] = totalVotes;
                     }
+                    
+                    // *** ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de que esta encuesta termine ***
+                    completedCount++;
+                    
+                    // Actualizar answersData y colorMap progresivamente
+                    answersData = { ...aggregatedData };
+                    colorMap = { ...aggregatedColors };
+                    
+                    // Recalcular y repintar polígonos progresivamente
+                    if (subdivisionPolygons.length > 0) {
+                      const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
+                      const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
+                      isoDominantKey = vm.isoDominantKey;
+                      legendItems = vm.legendItems;
+                      isoIntensity = vm.isoIntensity;
+                      
+                      // Forzar repintado inmediato
+                      globe?.refreshPolyColors?.();
+                      console.log(`[Navigation] 🎨 Pintado progresivo nivel 3: ${completedCount}/${trendingPolls.length} encuestas completadas`);
+                    }
                   }
                 } catch (error) {
                   // Error loading poll data
                 }
-              }
+              });
+              
+              // Esperar a que todas las encuestas terminen
+              await Promise.all(pollDataPromises);
               
               // Actualizar votos totales en activePollOptions
               activePollOptions = activePollOptions.map(option => {
@@ -1857,7 +1863,33 @@
                 
         // PRIORIDAD 1: Cargar colores REALES desde la base de datos (si hay encuesta activa)
         if (activePoll && activePoll.id) {
-          subdivisionColorById = await computeSubdivisionColorsFromDatabase(iso, childMarked);
+          // Usar callback de progreso para pintar a medida que se procesan subdivisiones
+          subdivisionColorById = await colorManager.loadSubdivisionColors(
+            activePoll.id,
+            iso,
+            childMarked,
+            colorMap,
+            (colors, processed, total) => {
+              // Actualizar colores progresivamente
+              subdivisionColorById = { ...colors };
+              
+              // Aplicar colores a polígonos
+              for (const c of childMarked) {
+                const props = c?.properties || {};
+                const id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
+                if (id1) {
+                  const col = subdivisionColorById[String(id1)];
+                  if (col) {
+                    c.properties._forcedColor = col;
+                  }
+                }
+              }
+              
+              // Forzar repintado inmediato
+              this.globe?.refreshPolyColors?.();
+              console.log(`[Navigation] 🎨 Pintado progresivo nivel 2: ${processed}/${total} subdivisiones`);
+            }
+          );
         } else if (answersData && Object.keys(answersData).length > 0 && colorMap && Object.keys(colorMap).length > 0) {
           // MODO TRENDING: Usar datos agregados de múltiples encuestas
           console.log('[Navigation] 🎨 Modo trending: usando datos agregados para colorear subdivisiones');
@@ -1940,26 +1972,73 @@
         
                 
         // Cargar colores ANTES de setPolygonsData
+        let subSubdivisionColorById: Record<string, string> = {};
+        
         if (activePoll && activePoll.id) {
-                    
-          // Cargar colores reales de sub-subdivisiones (nivel 2)
-          const subSubdivisionColorById = await computeSubSubdivisionColorsFromDatabase(
+          // Usar callback de progreso para pintar a medida que se procesan sub-subdivisiones
+          subSubdivisionColorById = await colorManager.loadSubSubdivisionColors(
+            activePoll.id,
             countryIso, 
             subdivisionId, 
-            markedPolygons
+            markedPolygons,
+            colorMap,
+            (colors, processed, total) => {
+              // Actualizar colores progresivamente
+              subSubdivisionColorById = { ...colors };
+              
+              // Aplicar colores a polígonos
+              for (const poly of markedPolygons) {
+                const props = poly?.properties || {};
+                const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
+                if (id2) {
+                  const col = subSubdivisionColorById[String(id2)];
+                  if (col) {
+                    poly.properties._forcedColor = col;
+                  }
+                }
+              }
+              
+              // Forzar repintado inmediato
+              this.globe?.refreshPolyColors?.();
+              console.log(`[Navigation] 🎨 Pintado progresivo nivel 3: ${processed}/${total} sub-subdivisiones`);
+            }
           );
+        } else if (answersData && Object.keys(answersData).length > 0 && colorMap && Object.keys(colorMap).length > 0) {
+          // MODO TRENDING: Usar datos agregados de múltiples encuestas
+          console.log('[Navigation] 🎨 Modo trending nivel 3: usando datos agregados para colorear sub-subdivisiones');
+          subSubdivisionColorById = colorManager.computeColorsFromAggregatedData(
+            subdivisionId, 
+            markedPolygons, 
+            answersData, 
+            colorMap
+          );
+        }
+        
+        // Aplicar _forcedColor a cada polígono (igual que en nivel 2)
+        let colorsApplied = 0;
+        for (const poly of markedPolygons) {
+          const props = poly?.properties || {};
+          const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2 || props.NAME_2 || props.name_2 || null;
           
-                              
-          // NO aplicar _forcedColor aquí - dejar que isoDominantKey lo maneje
-          // Esto permite que el sistema use los datos actualizados de answersData
-                            }
+          if (id2) {
+            const col = subSubdivisionColorById[String(id2)];
+            if (col) {
+              poly.properties._forcedColor = col;
+              colorsApplied++;
+            }
+          }
+        }
+        
+        console.log(`[Navigation] ✅ ${colorsApplied} sub-subdivisiones coloreadas en nivel 3`);
         
         // Set subdivision polygons con colores ya aplicados
         this.globe?.setPolygonsData(markedPolygons);
         
-        // REFRESH AGRESIVO: Forzar múltiples refreshes para actualizar cache
-        globe?.refreshPolyColors?.();
-        // Forzar refresh completo de todo
+        // IMPORTANTE: Hacer refresh INMEDIATO para aplicar colores de BD (igual que en nivel 2)
+        this.globe?.refreshPolyColors?.();
+        this.globe?.refreshPolyAltitudes?.();
+        
+        // REFRESH ADICIONAL: Forzar refresh completo después de un pequeño delay
         setTimeout(() => {
           globe?.refreshPolyColors?.();
           globe?.refreshPolyStrokes?.();
@@ -3148,7 +3227,10 @@
       // Crear activePollOptions con las encuestas trending como opciones
       activePollOptions = [];
       
-      // Cargar datos de votos de todas las encuestas en paralelo
+      // *** CARGA PARALELA con pintado progresivo ***
+      // Lanzar todas las llamadas API en paralelo, pero pintar a medida que cada una termina
+      let completedCount = 0;
+      
       const pollDataPromises = trendingPolls.map(async (poll, i) => {
         const pollKey = `poll_${poll.id}`;
         const pollColor = pollColors[i % pollColors.length];
@@ -3176,12 +3258,33 @@
             const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
             aggregatedData[countryIso][pollKey] = totalVotes;
           }
+          
+          // *** ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de que esta encuesta termine ***
+          completedCount++;
+          
+          // Actualizar datos globales progresivamente
+          answersData = { ...aggregatedData };
+          colorMap = { ...aggregatedColors };
+          
+          // Esperar a que worldPolygons esté disponible
+          if (worldPolygons && worldPolygons.length > 0) {
+            // Recalcular y repintar colores progresivamente
+            const geoData = { type: 'FeatureCollection', features: worldPolygons };
+            const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
+            isoDominantKey = vm.isoDominantKey;
+            legendItems = vm.legendItems;
+            isoIntensity = vm.isoIntensity;
+            
+            // Forzar repintado inmediato
+            globe?.refreshPolyColors?.();
+            console.log(`[processTrendingPolls] 🎨 Pintado progresivo nivel 1: ${completedCount}/${trendingPolls.length} encuestas completadas`);
+          }
         } catch (error) {
           console.warn('[processTrendingPolls] Error loading poll data:', error);
         }
       });
       
-      // Esperar a que todas las encuestas carguen
+      // Esperar a que todas las encuestas terminen
       await Promise.all(pollDataPromises);
       
       // Actualizar votos totales en activePollOptions
@@ -3505,7 +3608,36 @@
     try {
       // Cargar votos usando PollDataService
       const data = await pollDataService.loadVotesByCountry(poll.id);
-      Object.assign(newAnswersData, data);
+      
+      // *** PROCESAMIENTO PROGRESIVO: Pintar a medida que procesamos cada país ***
+      const countries = Object.entries(data);
+      const batchSize = 10; // Procesar 10 países a la vez
+      
+      for (let i = 0; i < countries.length; i += batchSize) {
+        const batch = countries.slice(i, i + batchSize);
+        
+        // Agregar países del batch a answersData
+        for (const [countryIso, votes] of batch) {
+          newAnswersData[countryIso] = votes as Record<string, number>;
+        }
+        
+        // Actualizar datos globales progresivamente
+        answersData = { ...newAnswersData };
+        
+        // Esperar a que worldPolygons esté disponible
+        if (worldPolygons && worldPolygons.length > 0) {
+          // Recalcular y repintar colores progresivamente
+          const geoData = { type: 'FeatureCollection', features: worldPolygons };
+          const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
+          isoDominantKey = vm.isoDominantKey;
+          legendItems = vm.legendItems;
+          isoIntensity = vm.isoIntensity;
+          
+          // Forzar repintado inmediato
+          globe?.refreshPolyColors?.();
+          console.log(`[HandleOpenPoll] 🎨 Pintado progresivo nivel 1: ${Math.min(i + batchSize, countries.length)}/${countries.length} países procesados`);
+        }
+      }
     } catch (error) {
       // Si falla la carga de datos, continuar
     }
@@ -5593,7 +5725,7 @@
           if (selectedCountryIso && activePoll?.id) {
             const countryIso = selectedCountryIso;
             setTimeout(async () => {
-              const subdivisionColorById = await computeSubdivisionColorsFromDatabase(countryIso, localPolygons || []);
+              const subdivisionColorById = activePoll?.id ? await colorManager.loadSubdivisionColors(activePoll.id, countryIso, localPolygons || [], colorMap) : {};
               
               for (const poly of (localPolygons || [])) {
                 const id1 = poly.properties?.ID_1;
@@ -5751,7 +5883,7 @@
           if (selectedCountryIso && activePoll?.id) {
             const countryIso = selectedCountryIso;
                         setTimeout(async () => {
-              const subdivisionColorById = await computeSubdivisionColorsFromDatabase(countryIso, localPolygons || []);
+              const subdivisionColorById = activePoll?.id ? await colorManager.loadSubdivisionColors(activePoll.id, countryIso, localPolygons || [], colorMap) : {};
               
               for (const poly of (localPolygons || [])) {
                 const id1 = poly.properties?.ID_1;
