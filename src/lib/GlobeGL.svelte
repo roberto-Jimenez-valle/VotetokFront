@@ -14,7 +14,7 @@
     themeState as globalThemeState,
     isDarkTheme as globalIsDarkTheme
   } from '$lib/stores/globalState';
-  
+   
   // ========================================
   // SERVICIOS REUTILIZABLES (Fase 3 - Refactorización)
   // ========================================
@@ -407,17 +407,56 @@
       sheetCtrl?.setState('peek');
     }
   }
-
   // Datos de ciudades cargados desde JSON
   let citiesData: Record<string, any> = {};
 
 
-  // Generar datos específicos para una ciudad desde el JSON cargado
-  function generateCityChartSegments(cityName: string) {
+  // Generar datos específicos para una ciudad desde answersData
+  function generateCityChartSegments(cityName: string, cityId?: string) {
+    console.log('[CityChart] 🔍 Generando datos para:', { cityName, cityId });
+    
+    // Intentar obtener datos desde answersData usando el cityId
+    if (cityId && answersData) {
+      // Construir posibles IDs para buscar
+      const state = navigationManager?.getState();
+      const countryIso = state?.countryIso || selectedCountryIso || '';
+      const parentSubdivisionId = state?.subdivisionId || selectedSubdivisionId || '';
+      
+      let possibleIds: string[] = [cityId];
+      if (!cityId.includes('.')) {
+        if (parentSubdivisionId.includes('.')) {
+          possibleIds.push(`${parentSubdivisionId}.${cityId}`);
+        } else if (parentSubdivisionId) {
+          possibleIds.push(`${countryIso}.${parentSubdivisionId}.${cityId}`);
+        }
+      }
+      
+      console.log('[CityChart] 🔍 IDs posibles:', possibleIds);
+      console.log('[CityChart] 🔍 Claves disponibles en answersData (nivel 3-4):', 
+        Object.keys(answersData).filter(k => k.split('.').length >= 3).slice(0, 20)
+      );
+      
+      // Buscar datos con cualquier ID posible
+      for (const id of possibleIds) {
+        const cityData = answersData[id];
+        if (cityData) {
+          console.log('[CityChart] ✅ Generando barra con datos de:', id, cityData);
+          cityChartSegments = generateCountryChartSegments([cityData]);
+          console.log('[CityChart] ✅ cityChartSegments generado:', cityChartSegments);
+          return;
+        }
+      }
+      
+      console.log('[CityChart] ⚠️ No se encontraron datos en answersData para ninguno de los IDs posibles');
+    }
+    
+    // Fallback: intentar con citiesData (datos estáticos)
     const cityData = citiesData[cityName];
     if (cityData) {
+      console.log('[CityChart] ⚠️ Usando datos estáticos de citiesData para:', cityName);
       cityChartSegments = generateCountryChartSegments([cityData]);
     } else {
+      console.log('[CityChart] ❌ No se encontraron datos para:', cityName);
       cityChartSegments = [];
     }
   }
@@ -1594,6 +1633,10 @@
               // Actualizar answersData con datos de TODOS los niveles
               answersData = allLevelsData;
               
+              // 🔍 DEBUG: Mostrar qué IDs tenemos en answersData
+              console.log('[Navigation] 🔍 IDs disponibles en answersData para nivel 3/4:');
+              console.log(Object.keys(allLevelsData));
+              
               // Solo calcular si hay polígonos
               if (subdivisionPolygons.length > 0) {
                 // Recalcular isoDominantKey y legendItems con los polígonos de subdivisión
@@ -1725,6 +1768,10 @@
               subdivisionLevelAnswers = aggregatedData;
               answersData = aggregatedData;
               colorMap = aggregatedColors;
+              
+              // 🔍 DEBUG: Mostrar qué IDs tenemos en answersData (trending nivel 3/4)
+              console.log('[Trending] 🔍 IDs disponibles en answersData para nivel 3/4:');
+              console.log(Object.keys(aggregatedData));
               
               // Recalcular colores dominantes
               if (subdivisionPolygons.length > 0) {
@@ -2315,7 +2362,22 @@
       } else if (this.state.level === 'subdivision' && this.state.countryIso && this.state.subdivisionId) {
         // Return ONLY sub-subdivisions with active data
         try {
-          const numericPart = this.state.subdivisionId.split('.').pop();
+          // 🔧 FIX: Limpiar subdivisionId para evitar duplicación
+          // Si subdivisionId = "ESP.1" o "ESP.1.ESP.1", extraer solo la parte numérica final
+          let cleanSubdivisionId = this.state.subdivisionId;
+          
+          // Remover duplicados como "ESP.1.ESP.1" → "ESP.1"
+          const parts = cleanSubdivisionId.split('.');
+          if (parts.length > 2 && parts[0] === parts[2]) {
+            // Caso "ESP.1.ESP.1" → tomar primeras 2 partes
+            cleanSubdivisionId = `${parts[0]}.${parts[1]}`;
+            console.log('[getAvailableOptions] 🔧 Limpiando ID duplicado:', this.state.subdivisionId, '→', cleanSubdivisionId);
+          }
+          
+          const numericPart = cleanSubdivisionId.split('.').pop();
+          console.log('[getAvailableOptions] 📊 Nivel 4 - subdivisionId:', this.state.subdivisionId, '→ numericPart:', numericPart);
+          console.log('[getAvailableOptions] 📦 answersData keys disponibles:', Object.keys(answersData || {}).slice(0, 15));
+          
           if (numericPart) {
             const subdivisionFile = `${this.state.countryIso}.${numericPart}`;
             const subSubPolygons = await loadSubregionTopoAsGeoFeatures(this.state.countryIso, subdivisionFile);
@@ -2323,19 +2385,41 @@
             // Filtrar polígonos nulos antes de iterar
             subSubPolygons.filter(poly => poly !== null && poly !== undefined).forEach(poly => {
               const props = poly?.properties || {};
-              const id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
+              let id2 = props.ID_2 || props.id_2 || props.GID_2 || props.gid_2;
               const name2 = props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
+              
+              // Limpiar id2 si tiene puntos (ej: "ESP.1.4" → "4")
+              if (id2 && String(id2).includes('.')) {
+                id2 = String(id2).split('.').pop();
+              }
               
               // FILTRO: Solo agregar si tiene datos activos
               if (id2 && name2 && !subSubMap.has(String(id2))) {
-                const hasData = Boolean(answersData?.[id2]);
+                // 🔧 FIX: Buscar con ID completo en answersData
+                const fullId = `${this.state.countryIso}.${numericPart}.${id2}`;
+                
+                // Intentar con múltiples formatos de ID
+                const hasData = Boolean(
+                  answersData?.[fullId] ||      // "ESP.1.4"
+                  answersData?.[id2] ||          // "4"
+                  answersData?.[String(id2)]     // "4" como string
+                );
+                
                 if (hasData) {
+                  console.log('[getAvailableOptions]   ✅ Encontrado:', name2, fullId, '(hasData)');
                   subSubMap.set(String(id2), String(name2));
+                } else {
+                  console.log('[getAvailableOptions]   ❌ Sin datos:', name2, fullId);
                 }
               }
             });
+            
+            console.log('[getAvailableOptions] 📊 Opciones con datos:', subSubMap.size, 'de', subSubPolygons.length, 'polígonos');
+            
             subSubMap.forEach((name, id) => {
-              options.push({ id: `${this.state.countryIso}.${numericPart}.${id}`, name });
+              const fullId = `${this.state.countryIso}.${numericPart}.${id}`;
+              console.log('[getAvailableOptions]   → Agregando opción:', name, '=', fullId);
+              options.push({ id: fullId, name });
             });
           }
         } catch (e) {
@@ -2664,6 +2748,38 @@
           // 5. Actualizar navigationManager internamente
           await navigationManager!.navigateToSubdivision(countryIso, parentIdClean, parentName);
           
+          // 5.5. ✅ CARGAR DATOS DE LA API para nivel 3/4
+          console.log('[selectDropdownOption] 📡 Cargando datos de votos para nivel 3/4...');
+          
+          if (activePoll && activePoll.id) {
+            // MODO ENCUESTA ESPECÍFICA
+            try {
+              const cleanSubdivisionId = parentIdClean;
+              const response = await apiCall(`/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`);
+              if (response.ok) {
+                const { data } = await response.json();
+                
+                // Guardar TODOS los votos que pertenecen a esta subdivisión
+                const fullSubdivisionId = `${countryIso}.${parentIdClean}`;
+                const allLevelsData: Record<string, Record<string, number>> = {};
+                for (const [subdivId, votes] of Object.entries(data)) {
+                  if (subdivId === fullSubdivisionId || subdivId.startsWith(fullSubdivisionId + '.')) {
+                    allLevelsData[subdivId] = votes as Record<string, number>;
+                  }
+                }
+                
+                answersData = allLevelsData;
+                console.log('[selectDropdownOption] ✅ Datos cargados. IDs disponibles:', Object.keys(allLevelsData));
+              }
+            } catch (error) {
+              console.error('[selectDropdownOption] ❌ Error cargando datos:', error);
+            }
+          } else if (!activePoll) {
+            // MODO TRENDING
+            console.log('[selectDropdownOption] ⚠️ Modo trending - datos deberían estar en answersData');
+            console.log('[selectDropdownOption] 📊 answersData keys disponibles:', Object.keys(answersData || {}));
+          }
+          
           // 6. Cargar los polígonos de nivel 3 en el globo
           globe?.polygonsData?.(level3Polygons);
           console.log('[selectDropdownOption] 🗺️ Globo actualizado con', level3Polygons.length, 'polígonos nivel 3');
@@ -2678,6 +2794,60 @@
             globe?.refreshPolyStrokes?.();
             globe?.refreshPolyAltitudes?.();
           }, 150);
+          
+          // 9. ✅ ACTUALIZAR VOTOS Y BARRA DE SEGMENTOS para nivel 4
+          const cityId = parts[2]; // "29" de "ESP.1.29"
+          console.log('[selectDropdownOption] 🔢 Actualizando datos para nivel 4:', option.id);
+          
+          // Generar barra de segmentos con datos reales
+          generateCityChartSegments(option.name, cityId);
+          
+          // Construir posibles IDs para buscar en answersData
+          let possibleIds: string[] = [cityId, option.id];
+          if (!cityId.includes('.')) {
+            possibleIds.push(`${parentSubdivisionId}.${cityId}`);
+            possibleIds.push(`${countryIso}.${parts[1]}.${cityId}`);
+          }
+          
+          // Buscar datos con cualquier ID posible
+          let cityVoteData = null;
+          let foundId = '';
+          for (const id of possibleIds) {
+            if (answersData?.[id]) {
+              cityVoteData = answersData[id];
+              foundId = id;
+              break;
+            }
+          }
+          
+          if (cityVoteData && activePollOptions.length > 0) {
+            console.log('[selectDropdownOption] ✅ Datos encontrados con ID:', foundId);
+            
+            // Actualizar votos totales en activePollOptions
+            // 🔧 FORZAR REACTIVIDAD: Crear array completamente nuevo
+            const updatedOptions = activePollOptions.map(opt => {
+              const votesForOption = cityVoteData[opt.key] || 0;
+              console.log(`[selectDropdownOption]   ${opt.label}: ${votesForOption} votos`);
+              return { ...opt, votes: votesForOption };
+            });
+            
+            // Asignar como array nuevo para forzar reactividad
+            activePollOptions = [...updatedOptions];
+            
+            // ⚡ FORZAR ACTUALIZACIÓN DIRECTA de voteOptions para el BottomSheet
+            voteOptions = [...updatedOptions];
+            
+            // ⚡⚡ TRIGGER: Incrementar para forzar bloque reactivo
+            voteOptionsUpdateTrigger++;
+            
+            // Forzar actualización del BottomSheet
+            tick().then(() => {
+              console.log('[selectDropdownOption] ✅ Votos actualizados en nivel 4 - UI debería actualizarse');
+            });
+          } else {
+            console.log('[selectDropdownOption] ⚠️ No se encontraron datos de votos. Intentado:', possibleIds);
+            console.log('[selectDropdownOption] 📊 answersData keys:', Object.keys(answersData || {}).slice(0, 10));
+          }
           
           console.log('[selectDropdownOption] ✅ Navegación nivel 3 completada:', option.name);
           
@@ -3559,9 +3729,13 @@
   let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   let cityChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   let voteOptions: Array<{ key: string; label: string; color: string; votes: number }> = [];
+  let voteOptionsUpdateTrigger = 0; // ⚡ Trigger para forzar actualización
   
   // Opciones de votación: SEPARAR CLARAMENTE trending vs encuesta específica
   $: {
+    // Dependencia en trigger para forzar reactividad
+    voteOptionsUpdateTrigger;
+    
     if (activePoll && activePoll.id) {
       // MODO ENCUESTA ESPECÍFICA: Usar activePollOptions (opciones de votación de la encuesta)
       voteOptions = activePollOptions.length > 0 ? activePollOptions : [];
@@ -3572,7 +3746,6 @@
   
       ];
     }
-    
   }
   
   // NOTA: Votación se maneja completamente en BottomSheet.svelte
@@ -5678,7 +5851,26 @@
         const countryData = [countryRecord];
         countryChartSegments = generateCountryChartSegments(countryData);
         
-        // PASO 4: PRE-CARGAR subdivisiones en paralelo durante el zoom (sin bloquear)
+        // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 2)
+        if (countryRecord && activePollOptions.length > 0) {
+          console.log('[Click] ✅ Actualizando votos para nivel 2 (país):', iso);
+          
+          const updatedOptions = activePollOptions.map(option => {
+            const votesForOption = countryRecord[option.key] || 0;
+            console.log(`[Click]   ${option.label}: ${votesForOption} votos`);
+            return { ...option, votes: votesForOption };
+          });
+          
+          activePollOptions = [...updatedOptions];
+          voteOptions = [...updatedOptions];
+          voteOptionsUpdateTrigger++;
+          
+          tick().then(() => {
+            console.log('[Click] ✅ Votos actualizados en nivel 2 - UI debería actualizarse');
+          });
+        }
+        
+        // PASO 5: PRE-CARGAR subdivisiones en paralelo durante el zoom (sin bloquear)
         const preloadPromise = (async () => {
           try {
             if (preloadedCountryIso !== iso) {
@@ -5770,6 +5962,25 @@
         subdivisionChartSegments = generateCountryChartSegments([subdivisionRecord]);
         selectedCountryIso = iso;
         
+        // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 3)
+        if (subdivisionRecord && activePollOptions.length > 0) {
+          console.log('[Click] ✅ Actualizando votos para nivel 3 (subdivisión):', subdivisionKey);
+          
+          const updatedOptions = activePollOptions.map(option => {
+            const votesForOption = subdivisionRecord[option.key] || 0;
+            console.log(`[Click]   ${option.label}: ${votesForOption} votos`);
+            return { ...option, votes: votesForOption };
+          });
+          
+          activePollOptions = [...updatedOptions];
+          voteOptions = [...updatedOptions];
+          voteOptionsUpdateTrigger++;
+          
+          tick().then(() => {
+            console.log('[Click] ✅ Votos actualizados en nivel 3 - UI debería actualizarse');
+          });
+        }
+        
         // PASO 3: Verificar si tiene subdivisiones (nivel 3)
         // Intentar cargar el archivo de subdivisión para ver si existe
         const hasSubdivisions = await (async () => {
@@ -5823,6 +6034,12 @@
         const cityName = feat.properties.NAME_2 || feat.properties.name_2 || name;
         const subdivisionName = feat.properties.NAME_1 || feat.properties.name_1;
         const cityId = feat.properties.ID_2;
+        
+        console.log('[Click] 🎯 Click en nivel 4:', {
+          cityName,
+          cityId,
+          'feat.properties': feat.properties
+        });
         
         // Verificar si tiene datos
         const cityRecord = answersData?.[cityId];
@@ -5900,8 +6117,73 @@
           console.log('[Click] Polígono nivel 3/4 activado con etiqueta:', cityId);
         }, 100);
         
-        // Generate city data
-        generateCityChartSegments(cityName);
+        // Generate city data - PASAR cityId para usar datos reales
+        generateCityChartSegments(cityName, cityId);
+        console.log('[Click] 📊 cityChartSegments después de generar:', cityChartSegments);
+        
+        // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 4)
+        // Buscar el ID completo de esta sub-subdivisión en answersData
+        const state = navigationManager?.getState();
+        const countryIso = state?.countryIso || selectedCountryIso || '';
+        const parentSubdivisionId = state?.subdivisionId || selectedSubdivisionId || '';
+        
+        // Construir posibles IDs para buscar en answersData
+        // El cityId puede ser el ID_2 completo o solo la parte final
+        let possibleIds: string[] = [cityId];
+        
+        // Si cityId no incluye puntos, construir IDs con diferentes formatos
+        if (!cityId.includes('.')) {
+          // Si parentSubdivisionId ya incluye el país (ej: "ESP.1")
+          if (parentSubdivisionId.includes('.')) {
+            possibleIds.push(`${parentSubdivisionId}.${cityId}`);
+          }
+          // Si parentSubdivisionId es solo el número (ej: "1")
+          else if (parentSubdivisionId) {
+            possibleIds.push(`${countryIso}.${parentSubdivisionId}.${cityId}`);
+          }
+        }
+        
+        console.log('[Click] 🔢 Buscando votos para nivel 4 con IDs:', possibleIds);
+        
+        // Intentar encontrar datos con cualquiera de los IDs posibles
+        let cityVoteData = null;
+        let foundId = '';
+        for (const id of possibleIds) {
+          if (answersData?.[id]) {
+            cityVoteData = answersData[id];
+            foundId = id;
+            break;
+          }
+        }
+        
+        if (cityVoteData && activePollOptions.length > 0) {
+          console.log('[Click] ✅ Datos encontrados con ID:', foundId);
+          
+          // Actualizar votos totales en activePollOptions
+          // 🔧 FORZAR REACTIVIDAD: Crear array completamente nuevo
+          const updatedOptions = activePollOptions.map(option => {
+            const votesForOption = cityVoteData[option.key] || 0;
+            console.log(`[Click]   ${option.label}: ${votesForOption} votos`);
+            return { ...option, votes: votesForOption };
+          });
+          
+          // Asignar como array nuevo para forzar reactividad
+          activePollOptions = [...updatedOptions];
+          
+          // ⚡ FORZAR ACTUALIZACIÓN DIRECTA de voteOptions para el BottomSheet
+          voteOptions = [...updatedOptions];
+          
+          // ⚡⚡ TRIGGER: Incrementar para forzar bloque reactivo
+          voteOptionsUpdateTrigger++;
+          
+          // Forzar actualización del BottomSheet
+          tick().then(() => {
+            console.log('[Click] ✅ Votos actualizados en nivel 4 - UI debería actualizarse');
+          });
+        } else {
+          console.log('[Click] ⚠️ No se encontraron datos de votos. Intentado:', possibleIds);
+          console.log('[Click] 📊 answersData keys disponibles:', Object.keys(answersData || {}).slice(0, 10));
+        }
         
               }
     } catch (e) {

@@ -2457,7 +2457,9 @@
       <!-- Para las OPCIONES EXPANDIDAS: mostrar TODAS las opciones de la encuesta -->
       {@const legendMap = Object.fromEntries(legendItems.map(item => [item.key, item.count]))}
       {@const optionsWithPct = voteOptions.map(opt => {
-        const count = legendMap[opt.key] || 0;
+        // ⚡ FIX: Usar opt.votes directamente en lugar de legendMap para nivel 4
+        // opt.votes tiene el valor correcto actualizado desde GlobeGL
+        const count = opt.votes !== undefined ? opt.votes : (legendMap[opt.key] || 0);
         const pct = totalCount > 0 ? (count / totalCount) * 100 : 0;
         
        

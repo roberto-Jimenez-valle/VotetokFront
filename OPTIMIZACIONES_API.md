@@ -1,5 +1,7 @@
 # 🚀 Optimizaciones de Llamadas API Implementadas
 
+> **📌 Nota:** Este documento cubre optimizaciones de **búsqueda (SearchModal)**. Para optimizaciones del **globo 3D (GlobeGL)**, ver [`OPTIMIZACIONES_GLOBO.md`](./OPTIMIZACIONES_GLOBO.md)
+
 ## Optimizaciones en SearchModal.svelte
 
 ### ✅ 1. Debounce Reducido (300ms → 200ms)
