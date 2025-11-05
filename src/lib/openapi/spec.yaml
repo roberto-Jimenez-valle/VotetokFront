@@ -2,16 +2,27 @@ openapi: 3.0.3
 info:
   title: VouTop API
   description: |
-    API para la plataforma de encuestas geolocalizadas VouTop.
+    API completa para la plataforma de encuestas geolocalizadas VouTop.
     
     ## Características principales:
     - 🗳️ Crear y gestionar encuestas (polls)
-    - 📍 Votación con geolocalización precisa
-    - 🌍 Visualización de datos en globo 3D
-    - 👥 Sistema de usuarios y trending
-    - 📊 Estadísticas por país y región
+    - 📍 Votación con geolocalización precisa (point-in-polygon)
+    - 🌍 Visualización de datos en globo 3D con mapas TopoJSON
+    - 👥 Sistema de usuarios, perfiles y seguimiento
+    - 📊 Estadísticas avanzadas por país, región y subdivisión
+    - 🔍 Búsqueda de encuestas, usuarios y lugares
+    - 🔐 Autenticación y registro de usuarios
+    - 🗺️ Tiles de mapas y geocodificación híbrida
+    - 📈 Trending y recomendaciones personalizadas
+    - 🔗 Link preview y proxy de medios
     
-  version: 1.0.0
+    ## Endpoints disponibles:
+    - **39 endpoints REST** organizados por categorías
+    - Soporte completo de CRUD para encuestas y usuarios
+    - APIs de datos geográficos con 3 niveles de granularidad
+    - Sistema de votación con prevención de duplicados
+    
+  version: 2.0.0
   contact:
     name: VouTop Team
     email: support@voutop.com
@@ -32,12 +43,18 @@ tags:
     description: Sistema de votación
   - name: Users
     description: Gestión de usuarios
+  - name: Auth
+    description: Autenticación y registro
+  - name: Search
+    description: Búsqueda de encuestas, usuarios y lugares
   - name: Geocoding
     description: Conversión de coordenadas a ubicaciones
   - name: Data
     description: Datos agregados y estadísticas
   - name: Maps
     description: Mapas y visualizaciones
+  - name: Utility
+    description: Utilidades y herramientas auxiliares
 
 components:
   schemas:
@@ -794,3 +811,643 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/UserBasic'
+
+  /users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Obtener perfil de usuario
+      description: Obtiene el perfil completo de un usuario con estadísticas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del usuario
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  username:
+                    type: string
+                  displayName:
+                    type: string
+                  avatarUrl:
+                    type: string
+                  bio:
+                    type: string
+                  verified:
+                    type: boolean
+                  countryIso3:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+                  stats:
+                    type: object
+                    properties:
+                      pollsCount:
+                        type: integer
+                      votesCount:
+                        type: integer
+                      followersCount:
+                        type: integer
+                      followingCount:
+                        type: integer
+
+  /users/{id}/polls:
+    get:
+      tags:
+        - Users
+      summary: Encuestas del usuario
+      description: Lista de encuestas creadas por el usuario
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista de encuestas del usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poll'
+
+  /users/{id}/votes:
+    get:
+      tags:
+        - Users
+      summary: Historial de votos del usuario
+      description: Lista de votos realizados por el usuario
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Historial de votos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /users/{id}/follow:
+    post:
+      tags:
+        - Users
+      summary: Seguir usuario
+      description: Sigue a un usuario
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Usuario seguido exitosamente
+
+    delete:
+      tags:
+        - Users
+      summary: Dejar de seguir usuario
+      description: Deja de seguir a un usuario
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Dejado de seguir exitosamente
+
+  /users/suggestions:
+    get:
+      tags:
+        - Users
+      summary: Sugerencias de usuarios
+      description: Usuarios sugeridos para seguir
+      responses:
+        '200':
+          description: Lista de usuarios sugeridos
+
+  /polls/{id}/stats:
+    get:
+      tags:
+        - Polls
+      summary: Estadísticas de encuesta
+      description: Obtiene estadísticas detalladas de una encuesta
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Estadísticas de la encuesta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalVotes:
+                    type: integer
+                  optionStats:
+                    type: array
+                    items:
+                      type: object
+
+  /polls/{id}/options:
+    get:
+      tags:
+        - Polls
+      summary: Opciones de encuesta
+      description: Lista las opciones de una encuesta
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Opciones de la encuesta
+
+  /polls/{id}/history:
+    get:
+      tags:
+        - Polls
+      summary: Historial de la encuesta
+      description: Historial de cambios y eventos de la encuesta
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Historial de la encuesta
+
+  /polls/{id}/friends-votes:
+    get:
+      tags:
+        - Polls
+      summary: Votos de amigos
+      description: Votos de usuarios que sigues en esta encuesta
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Votos de amigos
+
+  /polls/{id}/votes-by-country:
+    get:
+      tags:
+        - Polls
+      summary: Votos por país
+      description: Agregación de votos por país
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Votos agregados por país
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  additionalProperties:
+                    type: integer
+
+  /polls/{id}/votes-by-subdivisions:
+    get:
+      tags:
+        - Polls
+      summary: Votos por subdivisión
+      description: Agregación de votos por región/estado
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: countryIso
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Votos por subdivisión
+
+  /polls/{id}/votes-by-subsubdivisions:
+    get:
+      tags:
+        - Polls
+      summary: Votos por sub-subdivisión
+      description: Agregación de votos por provincia/condado
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: countryIso
+          in: query
+          schema:
+            type: string
+        - name: subdivisionId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Votos por sub-subdivisión
+
+  /polls/{id}/votes-history:
+    get:
+      tags:
+        - Polls
+      summary: Historial de votos
+      description: Historial temporal de votos en la encuesta
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Historial de votos
+
+  /polls/trending-aggregated-data:
+    get:
+      tags:
+        - Polls
+      summary: Datos agregados de trending
+      description: Datos agregados de encuestas en tendencia
+      responses:
+        '200':
+          description: Datos agregados
+
+  /polls/trending-by-region:
+    get:
+      tags:
+        - Polls
+      summary: Trending por región
+      description: Encuestas trending filtradas por región
+      parameters:
+        - name: countryIso
+          in: query
+          schema:
+            type: string
+        - name: subdivisionId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Encuestas trending de la región
+
+  /polls/user-interactions:
+    get:
+      tags:
+        - Polls
+      summary: Interacciones del usuario
+      description: Encuestas con las que el usuario ha interactuado
+      responses:
+        '200':
+          description: Lista de interacciones
+
+  /search:
+    get:
+      tags:
+        - Search
+      summary: Búsqueda general
+      description: Busca encuestas, usuarios y lugares
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Término de búsqueda
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Tipo de resultado (polls, users, places)
+          schema:
+            type: string
+            enum: [polls, users, places, all]
+      responses:
+        '200':
+          description: Resultados de búsqueda
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  polls:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poll'
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserBasic'
+                  places:
+                    type: array
+                    items:
+                      type: object
+
+  /search/trending:
+    get:
+      tags:
+        - Search
+      summary: Búsquedas trending
+      description: Términos de búsqueda más populares
+      responses:
+        '200':
+          description: Búsquedas trending
+
+  /data/answers:
+    get:
+      tags:
+        - Data
+      summary: Datos de respuestas
+      description: Datos agregados de respuestas de encuestas
+      parameters:
+        - name: pollId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Datos de respuestas
+
+  /data/votes:
+    get:
+      tags:
+        - Data
+      summary: Datos de votos
+      description: Datos agregados de votos
+      responses:
+        '200':
+          description: Datos de votos
+
+  /data/world:
+    get:
+      tags:
+        - Data
+      summary: Datos mundiales
+      description: Datos geográficos mundiales
+      responses:
+        '200':
+          description: Datos mundiales
+
+  /data/world3:
+    get:
+      tags:
+        - Data
+      summary: Datos mundiales v3
+      description: Datos geográficos mundiales versión 3
+      responses:
+        '200':
+          description: Datos mundiales v3
+
+  /data/clusters/{id}:
+    get:
+      tags:
+        - Data
+      summary: Datos de cluster
+      description: Datos de un cluster específico
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Datos del cluster
+
+  /votes/geo:
+    get:
+      tags:
+        - Votes
+      summary: Votos georreferenciados
+      description: Votos con información geográfica
+      parameters:
+        - name: pollId
+          in: query
+          schema:
+            type: integer
+        - name: bounds
+          in: query
+          description: Límites geográficos
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Votos georreferenciados
+
+  /maps/world:
+    get:
+      tags:
+        - Maps
+      summary: Mapa mundial
+      description: Datos de mapa mundial
+      responses:
+        '200':
+          description: Mapa mundial
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Iniciar sesión
+      description: Autenticación de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/UserBasic'
+
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Registrar usuario
+      description: Crea una nueva cuenta de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                displayName:
+                  type: string
+      responses:
+        '201':
+          description: Usuario registrado exitosamente
+
+  /link-preview:
+    get:
+      tags:
+        - Utility
+      summary: Vista previa de enlaces
+      description: Obtiene metadatos de una URL para preview
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '200':
+          description: Metadatos del enlace
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  image:
+                    type: string
+                  url:
+                    type: string
+
+  /media-proxy:
+    get:
+      tags:
+        - Utility
+      summary: Proxy de medios
+      description: Proxy para servir medios externos de forma segura
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '200':
+          description: Contenido del medio
+
+  /validate-iframe:
+    post:
+      tags:
+        - Utility
+      summary: Validar iframe
+      description: Valida si una URL puede ser embebida en iframe
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+      responses:
+        '200':
+          description: Resultado de validación
+
+  /validate-preview:
+    post:
+      tags:
+        - Utility
+      summary: Validar preview
+      description: Valida y genera preview de contenido
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+      responses:
+        '200':
+          description: Preview generado
+
