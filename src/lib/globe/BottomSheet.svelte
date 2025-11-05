@@ -2468,7 +2468,7 @@
           color: opt.color,
           votes: count,
           pct: pct,
-          displayText: count > 0 ? `${count} ${count === 1 ? 'voto' : 'votos'}` : '0 votos',
+          displayText: count > 0 ? `${formatNumber(count)} ${count === 1 ? 'voto' : 'votos'}` : '0 votos',
           pollData: (opt as any).pollData,
           avatarUrl: (opt as any).avatarUrl
         };

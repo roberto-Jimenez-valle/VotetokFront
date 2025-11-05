@@ -919,6 +919,64 @@
   // ========================================
   // Las funciones de carga de colores ahora llaman directamente a colorManager con callbacks de progreso
 
+  /**
+   * Calcular legendItems agregando TODOS los votos de un territorio incluyendo subniveles
+   * @param currentLevel - Nivel actual (world, country, subdivision)
+   * @param territoryId - ID del territorio (null para world, ISO para country, subdivisionId para subdivision)
+   */
+  function calculateAggregatedLegendItems(
+    currentLevel: 'world' | 'country' | 'subdivision',
+    territoryId: string | null
+  ): Array<{ key: string; color: string; count: number }> {
+    const totals: Record<string, number> = {};
+    
+    // Si no hay datos, retornar array vacío sin romper el flujo
+    if (!answersData || typeof answersData !== 'object' || Object.keys(answersData).length === 0) {
+      return [];
+    }
+    
+    // Si no hay colorMap, no podemos calcular colores
+    if (!colorMap || typeof colorMap !== 'object') {
+      return [];
+    }
+    
+    // Función para verificar si un ID pertenece al territorio
+    const belongsToTerritory = (subdivisionId: string): boolean => {
+      if (currentLevel === 'world') {
+        // En world, contar TODOS los votos
+        return true;
+      } else if (currentLevel === 'country' && territoryId) {
+        // En country, contar todos los que empiezan con el ISO del país
+        // Ejemplos: ESP, ESP.1, ESP.1.1, ESP.2.3.4, etc.
+        return subdivisionId === territoryId || subdivisionId.startsWith(territoryId + '.');
+      } else if (currentLevel === 'subdivision' && territoryId) {
+        // En subdivision, contar todos los que empiezan con el subdivisionId
+        // Ejemplos: ESP.1, ESP.1.1, ESP.1.2, ESP.1.1.3, etc.
+        return subdivisionId === territoryId || subdivisionId.startsWith(territoryId + '.');
+      }
+      return false;
+    };
+    
+    // Sumar todos los votos de todas las opciones en todos los territorios que pertenecen
+    for (const [subdivisionId, votes] of Object.entries(answersData)) {
+      if (belongsToTerritory(subdivisionId)) {
+        for (const [optionKey, voteCount] of Object.entries(votes)) {
+          if (!totals[optionKey]) {
+            totals[optionKey] = 0;
+          }
+          totals[optionKey] += voteCount;
+        }
+      }
+    }
+    
+    // Convertir a formato legendItems
+    return Object.entries(totals).map(([key, count]) => ({
+      key,
+      color: colorMap[key] || '#999999',
+      count
+    })).sort((a, b) => b.count - a.count); // Ordenar por count descendente
+  }
+
   // Fallback: Usar datos de la subdivisión padre para colorear proporcionalmente
   async function computeSubdivisionColorsFromVotesLevel3(
     countryIso: string,
@@ -1103,20 +1161,21 @@
             if (response.ok) {
               const { data } = await response.json();
                             
-              // FILTRAR solo nivel 1 exacto (ESP.1, ESP.2) - NO agregar de niveles inferiores
-              const level1Data: Record<string, Record<string, number>> = {};
+              // *** INCLUIR TODOS LOS NIVELES para conteo agregado correcto ***
+              // Guardar TODOS los votos que pertenecen a este país (nivel 1, 2, 3, etc.)
+              const allLevelsData: Record<string, Record<string, number>> = {};
               for (const [subdivisionId, votes] of Object.entries(data)) {
-                const parts = subdivisionId.split('.');
-                if (parts.length === 2) {
-                  level1Data[subdivisionId] = votes as Record<string, number>;
+                // Verificar que pertenece a este país
+                if (subdivisionId === iso || subdivisionId.startsWith(iso + '.')) {
+                  allLevelsData[subdivisionId] = votes as Record<string, number>;
                 }
               }
                             
               // Guardar en cache de nivel country
-              countryLevelAnswers = level1Data;
+              countryLevelAnswers = allLevelsData;
               
-              // Actualizar answersData con datos de nivel 1
-              answersData = level1Data;
+              // Actualizar answersData con datos de TODOS los niveles
+              answersData = allLevelsData;
               
               // USAR countryPolygons (los que se pasaron a la función) en lugar de intentar obtenerlos del globo
               const subdivisionPolygons = countryPolygons.filter((p: any) => !p.properties?._isParent);
@@ -1127,7 +1186,9 @@
                 const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
                 const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
                 isoDominantKey = vm.isoDominantKey;
-                legendItems = vm.legendItems;
+                // *** USAR TOTALES AGREGADOS: Sumar todos los votos de este país y subniveles ***
+                const aggregatedLegend = calculateAggregatedLegendItems('country', iso);
+                legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
                 isoIntensity = vm.isoIntensity;
                 
                 // FORZAR REFRESH DE COLORES - Los polígonos ya están renderizados, actualizar sus colores
@@ -1228,23 +1289,18 @@
                     if (pollResponse.ok) {
                       const { data: pollData } = await pollResponse.json() as { data: Record<string, Record<string, number>> };
                       
-                      // FILTRAR solo nivel 1 exacto - NO agregar
-                      const level1Data: Record<string, Record<string, number>> = {};
+                      // *** INCLUIR TODOS LOS NIVELES: nivel 1, 2, 3, etc. para conteo correcto ***
+                      // En trending, queremos sumar TODOS los votos de este país y subniveles
                       for (const [subdivisionId, votes] of Object.entries(pollData)) {
-                        const parts = subdivisionId.split('.');
-                        if (parts.length === 2) {
-                          level1Data[subdivisionId] = votes;
+                        // Verificar que pertenece a este país
+                        if (subdivisionId === iso || subdivisionId.startsWith(iso + '.')) {
+                          if (!aggregatedData[subdivisionId]) {
+                            aggregatedData[subdivisionId] = {};
+                          }
+                          
+                          const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
+                          aggregatedData[subdivisionId][pollKey] = totalVotes;
                         }
-                      }
-                      
-                      // Sumar TODOS los votos de esta encuesta por subdivisión
-                      for (const [subdivisionId, votes] of Object.entries(level1Data as Record<string, Record<string, number>>)) {
-                        if (!aggregatedData[subdivisionId]) {
-                          aggregatedData[subdivisionId] = {};
-                        }
-                        
-                        const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
-                        aggregatedData[subdivisionId][pollKey] = totalVotes;
                       }
                       
                       // *** ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de que esta encuesta termine ***
@@ -1260,7 +1316,9 @@
                         const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
                         const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
                         isoDominantKey = vm.isoDominantKey;
-                        legendItems = vm.legendItems;
+                        // *** USAR TOTALES AGREGADOS: Sumar todos los votos de este país y subniveles ***
+                        const aggregatedLegend = calculateAggregatedLegendItems('country', iso);
+                        legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
                         isoIntensity = vm.isoIntensity;
                         
                         // Refrescar colores inmediatamente
@@ -1307,7 +1365,9 @@
                 const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
                 const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
                 isoDominantKey = vm.isoDominantKey;
-                legendItems = vm.legendItems;
+                // *** USAR TOTALES AGREGADOS: Sumar todos los votos de este país y subniveles ***
+                const aggregatedLegend = calculateAggregatedLegendItems('country', iso);
+                legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
                 isoIntensity = vm.isoIntensity;
                 
                 // FORZAR REFRESH DE COLORES - Los polígonos ya están renderizados, actualizar sus colores
@@ -1476,20 +1536,22 @@
             if (response.ok) {
               const { data } = await response.json();
                             
-              // FILTRAR solo nivel 2 exacto (ESP.1.1) - NO agregar de niveles inferiores
-              const level2Data: Record<string, Record<string, number>> = {};
-              for (const [subdivisionId, votes] of Object.entries(data)) {
-                const parts = subdivisionId.split('.');
-                if (parts.length === 3) {
-                  level2Data[subdivisionId] = votes as Record<string, number>;
+              // *** INCLUIR TODOS LOS NIVELES para conteo agregado correcto ***
+              // Guardar TODOS los votos que pertenecen a esta subdivisión (nivel 2, 3, 4, etc.)
+              const fullSubdivisionId = subdivisionId.includes('.') ? subdivisionId : `${countryIso}.${subdivisionId}`;
+              const allLevelsData: Record<string, Record<string, number>> = {};
+              for (const [subdivId, votes] of Object.entries(data)) {
+                // Verificar que pertenece a esta subdivisión
+                if (subdivId === fullSubdivisionId || subdivId.startsWith(fullSubdivisionId + '.')) {
+                  allLevelsData[subdivId] = votes as Record<string, number>;
                 }
               }
               
               // Guardar en cache de nivel subdivision
-              subdivisionLevelAnswers = level2Data;
+              subdivisionLevelAnswers = allLevelsData;
               
-              // Actualizar answersData con datos de nivel 2
-              answersData = level2Data;
+              // Actualizar answersData con datos de TODOS los niveles
+              answersData = allLevelsData;
               
               // Solo calcular si hay polígonos
               if (subdivisionPolygons.length > 0) {
@@ -1497,7 +1559,10 @@
                 const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
                 const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
                 isoDominantKey = vm.isoDominantKey;
-                legendItems = vm.legendItems;
+                // *** USAR TOTALES AGREGADOS: Sumar todos los votos de esta subdivisión y subniveles ***
+                // fullSubdivisionId ya está definido arriba
+                const aggregatedLegend = calculateAggregatedLegendItems('subdivision', fullSubdivisionId);
+                legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
                 isoIntensity = vm.isoIntensity;
                 
                 // *** FORZAR REPINTADO: Actualizar colores después de cargar datos de la API ***
@@ -1559,23 +1624,22 @@
                   if (pollResponse.ok) {
                     const { data: pollData } = await pollResponse.json();
                     
-                    // FILTRAR solo nivel 2 exacto - NO agregar
-                    const level2Data: Record<string, Record<string, number>> = {};
-                    for (const [subdivisionId, votes] of Object.entries(pollData)) {
-                      const parts = subdivisionId.split('.');
-                      if (parts.length === 3) {
-                        level2Data[subdivisionId] = votes as Record<string, number>;
-                      }
-                    }
+                    // *** INCLUIR TODOS LOS NIVELES: nivel 2, 3, 4, etc. para conteo correcto ***
+                    // En trending, queremos sumar TODOS los votos de esta subdivisión y subniveles
+                    const fullSubdivisionId = subdivisionId.includes('.') ? subdivisionId : `${countryIso}.${subdivisionId}`;
                     
-                    // Sumar TODOS los votos de esta encuesta por sub-subdivisión
-                    for (const [subsubdivisionId, votes] of Object.entries(level2Data as Record<string, Record<string, number>>)) {
-                      if (!aggregatedData[subsubdivisionId]) {
-                        aggregatedData[subsubdivisionId] = {};
+                    for (const [subdivId, votesData] of Object.entries(pollData)) {
+                      // Verificar que pertenece a esta subdivisión
+                      if (subdivId === fullSubdivisionId || subdivId.startsWith(fullSubdivisionId + '.')) {
+                        if (!aggregatedData[subdivId]) {
+                          aggregatedData[subdivId] = {};
+                        }
+                        
+                        // Cast explícito para TypeScript
+                        const votes = votesData as Record<string, number>;
+                        const totalVotes = Object.values(votes).reduce((sum: number, count: number) => sum + count, 0);
+                        aggregatedData[subdivId][pollKey] = totalVotes;
                       }
-                      
-                      const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
-                      aggregatedData[subsubdivisionId][pollKey] = totalVotes;
                     }
                     
                     // *** ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de que esta encuesta termine ***
@@ -1590,7 +1654,10 @@
                       const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
                       const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
                       isoDominantKey = vm.isoDominantKey;
-                      legendItems = vm.legendItems;
+                      // *** USAR TOTALES AGREGADOS: Sumar todos los votos de esta subdivisión y subniveles ***
+                      const fullSubdivisionId = subdivisionId.includes('.') ? subdivisionId : `${countryIso}.${subdivisionId}`;
+                      const aggregatedLegend = calculateAggregatedLegendItems('subdivision', fullSubdivisionId);
+                      legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
                       isoIntensity = vm.isoIntensity;
                       
                       // Forzar repintado inmediato
@@ -1624,7 +1691,10 @@
                 const geoData = { type: 'FeatureCollection', features: subdivisionPolygons };
                 const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
                 isoDominantKey = vm.isoDominantKey;
-                legendItems = vm.legendItems;
+                // *** USAR TOTALES AGREGADOS: Sumar todos los votos de esta subdivisión y subniveles ***
+                const fullSubdivisionId = subdivisionId.includes('.') ? subdivisionId : `${countryIso}.${subdivisionId}`;
+                const aggregatedLegend = calculateAggregatedLegendItems('subdivision', fullSubdivisionId);
+                legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
                 isoIntensity = vm.isoIntensity;
               }
               
@@ -1737,7 +1807,9 @@
           const geoData = { type: 'FeatureCollection', features: worldPolygons || [] };
           const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
           isoDominantKey = vm.isoDominantKey;
-          legendItems = vm.legendItems;
+          // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
+          const aggregatedLegend = calculateAggregatedLegendItems('world', null);
+          legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
           isoIntensity = vm.isoIntensity;
         } catch (error) {
           // Error restoring world data
@@ -1754,7 +1826,9 @@
           const geoData = { type: 'FeatureCollection', features: worldPolygons || [] };
           const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
           isoDominantKey = vm.isoDominantKey;
-          legendItems = vm.legendItems;
+          // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
+          const aggregatedLegend = calculateAggregatedLegendItems('world', null);
+          legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
           isoIntensity = vm.isoIntensity;
         }
       }
@@ -3272,7 +3346,9 @@
             const geoData = { type: 'FeatureCollection', features: worldPolygons };
             const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
             isoDominantKey = vm.isoDominantKey;
-            legendItems = vm.legendItems;
+            // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
+            const aggregatedLegend = calculateAggregatedLegendItems('world', null);
+            legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
             isoIntensity = vm.isoIntensity;
             
             // Forzar repintado inmediato
@@ -3330,7 +3406,9 @@
       const geoData = { type: 'FeatureCollection', features: worldPolygons || [] };
       const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
       isoDominantKey = vm.isoDominantKey;
-      legendItems = vm.legendItems;
+      // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
+      const aggregatedLegend = calculateAggregatedLegendItems('world', null);
+      legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
       isoIntensity = vm.isoIntensity;
       intensityMin = vm.intensityMin;
       intensityMax = vm.intensityMax;
@@ -3630,7 +3708,9 @@
           const geoData = { type: 'FeatureCollection', features: worldPolygons };
           const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
           isoDominantKey = vm.isoDominantKey;
-          legendItems = vm.legendItems;
+          // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
+          const aggregatedLegend = calculateAggregatedLegendItems('world', null);
+          legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
           isoIntensity = vm.isoIntensity;
           
           // Forzar repintado inmediato
@@ -3658,7 +3738,9 @@
     const geoData = { type: 'FeatureCollection', features: worldPolygons || [] };
     const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
     isoDominantKey = vm.isoDominantKey;
-    legendItems = vm.legendItems;
+    // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
+    const aggregatedLegend = calculateAggregatedLegendItems('world', null);
+    legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
     isoIntensity = vm.isoIntensity;
     intensityMin = vm.intensityMin;
     intensityMax = vm.intensityMax;

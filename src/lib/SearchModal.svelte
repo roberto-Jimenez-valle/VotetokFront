@@ -3,6 +3,7 @@
   import { X, Search, TrendingUp, Clock, User } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   import { apiCall } from '$lib/api/client';
+  import { formatNumber } from '$lib/utils/pollHelpers';
   import AuthModal from '$lib/AuthModal.svelte';
   import UserProfileModal from '$lib/UserProfileModal.svelte';
   
@@ -53,6 +54,13 @@
   // Búsquedas recientes desde localStorage
   let recentSearches = $state<Array<{ text: string; type: string; icon: any }>>([]);
   
+  // Sistema de caché para búsquedas (3 minutos TTL)
+  const searchCache: Map<string, { data: any; timestamp: number }> = new Map();
+  const SEARCH_CACHE_TTL = 3 * 60 * 1000; // 3 minutos
+  
+  // AbortController para cancelar búsquedas anteriores
+  let searchAbortController: AbortController | null = null;
+  
   // Removido sistema de auto-ocultación que causaba parpadeo
   
   // Cargar búsquedas recientes del localStorage
@@ -101,6 +109,15 @@
   
   // Buscar con debounce
   async function performSearch() {
+    // Cancelar búsqueda anterior si existe
+    if (searchAbortController) {
+      searchAbortController.abort();
+    }
+    
+    // Crear nuevo AbortController para esta búsqueda
+    searchAbortController = new AbortController();
+    const currentController = searchAbortController;
+    
     isLoading = true;
     
     try {
@@ -116,20 +133,47 @@
         searchParams += `&userType=${usersSubfilter}`; // all o followers
       }
       
-      const response = await apiCall(`/api/search?${searchParams}`);
+      // Verificar caché primero
+      const cacheKey = searchParams;
+      const cachedResult = searchCache.get(cacheKey);
+      const now = Date.now();
+      
+      if (cachedResult && (now - cachedResult.timestamp) < SEARCH_CACHE_TTL) {
+        console.log('[SearchModal] ♻️ Usando resultados cacheados');
+        searchResults = cachedResult.data;
+        isLoading = false;
+        return;
+      }
+      
+      const response = await apiCall(`/api/search?${searchParams}`, {
+        signal: currentController.signal
+      });
+      
+      // Verificar si la búsqueda fue cancelada
+      if (currentController.signal.aborted) {
+        console.log('[SearchModal] ⚠️ Búsqueda cancelada');
+        return;
+      }
       
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
           searchResults = data.data;
+          
+          // Guardar en caché
+          searchCache.set(cacheKey, { data: data.data, timestamp: now });
+          
           // Guardar búsqueda solo si hay query
           if (searchQuery.trim()) {
             saveRecentSearch(searchQuery.trim(), searchFilter);
           }
         }
       }
-    } catch (error) {
-      console.error('[SearchModal] Error searching:', error);
+    } catch (error: any) {
+      // Ignorar errores de abort
+      if (error?.name !== 'AbortError') {
+        console.error('[SearchModal] Error searching:', error);
+      }
     } finally {
       isLoading = false;
     }
@@ -140,7 +184,7 @@
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       performSearch();
-    }, 300);
+    }, 200); // Reducido de 300ms a 200ms para búsquedas más rápidas
   }
   
   // Effect para cargar datos cuando se abre la modal
@@ -318,7 +362,7 @@
   function closeModal() {
     isOpen = false;
     searchQuery = '';
-    searchResults = { polls: [], users: [], places: [] };
+    searchResults = { polls: [], users: [] };
   }
 </script>
 
@@ -485,7 +529,7 @@
                     <div class="trending-rank">#{i + 1}</div>
                     <div class="trending-content">
                       <div class="trending-text">{poll.title}</div>
-                      <div class="trending-votes">{poll.votesCount.toLocaleString()} votos</div>
+                      <div class="trending-votes">{formatNumber(poll.votesCount)} votos</div>
                     </div>
                   </button>
                 {/each}
@@ -504,7 +548,7 @@
                         <div class="result-description">{poll.description}</div>
                       {/if}
                       <div class="result-meta">
-                        <span class="meta-item">{poll.votesCount.toLocaleString()} votos</span>
+                        <span class="meta-item">{formatNumber(poll.votesCount)} votos</span>
                         {#if poll.category}
                           <span class="meta-divider">•</span>
                           <span class="meta-item">{poll.category}</span>
@@ -534,7 +578,7 @@
                   <div class="trending-rank">#{i + 1}</div>
                   <div class="trending-content">
                     <div class="trending-text">{poll.title}</div>
-                    <div class="trending-votes">{poll.recentVotesCount?.toLocaleString() || poll.votesCount.toLocaleString()} votos</div>
+                    <div class="trending-votes">{formatNumber(poll.recentVotesCount || poll.votesCount)} votos</div>
                   </div>
                 </button>
               {/each}
