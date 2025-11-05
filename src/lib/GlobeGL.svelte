@@ -34,6 +34,33 @@
   // Helper para delays con Promesas
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   
+  // Helper para limitar concurrencia de promesas (evita sobrecarga de requests)
+  async function limitConcurrency<T = any>(
+    items: T[],
+    handler: (item: T, index: number) => Promise<any>,
+    concurrencyLimit: number = 5
+  ): Promise<any[]> {
+    const results: any[] = [];
+    const executing: Promise<any>[] = [];
+    
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const promise = handler(item, i).then(result => {
+        executing.splice(executing.indexOf(promise), 1);
+        return result;
+      });
+      
+      results.push(promise);
+      executing.push(promise);
+      
+      if (executing.length >= concurrencyLimit) {
+        await Promise.race(executing);
+      }
+    }
+    
+    return Promise.all(results);
+  }
+  
   // Sistema de cache para evitar repintados innecesarios
   let lastColorMapHash = '';
   let isRefreshing = false;
@@ -1256,27 +1283,29 @@
                 console.log('[Trending] 📡 Cargando datos frescos para', iso, `(${trendingPolls.length} encuestas)`);
               }
               
-              // *** CARGA PARALELA con pintado progresivo ***
+              // *** CARGA PARALELA con límite de concurrencia y pintado progresivo ***
               let completedCount = 0;
               
-              const pollDataPromises = trendingPolls.map(async (poll: any, i: number) => {
-                const pollKey = `poll_${poll.id}`;
-                const pollColor = pollColors[i % pollColors.length];
+              // Solo cargar datos si NO están en cache
+              if (!isCacheValid) {
+                console.log(`[Trending] 🚀 Iniciando carga con límite de 5 requests simultáneos (${trendingPolls.length} encuestas)`);
                 
-                // Agregar color al mapa
-                aggregatedColors[pollKey] = pollColor;
-                
-                // Agregar a activePollOptions
-                activePollOptions.push({
-                  key: pollKey,
-                  label: poll.question || poll.title || `Encuesta ${poll.id}`,
-                  color: pollColor,
-                  votes: 0, // Se actualizará después
-                  pollData: poll
-                });
-                
-                // Solo cargar datos si NO están en cache
-                if (!isCacheValid) {
+                await limitConcurrency(trendingPolls, async (poll: any, i: number) => {
+                  const pollKey = `poll_${poll.id}`;
+                  const pollColor = pollColors[i % pollColors.length];
+                  
+                  // Agregar color al mapa
+                  aggregatedColors[pollKey] = pollColor;
+                  
+                  // Agregar a activePollOptions
+                  activePollOptions.push({
+                    key: pollKey,
+                    label: poll.question || poll.title || `Encuesta ${poll.id}`,
+                    color: pollColor,
+                    votes: 0, // Se actualizará después
+                    pollData: poll
+                  });
+                  
                   try {
                     const pollResponse = await apiCall(`/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`);
                     
@@ -1330,11 +1359,23 @@
                   } catch (error) {
                     console.warn(`[Trending] ⚠️ Error loading data for poll ${poll.id}:`, error);
                   }
-                }
-              });
-              
-              // Esperar a que todas las encuestas terminen
-              await Promise.all(pollDataPromises);
+                }, 5); // Límite de 5 requests simultáneos
+              } else {
+                // Si está en caché, solo preparar activePollOptions
+                trendingPolls.forEach((poll: any, i: number) => {
+                  const pollKey = `poll_${poll.id}`;
+                  const pollColor = pollColors[i % pollColors.length];
+                  
+                  aggregatedColors[pollKey] = pollColor;
+                  activePollOptions.push({
+                    key: pollKey,
+                    label: poll.question || poll.title || `Encuesta ${poll.id}`,
+                    color: pollColor,
+                    votes: 0,
+                    pollData: poll
+                  });
+                });
+              }
               
               // Guardar en cache si se cargaron datos frescos
               if (!isCacheValid) {
@@ -1598,11 +1639,13 @@
               // Actualizar activePollOptions con las encuestas trending
               activePollOptions = [];
               
-              // *** CARGA PARALELA con pintado progresivo ***
+              // *** CARGA PARALELA con límite de concurrencia y pintado progresivo ***
               let completedCount = 0;
               const cleanSubdivisionId = subdivisionId.includes('.') ? subdivisionId.split('.').pop() : subdivisionId;
               
-              const pollDataPromises = trendingPolls.map(async (poll: any, i: number) => {
+              console.log(`[Trending] 🚀 Iniciando carga subdivisión con límite de 5 requests simultáneos (${trendingPolls.length} encuestas)`);
+              
+              await limitConcurrency(trendingPolls, async (poll: any, i: number) => {
                 const pollKey = `poll_${poll.id}`;
                 const pollColor = pollColors[i % pollColors.length];
                 
@@ -1668,10 +1711,7 @@
                 } catch (error) {
                   // Error loading poll data
                 }
-              });
-              
-              // Esperar a que todas las encuestas terminen
-              await Promise.all(pollDataPromises);
+              }, 5); // Límite de 5 requests simultáneos
               
               // Actualizar votos totales en activePollOptions
               activePollOptions = activePollOptions.map(option => {
