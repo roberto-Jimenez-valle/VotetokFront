@@ -2,6 +2,20 @@ import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 import { requireAuth } from '$lib/server/middleware/auth';
 import { rateLimitByUser } from '$lib/server/middleware/rateLimit';
+import { sanitizePollData } from '$lib/server/utils/sanitize';
+import {
+  validateTitle,
+  validateDescription,
+  validateOptions,
+  validateHexColor,
+  validateUrl,
+  validateHashtags,
+  TITLE_MIN_LENGTH,
+  TITLE_MAX_LENGTH,
+  OPTIONS_MIN_COUNT,
+  OPTIONS_MAX_COUNT,
+  HASHTAGS_MAX_COUNT
+} from '$lib/validation/pollValidation';
 
 export const POST: RequestHandler = async (event) => {
   try {
@@ -33,7 +47,13 @@ export const POST: RequestHandler = async (event) => {
       }
     }
     
-    const data = await event.request.json();
+    const rawData = await event.request.json();
+    
+    // ========================================
+    // SANITIZACIÓN (prevenir XSS)
+    // ========================================
+    const data = sanitizePollData(rawData);
+    
     const { 
       title, 
       description, 
@@ -47,13 +67,82 @@ export const POST: RequestHandler = async (event) => {
       settings
     } = data;
 
-    // Validaciones
-    if (!title || title.trim().length === 0) {
-      throw error(400, { message: 'El título es requerido', code: 'MISSING_TITLE' });
+    // ========================================
+    // VALIDACIONES COMPLETAS
+    // ========================================
+    
+    // Validar título
+    const titleValidation = validateTitle(title);
+    if (!titleValidation.valid) {
+      throw error(400, { 
+        message: titleValidation.error, 
+        code: 'INVALID_TITLE',
+        constraints: { min: TITLE_MIN_LENGTH, max: TITLE_MAX_LENGTH }
+      });
     }
     
-    if (!options || options.length < 2) {
-      throw error(400, { message: 'Se requieren al menos 2 opciones', code: 'INVALID_OPTIONS' });
+    // Validar descripción
+    if (description) {
+      const descValidation = validateDescription(description);
+      if (!descValidation.valid) {
+        throw error(400, { 
+          message: descValidation.error, 
+          code: 'INVALID_DESCRIPTION'
+        });
+      }
+    }
+    
+    // Validar opciones
+    if (!options || !Array.isArray(options)) {
+      throw error(400, { 
+        message: 'Las opciones son requeridas', 
+        code: 'MISSING_OPTIONS'
+      });
+    }
+    
+    const optionsValidation = validateOptions(options);
+    if (!optionsValidation.valid) {
+      throw error(400, { 
+        message: optionsValidation.error, 
+        code: 'INVALID_OPTIONS',
+        constraints: { min: OPTIONS_MIN_COUNT, max: OPTIONS_MAX_COUNT }
+      });
+    }
+    
+    // Validar colores de opciones
+    for (const opt of options) {
+      if (opt.color) {
+        const colorValidation = validateHexColor(opt.color);
+        if (!colorValidation.valid) {
+          throw error(400, { 
+            message: colorValidation.error, 
+            code: 'INVALID_COLOR'
+          });
+        }
+      }
+    }
+    
+    // Validar URL de imagen
+    if (imageUrl) {
+      const urlValidation = validateUrl(imageUrl);
+      if (!urlValidation.valid) {
+        throw error(400, { 
+          message: urlValidation.error, 
+          code: 'INVALID_IMAGE_URL'
+        });
+      }
+    }
+    
+    // Validar hashtags
+    if (hashtags && Array.isArray(hashtags) && hashtags.length > 0) {
+      const hashtagsValidation = validateHashtags(hashtags);
+      if (!hashtagsValidation.valid) {
+        throw error(400, { 
+          message: hashtagsValidation.error, 
+          code: 'INVALID_HASHTAGS',
+          constraints: { max: HASHTAGS_MAX_COUNT }
+        });
+      }
     }
 
     // Calcular closedAt basado en duration
@@ -107,11 +196,12 @@ export const POST: RequestHandler = async (event) => {
         }
       });
 
-      // Procesar hashtags si existen
+      // Procesar hashtags si existen (ya validados y sanitizados)
       if (hashtags && Array.isArray(hashtags) && hashtags.length > 0) {
         for (const tag of hashtags) {
           if (!tag || tag.trim().length === 0) continue;
           
+          // Los hashtags ya vienen sanitizados de sanitizePollData
           const cleanTag = tag.trim().toLowerCase();
           
           // Crear o encontrar el hashtag
@@ -141,7 +231,17 @@ export const POST: RequestHandler = async (event) => {
 
   } catch (err: any) {
     console.error('Error creating poll:', err);
-    return error(500, { message: err.message || 'Error al crear la encuesta' });
+    
+    // Si ya es un error de validación, re-lanzarlo
+    if (err.status) {
+      throw err;
+    }
+    
+    // Error genérico
+    throw error(500, { 
+      message: err.message || 'Error al crear la encuesta',
+      code: 'INTERNAL_ERROR'
+    });
   }
 };
 
