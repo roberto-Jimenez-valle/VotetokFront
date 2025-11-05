@@ -2927,11 +2927,8 @@
           }, 150);
           
           // 9. ✅ ACTUALIZAR VOTOS Y BARRA DE SEGMENTOS para nivel 4
-          const cityId = parts[2]; // "29" de "ESP.1.29"
+          const cityId = option.id; // Usar el ID completo "ESP.1.29"
           console.log('[selectDropdownOption] 🔢 Actualizando datos para nivel 4:', option.id);
-          
-          // Generar barra de segmentos con datos reales
-          generateCityChartSegments(option.name, cityId);
           
           // Construir posibles IDs para buscar en answersData
           let possibleIds: string[] = [cityId, option.id];
@@ -2951,33 +2948,42 @@
             }
           }
           
-          if (cityVoteData && activePollOptions.length > 0) {
+          if (cityVoteData) {
             console.log('[selectDropdownOption] ✅ Datos encontrados con ID:', foundId);
             
-            // Actualizar votos totales en activePollOptions
-            // 🔧 FORZAR REACTIVIDAD: Crear array completamente nuevo
-            const updatedOptions = activePollOptions.map(opt => {
-              const votesForOption = cityVoteData[opt.key] || 0;
-              console.log(`[selectDropdownOption]   ${opt.label}: ${votesForOption} votos`);
-              return { ...opt, votes: votesForOption };
-            });
+            // ✅ GENERAR BARRA DE SEGMENTOS con el ID correcto que funcionó
+            // 🔧 FORZAR REACTIVIDAD: Crear array nuevo
+            cityChartSegments = [...generateCountryChartSegments([cityVoteData])];
+            console.log('[selectDropdownOption] 📊 cityChartSegments generado:', cityChartSegments);
             
-            // Asignar como array nuevo para forzar reactividad
-            activePollOptions = [...updatedOptions];
+            // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen
+            legendItems = activePollOptions.map(opt => ({
+              key: opt.key,
+              color: opt.color,
+              count: cityVoteData[opt.key] || 0
+            }));
+            console.log('[selectDropdownOption] 📊 legendItems actualizado:', legendItems);
             
-            // ⚡ FORZAR ACTUALIZACIÓN DIRECTA de voteOptions para el BottomSheet
-            voteOptions = [...updatedOptions];
-            
-            // ⚡⚡ TRIGGER: Incrementar para forzar bloque reactivo
-            voteOptionsUpdateTrigger++;
-            
-            // Forzar actualización del BottomSheet
-            tick().then(() => {
-              console.log('[selectDropdownOption] ✅ Votos actualizados en nivel 4 - UI debería actualizarse');
-            });
+            // Actualizar votos en las opciones
+            if (activePollOptions.length > 0) {
+              const updatedOptions = activePollOptions.map(opt => {
+                const votesForOption = cityVoteData[opt.key] || 0;
+                console.log(`[selectDropdownOption]   ${opt.label}: ${votesForOption} votos`);
+                return { ...opt, votes: votesForOption };
+              });
+              
+              activePollOptions = [...updatedOptions];
+              voteOptions = [...updatedOptions];
+              voteOptionsUpdateTrigger++;
+              
+              tick().then(() => {
+                console.log('[selectDropdownOption] ✅ Votos actualizados en nivel 4 - UI debería actualizarse');
+              });
+            }
           } else {
             console.log('[selectDropdownOption] ⚠️ No se encontraron datos de votos. Intentado:', possibleIds);
             console.log('[selectDropdownOption] 📊 answersData keys:', Object.keys(answersData || {}).slice(0, 10));
+            cityChartSegments = [];
           }
           
           console.log('[selectDropdownOption] ✅ Navegación nivel 3 completada:', option.name);
@@ -6306,6 +6312,14 @@
         
         if (cityVoteData && activePollOptions.length > 0) {
           console.log('[Click] ✅ Datos encontrados con ID:', foundId);
+          
+          // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen
+          legendItems = activePollOptions.map(opt => ({
+            key: opt.key,
+            color: opt.color,
+            count: cityVoteData[opt.key] || 0
+          }));
+          console.log('[Click] 📊 legendItems actualizado:', legendItems);
           
           // Actualizar votos totales en activePollOptions
           // 🔧 FORZAR REACTIVIDAD: Crear array completamente nuevo
