@@ -960,7 +960,7 @@
   export let selectedProfileUserId: number | null = null;
   
   // Search results for countries/subdivisions
-  let searchResults: Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision' }> = [];
+  let searchResults: Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision'; parentName?: string | null; parentNameLocal?: string | null; subdivisionId?: string }> = [];
   let isSearching = false;
 
   // Texto de ayuda bajo los botones: ciudad > subdivisión > país > Global
@@ -1036,7 +1036,7 @@
     searchDebounceTimer = setTimeout(async () => {
       console.log('[BottomSheet Search] Debounce completado, ejecutando búsqueda...');
       isSearching = true;
-      const results = [] as Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision' }>;
+      const results = [] as Array<{ id: string; name: string; iso?: string; type: 'country' | 'subdivision'; parentName?: string | null; parentNameLocal?: string | null; subdivisionId?: string }>;
       const lowerQuery = query.toLowerCase().trim();
       
       try {
@@ -1145,7 +1145,7 @@
   }
   
   // Function to select a search result
-  async function selectSearchResult(result: { id: string; name: string; iso?: string; type: 'country' | 'subdivision' }) {
+  async function selectSearchResult(result: { id: string; name: string; iso?: string; type: 'country' | 'subdivision'; parentName?: string | null; parentNameLocal?: string | null; subdivisionId?: string }) {
         
     // Close search
     tagQuery = '';
@@ -1153,9 +1153,18 @@
     onToggleSearch();
     
     // Dispatch event to parent to handle navigation
-    const option = { id: result.id, name: result.name, iso: result.iso };
-        const event = new CustomEvent('searchSelect', { detail: option });
+    // IMPORTANTE: Agregar flag fromDirectSearch para limpieza completa
+    const option = { 
+      id: result.id, 
+      name: result.name, 
+      iso: result.iso,
+      parentName: result.parentName,
+      fromDirectSearch: true // 🔥 FLAG para indicar navegación limpia
+    };
+    const event = new CustomEvent('searchSelect', { detail: option });
     window.dispatchEvent(event);
+    
+    console.log('[BottomSheet] 🔍 Búsqueda directa seleccionada:', result.name, 'ID:', result.id, 'fromDirectSearch: true');
   }
 
   const dispatch = createEventDispatcher<{
