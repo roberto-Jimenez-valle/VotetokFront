@@ -140,61 +140,99 @@
   {#if activeOption}
     {#key activeOptionId}
       <div class="option-content-container">
-        <!-- Media Preview con texto dentro -->
-        <div class="media-preview">
-          {#if activeOption.imageUrl}
+        {#if activeOption.imageUrl}
+          <!-- Media Preview con texto dentro -->
+          <div class="media-preview">
             <MediaEmbed 
               url={activeOption.imageUrl}
               mode="full"
               width="100%"
               height="auto"
             />
-          {:else}
-            <div class="no-media-placeholder" style="background: {activeOption.color}20;">
-              <div style="font-size: 64px; opacity: 0.3;">📊</div>
-            </div>
-          {/if}
 
-          <!-- Texto con flechas en el bottom del preview -->
-          <div class="text-with-arrows">
-            <!-- Textarea arriba -->
-            <textarea
-              class="option-label-input"
-              placeholder="Opción {activeIndex + 1}"
-              value={activeOption.label}
-              oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
-              rows="2"
-              maxlength="150"
-            ></textarea>
+            <!-- Texto con flechas en el bottom del preview -->
+            <div class="text-with-arrows">
+              <!-- Textarea arriba -->
+              <textarea
+                class="option-label-input"
+                placeholder="Opción {activeIndex + 1}"
+                value={activeOption.label}
+                oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
+                rows="2"
+                maxlength="150"
+              ></textarea>
 
-            <!-- Flechas debajo a los lados -->
-            <div class="arrows-below">
-              <button
-                type="button"
-                class="nav-arrow-side left"
-                onclick={goToPrevious}
-                aria-label="Opción anterior"
-                style="visibility: {activeIndex > 0 ? 'visible' : 'hidden'};"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
+              <!-- Flechas debajo a los lados -->
+              <div class="arrows-below">
+                <button
+                  type="button"
+                  class="nav-arrow-side left"
+                  onclick={goToPrevious}
+                  aria-label="Opción anterior"
+                  style="visibility: {activeIndex > 0 ? 'visible' : 'hidden'};"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
 
-              <button
-                type="button"
-                class="nav-arrow-side right"
-                onclick={goToNext}
-                aria-label="Siguiente opción"
-                style="visibility: {activeIndex < options.length - 1 ? 'visible' : 'hidden'};"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
+                <button
+                  type="button"
+                  class="nav-arrow-side right"
+                  onclick={goToNext}
+                  aria-label="Siguiente opción"
+                  style="visibility: {activeIndex < options.length - 1 ? 'visible' : 'hidden'};"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        {:else}
+          <!-- Sin media: texto centrado en toda la pantalla -->
+          <div class="text-only-container">
+            <div class="text-with-arrows-centered">
+              <!-- Textarea centrado -->
+              <textarea
+                class="option-label-input-centered"
+                placeholder="Opción {activeIndex + 1}"
+                value={activeOption.label}
+                oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
+                rows="3"
+                maxlength="150"
+              ></textarea>
+
+              <!-- Flechas debajo a los lados -->
+              <div class="arrows-below">
+                <button
+                  type="button"
+                  class="nav-arrow-side left"
+                  onclick={goToPrevious}
+                  aria-label="Opción anterior"
+                  style="visibility: {activeIndex > 0 ? 'visible' : 'hidden'};"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  class="nav-arrow-side right"
+                  onclick={goToNext}
+                  aria-label="Siguiente opción"
+                  style="visibility: {activeIndex < options.length - 1 ? 'visible' : 'hidden'};"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        {/if}
       </div>
     {/key}
   {/if}
@@ -388,14 +426,46 @@
     border-radius: 0 !important;
   }
 
-  .no-media-placeholder {
-    width: 100%;
-    min-height: 200px;
+  /* Contenedor para opciones sin media - texto centrado */
+  .text-only-container {
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+    min-height: 75vh;
+  }
+
+  .text-with-arrows-centered {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    max-width: 600px;
+  }
+
+  .option-label-input-centered {
     background: transparent;
+    border: none;
     border-radius: 0;
+    padding: 20px;
+    color: white;
+    font-size: 32px;
+    font-weight: 500;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    line-height: 1.5;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .option-label-input-centered:focus {
+    background: transparent;
+  }
+
+  .option-label-input-centered::placeholder {
+    color: rgba(255, 255, 255, 0.4);
   }
 
   /* Contenedor principal de texto y botones - horizontal */

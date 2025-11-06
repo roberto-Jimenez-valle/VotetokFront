@@ -2552,7 +2552,7 @@
   <PollMaximizedView
     options={options}
     bind:activeOptionId={maximizedOption}
-    pollTitle={title || '¿Cómo calificarías...?'}
+    pollTitle={title}
     onClose={() => {
       maximizedOption = null;
     }}
