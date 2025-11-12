@@ -881,6 +881,7 @@
   export let selectedSubdivisionName: string | null = null;
   export const selectedSubdivisionId: string | null = null;
   export let selectedCityName: string | null = null;
+  export let hasSubdivisions: boolean = true;
   export let countryChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export const subdivisionChartSegments: Array<{ key: string; pct: number; color: string }> = [];
   export let worldChartSegments: Array<{ key: string; pct: number; color: string }> = [];
@@ -888,6 +889,7 @@
   export let voteOptions: Array<{ key: string; label: string; color: string; votes: number; pollData?: any; isEditing?: boolean }> = [];
   export let legendItems: Array<{ key: string; color: string; count: number }> = [];
   export let activePoll: any = null;
+  export let updateTrigger: number = 0; // Trigger para forzar actualización
   // Estadísticas de la encuesta principal
   export let mainPollViews: number = 0;
   export const mainPollSaves: number = 0;
@@ -2458,14 +2460,19 @@
     <!-- Barra de opciones de encuesta (cuando hay una activa) -->
     {#if voteOptions.length > 0}
       <!-- Para la BARRA: usar legendItems (solo opciones con votos en el nivel actual) -->
+      {@const _trigger = updateTrigger} <!-- Forzar dependencia del trigger -->
       {@const totalCount = legendItems.reduce((sum, item) => sum + item.count, 0)}
-      {@const barSegments = legendItems.map(item => ({
-        key: item.key,
-        label: item.key,
-        color: item.color,
-        votes: item.count,
-        pct: totalCount > 0 ? (item.count / totalCount) * 100 : 0
-      }))}
+      {@const barSegments = (() => {
+        const segments = legendItems.map(item => ({
+          key: item.key,
+          label: item.key,
+          color: item.color,
+          votes: item.count,
+          pct: totalCount > 0 ? (item.count / totalCount) * 100 : 0
+        }));
+        console.log('[BottomSheet] 📊 barSegments recalculado - trigger:', _trigger, 'total:', totalCount, 'segmentos:', segments.length);
+        return segments;
+      })()}
       
       <!-- Para las OPCIONES EXPANDIDAS: mostrar TODAS las opciones de la encuesta -->
       {@const legendMap = Object.fromEntries(legendItems.map(item => [item.key, item.count]))}
@@ -2773,14 +2780,22 @@
       {#if selectedCountryName}
         <div class="nav-divider">/</div>
         
-        {#if !selectedSubdivisionName}
-          <!-- Country is last active - show dropdown -->
+        {#if !selectedSubdivisionName && hasSubdivisions}
+          <!-- Country is last active and has subdivisions - show dropdown -->
           <button
             class="nav-chip active dropdown-trigger"
             onclick={onToggleDropdown}
           >
             {selectedCountryName}
             <span style="margin-left: 4px;">▼</span>
+          </button>
+        {:else if !selectedSubdivisionName && !hasSubdivisions}
+          <!-- Country is last active but has NO subdivisions - no dropdown, just active chip -->
+          <button
+            class="nav-chip active"
+            onclick={() => {}}
+          >
+            {selectedCountryName}
           </button>
         {:else}
           <!-- Country is not last - no dropdown -->
@@ -2796,14 +2811,22 @@
       {#if selectedSubdivisionName}
         <div class="nav-divider">/</div>
         
-        {#if !selectedCityName}
-          <!-- Subdivision is last active - show dropdown -->
+        {#if !selectedCityName && hasSubdivisions}
+          <!-- Subdivision is last active and has sub-subdivisions - show dropdown -->
           <button
             class="nav-chip active dropdown-trigger"
             onclick={onToggleDropdown}
           >
             {selectedSubdivisionName}
             <span style="margin-left: 4px;">▼</span>
+          </button>
+        {:else if !selectedCityName && !hasSubdivisions}
+          <!-- Subdivision is last active but has NO sub-subdivisions - no dropdown, just active chip -->
+          <button
+            class="nav-chip active"
+            onclick={() => {}}
+          >
+            {selectedSubdivisionName}
           </button>
         {:else}
           <!-- Subdivision is not last - no dropdown -->
@@ -2818,13 +2841,12 @@
       
       {#if selectedCityName}
         <div class="nav-divider">/</div>
-        <!-- City is last active - show dropdown -->
+        <!-- City is last active - NO dropdown (cities never have subdivisions) -->
         <button
-          class="nav-chip active dropdown-trigger"
-          onclick={onToggleDropdown}
+          class="nav-chip active"
+          onclick={() => {}}
         >
           {selectedCityName}
-          <span style="margin-left: 4px;">▼</span>
         </button>
       {/if}
     </div>

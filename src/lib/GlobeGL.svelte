@@ -4010,6 +4010,36 @@
   let selectedCityName: string | null = null;
   let selectedCityId: string | null = null;
   
+  // Determinar si el territorio actual tiene subdivisiones disponibles
+  $: hasSubdivisions = (() => {
+    // NIVEL PAÍS: Verificar si el país tiene subdivisiones (nivel 2)
+    if (selectedCountryIso && !selectedSubdivisionName && !selectedCityName) {
+      // Es un territorio especial sin subdivisiones?
+      const isSpecial = SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(selectedCountryIso);
+      console.log('[hasSubdivisions] País:', selectedCountryIso, 'isSpecial:', isSpecial);
+      return !isSpecial;
+    }
+    
+    // NIVEL SUBDIVISIÓN: Verificar si la subdivisión tiene sub-subdivisiones (nivel 3)
+    if (selectedCountryIso && selectedSubdivisionId && !selectedCityName) {
+      // Para subdivisiones, verificar si existe archivo nivel 3
+      // Por ejemplo: ESP.1.topojson para Andalucía
+      // Esto es una aproximación - en producción podrías hacer una verificación real
+      // Por ahora, asumir que las subdivisiones de primer nivel NO tienen hijos
+      // (esto es cierto para la mayoría de países en el dataset actual)
+      console.log('[hasSubdivisions] Subdivisión:', selectedSubdivisionId, '- asumiendo sin hijos');
+      return false; // La mayoría de subdivisiones nivel 2 no tienen nivel 3
+    }
+    
+    // NIVEL CIUDAD: Las ciudades nunca tienen subdivisiones
+    if (selectedCityName) {
+      return false;
+    }
+    
+    // Por defecto (nivel mundial), tiene subdivisiones
+    return true;
+  })();
+  
   // Sincronizar estado local con store
   $: {
     const nav = $globalNavigationState;
@@ -5740,6 +5770,16 @@
       return segments;
     }
     
+    // NIVEL SUBDIVISIÓN: Mostrar datos de la subdivisión seleccionada
+    if (selectedCountryIso && selectedSubdivisionId) {
+      const subdivisionKey = selectedSubdivisionId.includes('.') ? selectedSubdivisionId : `${selectedCountryIso}.${selectedSubdivisionId}`;
+      const rec = answersData?.[subdivisionKey];
+      console.log('[Reactivo] 🗺️ countryChartSegments - NIVEL SUBDIVISIÓN:', subdivisionKey, 'tiene datos:', !!rec);
+      const segments = generateCountryChartSegments(rec ? [rec] : []);
+      console.log('[Reactivo] 🗺️ countryChartSegments subdivisión generado:', segments.length, 'segmentos');
+      return segments;
+    }
+    
     // NIVEL PAÍS: Mostrar datos del país (o vacío si no hay datos)
     if (selectedCountryIso) {
       const rec = answersData?.[selectedCountryIso];
@@ -6884,9 +6924,40 @@
           // NO tiene subdivisiones (es nivel mínimo): solo centrar SIN cambiar nivel
           console.log(`[PolygonClick] 🏝️ ${subdivisionName} es nivel mínimo, solo zoom (nivel permanece en COUNTRY)...`);
           
-          // NO cambiar el nivel de navegación - permanece en 'country'
-          // Solo hacer zoom y resaltar el polígono
+          // ✅ ACTUALIZAR ESTADO DE UI aunque no naveguemos más profundo
+          selectedSubdivisionName = subdivisionName;
+          selectedSubdivisionId = subdivisionId;
           
+          // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen horizontal
+          if (activePollOptions.length > 0) {
+            console.log('[Click] 🔍 activePollOptions antes de actualizar legendItems:', activePollOptions);
+            legendItems = [...activePollOptions.map(opt => ({
+              key: opt.key,
+              color: opt.color,
+              count: opt.votes || 0
+            }))];
+            console.log('[Click] ✅ legendItems actualizado para subdivisión mínima:', legendItems);
+            console.log('[Click] 🔍 Total votos en legendItems:', legendItems.reduce((sum, item) => sum + item.count, 0));
+            
+            // ⚡ FORZAR ACTUALIZACIÓN de BottomSheet incrementando trigger
+            voteOptionsUpdateTrigger++;
+            console.log('[Click] ⚡ voteOptionsUpdateTrigger incrementado:', voteOptionsUpdateTrigger);
+          }
+          
+          // ✅ ACTUALIZAR countryChartSegments Y subdivisionChartSegments con los datos de la subdivisión
+          if (subdivisionRecord) {
+            const segments = generateCountryChartSegments([subdivisionRecord]);
+            countryChartSegments = [...segments]; // Forzar nueva referencia
+            subdivisionChartSegments = [...segments]; // También actualizar subdivisionChartSegments
+            console.log('[Click] ✅ countryChartSegments Y subdivisionChartSegments actualizados para subdivisión mínima:', segments.length, 'segmentos');
+          }
+          
+          // Forzar actualización de UI
+          tick().then(() => {
+            console.log('[Click] ✅ UI actualizada para subdivisión mínima - legendItems:', legendItems.length, 'items');
+          });
+          
+          // Solo hacer zoom y resaltar el polígono
           scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
           
           // ACTIVAR polígono centrado con etiqueta
@@ -6899,7 +6970,7 @@
             console.log('[Click] 🏝️ Subdivisión mínima resaltada (nivel country):', subdivisionKey);
           }, 250);
           
-          console.log('[PolygonClick] ✅ Zoom completado - Nivel permanece en COUNTRY');
+          console.log('[PolygonClick] ✅ Zoom completado - Nivel permanece en COUNTRY pero UI actualizada');
         }
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {
@@ -7442,6 +7513,7 @@
   {selectedSubdivisionName}
   {selectedSubdivisionId}
   {selectedCityName}
+  {hasSubdivisions}
   {countryChartSegments}
   {subdivisionChartSegments}
   {worldChartSegments}
@@ -7449,6 +7521,7 @@
   {voteOptions}
   {legendItems}
   {activePoll}
+  updateTrigger={voteOptionsUpdateTrigger}
   {friendsByOption}
   {visitsByOption}
   {creatorsByOption}
