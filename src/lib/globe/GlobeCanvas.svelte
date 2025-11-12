@@ -36,9 +36,18 @@
   let lastPolygonData: any[] = [];
   let lastPolygonDataHash = '';
 
-  // Helper para calcular hash de datos
+  // Helper para calcular hash de datos - MEJORADO para distinguir entre niveles
   function hashData(data: any[]): string {
-    return data.length + '_' + (data[0]?.properties?.ISO_A3 || '') + '_' + (data[data.length - 1]?.properties?.ISO_A3 || '');
+    if (!data || data.length === 0) return '0_empty';
+    
+    const first = data[0]?.properties || {};
+    const last = data[data.length - 1]?.properties || {};
+    
+    // Obtener el ID más específico disponible para cada polígono
+    const firstId = first.ID_2 || first.GID_2 || first.ID_1 || first.GID_1 || first.ISO_A3 || 'unknown';
+    const lastId = last.ID_2 || last.GID_2 || last.ID_1 || last.GID_1 || last.ISO_A3 || 'unknown';
+    
+    return `${data.length}_${firstId}_${lastId}`;
   }
   
   // Función para aplicar LOD filtering - DESACTIVADA para carga uniforme
@@ -68,22 +77,33 @@
   export function setPolygonsData(data: any[]) {
     if (!world) return;
     try {
+      console.log(`[GlobeCanvas] 📦 setPolygonsData llamado con ${data.length} polígonos`);
+      
       // Evitar recalcular si los datos no cambiaron
       const newHash = hashData(data);
       if (newHash === lastPolygonDataHash && data.length === lastPolygonData.length) {
+        console.log(`[GlobeCanvas] ⏭️ Datos no cambiaron, skipping (hash: ${newHash}, length: ${data.length})`);
         return; // Datos no cambiaron, no hacer nada
       }
+      
+      console.log(`[GlobeCanvas] ✅ Aplicando ${data.length} polígonos (hash anterior: ${lastPolygonDataHash}, nuevo: ${newHash})`);
+      const firstId = data[0]?.properties?.ID_2 || data[0]?.properties?.ID_1 || data[0]?.properties?.ISO_A3;
+      console.log(`[GlobeCanvas] 🔍 Primer polígono ID:`, firstId);
       
       lastPolygonDataHash = newHash;
       lastPolygonData = data;
       
       // Aplicar datos en requestAnimationFrame para no bloquear
       requestAnimationFrame(() => {
-        if (!world) return; // Verificar que world siga disponible
+        if (!world) return; // Verificar que world sigue disponible
         const filteredData = applyLODFiltering(data);
+        console.log(`[GlobeCanvas] 🌐 Llamando world.polygonsData() con ${filteredData.length} polígonos`);
         world.polygonsData(filteredData);
+        console.log(`[GlobeCanvas] ✅ world.polygonsData() completado`);
       });
-    } catch {}
+    } catch (err) {
+      console.error('[GlobeCanvas] ❌ Error en setPolygonsData:', err);
+    }
   }
   export function setTilesEnabled(enabled: boolean) {
     world.globeTileEngineUrl(null);

@@ -1,0 +1,55 @@
+{
+  "timestamp": "2025-11-12T16:36:39.402Z",
+  "totalCountries": 230,
+  "summary": {
+    "success": 227,
+    "wrongFormat": 3,
+    "idMismatch": 0,
+    "missingIds": 0
+  },
+  "issues": {
+    "wrongFormat": [
+      {
+        "country": "MDA",
+        "level": 2,
+        "file": "static\\geojson\\MDA\\MDA.topojson",
+        "status": "wrong_format",
+        "message": "Formato incorrecto: usa shapeISO/shapeName",
+        "count": 37,
+        "sample": {
+          "shapeISO": "MD-CA",
+          "shapeName": "Cahul",
+          "shapeID": "25212430B51059014460141"
+        }
+      },
+      {
+        "country": "MNE",
+        "level": 2,
+        "file": "static\\geojson\\MNE\\MNE.topojson",
+        "status": "wrong_format",
+        "message": "Formato incorrecto: usa shapeISO/shapeName",
+        "count": 23,
+        "sample": {
+          "shapeISO": "ME-08",
+          "shapeName": "Herceg Novi Municipality",
+          "shapeID": "59799669B9703090978387"
+        }
+      },
+      {
+        "country": "TTO",
+        "level": 2,
+        "file": "static\\geojson\\TTO\\TTO.topojson",
+        "status": "wrong_format",
+        "message": "Formato incorrecto: usa shapeISO/shapeName",
+        "count": 14,
+        "sample": {
+          "shapeISO": "TT-TOB",
+          "shapeName": "Tobago",
+          "shapeID": "22272344B40586354952803"
+        }
+      }
+    ],
+    "idMismatch": [],
+    "missingIds": []
+  }
+}
