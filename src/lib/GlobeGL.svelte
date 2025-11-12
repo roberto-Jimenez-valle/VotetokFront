@@ -31,6 +31,47 @@
   const dispatch = createEventDispatcher();
   const eventListeners = createEventListenerManager(); // Gestión automática de listeners
   
+  // ========================================
+  // TERRITORIOS ESPECIALES SIN ARCHIVOS TOPOJSON
+  // ========================================
+  // Territorios disputados y áreas especiales que no tienen archivos geográficos
+  const SPECIAL_TERRITORIES_WITHOUT_TOPOJSON = new Set([
+    // Territorios disputados
+    'XA',   // Paracel Islands
+    'XAD',  // Akrotiri and Dhekelia
+    'XB',   // Spratly Islands
+    'XC',   // Aksai Chin
+    'XD',   // Arunachal Pradesh
+    'XE',   // China/India
+    'XF',   // Hala'Ib Triangle
+    'XG',   // Ilemi Triangle
+    'XH',   // Jammu Kashmir
+    'XI',   // Kuril Islands
+    'XJL',  // No mans land
+    'XKO',  // Kosovo
+    'XL',   // Navassa Island
+    'XM',   // Scarborough Reef
+    'XN',   // Senkaku Islands
+    'XO',   // Bassas Da India
+    'XU',   // Abyei
+    'XV',   // Bir Tawil
+    'XXR',  // Equatorial Guinea/Gabon
+    'XXS',  // Chagos Islands
+    
+    // Micro-estados sin subdivisiones
+    'VAT',  // Vatican City
+    'MCO',  // Monaco
+    'SMR',  // San Marino
+    'LIE',  // Liechtenstein
+    'AND',  // Andorra
+    'NRU',  // Nauru
+    'TUV',  // Tuvalu
+    'PLW',  // Palau
+    'GIB',  // Gibraltar
+    'MAC',  // Macao
+    'HKG'   // Hong Kong
+  ]);
+  
   // Helper para delays con Promesas
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   
@@ -1218,6 +1259,8 @@
       try {
         // Load country data (solo si NO viene de búsqueda directa con polígonos ya cargados)
         let countryPolygons: any[] = [];
+        let isSpecialTerritory = false;
+        
         if (!skipPolygonLoad) {
           countryPolygons = await this.loadCountryPolygons(iso);
           
@@ -1227,8 +1270,15 @@
             return;
           }
           
+          // Si es un territorio especial sin polígonos, está permitido
           if (!countryPolygons?.length) {
-            throw new Error(`No polygons found for country ${iso}`);
+            if (SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(iso)) {
+              console.log(`[Navigation] 🏝️ Territorio especial sin subdivisiones: ${iso}`);
+              console.log(`[Navigation] ✅ Navegación permitida en nivel país (sin subdivisiones)`);
+              isSpecialTerritory = true;
+            } else {
+              throw new Error(`No polygons found for country ${iso}`);
+            }
           }
         } else {
           console.log('[navigateToCountry] 🔍 Saltando carga de polígonos (ya cargados desde búsqueda directa)');
@@ -1295,6 +1345,10 @@
           await this.renderCountryView(iso, countryPolygons);
         } else if (skipPolygonLoad) {
           console.log('[navigateToCountry] 🔍 Saltando renderizado (polígonos ya renderizados desde búsqueda directa)');
+        } else if (isSpecialTerritory) {
+          console.log('[navigateToCountry] 🏝️ Territorio especial - mantener vista mundial sin subdivisiones');
+          // Para territorios especiales: mantener los polígonos mundiales pero cambiar el estado de navegación
+          // Los datos del país se mostrarán en el breadcrumb pero no se cargarán subdivisiones
         }
         
         // REMOVIDO: No cargar subdivisiones automáticamente
@@ -1674,16 +1728,18 @@
 
         // Load subdivision data (solo si NO viene de búsqueda directa con polígonos ya cargados)
         let subdivisionPolygons: any[] = [];
+        let hasNoSubdivisions = false;
+        
         if (!skipPolygonLoad) {
           subdivisionPolygons = await this.loadSubdivisionPolygons(countryIso, subdivisionId);
           console.log(`[Navigation] 📦 subdivisionPolygons cargados: ${subdivisionPolygons.length} polígonos`);
           
           if (!subdivisionPolygons?.length) {
-            console.error(`[Navigation] ❌ ERROR: No hay polígonos para renderizar, abortando navegación`);
-            return;
+            console.log(`[Navigation] 🏝️ Subdivisión sin archivos TopoJSON - solo actualizar estado`);
+            hasNoSubdivisions = true;
+          } else {
+            console.log(`[Navigation] ✅ Polígonos válidos, continuando con renderizado`);
           }
-          
-          console.log(`[Navigation] ✅ Polígonos válidos, continuando con renderizado`);
         } else {
           console.log('[navigateToSubdivision] 🔍 Saltando carga de polígonos (ya cargados desde búsqueda directa)');
         }
@@ -1738,6 +1794,15 @@
           console.log('[History] 🔄 Restaurando subdivisión desde historial:', subdivisionName);
         }
 
+        // Si es una subdivisión sin polígonos, NO cambiar nivel de navegación
+        if (hasNoSubdivisions) {
+          console.log('[Navigation] 🏝️ Subdivisión sin TopoJSON - nivel permanece en COUNTRY');
+          // NO cambiar el nivel de navegación - debe permanecer en 'country'
+          // NO actualizar navigationState ni navigationHistory
+          console.log('[Navigation] ✅ Nivel permanece en COUNTRY - Mapa actual permanece visible');
+          return; // ❌ NO continuar con renderizado ni carga de datos
+        }
+        
         // Render subdivision view PRIMERO (solo si cargamos polígonos)
         // NO limpiar answersData todavía en modo trending - lo haremos justo antes de cargar datos
         console.log(`[Navigation] 🎨 Verificando condición para renderizar: skipPolygonLoad=${skipPolygonLoad}, subdivisionPolygons.length=${subdivisionPolygons.length}`);
@@ -2113,9 +2178,85 @@
         resolve();
       });
       
+      // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel mundial - agregado)
+      // Funciona tanto en modo encuesta específica como en modo trending
+      console.log('[Navigation] 🔍 DEBUG: activePollOptions.length =', activePollOptions.length);
+      console.log('[Navigation] 🔍 DEBUG: answersData keys =', answersData ? Object.keys(answersData).length : 0);
+      console.log('[Navigation] 🔍 DEBUG: activePoll =', activePoll?.id || 'null (modo trending)');
+      
+      if (activePollOptions.length > 0 && answersData && Object.keys(answersData).length > 0) {
+        const mode = activePoll ? 'encuesta específica' : 'trending';
+        console.log(`[Navigation] ✅ Actualizando votos para nivel mundial (${mode})`);
+        
+        // Agregar todos los votos de todos los países
+        const worldTotals: Record<string, number> = {};
+        Object.values(answersData).forEach(countryData => {
+          if (countryData && typeof countryData === 'object') {
+            Object.entries(countryData).forEach(([key, value]) => {
+              worldTotals[key] = (worldTotals[key] || 0) + (Number(value) || 0);
+            });
+          }
+        });
+        
+        console.log('[Navigation] 🔍 DEBUG: worldTotals =', worldTotals);
+        
+        const updatedOptions = activePollOptions.map(option => {
+          const votesForOption = worldTotals[option.key] || 0;
+          console.log(`[Navigation]   ${option.label}: ${votesForOption} votos (mundial)`);
+          return { ...option, votes: votesForOption };
+        });
+        
+        activePollOptions = [...updatedOptions];
+        voteOptions = [...updatedOptions];
+        voteOptionsUpdateTrigger++;
+        
+        // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen horizontal
+        legendItems = activePollOptions.map(opt => ({
+          key: opt.key,
+          color: opt.color,
+          count: opt.votes || 0
+        }));
+        console.log('[Navigation] ✅ legendItems actualizado para barra de progreso:', legendItems.length, 'items');
+        
+        // ✅ countryChartSegments se actualiza automáticamente por el bloque reactivo (línea 5721)
+        
+        tick().then(() => {
+          console.log('[Navigation] ✅ Votos y barrita actualizados en nivel mundial - UI debería actualizarse');
+        });
+      } else {
+        console.log('[Navigation] ⚠️ NO se actualizan votos - razones:');
+        if (activePollOptions.length === 0) console.log('  - activePollOptions está vacío');
+        if (!answersData) console.log('  - answersData es null/undefined');
+        if (answersData && Object.keys(answersData).length === 0) console.log('  - answersData no tiene países');
+      }
+      
       // NIVEL MUNDIAL: NO mostrar etiquetas automáticamente
       // Las etiquetas solo se muestran en niveles 2, 3 y 4
       console.log('[Navigation] 🌍 Nivel Mundial: Sin etiquetas automáticas');
+    }
+
+    // Método especial para territorios sin subdivisiones: actualiza a nivel country sin renderizar
+    updateToCountryWithoutSubdivisions(iso: string, countryName: string) {
+      console.log('[Navigation] 🏝️ updateToCountryWithoutSubdivisions:', iso, countryName);
+      
+      // Update state to country level (permite navegación a otros países)
+      this.state = {
+        level: 'country',
+        countryIso: iso,
+        subdivisionId: null,
+        path: [iso]
+      };
+      
+      // Sync with reactive navigationState
+      navigationState = { ...this.state };
+      
+      // Update history
+      this.history = [
+        { level: 'world', name: 'World' },
+        { level: 'country', name: countryName, iso }
+      ];
+      
+      console.log('[Navigation] ✅ Estado actualizado a COUNTRY (sin subdivisiones)');
     }
 
     async navigateBack() {
@@ -5450,6 +5591,13 @@
   
 
   async function loadCountryTopoAsGeoFeatures(iso: string): Promise<any[]> {
+    // Verificar si es un territorio especial sin subdivisiones
+    if (SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(iso)) {
+      console.log(`[LoadTopo] 🏝️ Territorio especial sin subdivisiones: ${iso}`);
+      console.log(`[LoadTopo] ✅ Retornando array vacío (navegación permitida sin subdivisiones)`);
+      return [];
+    }
+    
     const path = getCountryPath(iso);
     console.log(`[LoadTopo] Cargando ${iso}...`);
     
@@ -5576,10 +5724,33 @@
   }
   
   $: countryChartSegments = (() => {
-    if (!selectedCountryIso) return [];
-    const rec = answersData?.[selectedCountryIso];
-    if (!rec) return [];
-    return generateCountryChartSegments([rec]);
+    // NIVEL MUNDIAL: Agregar todos los votos de todos los países
+    if (!selectedCountryIso && answersData && Object.keys(answersData).length > 0) {
+      console.log('[Reactivo] 🌍 countryChartSegments - NIVEL MUNDIAL, agregando datos');
+      const worldTotals: Record<string, number> = {};
+      Object.values(answersData).forEach(countryData => {
+        if (countryData && typeof countryData === 'object') {
+          Object.entries(countryData).forEach(([key, value]) => {
+            worldTotals[key] = (worldTotals[key] || 0) + (Number(value) || 0);
+          });
+        }
+      });
+      const segments = generateCountryChartSegments([worldTotals]);
+      console.log('[Reactivo] 🌍 countryChartSegments mundial generado:', segments.length, 'segmentos');
+      return segments;
+    }
+    
+    // NIVEL PAÍS: Mostrar datos del país (o vacío si no hay datos)
+    if (selectedCountryIso) {
+      const rec = answersData?.[selectedCountryIso];
+      console.log('[Reactivo] 🏳️ countryChartSegments - NIVEL PAÍS:', selectedCountryIso, 'tiene datos:', !!rec);
+      const segments = generateCountryChartSegments(rec ? [rec] : []);
+      console.log('[Reactivo] 🏳️ countryChartSegments país generado:', segments.length, 'segmentos');
+      return segments;
+    }
+    
+    console.log('[Reactivo] ⚪ countryChartSegments - SIN NIVEL, retornando []');
+    return [];
   })();
 
   // Reactive statement para generar gráfico mundial
@@ -6393,14 +6564,24 @@
       const iso = isoOf(feat);
       let name = nameOf(feat);
       
-      if (currentLevel === 'world' && iso) {
-        // Click on country from world view
+      // Detectar si es un click en país (no tiene ID_1) - puede ser desde world O desde country sin subdivisiones
+      const isCountryClick = iso && !feat.properties?.ID_1 && !feat.properties?.id_1;
+      
+      if ((currentLevel === 'world' || (currentLevel === 'country' && isCountryClick)) && iso) {
+        // Click on country from world view OR from country view without subdivisions (permite cambiar de país)
+        
+        // PASO 0b: Si es un territorio especial, permitir navegación incluso sin datos
+        const isSpecialTerritory = SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(iso);
+        if (isSpecialTerritory) {
+          console.log(`[PolygonClick] 🏝️ Territorio especial detectado: ${iso}`);
+          console.log('[PolygonClick] ✅ Navegación permitida (nivel país sin subdivisiones)');
+        }
         
         // PASO 1: Verificar si hay datos ANTES de permitir la navegación
         // IMPORTANTE: answersData ya está filtrado por la encuesta activa (si existe)
         const countryRecord = answersData?.[iso];
-        if (!countryRecord) {
-          console.log('[PolygonClick] País sin datos, tratando como click fuera');
+        if (!countryRecord && !isSpecialTerritory) {
+          console.log('[PolygonClick] País sin datos (no es territorio especial), tratando como click fuera');
           // NO HAY DATOS: Tratar como click fuera (no hace nada en nivel mundial)
           return;
         }
@@ -6421,19 +6602,31 @@
         
         // PASO 3: Calcular zoom INMEDIATAMENTE para respuesta instantánea
         const centroid = centroidOf(feat);
-        const adaptiveAltitude = calculateAdaptiveZoom(feat);
+        let adaptiveAltitude: number;
+        
+        if (isSpecialTerritory) {
+          // Para territorios especiales: zoom muy cercano (micro-estados)
+          adaptiveAltitude = 0.15; // Zoom máximo para ver territorios muy pequeños
+          console.log('[PolygonClick] 🔍 Zoom cercano para micro-estado:', adaptiveAltitude);
+        } else {
+          // Para países normales: zoom adaptativo según tamaño
+          adaptiveAltitude = calculateAdaptiveZoom(feat);
+        }
+        
         scheduleZoom(centroid.lat, centroid.lng, adaptiveAltitude, 500, 0);
         
-        // PASO 4: Actualizar datos del país
-        const countryData = [countryRecord];
-        countryChartSegments = generateCountryChartSegments(countryData);
+        // PASO 4: Actualizar datos del país (puede be undefined para territorios sin datos)
+        const countryData = countryRecord ? [countryRecord] : [];
+        const manualSegments = generateCountryChartSegments(countryData);
+        console.log('[Click] 📊 Actualizando countryChartSegments manualmente:', iso, 'tiene datos:', !!countryRecord, 'segmentos:', manualSegments.length);
+        countryChartSegments = manualSegments;
         
         // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 2)
-        if (countryRecord && activePollOptions.length > 0) {
-          console.log('[Click] ✅ Actualizando votos para nivel 2 (país):', iso);
+        if (activePollOptions.length > 0) {
+          console.log('[Click] ✅ Actualizando votos para nivel 2 (país):', iso, countryRecord ? 'con datos' : 'sin datos (votos=0)');
           
           const updatedOptions = activePollOptions.map(option => {
-            const votesForOption = countryRecord[option.key] || 0;
+            const votesForOption = countryRecord ? (countryRecord[option.key] || 0) : 0;
             console.log(`[Click]   ${option.label}: ${votesForOption} votos`);
             return { ...option, votes: votesForOption };
           });
@@ -6442,12 +6635,78 @@
           voteOptions = [...updatedOptions];
           voteOptionsUpdateTrigger++;
           
+          // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen horizontal
+          legendItems = activePollOptions.map(opt => ({
+            key: opt.key,
+            color: opt.color,
+            count: opt.votes || 0
+          }));
+          console.log('[Click] ✅ legendItems actualizado para barra de progreso:', legendItems.length, 'items');
+          
           tick().then(() => {
-            console.log('[Click] ✅ Votos actualizados en nivel 2 - UI debería actualizarse');
+            console.log('[Click] ✅ Votos y barra actualizados en nivel 2 - UI debería actualizarse');
           });
         }
         
-        // PASO 5: PRE-CARGAR subdivisiones en paralelo durante el zoom (sin bloquear)
+        // PASO 5: Para territorios especiales, actualizar a nivel COUNTRY pero sin cargar subdivisiones
+        if (isSpecialTerritory) {
+          console.log(`[Navigate] 🏝️ Territorio especial: Actualizar a nivel COUNTRY sin subdivisiones`);
+          
+          // SÍ cambiar a nivel 'country' para permitir navegación a otros países
+          selectedCountryName = name;
+          selectedCountryIso = iso;
+          
+          // Actualizar navigationManager al nivel country
+          if (navigationManager) {
+            navigationManager.updateToCountryWithoutSubdivisions(iso, name);
+          }
+          
+          // Actualizar breadcrumb
+          navigationHistory = [
+            { level: 'world', name: 'World' },
+            { level: 'country', name: name, iso }
+          ];
+          
+          // HISTORY API: Guardar en historial
+          if (!isNavigatingFromHistory) {
+            const historyState = {
+              level: 'country',
+              countryIso: iso,
+              countryName: name,
+              isSpecialTerritory: true,
+              timestamp: Date.now()
+            };
+            const url = `/?country=${encodeURIComponent(iso)}`;
+            history.pushState(historyState, '', url);
+            console.log('[History] 📍 Territorio especial (nivel country):', name);
+          }
+          
+          // Activar polígono centrado con etiqueta
+          setTimeout(() => {
+            centerPolygon = feat;
+            centerPolygonId = iso;
+            isCenterPolygonActive = true;
+            globe?.refreshPolyAltitudes?.();
+            
+            subdivisionLabels = [{
+              name: name,
+              lat: centroid.lat,
+              lng: centroid.lng,
+              text: name,
+              size: 1.2,
+              opacity: 1.0
+            }];
+            updateSubdivisionLabels(true);
+            
+            console.log('[Click] 🏝️ Territorio especial en nivel COUNTRY (sin subdivisiones):', iso);
+          }, 250);
+          
+          console.log(`[Navigate] ✅ Nivel COUNTRY - Mapa mundial visible, puedes navegar a otros países`);
+          console.log(`[Navigate] ⏹️ Saltando precarga de polígonos para territorio especial`);
+          return; // ⚠️ IMPORTANTE: No intentar cargar subdivisiones ni navegar
+        }
+        
+        // PASO 6: PRE-CARGAR subdivisiones en paralelo durante el zoom (sin bloquear)
         const preloadPromise = (async () => {
           try {
             if (preloadedCountryIso !== iso) {
@@ -6465,7 +6724,7 @@
           }
         })();
         
-        // PASO 5: Navegar más temprano (200ms) para que aparezcan antes
+        // PASO 6: Navegar más temprano (200ms) para que aparezcan antes
         setTimeout(async () => {
           try {
             await tick();
@@ -6561,21 +6820,42 @@
           });
         }
         
-        // PASO 3: Verificar si tiene subdivisiones (nivel 3)
-        // Intentar cargar el archivo de subdivisión para ver si existe
-        const subdivisionPath = getCountryPath(iso, subdivisionId);
-        console.log('[PolygonClick] 🔍 Verificando subdivisiones en:', subdivisionPath);
+        // PASO 3: Verificar si es el nivel mínimo en la base de datos
+        // Si isLowestLevel = true, NO intentar navegar más profundo aunque tenga archivos
+        console.log('[PolygonClick] 🔍 Verificando si es nivel mínimo en DB...');
         
-        const hasSubdivisions = await (async () => {
-          try {
-            const resp = await fetch(subdivisionPath, { method: 'HEAD' });
-            console.log('[PolygonClick] 🔍 Respuesta HEAD:', resp.ok ? 'OK (tiene subdivisiones)' : `Error ${resp.status}`);
-            return resp.ok;
-          } catch (err) {
-            console.log('[PolygonClick] ❌ Error verificando subdivisiones:', err);
-            return false;
+        let isLowestLevel = false;
+        try {
+          const dbCheckResp = await apiCall(`/api/subdivisions/check-lowest?id=${encodeURIComponent(subdivisionKey)}`);
+          if (dbCheckResp.ok) {
+            const { isLowestLevel: lowest } = await dbCheckResp.json();
+            isLowestLevel = lowest;
+            console.log('[PolygonClick] 📊 isLowestLevel en DB:', isLowestLevel);
           }
-        })();
+        } catch (err) {
+          console.log('[PolygonClick] ⚠️ No se pudo verificar isLowestLevel, continuando con verificación de archivos');
+        }
+        
+        // Si NO es nivel mínimo en DB, verificar archivos TopoJSON
+        let hasSubdivisions = false;
+        
+        if (!isLowestLevel) {
+          const subdivisionPath = getCountryPath(iso, subdivisionId);
+          console.log('[PolygonClick] 🔍 Verificando subdivisiones en:', subdivisionPath);
+          
+          hasSubdivisions = await (async () => {
+            try {
+              const resp = await fetch(subdivisionPath, { method: 'HEAD' });
+              console.log('[PolygonClick] 🔍 Respuesta HEAD:', resp.ok ? 'OK (tiene subdivisiones)' : `Error ${resp.status}`);
+              return resp.ok;
+            } catch (err) {
+              console.log('[PolygonClick] ❌ Error verificando subdivisiones:', err);
+              return false;
+            }
+          })();
+        } else {
+          console.log('[PolygonClick] ✅ Es nivel mínimo en DB, no buscar subdivisiones');
+        }
         
         // PASO 4: Calcular zoom y centrar
         const centroid = centroidOf(feat);
@@ -6601,8 +6881,12 @@
             await updateGlobeColors(true);
           }, 200);
         } else {
-          // NO tiene subdivisiones: solo centrar cámara, mostrar info y activar etiqueta
-          console.log(`[PolygonClick] ⚠️ ${subdivisionName} NO tiene subdivisiones, solo centrando...`);
+          // NO tiene subdivisiones (es nivel mínimo): solo centrar SIN cambiar nivel
+          console.log(`[PolygonClick] 🏝️ ${subdivisionName} es nivel mínimo, solo zoom (nivel permanece en COUNTRY)...`);
+          
+          // NO cambiar el nivel de navegación - permanece en 'country'
+          // Solo hacer zoom y resaltar el polígono
+          
           scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
           
           // ACTIVAR polígono centrado con etiqueta
@@ -6612,8 +6896,10 @@
             isCenterPolygonActive = true;
             globe?.refreshPolyAltitudes?.();
             addCenterPolygonLabel();
-            console.log('[Click] Polígono activado con etiqueta:', subdivisionKey);
-          }, 250); // Esperar que el zoom haya avanzado
+            console.log('[Click] 🏝️ Subdivisión mínima resaltada (nivel country):', subdivisionKey);
+          }, 250);
+          
+          console.log('[PolygonClick] ✅ Zoom completado - Nivel permanece en COUNTRY');
         }
         
       } else if (currentLevel === 'subdivision' && feat.properties?.ID_2) {

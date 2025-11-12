@@ -161,9 +161,21 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
   const intensityMin = vals.length ? Math.min(...vals) : 0;
   const intensityMax = vals.length ? Math.max(...vals) : 1;
   
+  // IMPORTANTE: Ordenar polígonos por área (pequeños primero, grandes al final)
+  // Esto asegura que países pequeños como Vaticano se DETECTEN PRIMERO en el raycasting
+  const sortedData = [...data].sort((a, b) => {
+    const areaA = calculatePolygonArea(a);
+    const areaB = calculatePolygonArea(b);
+    return areaA - areaB; // Ascendente: pequeños primero
+  });
+  
+  console.log(`[computeGlobeViewModel] ✅ Polígonos ordenados por área (pequeños primero para raycasting)`);
+  const smallest = sortedData.slice(0, 5);
+  console.log(`[computeGlobeViewModel] 🔍 5 polígonos más pequeños (detectados primero):`, 
+    smallest.map(f => `${getFeatureId(f)} (${calculatePolygonArea(f).toFixed(6)})`));
     
   return {
-    polygons: data,
+    polygons: sortedData,
     isoDominantKey,
     legendItems,
     trendingTags,
@@ -174,4 +186,37 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
     intensityMin,
     intensityMax,
   };
+}
+
+// Función auxiliar para calcular área aproximada de un polígono
+function calculatePolygonArea(feature: any): number {
+  try {
+    const geom = feature?.geometry;
+    if (!geom || !geom.coordinates) return 0;
+    
+    let totalArea = 0;
+    
+    const calculateRingArea = (ring: number[][]): number => {
+      if (!ring || ring.length < 3) return 0;
+      let area = 0;
+      for (let i = 0; i < ring.length - 1; i++) {
+        const [x1, y1] = ring[i];
+        const [x2, y2] = ring[i + 1];
+        area += x1 * y2 - x2 * y1;
+      }
+      return Math.abs(area / 2);
+    };
+    
+    if (geom.type === 'Polygon') {
+      totalArea = calculateRingArea(geom.coordinates[0]);
+    } else if (geom.type === 'MultiPolygon') {
+      for (const poly of geom.coordinates) {
+        totalArea += calculateRingArea(poly[0]);
+      }
+    }
+    
+    return totalArea;
+  } catch {
+    return 0;
+  }
 }
