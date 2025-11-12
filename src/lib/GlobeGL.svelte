@@ -268,7 +268,7 @@
 
   // Umbrales de altitud para mostrar textos (Level of Detail)
   // Cuanto MENOR es la altitud, MÁS cerca estás y MÁS etiquetas debes ver
-  const COUNTRY_LABELS_ALT = 2.5; // mostrar etiquetas de países cuando altitud < 2.5
+  const COUNTRY_LABELS_ALT = 5.0; // mostrar etiquetas de países cuando altitud < 5.0 (siempre en nivel mundial)
   const SUBDIVISION_LABELS_ALT = 0.8; // mostrar etiquetas de subdivisiones cuando altitud < 0.8
   const DETAILED_LABELS_ALT = 0.3; // mostrar etiquetas detalladas cuando altitud < 0.3
   
@@ -2230,9 +2230,9 @@
         if (answersData && Object.keys(answersData).length === 0) console.log('  - answersData no tiene países');
       }
       
-      // NIVEL MUNDIAL: NO mostrar etiquetas automáticamente
-      // Las etiquetas solo se muestran en niveles 2, 3 y 4
-      console.log('[Navigation] 🌍 Nivel Mundial: Sin etiquetas automáticas');
+      // NIVEL MUNDIAL: Las etiquetas se manejan con autoSelectCenterPolygon
+      // (solo muestra el país centrado, igual que en otros niveles)
+      console.log('[Navigation] 🌍 Nivel Mundial: Etiquetas manejadas por autoSelectCenterPolygon');
     }
 
     // Método especial para territorios sin subdivisiones: actualiza a nivel country sin renderizar
@@ -2316,6 +2316,9 @@
         // Clear subdivision labels
         subdivisionLabels = [];
         updateSubdivisionLabels(false);
+        
+        // Las etiquetas en nivel mundial se manejan con autoSelectCenterPolygon
+        // (solo muestra el país centrado, igual que en otros niveles)
       } catch (error) {
         console.error('[Navigation] Error rendering world view:', error);
       }
@@ -3658,9 +3661,8 @@
   }
   
   async function updateLabelsForCurrentView(pov: { lat: number; lng: number; altitude: number }, forceImmediate: boolean = false) {
-    // SISTEMA SIMPLIFICADO: Solo el sistema de polígono centrado
-    // No hay etiquetas automáticas, solo la etiqueta del polígono en el centro
-    // Las etiquetas se manejan completamente en autoSelectCenterPolygon
+    // TODOS LOS NIVELES: Las etiquetas se manejan con el sistema de polígono centrado
+    // (autoSelectCenterPolygon) - solo muestra la etiqueta del polígono centrado en pantalla
     return;
   }
 
@@ -4954,8 +4956,14 @@
       const props = centerPolygon.properties;
       let name = 'Región';
       
+      const currentLevel = navigationManager?.getCurrentLevel();
+      
+      if (currentLevel === 'world') {
+        // Nivel mundial: usar propiedades de país
+        name = props?.NAME_ENGL || props?.CNTR_NAME || props?.NAME || props?.name || 'País';
+      }
       // Primero intentar NAME_2 (nivel 3 y 4)
-      if (props?.NAME_2 || props?.name_2) {
+      else if (props?.NAME_2 || props?.name_2) {
         name = props.NAME_2 || props.name_2;
       }
       // Luego NAME_1 (nivel 2)
@@ -5036,9 +5044,18 @@
         
         // Obtener nombre
         let name = '';
-        if (props.NAME_2 || props.name_2) name = props.NAME_2 || props.name_2;
-        else if (props.NAME_1 || props.name_1) name = props.NAME_1 || props.name_1;
-        else if (props.NAME || props.name) name = props.NAME || props.name;
+        const currentLevel = navigationManager?.getCurrentLevel();
+        
+        if (currentLevel === 'world') {
+          // Nivel mundial: usar propiedades de país
+          name = props.NAME_ENGL || props.CNTR_NAME || props.NAME || props.name || '';
+        } else if (props.NAME_2 || props.name_2) {
+          name = props.NAME_2 || props.name_2;
+        } else if (props.NAME_1 || props.name_1) {
+          name = props.NAME_1 || props.name_1;
+        } else if (props.NAME || props.name) {
+          name = props.NAME || props.name;
+        }
         
         if (!name) continue;
         
@@ -5073,15 +5090,9 @@
   
   // Función para auto-seleccionar polígono más cercano al centro
   function autoSelectCenterPolygon(forceActivate: boolean = false) {
-    // Activar SOLO en niveles 2, 3 y 4 (country, subdivision)
+    // Activar en TODOS los niveles (world, country, subdivision)
     const currentLevel = navigationManager?.getCurrentLevel();
     if (!currentLevel) return;
-    
-    // En nivel mundial: NO activar NUNCA (sin etiquetas automáticas)
-    if (currentLevel === 'world') {
-      console.log('[AutoSelect] Nivel mundial: auto-selección desactivada');
-      return;
-    }
     
     // Esperar un frame para que el globo haya renderizado
     requestAnimationFrame(() => {
@@ -5100,15 +5111,27 @@
           const props = detected.properties;
           let detectedId = '';
           
-          // Usar la misma lógica que globeDataProc.ts: del más específico al más general
-          if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
+          // Lógica de detección de ID según el nivel
+          if (currentLevel === 'world') {
+            // NIVEL MUNDIAL: buscar SOLO propiedades de país
+            detectedId = String(
+              props.ISO3_CODE || 
+              props.iso3_code ||
+              props.ISO_A3 || 
+              props.iso_a3 || 
+              props.ADM0_A3 || 
+              props.adm0_a3 ||
+              ''
+            ).toUpperCase();
+            console.log('[AutoSelect] Nivel mundial - ID detectado:', detectedId, 'de:', { ISO3_CODE: props.ISO3_CODE, NAME_ENGL: props.NAME_ENGL });
+          } else if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
             // Nivel 3 o 4: tiene ID_2
             detectedId = String(props.ID_2 || props.id_2 || props.GID_2 || props.gid_2);
           } else if (props.ID_1 || props.id_1 || props.GID_1 || props.gid_1) {
             // Nivel 2: tiene ID_1
             detectedId = String(props.ID_1 || props.id_1 || props.GID_1 || props.gid_1);
           } else if (props.ISO_A3 || props.iso_a3) {
-            // Nivel 1: país
+            // Nivel 1: país (fallback)
             detectedId = String(props.ISO_A3 || props.iso_a3 || '').toUpperCase();
           }
           
@@ -5216,16 +5239,34 @@
         const props = poly.properties;
         if (!props) continue;
         
-        // Usar la misma lógica que globeDataProc.ts: del más específico al más general
+        // Log de propiedades del primer polígono para debug
+        if (polygonsWithId === 0 && currentLevel === 'world') {
+          console.log('[FindClosest] 🔍 PRIMER POLÍGONO - Todas las claves:', Object.keys(props));
+          console.log('[FindClosest] 🔍 PRIMER POLÍGONO - Objeto completo:', props);
+          console.log('[FindClosest] 🔍 PRIMER POLÍGONO - Polígono completo:', poly);
+        }
+        
+        // Lógica de detección de ID según el nivel
         let polyId = '';
-        if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
+        if (currentLevel === 'world') {
+          // NIVEL MUNDIAL: buscar SOLO propiedades de país
+          polyId = String(
+            props.ISO3_CODE || 
+            props.iso3_code ||
+            props.ISO_A3 || 
+            props.iso_a3 || 
+            props.ADM0_A3 || 
+            props.adm0_a3 ||
+            ''
+          ).toUpperCase();
+        } else if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
           // Nivel 3 o 4: tiene ID_2
           polyId = String(props.ID_2 || props.id_2 || props.GID_2 || props.gid_2);
         } else if (props.ID_1 || props.id_1 || props.GID_1 || props.gid_1) {
           // Nivel 2: tiene ID_1
           polyId = String(props.ID_1 || props.id_1 || props.GID_1 || props.gid_1);
         } else if (props.ISO_A3 || props.iso_a3) {
-          // Nivel 1: país
+          // Nivel 1: país (fallback)
           polyId = String(props.ISO_A3 || props.iso_a3 || '').toUpperCase();
         }
         
