@@ -67,27 +67,35 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			pollOptions.map(opt => [opt.id, opt.optionKey])
 		);
 
-		// Agrupar votos por subdivisión nivel 2 (comunidades/estados)
+		// Agrupar votos por TODOS los niveles (individual Y agregado)
+		// Esto permite visualización en nivel 2 Y drill-down a nivel 3
 		const subdivisionVotes: Record<string, Record<string, number>> = {};
 
 		for (const vote of votes) {
-			// Extraer nivel 2 del subdivisionId
-			// ESP.1.2 → ESP.1 (comunidad)
-			// ESP.1 → ESP.1 (ya es comunidad)
-			const parts = vote.subdivision.subdivisionId.split('.');
-			const subdivisionKey = parts.length >= 2 
-				? `${parts[0]}.${parts[1]}`  // ESP.1
-				: vote.subdivision.subdivisionId;  // ESP (fallback a país)
-
 			const optionKey = optionIdToKey.get(vote.optionId);
 			if (!optionKey) continue;
 
-			if (!subdivisionVotes[subdivisionKey]) {
-				subdivisionVotes[subdivisionKey] = {};
+			// 1. Guardar voto en el nivel COMPLETO (nivel 3)
+			// BRA.20.124 → BRA.20.124
+			const fullKey = vote.subdivision.subdivisionId;
+			if (!subdivisionVotes[fullKey]) {
+				subdivisionVotes[fullKey] = {};
 			}
+			subdivisionVotes[fullKey][optionKey] = 
+				(subdivisionVotes[fullKey][optionKey] || 0) + 1;
 
-			subdivisionVotes[subdivisionKey][optionKey] = 
-				(subdivisionVotes[subdivisionKey][optionKey] || 0) + 1;
+			// 2. TAMBIÉN agregar al nivel 2 (para visualización de estados)
+			// BRA.20.124 → BRA.20 (agregado)
+			const parts = vote.subdivision.subdivisionId.split('.');
+			if (parts.length >= 3) {
+				// Solo agregar si es nivel 3 o superior
+				const level2Key = `${parts[0]}.${parts[1]}`; // BRA.20
+				if (!subdivisionVotes[level2Key]) {
+					subdivisionVotes[level2Key] = {};
+				}
+				subdivisionVotes[level2Key][optionKey] = 
+					(subdivisionVotes[level2Key][optionKey] || 0) + 1;
+			}
 		}
 
 		

@@ -106,6 +106,18 @@ export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): Comput
   console.log(`[computeGlobeViewModel] TODOS los sin datos (${unmatchedCountries.length}):`, unmatchedCountries);
   console.log(`[computeGlobeViewModel] answersData total keys:`, Object.keys(answersData).length);
   
+  // DEBUG específico para Brasil
+  const brasilPolygons = data.filter(f => getFeatureId(f)?.startsWith('BRA.'));
+  const brasilWithData = brasilPolygons.filter(f => {
+    const id = getFeatureId(f);
+    return id && answersData[id];
+  });
+  if (brasilPolygons.length > 0) {
+    console.log(`[computeGlobeViewModel] 🇧🇷 Brasil: ${brasilPolygons.length} polígonos, ${brasilWithData.length} con datos`);
+    console.log(`[computeGlobeViewModel] 🇧🇷 Brasil IDs con datos:`, brasilWithData.map(f => getFeatureId(f)).slice(0, 5));
+    console.log(`[computeGlobeViewModel] 🇧🇷 Brasil dominant keys:`, brasilWithData.map(f => isoDominantKey[getFeatureId(f)!]).slice(0, 5));
+  }
+  
   // Verificar si hay algún país en answersData que NO esté en el archivo mundial
   const worldCountries = new Set(data.map(f => getFeatureId(f)).filter(id => id));
   const missingInWorld = Object.keys(answersData).filter(iso => !worldCountries.has(iso));

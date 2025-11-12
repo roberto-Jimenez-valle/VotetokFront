@@ -1283,10 +1283,11 @@
           console.log('[History] 🔄 Restaurando país desde historial:', countryName);
         }
 
-        // LIMPIAR answersData ANTES de renderizar para evitar que autoSelect use datos mundiales
+        // LIMPIAR answersData Y CACHE ANTES de renderizar para evitar datos obsoletos
         if (!skipPolygonLoad) {
           answersData = {};
-          console.log('[Navigation] 🧹 answersData limpiado antes de renderizar país');
+          isoDominantKey = {}; // También limpiar el mapa de colores dominantes
+          console.log('[Navigation] 🧹 answersData e isoDominantKey limpiados antes de renderizar país');
         }
 
         // Render country view PRIMERO (solo si cargamos polígonos)
@@ -6067,6 +6068,30 @@
       });
     }
     
+    // DEBUG ESPECÍFICO: Brasil y especialmente Mato Grosso do Sul
+    if (featureId === 'BRA.11') {
+      // SIEMPRE loguear Mato Grosso do Sul
+      console.log('[onPolyCapColor] 🔴 MATO GROSSO DO SUL (BRA.11):', {
+        level: currentLevel,
+        hasAnswersData: !!answersData?.[featureId],
+        answersDataValue: answersData?.[featureId],
+        isoDominantKey: isoDominantKey?.[featureId],
+        colorMap: colorMap,
+        finalColor: isoDominantKey?.[featureId] ? colorMap?.[isoDominantKey[featureId]] : 'NONE',
+        activePoll: !!activePoll,
+        isoDominantKeyEmpty: !isoDominantKey || Object.keys(isoDominantKey).length === 0
+      });
+    } else if (featureId.startsWith('BRA.') && Math.random() < 0.05) {
+      console.log('[onPolyCapColor] 🇧🇷 Brasil:', {
+        id: featureId,
+        name: props.NAME_1,
+        level: currentLevel,
+        hasAnswersData: !!answersData?.[featureId],
+        isoDominantKey: isoDominantKey?.[featureId],
+        finalColor: isoDominantKey?.[featureId] ? colorMap?.[isoDominantKey[featureId]] : 'NONE'
+      });
+    }
+    
     // VERIFICACIÓN CRÍTICA: Si activePoll es null, SOLO usar datos si isoDominantKey tiene contenido
     // Esto evita que se muestren colores de encuestas cerradas
     if (!activePoll) {
@@ -6606,6 +6631,11 @@
         // Verificar si tiene datos
         const cityRecord = answersData?.[cityId];
         if (!cityRecord) {
+          console.log('[PolygonClick] ❌ Ciudad sin datos en answersData');
+          console.log('[PolygonClick] 🔍 cityId buscado:', cityId);
+          console.log('[PolygonClick] 📊 answersData tiene', Object.keys(answersData || {}).length, 'claves');
+          console.log('[PolygonClick] 📊 IDs de nivel 3 en answersData:', 
+            Object.keys(answersData || {}).filter(k => k.split('.').length === 3).slice(0, 10));
           console.log('[PolygonClick] Ciudad sin datos, volviendo a nivel país');
           // NO HAY DATOS: Volver a nivel país
           subdivisionLabels = [];

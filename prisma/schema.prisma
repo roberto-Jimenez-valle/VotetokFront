@@ -324,6 +324,9 @@ model Subdivision {
   latitude        Float                                    // Latitud del centroide
   longitude       Float                                    // Longitud del centroide
   
+  // Indicador de último nivel disponible
+  isLowestLevel   Boolean  @default(false) @map("is_lowest_level")  // True si no tiene subniveles (puede tener votos directos)
+  
   // Metadata
   createdAt       DateTime @default(now()) @map("created_at")
   
