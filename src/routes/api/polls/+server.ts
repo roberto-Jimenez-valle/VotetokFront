@@ -41,8 +41,27 @@ export const POST: RequestHandler = async (event) => {
       if (authUser) {
         user = authUser;
       } else {
-        // Usuario de prueba para desarrollo
-        user = { userId: 1, role: 'user' };
+        // Buscar o crear usuario de prueba para desarrollo
+        let devUser = await prisma.user.findFirst({
+          where: { email: 'dev@local.test' }
+        });
+        
+        if (!devUser) {
+          console.log('[DEV] Creando usuario de prueba...');
+          devUser = await prisma.user.create({
+            data: {
+              email: 'dev@local.test',
+              username: 'dev_user',
+              displayName: 'Dev User',
+              avatarUrl: null,
+              bio: null,
+              verified: false,
+              countryIso3: 'ESP'
+            }
+          });
+        }
+        
+        user = { userId: devUser.id, role: 'user' };
         console.log('[DEV] Creando encuesta sin autenticación - usando userId:', user.userId);
       }
     }
@@ -177,6 +196,7 @@ export const POST: RequestHandler = async (event) => {
               optionKey: opt.optionKey,
               optionLabel: opt.optionLabel,
               color: opt.color,
+              imageUrl: opt.imageUrl || null,
               createdById: opt.createdById || finalUserId,
               displayOrder: opt.displayOrder ?? index
             }))

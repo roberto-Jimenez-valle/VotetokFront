@@ -8,15 +8,58 @@
     width?: string;
     height?: string;
     mode?: 'full' | 'preview' | 'linkedin'; // full = 180px alto, preview = 130px, linkedin = preview horizontal
+    autoplay?: boolean;
   }
   
-  let { url = '', mode = 'preview', width = '100%', height = '100%' }: Props = $props();
+  let { url = '', mode = 'preview', width = '100%', height = '100%', autoplay = false }: Props = $props();
   
   let embedType: string = $state('');
   let embedHTML: string = $state('');
   let metadata: any = $state(null);
   let loading: boolean = $state(true);
   let error: boolean = $state(false);
+  
+  // Procesar embedHTML para agregar autoplay
+  function processEmbedHTML(html: string): string {
+    if (!html || !autoplay) return html;
+    
+    let processed = html;
+    
+    // Para iframes de YouTube
+    if (processed.includes('youtube.com/embed') || processed.includes('youtu.be')) {
+      processed = processed.replace(
+        /src="([^"]+)"/,
+        (match, url) => {
+          const separator = url.includes('?') ? '&' : '?';
+          return `src="${url}${separator}autoplay=1"`;
+        }
+      );
+    }
+    
+    // Para iframes de Vimeo
+    if (processed.includes('player.vimeo.com')) {
+      processed = processed.replace(
+        /src="([^"]+)"/,
+        (match, url) => {
+          const separator = url.includes('?') ? '&' : '?';
+          return `src="${url}${separator}autoplay=1"`;
+        }
+      );
+    }
+    
+    // Para videos HTML5
+    if (processed.includes('<video')) {
+      if (!processed.includes('autoplay')) {
+        processed = processed.replace('<video', '<video autoplay');
+      }
+      if (!processed.includes('playsinline')) {
+        processed = processed.replace('<video', '<video playsinline');
+      }
+      // No agregar muted para que tenga sonido por defecto
+    }
+    
+    return processed;
+  }
 
   /**
    * Convierte una URL de imagen externa a través del proxy de medios
@@ -308,7 +351,7 @@
   {:else if embedHTML && embedHTML.trim() !== ''}
     <!-- Renderizar cualquier HTML de embed (oEmbed, etc.) -->
     <div class="embed-container">
-      {@html embedHTML}
+      {@html processEmbedHTML(embedHTML)}
     </div>
   {:else if (embedType === 'generic' || embedType === 'opengraph' || embedType === 'text' || embedType === 'website') && metadata}
     <button 

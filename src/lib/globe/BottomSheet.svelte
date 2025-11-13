@@ -12,6 +12,7 @@
   import SinglePollSection from './cards/sections/SinglePollSection.svelte';
   import WhoToFollowSection from './cards/sections/WhoToFollowSection.svelte';
   import AdCard from './cards/sections/AdCard.svelte';
+  import PollMaximizedView from '$lib/components/PollMaximizedView.svelte';
 
   // Helper para reemplazar setTimeout con Promesas
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -331,7 +332,8 @@
             label: opt.optionLabel || opt.label || `Opción ${optIdx + 1}`,
             color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][optIdx % 4],
             votes: opt._count?.votes || 0,  // Auto-calculado desde votos
-            avatarUrl: opt.createdBy?.avatarUrl || poll.user?.avatarUrl  // Desde relación User
+            avatarUrl: opt.createdBy?.avatarUrl || poll.user?.avatarUrl,  // Desde relación User
+            imageUrl: opt.imageUrl  // URL de preview (imagen/video/link)
           })),
           totalVotes: poll._count?.votes || 0,  // Auto-calculado desde votos
           totalViews: 0,  // Campo legacy - no se usa
@@ -929,6 +931,13 @@
   // Estado del botón "volver al inicio"
   let showScrollToTop = false;
   
+  // Modal de preview fullscreen usando PollMaximizedView
+  let showPreviewModal = false;
+  let previewModalOption: any = null; // Array de opciones transformadas
+  let previewModalPoll: any = null;
+  let previewModalOptionIndex: string = ''; // ID de la opción activa
+  let previewModalPollIndex: number = 0;
+  
   // Auto-hide navigation bar on scroll
   let showNavBar = true;
   let lastScrollTop = 0;
@@ -968,20 +977,7 @@
   // Texto de ayuda bajo los botones: ciudad > subdivisión > país > Global
   $: hintTarget = selectedCityName || selectedSubdivisionName || selectedCountryName || 'Global';
 
-  // Aproximación de escala en kilómetros basada en altitud actual del globo
-  function getScaleKm(alt: number): number {
-    // Mapa heurístico sencillo para una barra de ~60px
-    if (alt >= 3.0) return 4000;
-    if (alt >= 2.0) return 2000;
-    if (alt >= 1.0) return 1000;
-    if (alt >= 0.6) return 500;
-    if (alt >= 0.3) return 200;
-    if (alt >= 0.15) return 100;
-    if (alt >= 0.08) return 50;
-    return 20;
-  }
-  $: scaleKm = getScaleKm(currentAltitude ?? 0);
-  const numberFmt = new Intl.NumberFormat('es-ES');
+ 
   
   // Referencia al input de búsqueda
   let searchInput: HTMLInputElement;
@@ -1093,57 +1089,6 @@
         isSearching = false;
       }
     }, 300);
-  }
-  
-  // Helper function to get country name from ISO code
-  function getCountryName(iso: string): string {
-    // Map of common country codes to names (expandable)
-    const countryNames: Record<string, string> = {
-      'ESP': 'España',
-      'COL': 'Colombia',
-      'MEX': 'México',
-      'ARG': 'Argentina',
-      'USA': 'United States',
-      'CAN': 'Canada',
-      'FRA': 'France',
-      'DEU': 'Germany',
-      'ITA': 'Italy',
-      'GBR': 'United Kingdom',
-      'PRT': 'Portugal',
-      'BRA': 'Brazil',
-      'CHL': 'Chile',
-      'PER': 'Peru',
-      'VEN': 'Venezuela',
-      'ECU': 'Ecuador',
-      'BOL': 'Bolivia',
-      'URY': 'Uruguay',
-      'PRY': 'Paraguay',
-      'CRI': 'Costa Rica',
-      'PAN': 'Panama',
-      'NIC': 'Nicaragua',
-      'HND': 'Honduras',
-      'GTM': 'Guatemala',
-      'SLV': 'El Salvador',
-      'CUB': 'Cuba',
-      'DOM': 'Dominican Republic',
-      'PRI': 'Puerto Rico',
-      'PHL': 'Philippines',
-      'CHN': 'China',
-      'JPN': 'Japan',
-      'KOR': 'South Korea',
-      'IND': 'India',
-      'RUS': 'Russia',
-      'AUS': 'Australia',
-      'NZL': 'New Zealand',
-      'ZAF': 'South Africa',
-      'EGY': 'Egypt',
-      'MAR': 'Morocco',
-      'NGA': 'Nigeria',
-      'KEN': 'Kenya',
-      'ETH': 'Ethiopia'
-    };
-    
-    return countryNames[iso] || iso;
   }
   
   // Function to select a search result
@@ -1985,6 +1930,7 @@
       label: '',
       color: randomColor,
       votes: 0,
+      imageUrl: null,
       isEditing: true // ← Flag directo en la opción
     };
     
@@ -2211,7 +2157,8 @@
         key: result.data.optionKey,
         label: result.data.optionLabel,
         color: result.data.color,
-        votes: 0
+        votes: 0,
+        imageUrl: result.data.imageUrl
       };
       
       poll.options = [...poll.options, newOption];
@@ -2416,6 +2363,137 @@
         behavior: 'smooth'
       });
     }
+  }
+  
+  // Handler para abrir modal de preview fullscreen
+  function handleOpenPreviewModal(event: CustomEvent) {
+    const { option, pollId } = event.detail;
+    console.log('[BottomSheet] 🎬 Abriendo modal preview:', { option, pollId });
+    
+    // Encontrar la encuesta
+    let poll = null;
+    
+    if (activePoll && activePoll.id.toString() === pollId.toString()) {
+      poll = activePoll;
+    } else {
+      poll = additionalPolls.find(p => p.id.toString() === pollId.toString());
+    }
+    
+    if (!poll) {
+      console.error('[BottomSheet] No se encontró la encuesta:', pollId);
+      return;
+    }
+    
+    // Transformar opciones al formato que espera PollMaximizedView
+    // Calcular total de votos para porcentajes
+    const totalVotes = (poll.options || []).reduce((sum: number, opt: any) => sum + (opt.votes || 0), 0);
+    
+    // Obtener los votos del usuario para esta encuesta
+    const userVoteForPoll = userVotes[poll.id.toString()];
+    const isMultiple = poll.multipleChoice;
+    
+    const transformedOptions = (poll.options || [])
+      .filter((opt: any) => opt.imageUrl) // Solo opciones con preview
+      .map((opt: any) => {
+        const votes = opt.votes || 0;
+        const pct = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+        const optionKey = opt.key || opt.id;
+        
+        // Determinar si esta opción fue votada
+        let hasVoted = false;
+        if (isMultiple) {
+          // Encuesta múltiple: array de keys
+          hasVoted = Array.isArray(userVoteForPoll) && userVoteForPoll.includes(optionKey);
+        } else {
+          // Encuesta simple: string key
+          hasVoted = userVoteForPoll === optionKey;
+        }
+        
+        return {
+          id: optionKey,
+          label: opt.label || opt.optionLabel || '',
+          color: opt.color || '#10b981',
+          imageUrl: opt.imageUrl,
+          pct: pct,
+          votes: votes,
+          voted: hasVoted
+        };
+      });
+    
+    if (transformedOptions.length === 0) {
+      console.error('[BottomSheet] No hay opciones con preview');
+      return;
+    }
+    
+    // Encontrar la opción activa
+    const activeId = transformedOptions.find((opt: any) => 
+      opt.id === option.key || opt.label === option.label
+    )?.id || transformedOptions[0].id;
+    
+    previewModalPoll = poll;
+    previewModalOption = transformedOptions;
+    previewModalOptionIndex = activeId;
+    showPreviewModal = true;
+    
+    console.log('[BottomSheet] 📊 Modal data:', { 
+      activeId,
+      totalOptions: transformedOptions.length,
+      pollTitle: poll.question || poll.title
+    });
+  }
+  
+  // Función para cerrar modal de preview
+  function closePreviewModal() {
+    console.log('[BottomSheet] ❌ Cerrando modal preview');
+    showPreviewModal = false;
+    previewModalOption = null;
+    previewModalPoll = null;
+    previewModalOptionIndex = '';
+    previewModalPollIndex = 0;
+  }
+  
+  // Navegar a la siguiente encuesta con opciones de preview
+  function navigateToNextPollWithPreview() {
+    const allPolls = activePoll ? [activePoll, ...additionalPolls] : additionalPolls;
+    const currentIndex = previewModalPollIndex === -1 ? 0 : previewModalPollIndex + 1;
+    
+    // Buscar siguiente encuesta con opciones con preview
+    for (let i = currentIndex + 1; i < allPolls.length; i++) {
+      const poll = allPolls[i];
+      const optionsWithPreview = (poll.options || []).filter((opt: any) => opt.imageUrl);
+      if (optionsWithPreview.length > 0) {
+        // Abrir esta encuesta en el modal
+        const firstOption = optionsWithPreview[0];
+        handleOpenPreviewModal({
+          detail: { option: firstOption, pollId: poll.id.toString() }
+        } as CustomEvent);
+        console.log('[BottomSheet] ⬇️ Siguiente encuesta:', i);
+        return;
+      }
+    }
+    console.log('[BottomSheet] No hay más encuestas con preview');
+  }
+  
+  // Navegar a la encuesta anterior con opciones de preview
+  function navigateToPreviousPollWithPreview() {
+    const allPolls = activePoll ? [activePoll, ...additionalPolls] : additionalPolls;
+    const currentIndex = previewModalPollIndex === -1 ? 0 : previewModalPollIndex + 1;
+    
+    // Buscar encuesta anterior con opciones con preview
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      const poll = allPolls[i];
+      const optionsWithPreview = (poll.options || []).filter((opt: any) => opt.imageUrl);
+      if (optionsWithPreview.length > 0) {
+        // Abrir esta encuesta en el modal
+        const firstOption = optionsWithPreview[0];
+        handleOpenPreviewModal({
+          detail: { option: firstOption, pollId: poll.id.toString() }
+        } as CustomEvent);
+        console.log('[BottomSheet] ⬆️ Encuesta anterior:', i);
+        return;
+      }
+    }
+    console.log('[BottomSheet] No hay encuestas anteriores con preview');
   }
   
   // Debug: log when world chart segments change
@@ -2925,7 +3003,6 @@
                     {#if hasLevel3}
                       <!-- Nivel 3: Mostrar jerarquía completa -->
                       <span class="hierarchy">
-                        <span class="hierarchy-country">{getCountryName(parts[0])}</span>
                         <span class="hierarchy-separator">→</span>
                         <span class="hierarchy-subdivision">{result.parentName || 'Subdivisión'}</span>
                         <span class="hierarchy-separator">→</span>
@@ -2934,7 +3011,6 @@
                     {:else}
                       <!-- Nivel 2: Mostrar país y subdivisión -->
                       <span class="hierarchy">
-                        <span class="hierarchy-country">{getCountryName(parts[0])}</span>
                         <span class="hierarchy-separator">→</span>
                         <span class="hierarchy-subdivision">{result.name}</span>
                       </span>
@@ -3106,6 +3182,7 @@
             const pollId = e.detail.pollId;
             goToChartView(pollId);
           }}
+          on:openPreviewModal={handleOpenPreviewModal}
         />
         
         <!-- Separador después de encuesta activa -->
@@ -3230,6 +3307,7 @@
           }}
           on:publishOption={(e: any) => handlePublishOption(e.detail.pollId, e.detail.optionKey, e.detail.label, e.detail.color)}
           on:goToChart={(e) => goToChartView(e.detail.pollId)}
+          on:openPreviewModal={handleOpenPreviewModal}
         />
       {/each} 
 
@@ -3300,7 +3378,7 @@
       </svg>
     </button>
   {/if}
-  
+
   <!-- Modal de opciones de encuesta -->
   {#if showPollOptionsModal && selectedPollForOptions}
     <div class="poll-options-overlay" 
@@ -3395,6 +3473,104 @@
     </div>
   {/if}
 </div>
+
+<!-- Modal fullscreen de preview FUERA del BottomSheet -->
+{#if showPreviewModal && previewModalOption && previewModalPoll}
+  <PollMaximizedView
+    options={previewModalOption}
+    bind:activeOptionId={previewModalOptionIndex}
+    pollTitle={previewModalPoll.question || previewModalPoll.title || 'Encuesta'}
+    creator={{
+      username: previewModalPoll.creator?.username || previewModalPoll.user?.username || 'Usuario',
+      avatar: previewModalPoll.creator?.avatar || previewModalPoll.user?.avatar
+    }}
+    stats={{
+      totalVotes: previewModalPoll.stats?.totalVotes || previewModalPoll.totalVotes || 0,
+      totalViews: previewModalPoll.stats?.totalViews || previewModalPoll.totalViews || 0
+    }}
+    readOnly={true}
+    onClose={closePreviewModal}
+    onOptionChange={(optionId) => {
+      previewModalOptionIndex = optionId;
+      console.log('[BottomSheet] Opción cambiada a:', optionId);
+    }}
+    onSwipeVertical={(direction) => {
+      console.log('[BottomSheet] Swipe vertical:', direction);
+      if (direction === 'down') {
+        // Siguiente encuesta
+        navigateToNextPollWithPreview();
+      } else {
+        // Encuesta anterior
+        navigateToPreviousPollWithPreview();
+      }
+    }}
+    onVote={async (optionId) => {
+      console.log('[BottomSheet] 🗳️ Votando desde modal preview:', optionId);
+      if (!previewModalPoll) return;
+      
+      // Usar el handler de voto existente
+      const option = previewModalOption.find((opt: any) => opt.id === optionId);
+      if (option) {
+        await handleVote(option.id, previewModalPoll.id.toString());
+        
+        // Esperar a que se actualice el estado y recargar modal
+        setTimeout(async () => {
+          // Recargar la encuesta desde el servidor para obtener datos actualizados
+          try {
+            const response = await apiCall(`/api/polls/${previewModalPoll.id}`);
+            if (response.ok) {
+              const updatedPollData = await response.json();
+              const updatedPoll = updatedPollData.data || updatedPollData;
+              
+              // Actualizar la encuesta en el estado
+              if (activePoll && activePoll.id === updatedPoll.id) {
+                activePoll = updatedPoll;
+              } else {
+                const index = additionalPolls.findIndex(p => p.id === updatedPoll.id);
+                if (index !== -1) {
+                  additionalPolls[index] = updatedPoll;
+                }
+              }
+              
+              // Reabrir el modal con datos actualizados
+              handleOpenPreviewModal({
+                detail: { option, pollId: previewModalPoll.id.toString() }
+              } as CustomEvent);
+            }
+          } catch (error) {
+            console.error('[BottomSheet] Error recargando encuesta:', error);
+          }
+        }, 300);
+      }
+    }}
+    onOpenInGlobe={() => {
+      console.log('[BottomSheet] 🌍 Abrir en mapa desde modal');
+      if (previewModalPoll) {
+        openAdditionalPollInGlobe(previewModalPoll);
+        closePreviewModal();
+      }
+    }}
+    onShare={() => {
+      console.log('[BottomSheet] 📤 Compartir desde modal');
+      // TODO: Implementar compartir
+      if (navigator.share && previewModalPoll) {
+        navigator.share({
+          title: previewModalPoll.question || previewModalPoll.title,
+          text: 'Mira esta encuesta en VoteTok',
+          url: window.location.origin + '/?poll=' + previewModalPoll.id
+        }).catch(err => console.log('Error sharing:', err));
+      }
+    }}
+    onBookmark={() => {
+      console.log('[BottomSheet] 🔖 Guardar desde modal');
+      // TODO: Implementar guardar
+    }}
+    onRepost={() => {
+      console.log('[BottomSheet] 🔄 Republicar desde modal');
+      // TODO: Implementar republicar
+    }}
+  />
+{/if}
 
 <!-- Modal del selector de color para opciones colaborativas -->
 {#if colorPickerOpenFor}

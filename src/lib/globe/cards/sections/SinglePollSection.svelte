@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
+  import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -27,6 +28,68 @@
   let longPressTimer: any = null;
   let longPressActivated: boolean = false; // Flag para evitar interferencia con doble click
   const LONG_PRESS_DELAY = 500; // ms
+  
+  
+  // Debug console para móvil
+  let debugLogs: string[] = [];
+  let showDebugConsole = false;
+  
+  function addDebugLog(message: string) {
+    debugLogs = [...debugLogs.slice(-50), `${new Date().toLocaleTimeString()}: ${message}`];
+    console.log(message);
+  }
+  
+  function copyDebugLogs() {
+    const text = debugLogs.join('\n');
+    
+    // Intentar con clipboard API (solo funciona en HTTPS)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Logs copiados al portapapeles');
+      }).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  }
+  
+  function fallbackCopy(text: string) {
+    // Fallback para HTTP: mostrar en textarea para copiar manualmente
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '0';
+    textarea.style.width = '100%';
+    textarea.style.height = '200px';
+    textarea.style.zIndex = '99999';
+    textarea.style.background = 'white';
+    textarea.style.color = 'black';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    alert('Selecciona todo el texto y cópialo manualmente (Ctrl+C). Luego cierra.');
+    
+    setTimeout(() => {
+      document.body.removeChild(textarea);
+    }, 30000);
+  }
+  
+  // Funciones para modal de preview - dispatch evento al padre
+  function openPreviewModal(option: any) {
+    addDebugLog(`🎬 Abriendo modal fullscreen para: ${option.key}`);
+    dispatch('openPreviewModal', { option, pollId: poll.id });
+  }
+  
+  // Log inicial cuando el componente se monta
+  onMount(() => {
+    addDebugLog('✅ Debug console inicializada');
+    if (poll) {
+      addDebugLog(`📊 Poll ID: ${poll.id || 'N/A'}`);
+      addDebugLog(`📋 Opciones: ${poll.options?.length || 0}`);
+    }
+  });
   
   // Title tooltip (para títulos truncados)
   let showTitleTooltip: boolean = false;
@@ -818,12 +881,10 @@
           {longPressTooltipText}
         </div>
       {/if}
-      
-      
 
       <div 
         class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {isSingleOptionPoll ? 'compact-one' : ''} pagination-{paginationDirection}"
-      style="--items: {paginatedPoll.items.length}"
+      style="--items: {paginatedPoll.items.length}; overflow: hidden;"
       role="group"
       aria-label="Opciones de {poll.question || poll.title}"
       bind:this={pollGridRef}
@@ -866,6 +927,11 @@
           ontouchend={(e: TouchEvent) => {
             // Cancelar long press al soltar
             cancelLongPress();
+            
+            // PREVENIR click sintético del navegador
+            e.preventDefault();
+            e.stopPropagation();
+            
             // Manejar touch para móvil (igual que onclick)
             if (isNewOption || isSingleOptionPoll) { return; }
             
@@ -885,20 +951,13 @@
             // Si el long press acaba de activarse, ignorar este touch
             if (longPressActivated) {
               console.log('[SinglePoll] Touch ignorado - long press activo');
-              return;
-            }
-            
-            const editingOption = poll.options.find((opt: any) => opt.isEditing);
-            if (editingOption) {
-              dispatch('cancelEditing', { pollId: poll.id, optionKey: editingOption.key });
+              longPressActivated = false;
               return;
             }
             
             // Para polls múltiples o colaborativas: voto con un touch
             if (poll.type === 'multiple' || poll.type === 'collaborative') {
               if (state !== 'expanded' || activeAccordionIndex !== index) {
-                e.preventDefault();
-                e.stopPropagation();
                 handleSetActive(index);
                 return;
               }
@@ -906,16 +965,34 @@
               return;
             }
             
-            // Para polls normales: sistema de doble touch (funciona tanto colapsada como expandida)
-            e.preventDefault();
-            e.stopPropagation();
-            
+            // Para polls normales: abrir maximizado directamente (como CreatePollModal)
             const wasCollapsed = state !== 'expanded' || activeAccordionIndex !== index;
             
-            // Si está colapsada, abrirla
+            addDebugLog('📱🖐️ TOUCH EVENT HANDLER');
+            const debugInfo = `📱 Estado: wasCollapsed=${wasCollapsed}, key=${option.key}, hasImageUrl=${!!option.imageUrl}, imageUrl=${option.imageUrl}`;
+            addDebugLog(debugInfo);
+            
+            // Si está colapsada, abrirla primero
             if (wasCollapsed) {
+              e.preventDefault();
+              e.stopPropagation();
+              addDebugLog('✅ Abriendo opción colapsada');
               handleSetActive(index);
+              return; // NO mostrar tooltip de doble click
             }
+            
+            addDebugLog('[Touch] Ya estaba desplegada');
+            
+            // Si tiene preview y ya está desplegada, abrir modal fullscreen
+            if (option.imageUrl) {
+              e.preventDefault();
+              e.stopPropagation();
+              openPreviewModal(option);
+              return;
+            }
+            
+            e.preventDefault();
+            e.stopPropagation();
             
             // Incrementar contador y procesar doble touch
             clickCount++;
@@ -1014,16 +1091,39 @@
               return;
             }
             
-            // Para polls normales: sistema de doble click (funciona tanto colapsada como expandida)
-            e.preventDefault();
-            e.stopPropagation();
-            
+            // Para polls normales: abrir maximizado directamente (como CreatePollModal)
             const wasCollapsed = state !== 'expanded' || activeAccordionIndex !== index;
             
-            // Si está colapsada, abrirla
+            addDebugLog('🖱️🖱️ CLICK EVENT HANDLER (DESKTOP)');
+            console.log('[SinglePoll] 🔍 Estado:', { 
+              wasCollapsed, 
+              state, 
+              activeAccordionIndex, 
+              index,
+              pollType: poll.type 
+            });
+            
+            // Si está colapsada, abrirla primero
             if (wasCollapsed) {
+              addDebugLog('✅ [Click] Opción cerrada -> Abriendo');
+              e.preventDefault();
+              e.stopPropagation();
               handleSetActive(index);
+              return; // NO mostrar tooltip de doble click
             }
+            
+            addDebugLog('[Click] ⚠️ Ya estaba desplegada');
+            
+            // Si tiene preview y ya está desplegada, abrir modal fullscreen
+            if (option.imageUrl) {
+              e.preventDefault();
+              e.stopPropagation();
+              openPreviewModal(option);
+              return;
+            }
+            
+            e.preventDefault();
+            e.stopPropagation();
             
             // Incrementar contador y procesar doble click
             clickCount++;
@@ -1232,9 +1332,21 @@
             </button>
           {:else}
             <!-- Layout normal para opciones existentes -->
+            
+            <!-- MediaEmbed de fondo (si hay imageUrl) -->
+            {#if option.imageUrl}
+              <div class="option-media-background {activeAccordionIndex === index ? 'interactive' : ''}">
+                <MediaEmbed 
+                  url={option.imageUrl} 
+                  mode="full"
+                />
+                <div class="media-overlay"></div>
+              </div>
+            {/if}
+            
             <!-- Header con avatar y título -->
             {#if !isSingleOptionPoll}
-            <div class="card-header" style="position: relative;">
+            <div class="card-header {activeAccordionIndex === index && option.imageUrl ? 'with-preview' : ''}" style="position: relative;">
               <h2 class="question-title">{option.label}</h2>
               
               <!-- Botón de tooltip para texto largo (solo cuando está desplegada/activa) -->
@@ -1518,6 +1630,44 @@
   </div>
 </div>
 
+<!-- Debug Console para móvil (siempre visible) -->
+<button 
+  class="debug-toggle-btn"
+  onclick={() => {
+    showDebugConsole = !showDebugConsole;
+    addDebugLog('🔵 Toggle console: ' + showDebugConsole);
+  }}
+  type="button"
+  aria-label="Toggle debug console"
+>
+  🐛
+</button>
+
+{#if showDebugConsole}
+  <div class="debug-console">
+    <div class="debug-header">
+      <span>Debug Console</span>
+      <div>
+        <button onclick={copyDebugLogs} type="button">📋 Copiar</button>
+        <button onclick={() => {
+          debugLogs = [];
+          addDebugLog('🗑️ Logs limpiados');
+        }} type="button">🗑️ Limpiar</button>
+        <button onclick={() => showDebugConsole = false} type="button">✕</button>
+      </div>
+    </div>
+    <div class="debug-logs">
+      {#if debugLogs.length === 0}
+        <div class="debug-log">Sin logs aún... Toca una opción.</div>
+      {:else}
+        {#each debugLogs as log}
+          <div class="debug-log">{log}</div>
+        {/each}
+      {/if}
+    </div>
+  </div>
+{/if}
+
 <!-- Tooltip del título truncado (fuera de todo para máxima visibilidad) -->
 {#if showTitleTooltip}
   <div class="title-tooltip-overlay" onclick={hideTitleTooltip}>
@@ -1751,10 +1901,14 @@
   /* Vote cards con background sólido */
   :global(.vote-card) {
     background: #2a2c31 !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
   }
 
   :global(.vote-card.collapsed) {
     background: #2a2c31 !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
   }
 
   /* Contenedor de tarjetas con botón añadir */
@@ -1834,14 +1988,14 @@
   .card-header {
     background: transparent;
     position: relative;
-    z-index: 0;
+    z-index: 4;
     pointer-events: none;
   }
 
   .question-title {
     background: transparent;
     position: relative;
-    z-index: 0;
+    z-index: 4;
     pointer-events: none;
   }
 
@@ -1907,9 +2061,129 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    background: transparent;
+    align-items: center;
+    justify-content: center;
     z-index: 0;
+  }
+
+  /* MediaEmbed de fondo en opciones - igual que CreatePollModal */
+  .option-media-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 55%;
+    max-height: 220px;
+    max-width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    z-index: 0;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  
+  /* Permitir clicks cuando está activa PERO NO en el contenido del MediaEmbed */
+  .option-media-background.interactive {
+    pointer-events: none;
+    z-index: 3;
+    cursor: pointer;
+  }
+  
+  /* Modo maximizado - preview ocupa toda la card y permite interacción */
+  .option-media-background.is-maximized {
+    height: 100%;
+    max-height: 100%;
+    z-index: 10;
+    cursor: zoom-out;
+    border-radius: 16px;
+    pointer-events: auto;
+  }
+  
+  .option-media-background.is-maximized :global(*) {
+    pointer-events: auto;
+  }
+  
+  .option-media-background.is-maximized :global(img),
+  .option-media-background.is-maximized :global(video),
+  .option-media-background.is-maximized :global(iframe) {
+    pointer-events: auto;
+  }
+  
+  /* Overlay minimizado (oscuro) cuando está maximizado */
+  .media-overlay.minimized {
+    opacity: 0.3;
+  }
+  
+  .option-media-background :global(img),
+  .option-media-background :global(video),
+  .option-media-background :global(iframe) {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+  
+  .option-media-background :global(.media-embed-container) {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  
+  .option-media-background :global(*) {
+    pointer-events: none;
+  }
+  
+  /* Cuando está activa, ocupar toda la altura */
+  :global(.vote-card.is-active) .option-media-background {
+    height: 100%;
+    max-height: 260px;
+  }
+  
+  :global(.vote-card.is-active) .option-media-background :global(img),
+  :global(.vote-card.is-active) .option-media-background :global(video),
+  :global(.vote-card.is-active) .option-media-background :global(iframe) {
+    object-fit: contain;
+  }
+  
+  /* Overlay oscuro sobre el media */
+  .media-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.7) 0%,
+      rgba(0, 0, 0, 0.5) 30%,
+      rgba(0, 0, 0, 0.3) 50%,
+      rgba(0, 0, 0, 0.5) 70%,
+      rgba(0, 0, 0, 0.8) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+    transition: opacity 0.3s ease;
+  }
+  
+  .media-overlay.hidden {
+    opacity: 0;
+  }
+  
+  /* Ocultar elementos completamente */
+  .hidden {
+    display: none !important;
+  }
+  
+  /* Header y content con z-index superior cuando hay preview */
+  .card-header.with-preview,
+  .card-header.with-preview ~ .card-content {
+    position: relative;
+    z-index: 2;
   }
 
   .card-content::before {
@@ -1922,7 +2196,7 @@
     max-height: var(--fill-window, 120px);
     background: var(--card-color, rgba(0, 0, 0, 0.4));
     pointer-events: none;
-    z-index: 0;
+    z-index: 1;
     opacity: 0.8;
     transition: height 0.3s ease, opacity 0.2s ease;
   }
@@ -1933,7 +2207,7 @@
     justify-content: space-between;
     align-items: center;
     position: relative;
-    z-index: 1;
+    z-index: 4;
   }
 
   .bottom-buttons {
@@ -1951,7 +2225,7 @@
     padding: 0;
     background: transparent;
     position: relative;
-    z-index: 0;
+    z-index: 4;
     pointer-events: none;
   }
   
@@ -2675,6 +2949,200 @@
     0%, 20% { content: '.'; }
     40% { content: '..'; }
     60%, 100% { content: '...'; }
+  }
+  
+  /* Debug Console para móvil */
+  .debug-toggle-btn {
+    position: fixed;
+    bottom: 200px;
+    bottom: calc(200px + env(safe-area-inset-bottom));
+    right: 20px;
+    right: calc(20px + env(safe-area-inset-right));
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #ff6b6b;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .debug-toggle-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
+  }
+  
+  .debug-toggle-btn:active {
+    transform: scale(0.95);
+  }
+  
+  .debug-console {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: calc(100vw - 40px);
+    max-width: 500px;
+    height: 400px;
+    background: rgba(20, 20, 20, 0.98);
+    border: 1px solid #333;
+    border-radius: 12px;
+    z-index: 9998;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  
+  .debug-header {
+    padding: 12px 16px;
+    background: #2a2a2a;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+    border-radius: 12px 12px 0 0;
+  }
+  
+  .debug-header div {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .debug-header button {
+    background: #444;
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .debug-logs {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #0f0;
+  }
+  
+  .debug-log {
+    padding: 4px 0;
+    border-bottom: 1px solid #222;
+    word-break: break-all;
+  }
+  
+  /* Modal fullscreen para preview (estilo Instagram) */
+  .preview-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  .preview-modal-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .preview-modal-close {
+    position: absolute;
+    top: 20px;
+    top: calc(20px + env(safe-area-inset-top));
+    right: 20px;
+    right: calc(20px + env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100001;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+  }
+  
+  .preview-modal-close:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
+  }
+  
+  .preview-modal-close svg {
+    color: white;
+  }
+  
+  .preview-modal-media {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  
+  .preview-modal-media :global(.media-embed-container) {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+  }
+  
+  .preview-modal-media :global(img),
+  .preview-modal-media :global(video) {
+    max-width: 100vw;
+    max-height: 100vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+  
+  .preview-modal-media :global(iframe) {
+    width: 100vw;
+    height: 56.25vw; /* 16:9 aspect ratio */
+    max-height: 100vh;
+  }
+  
+  .preview-modal-info {
+    position: absolute;
+    bottom: 40px;
+    bottom: calc(40px + env(safe-area-inset-bottom));
+    left: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 20px;
+    z-index: 100000;
+  }
+  
+  .preview-modal-title {
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+  }
+  
+  .preview-modal-votes {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    margin: 0;
   }
   
 </style>

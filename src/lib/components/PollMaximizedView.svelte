@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X } from 'lucide-svelte';
+  import { ChevronDown, MoreVertical } from 'lucide-svelte';
   import MediaEmbed from './MediaEmbed.svelte';
   import { fade, fly } from 'svelte/transition';
 
@@ -8,34 +8,118 @@
     label: string;
     color: string;
     imageUrl?: string;
+    pct?: number; // Porcentaje real de la encuesta
+    votes?: number; // Votos reales
+    voted?: boolean; // Si el usuario votó por esta opción
+  }
+
+  interface PollCreator {
+    username: string;
+    avatar?: string;
+  }
+
+  interface PollStats {
+    totalVotes: number;
+    totalViews: number;
   }
 
   interface Props {
     options: PollOption[];
     activeOptionId: string;
     pollTitle: string;
+    creator?: PollCreator;
+    stats?: PollStats;
+    readOnly?: boolean; // Modo solo lectura
     onClose: () => void;
     onOptionChange: (optionId: string) => void;
-    onTitleChange: (title: string) => void;
-    onLabelChange: (optionId: string, label: string) => void;
-    onOpenColorPicker: (optionId: string) => void;
+    onSwipeVertical?: (direction: 'up' | 'down') => void; // Swipe vertical para cambiar encuesta
+    onVote?: (optionId: string) => void; // Votar con doble click
+    onTitleChange?: (title: string) => void;
+    onLabelChange?: (optionId: string, label: string) => void;
+    onOpenColorPicker?: (optionId: string) => void;
+    onOpenInGlobe?: () => void;
+    onShare?: () => void;
+    onBookmark?: () => void;
+    onRepost?: () => void;
   }
 
   let { 
     options, 
     activeOptionId = $bindable(), 
     pollTitle,
+    creator,
+    stats,
+    readOnly = false,
     onClose,
     onOptionChange,
-    onTitleChange,
-    onLabelChange,
-    onOpenColorPicker
+    onSwipeVertical = () => {},
+    onVote = () => {},
+    onTitleChange = () => {},
+    onLabelChange = () => {},
+    onOpenColorPicker = () => {},
+    onOpenInGlobe = () => {},
+    onShare = () => {},
+    onBookmark = () => {},
+    onRepost = () => {}
   }: Props = $props();
+
+  const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
 
   // Opción activa derivada (readonly, calculada reactivamente)
   let activeOption = $derived(options.find(opt => opt.id === activeOptionId));
   let activeIndex = $derived(options.findIndex(opt => opt.id === activeOptionId));
-  let percentage = $derived(Math.round(100 / options.length));
+  // Usar porcentaje real si existe, sino calcular
+  let percentage = $derived(activeOption?.pct !== undefined ? Math.round(activeOption.pct) : Math.round(100 / options.length));
+
+  // Estado del modal de opciones
+  let showOptionsModal = $state(false);
+  let modalDragStartY = $state(0);
+  let modalDragCurrentY = $state(0);
+  let isModalDragging = $state(false);
+
+  function formatNumber(num: number): string {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  }
+
+  // Handlers para drag del modal
+  function handleModalDragStart(e: TouchEvent | PointerEvent) {
+    e.stopPropagation(); // Evitar que afecte al modal principal
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    modalDragStartY = clientY;
+    modalDragCurrentY = 0;
+    isModalDragging = true;
+  }
+
+  function handleModalDragMove(e: TouchEvent | PointerEvent) {
+    if (!isModalDragging) return;
+    
+    e.stopPropagation(); // Evitar que afecte al modal principal
+    e.preventDefault(); // Evitar scroll del body
+    
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const deltaY = clientY - modalDragStartY;
+    
+    // Solo permitir drag hacia abajo
+    if (deltaY > 0) {
+      modalDragCurrentY = deltaY;
+    }
+  }
+
+  function handleModalDragEnd() {
+    if (!isModalDragging) return;
+    
+    // Si se arrastró más de 100px hacia abajo, cerrar el modal
+    if (modalDragCurrentY > 100) {
+      showOptionsModal = false;
+    }
+    
+    // Reset
+    isModalDragging = false;
+    modalDragCurrentY = 0;
+    modalDragStartY = 0;
+  }
 
   // Debug logs
   $effect(() => {
@@ -57,16 +141,28 @@
   let touchStartX = $state(0);
   let touchStartY = $state(0);
   let isDragging = $state(false);
+  
+  // Estado para doble click/tap
+  let lastTapTime = 0;
+  let tapTimeout: ReturnType<typeof setTimeout> | null = null;
+  
+  // Transiciones dinámicas
+  let transitionX = $state(0);
+  let transitionY = $state(0);
 
-  // Navegación simple
+  // Navegación simple con transiciones
   function goToPrevious() {
     if (activeIndex > 0) {
+      transitionX = -300; // Sale hacia la izquierda, entra desde derecha
+      transitionY = 0;
       onOptionChange(options[activeIndex - 1].id);
     }
   }
 
   function goToNext() {
     if (activeIndex < options.length - 1) {
+      transitionX = 300; // Sale hacia la derecha, entra desde izquierda
+      transitionY = 0;
       onOptionChange(options[activeIndex + 1].id);
     }
   }
@@ -75,7 +171,7 @@
     onOptionChange(optionId);
   }
 
-  // Swipe handlers simplificados
+  // Swipe handlers con doble tap
   function handleTouchStart(e: TouchEvent) {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
@@ -87,14 +183,57 @@
     
     const touch = e.changedTouches[0];
     const deltaX = touch.clientX - touchStartX;
-    const deltaY = Math.abs(touch.clientY - touchStartY);
+    const deltaY = touch.clientY - touchStartY;
+    const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     
-    // Solo swipe horizontal con threshold de 50px
-    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > deltaY) {
-      if (deltaX < 0) {
-        goToNext();
+    // Si es un tap (sin movimiento significativo)
+    if (moveDistance < 10) {
+      const now = Date.now();
+      const timeSinceLastTap = now - lastTapTime;
+      
+      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+        // Doble tap detectado - votar
+        if (activeOption && readOnly) {
+          console.log('[PollMaximizedView] 🗳️ Doble tap - Votando:', activeOption.id);
+          onVote(activeOption.id);
+        }
+        lastTapTime = 0; // Reset
       } else {
-        goToPrevious();
+        // Primer tap
+        lastTapTime = now;
+      }
+    } else {
+      // Es un swipe
+      // Determinar dirección predominante
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Swipe horizontal (cambiar opción) - threshold de 50px
+        if (Math.abs(deltaX) > 50) {
+          if (deltaX < 0) {
+            // Swipe a la izquierda → siguiente (sale hacia izquierda)
+            transitionX = 300;
+            transitionY = 0;
+            goToNext();
+          } else {
+            // Swipe a la derecha → anterior (sale hacia derecha)
+            transitionX = -300;
+            transitionY = 0;
+            goToPrevious();
+          }
+        }
+      } else {
+        // Swipe vertical (cambiar encuesta) - threshold de 80px
+        if (Math.abs(deltaY) > 80) {
+          transitionX = 0;
+          if (deltaY < 0) {
+            // Swipe hacia arriba → siguiente encuesta (sale hacia arriba)
+            transitionY = 300;
+            onSwipeVertical('down');
+          } else {
+            // Swipe hacia abajo → encuesta anterior (sale hacia abajo)
+            transitionY = -300;
+            onSwipeVertical('up');
+          }
+        }
       }
     }
     
@@ -124,22 +263,47 @@
   ontouchstart={handleTouchStart}
   ontouchend={handleTouchEnd}
 >
-  <!-- Título editable de la encuesta -->
-  <div class="poll-title-section">
-    <textarea
-      class="poll-title-input"
-      placeholder="¿Cuál es tu pregunta?"
-      value={pollTitle}
-      oninput={(e) => onTitleChange((e.target as HTMLTextAreaElement).value)}
-      rows="2"
-      maxlength="280"
-    ></textarea>
-  </div>
+  <!-- Título de la encuesta con avatar -->
+  {#key pollTitle}
+    <div 
+      class="poll-title-section"
+      in:fly={{ y: transitionY, duration: 250 }}
+      out:fly={{ y: -transitionY, duration: 250 }}
+    >
+      <div class="poll-header">
+        {#if creator}
+          <img 
+            src={creator.avatar || DEFAULT_AVATAR} 
+            alt={creator.username}
+            class="creator-avatar"
+          />
+        {/if}
+        {#if readOnly}
+          <h2 class="poll-title-readonly">{pollTitle}</h2>
+        {:else}
+          <textarea
+            class="poll-title-input"
+            placeholder="¿Cuál es tu pregunta?"
+            value={pollTitle}
+            oninput={(e) => onTitleChange((e.target as HTMLTextAreaElement).value)}
+            rows="2"
+            maxlength="280"
+          ></textarea>
+        {/if}
+      </div>
+    </div>
+  {/key}
 
   <!-- Contenedor de la opción activa -->
   {#if activeOption}
     {#key activeOptionId}
-      <div class="option-content-container">
+      <div 
+        class="option-content-container"
+        class:voted={activeOption.voted}
+        style={activeOption.voted ? `--vote-color: ${activeOption.color}` : ''}
+        in:fly={{ x: transitionX, y: transitionY, duration: 250 }}
+        out:fly={{ x: -transitionX, y: -transitionY, duration: 250 }}
+      >
         {#if activeOption.imageUrl}
           <!-- Media Preview con texto dentro -->
           <div class="media-preview">
@@ -148,19 +312,24 @@
               mode="full"
               width="100%"
               height="auto"
+              autoplay={true}
             />
 
             <!-- Texto con flechas en el bottom del preview -->
             <div class="text-with-arrows">
-              <!-- Textarea arriba -->
-              <textarea
-                class="option-label-input"
-                placeholder="Opción {activeIndex + 1}"
-                value={activeOption.label}
-                oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
-                rows="2"
-                maxlength="150"
-              ></textarea>
+              <!-- Label de opción -->
+              {#if readOnly}
+                <div class="option-label-readonly">{activeOption.label}</div>
+              {:else}
+                <textarea
+                  class="option-label-input"
+                  placeholder="Opción {activeIndex + 1}"
+                  value={activeOption.label}
+                  oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
+                  rows="2"
+                  maxlength="150"
+                ></textarea>
+              {/if}
 
               <!-- Flechas debajo a los lados -->
               <div class="arrows-below">
@@ -194,15 +363,19 @@
           <!-- Sin media: texto centrado en toda la pantalla -->
           <div class="text-only-container">
             <div class="text-with-arrows-centered">
-              <!-- Textarea centrado -->
-              <textarea
-                class="option-label-input-centered"
-                placeholder="Opción {activeIndex + 1}"
-                value={activeOption.label}
-                oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
-                rows="3"
-                maxlength="150"
-              ></textarea>
+              <!-- Label de opción centrado -->
+              {#if readOnly}
+                <div class="option-label-readonly-centered">{activeOption.label}</div>
+              {:else}
+                <textarea
+                  class="option-label-input-centered"
+                  placeholder="Opción {activeIndex + 1}"
+                  value={activeOption.label}
+                  oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
+                  rows="3"
+                  maxlength="150"
+                ></textarea>
+              {/if}
 
               <!-- Flechas debajo a los lados -->
               <div class="arrows-below">
@@ -240,12 +413,140 @@
   <!-- Porcentaje abajo a la izquierda -->
   {#if activeOption}
     <div class="percentage-bottom-left">
-      <span class="percentage-text">{percentage}%</span>
+      <div class="percentage-text">{percentage}%</div>
     </div>
   {/if}
 
-  <!-- Botones de acción en el bottom derecho -->
-  {#if activeOption}
+  <!-- Botones de acción abajo a la derecha (solo en modo readonly) -->
+  {#if activeOption && readOnly}
+    <div class="bottom-right-buttons">
+      <!-- Botón de opciones (3 puntos) -->
+      <button
+        type="button"
+        class="options-button"
+        onclick={() => showOptionsModal = true}
+        aria-label="Opciones"
+      >
+        <MoreVertical size={28} />
+      </button>
+      
+      <!-- Botón de minimizar -->
+      <button
+        type="button"
+        class="minimize-button-bottom"
+        onclick={onClose}
+        aria-label="Minimizar"
+      >
+        <ChevronDown size={24} />
+      </button>
+    </div>
+  {/if}
+
+  <!-- Modal de opciones (bottom sheet) -->
+  {#if showOptionsModal}
+    <div 
+      class="options-modal-overlay" 
+      role="button"
+      tabindex="0"
+      onclick={(e) => { e.stopPropagation(); showOptionsModal = false; }}
+      onkeydown={(e) => e.key === 'Enter' && (showOptionsModal = false)}
+      ontouchstart={(e) => e.stopPropagation()}
+      ontouchmove={(e) => e.stopPropagation()}
+      ontouchend={(e) => e.stopPropagation()}
+      transition:fade={{ duration: 200 }}
+    >
+      <div 
+        class="options-modal-content"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        style={isModalDragging ? `transform: translateY(${modalDragCurrentY}px); transition: none;` : ''}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
+        ontouchstart={handleModalDragStart}
+        ontouchmove={handleModalDragMove}
+        ontouchend={handleModalDragEnd}
+        onpointerdown={handleModalDragStart}
+        onpointermove={handleModalDragMove}
+        onpointerup={handleModalDragEnd}
+        in:fly={{ y: 300, duration: 250 }}
+        out:fly|global={{ y: 300, duration: 250 }}
+      >
+        <div class="options-modal-header" style="cursor: grab; user-select: none;">
+          <div class="modal-handle"></div>
+        </div>
+        
+        <div class="options-modal-actions">
+          <!-- Info: Votos y Vistas -->
+          {#if stats}
+            <div class="stats-row">
+              <div class="stat-item">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 11l3 3L22 4"></path>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                </svg>
+                <span class="stat-label">Votos</span>
+                <span class="stat-value">{formatNumber(stats.totalVotes)}</span>
+              </div>
+              <div class="stat-item">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span class="stat-label">Vistas</span>
+                <span class="stat-value">{formatNumber(stats.totalViews)}</span>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Acciones -->
+          <button class="action-item" onclick={() => { onOpenInGlobe(); showOptionsModal = false; }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            <span>Ver en el mapa</span>
+          </button>
+
+          <button class="action-item" onclick={() => { onBookmark(); showOptionsModal = false; }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Guardar</span>
+          </button>
+
+          <button class="action-item" onclick={() => { onRepost(); showOptionsModal = false; }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M17 1l4 4-4 4"/>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <path d="M7 23l-4-4 4-4"/>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+            <span>Republicar</span>
+          </button>
+
+          <button class="action-item" onclick={() => { onShare(); showOptionsModal = false; }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="18" cy="5" r="3"/>
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            <span>Compartir</span>
+          </button>
+        </div>
+
+        <button class="cancel-button" onclick={() => showOptionsModal = false}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Botones de acción en el bottom derecho (solo en modo edición) -->
+  {#if activeOption && !readOnly}
     <div class="action-buttons-bottom">
       <!-- Botón de cambiar color (izquierda) -->
       <button
@@ -341,6 +642,11 @@
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    min-height: 80px;
+    max-height: 120px;
+    display: flex;
+    align-items: center;
+    overflow-y: auto;
   }
 
   .poll-title-input {
@@ -371,6 +677,24 @@
     padding: 0;
     padding-bottom: 100px;
     gap: 0;
+    position: relative;
+    box-sizing: border-box;
+  }
+
+  /* Marco de voto - siempre presente pero transparente cuando no votado */
+  .option-content-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 4px solid transparent;
+    border-radius: 0;
+    pointer-events: none;
+    z-index: 10;
+    transition: border-color 0.2s ease;
+  }
+
+  .option-content-container.voted::before {
+    border-color: var(--vote-color);
   }
 
   /* Media preview - centrado vertical, todo el ancho */
@@ -754,6 +1078,276 @@
 
     .percentage-text {
       font-size: 20px;
+    }
+  }
+
+  /* Botón de minimizar abajo a la derecha (modo readonly) */
+  .minimize-button-bottom {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .minimize-button-bottom:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .minimize-button-bottom:active {
+    transform: scale(0.95);
+  }
+
+  /* Estilos para modo readonly */
+  .poll-title-readonly {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    flex: 1;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .option-label-readonly {
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+    padding: 12px 16px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  }
+
+  .option-label-readonly-centered {
+    color: white;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+    padding: 20px;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+  }
+
+  /* Header con avatar */
+  .poll-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .creator-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  /* Contenedor de botones abajo a la derecha */
+  .bottom-right-buttons {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 12px;
+    pointer-events: auto;
+  }
+
+  /* Botón de opciones (3 puntos) */
+  .options-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .options-button:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .options-button:active {
+    transform: scale(0.95);
+  }
+
+  /* Modal de opciones (bottom sheet) */
+  .options-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 99999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .options-modal-content {
+    width: 100%;
+    max-width: 500px;
+    background: #1a1a1a;
+    border-radius: 24px 24px 0 0;
+    padding: 0 0 20px 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    transition: transform 0.2s ease-out;
+    touch-action: pan-y;
+  }
+
+  .options-modal-header {
+    padding: 12px 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .modal-handle {
+    width: 40px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+  }
+
+  .options-modal-actions {
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Fila de estadísticas */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 8px;
+  }
+
+  .stat-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+  }
+
+  .stat-item svg {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .stat-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-value {
+    color: white;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  /* Botón de acción del modal */
+  .action-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 16px;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 12px;
+  }
+
+  .action-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .action-item:active {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.98);
+  }
+
+  .action-item svg {
+    color: rgba(255, 255, 255, 0.8);
+    flex-shrink: 0;
+  }
+
+  .action-item span {
+    flex: 1;
+    text-align: left;
+  }
+
+  /* Botón de cancelar */
+  .cancel-button {
+    width: calc(100% - 40px);
+    margin: 16px 20px 0 20px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .cancel-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .cancel-button:active {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(0.98);
+  }
+
+  /* Responsive para modal */
+  @media (max-width: 640px) {
+    .stat-item {
+      padding: 8px;
+    }
+
+    .stat-value {
+      font-size: 16px;
+    }
+
+    .action-item {
+      padding: 14px 12px;
+      font-size: 15px;
     }
   }
 </style>

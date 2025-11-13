@@ -26,7 +26,7 @@ export const OPTION_LABEL_MAX_LENGTH = 200;
 // ========================================
 export const HASHTAGS_MAX_COUNT = 10;
 export const HASHTAG_MAX_LENGTH = 30;
-export const HASHTAG_REGEX = /^[a-zA-Z0-9_-]+$/; // Solo alfanuméricos, guiones y underscores
+export const HASHTAG_REGEX = /^[\p{L}\p{N}_-]+$/u; // Letras Unicode (incluyendo tildes), números, guiones y underscores
 
 // ========================================
 // COLORES
@@ -103,7 +103,11 @@ export function validateDescription(description: string | null | undefined): { v
  * Validar opciones
  */
 export function validateOptions(options: any[]): { valid: boolean; error?: string } {
-  const validOptions = options.filter(opt => opt?.label?.trim());
+  // Soportar tanto 'label' (frontend) como 'optionLabel' (backend)
+  const validOptions = options.filter(opt => {
+    const label = opt?.label || opt?.optionLabel;
+    return label && label.trim();
+  });
   
   if (validOptions.length < OPTIONS_MIN_COUNT) {
     return { 
@@ -121,7 +125,8 @@ export function validateOptions(options: any[]): { valid: boolean; error?: strin
   
   // Validar longitud de cada opción
   for (const opt of validOptions) {
-    if (opt.label.trim().length > OPTION_LABEL_MAX_LENGTH) {
+    const label = opt.label || opt.optionLabel;
+    if (label.trim().length > OPTION_LABEL_MAX_LENGTH) {
       return { 
         valid: false, 
         error: `Cada opción no puede superar ${OPTION_LABEL_MAX_LENGTH} caracteres` 
@@ -130,7 +135,10 @@ export function validateOptions(options: any[]): { valid: boolean; error?: strin
   }
   
   // Verificar duplicados
-  const labels = validOptions.map(opt => opt.label.trim().toLowerCase());
+  const labels = validOptions.map(opt => {
+    const label = opt.label || opt.optionLabel;
+    return label.trim().toLowerCase();
+  });
   const hasDuplicates = labels.some((label, index) => labels.indexOf(label) !== index);
   
   if (hasDuplicates) {

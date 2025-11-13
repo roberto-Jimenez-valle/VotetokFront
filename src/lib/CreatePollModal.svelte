@@ -697,7 +697,19 @@
     }
     
     // Validar opciones usando función compartida
-    const optionsValidation = validateOptions(options);
+    // Considerar válidas las opciones con texto O con URL guardada
+    const optionsWithContent = options.map(opt => {
+      const hasLabel = opt.label && opt.label.trim().length > 0;
+      const hasUrl = optionUrls.has(opt.id) && optionUrls.get(opt.id);
+      const finalLabel = hasLabel ? opt.label.trim() : (hasUrl ? `[Preview-${opt.id}]` : '');
+      
+      return {
+        ...opt,
+        label: finalLabel
+      };
+    });
+    
+    const optionsValidation = validateOptions(optionsWithContent);
     if (!optionsValidation.valid) {
       errors.options = optionsValidation.error!;
     }
@@ -713,9 +725,9 @@
     }
     
     // Validar URLs de las opciones
-    const validOptions = options.filter(opt => opt.label.trim());
+    const validOptions = options.filter(opt => opt.label.trim() || optionUrls.get(opt.id));
     for (const opt of validOptions) {
-      const optionUrl = extractUrlFromText(opt.label) || opt.imageUrl;
+      const optionUrl = extractUrlFromText(opt.label) || optionUrls.get(opt.id) || opt.imageUrl;
       if (optionUrl) {
         const urlValidation = validateUrl(optionUrl);
         if (!urlValidation.valid) {
@@ -733,7 +745,8 @@
       for (const tag of tagArray) {
         const tagValidation = validateHashtag(tag);
         if (!tagValidation.valid) {
-          errors.hashtags = tagValidation.error!;
+          errors.hashtags = `${tagValidation.error} (en: "${tag}")`;
+          console.error('❌ Hashtag inválido:', tag, 'Error:', tagValidation.error);
           break;
         }
       }
@@ -771,8 +784,8 @@
     isSubmitting = true;
     
     try {
-      // Filtrar opciones vacías
-      const validOptions = options.filter(opt => opt.label.trim());
+      // Filtrar opciones vacías (sin texto Y sin URL)
+      const validOptions = options.filter(opt => opt.label.trim() || optionUrls.get(opt.id));
       
       // Preparar datos para enviar
       const pollData = {
@@ -787,7 +800,7 @@
         location: location || undefined,
         options: validOptions.map((opt, index) => ({
           optionKey: opt.id,
-          optionLabel: opt.label.trim(),
+          optionLabel: opt.label.trim() || optionUrls.get(opt.id) || 'Opción sin texto',  // Si solo tiene URL, usar la URL como label
           color: opt.color,
           displayOrder: index,
           imageUrl: optionUrls.get(opt.id) || opt.imageUrl || undefined  // 🆕 Usar URL del Map persistente
