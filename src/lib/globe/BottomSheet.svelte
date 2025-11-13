@@ -937,6 +937,7 @@
   let previewModalPoll: any = null;
   let previewModalOptionIndex: string = ''; // ID de la opción activa
   let previewModalPollIndex: number = 0;
+  let previewModalShowAllOptions: boolean = false; // Mostrar todas las opciones en vertical
   
   // Auto-hide navigation bar on scroll
   let showNavBar = true;
@@ -2392,8 +2393,11 @@
     const userVoteForPoll = userVotes[poll.id.toString()];
     const isMultiple = poll.multipleChoice;
     
+    // Detectar si alguna opción tiene imagen
+    const hasAnyImages = (poll.options || []).some((opt: any) => opt.imageUrl);
+    
+    // Transformar TODAS las opciones (no filtrar por imageUrl)
     const transformedOptions = (poll.options || [])
-      .filter((opt: any) => opt.imageUrl) // Solo opciones con preview
       .map((opt: any) => {
         const votes = opt.votes || 0;
         const pct = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
@@ -2421,24 +2425,38 @@
       });
     
     if (transformedOptions.length === 0) {
-      console.error('[BottomSheet] No hay opciones con preview');
+      console.error('[BottomSheet] No hay opciones');
       return;
     }
     
-    // Encontrar la opción activa
+    // Si NO hay imágenes, mostrar todas las opciones en vertical
+    // Si HAY imágenes, usar el modo de una opción a la vez
+    const showAllOptions = !hasAnyImages;
+    
+    // Encontrar la opción activa (solo relevante para modo single-option)
     const activeId = transformedOptions.find((opt: any) => 
       opt.id === option.key || opt.label === option.label
     )?.id || transformedOptions[0].id;
     
+    // Encontrar el índice de esta encuesta en allPolls
+    const allPolls = activePoll ? [activePoll, ...additionalPolls] : additionalPolls;
+    const pollIndex = allPolls.findIndex(p => p.id.toString() === poll.id.toString());
+    
     previewModalPoll = poll;
     previewModalOption = transformedOptions;
     previewModalOptionIndex = activeId;
+    previewModalPollIndex = pollIndex >= 0 ? pollIndex : 0;
+    previewModalShowAllOptions = showAllOptions; // Nuevo estado
     showPreviewModal = true;
     
     console.log('[BottomSheet] 📊 Modal data:', { 
       activeId,
       totalOptions: transformedOptions.length,
-      pollTitle: poll.question || poll.title
+      pollTitle: poll.question || poll.title,
+      pollIndex: previewModalPollIndex,
+      totalPolls: allPolls.length,
+      showAllOptions,
+      hasAnyImages
     });
   }
   
@@ -2453,47 +2471,70 @@
   }
   
   // Navegar a la siguiente encuesta con opciones de preview
-  function navigateToNextPollWithPreview() {
+  async function navigateToNextPollWithPreview() {
     const allPolls = activePoll ? [activePoll, ...additionalPolls] : additionalPolls;
-    const currentIndex = previewModalPollIndex === -1 ? 0 : previewModalPollIndex + 1;
+    const currentIndex = previewModalPollIndex >= 0 ? previewModalPollIndex : 0;
     
-    // Buscar siguiente encuesta con opciones con preview
+    console.log('[BottomSheet] 🔍 Buscando siguiente desde índice:', currentIndex, 'de', allPolls.length);
+    
+    // Buscar siguiente encuesta (con o sin imágenes)
     for (let i = currentIndex + 1; i < allPolls.length; i++) {
       const poll = allPolls[i];
-      const optionsWithPreview = (poll.options || []).filter((opt: any) => opt.imageUrl);
-      if (optionsWithPreview.length > 0) {
-        // Abrir esta encuesta en el modal
-        const firstOption = optionsWithPreview[0];
+      if ((poll.options || []).length > 0) {
+        // Abrir esta encuesta en el modal (puede tener o no imágenes)
+        const firstOption = poll.options[0];
         handleOpenPreviewModal({
           detail: { option: firstOption, pollId: poll.id.toString() }
         } as CustomEvent);
-        console.log('[BottomSheet] ⬇️ Siguiente encuesta:', i);
+        console.log('[BottomSheet] ⬇️ Siguiente encuesta:', i, '/', allPolls.length);
         return;
       }
     }
+    
+    // Si llegamos al final y hay más encuestas por cargar, cargarlas
+    if (hasMorePolls && !isLoadingPolls && !activePoll) {
+      console.log('[BottomSheet] 📥 Cargando más encuestas para navegación...');
+      await loadAdditionalPolls(currentPollsPage + 1);
+      
+      // Intentar de nuevo después de cargar
+      const newAllPolls = activePoll ? [activePoll, ...additionalPolls] : additionalPolls;
+      for (let i = currentIndex + 1; i < newAllPolls.length; i++) {
+        const poll = newAllPolls[i];
+        if ((poll.options || []).length > 0) {
+          const firstOption = poll.options[0];
+          handleOpenPreviewModal({
+            detail: { option: firstOption, pollId: poll.id.toString() }
+          } as CustomEvent);
+          console.log('[BottomSheet] ⬇️ Siguiente encuesta (después de cargar):', i, '/', newAllPolls.length);
+          return;
+        }
+      }
+    }
+    
     console.log('[BottomSheet] No hay más encuestas con preview');
   }
   
   // Navegar a la encuesta anterior con opciones de preview
   function navigateToPreviousPollWithPreview() {
     const allPolls = activePoll ? [activePoll, ...additionalPolls] : additionalPolls;
-    const currentIndex = previewModalPollIndex === -1 ? 0 : previewModalPollIndex + 1;
+    const currentIndex = previewModalPollIndex >= 0 ? previewModalPollIndex : 0;
     
-    // Buscar encuesta anterior con opciones con preview
+    console.log('[BottomSheet] 🔍 Buscando anterior desde índice:', currentIndex, 'de', allPolls.length);
+    
+    // Buscar encuesta anterior (con o sin imágenes)
     for (let i = currentIndex - 1; i >= 0; i--) {
       const poll = allPolls[i];
-      const optionsWithPreview = (poll.options || []).filter((opt: any) => opt.imageUrl);
-      if (optionsWithPreview.length > 0) {
+      if ((poll.options || []).length > 0) {
         // Abrir esta encuesta en el modal
-        const firstOption = optionsWithPreview[0];
+        const firstOption = poll.options[0];
         handleOpenPreviewModal({
           detail: { option: firstOption, pollId: poll.id.toString() }
         } as CustomEvent);
-        console.log('[BottomSheet] ⬆️ Encuesta anterior:', i);
+        console.log('[BottomSheet] ⬆️ Encuesta anterior:', i, '/', allPolls.length);
         return;
       }
     }
-    console.log('[BottomSheet] No hay encuestas anteriores con preview');
+    console.log('[BottomSheet] No hay encuestas anteriores');
   }
   
   // Debug: log when world chart segments change
@@ -3489,6 +3530,7 @@
       totalViews: previewModalPoll.stats?.totalViews || previewModalPoll.totalViews || 0
     }}
     readOnly={true}
+    showAllOptions={previewModalShowAllOptions}
     onClose={closePreviewModal}
     onOptionChange={(optionId) => {
       previewModalOptionIndex = optionId;

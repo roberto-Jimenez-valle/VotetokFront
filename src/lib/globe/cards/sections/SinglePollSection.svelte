@@ -983,20 +983,11 @@
             
             addDebugLog('[Touch] Ya estaba desplegada');
             
-            // Si tiene preview y ya está desplegada, abrir modal fullscreen
-            if (option.imageUrl) {
-              e.preventDefault();
-              e.stopPropagation();
-              openPreviewModal(option);
-              return;
-            }
-            
+            // Si ya está desplegada, abrir modal fullscreen (con o sin imagen)
             e.preventDefault();
             e.stopPropagation();
-            
-            // Incrementar contador y procesar doble touch
-            clickCount++;
-            pendingOptionKey = option.key;
+            openPreviewModal(option);
+            return;
             
             console.log('[SinglePoll] Touch #' + clickCount, option.key);
             
@@ -1114,20 +1105,11 @@
             
             addDebugLog('[Click] ⚠️ Ya estaba desplegada');
             
-            // Si tiene preview y ya está desplegada, abrir modal fullscreen
-            if (option.imageUrl) {
-              e.preventDefault();
-              e.stopPropagation();
-              openPreviewModal(option);
-              return;
-            }
-            
+            // Si ya está desplegada, abrir modal fullscreen (con o sin imagen)
             e.preventDefault();
             e.stopPropagation();
-            
-            // Incrementar contador y procesar doble click
-            clickCount++;
-            pendingOptionKey = option.key;
+            openPreviewModal(option);
+            return;
             
             console.log('[SinglePoll] Click #' + clickCount, option.key);
             console.log('[SinglePoll] clickCount actual:', clickCount, 'pendingOptionKey:', option.key);

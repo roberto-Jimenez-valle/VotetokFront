@@ -1,14 +1,16 @@
 <script lang="ts">
   import { searchGiphy, getTrendingGifs, getBestGifUrl, type GiphyGif } from '$lib/services/giphy';
-  import { Search, Loader2, TrendingUp } from 'lucide-svelte';
+  import { getUserLocation } from '$lib/services/geolocation';
+  import { Search, Loader2, TrendingUp, Globe } from 'lucide-svelte';
   
   // Props
   interface Props {
     onSelect: (gifUrl: string) => void;
     onClose?: () => void;
+    optionColor?: string; // Color de la opción para personalizar el picker
   }
   
-  let { onSelect, onClose }: Props = $props();
+  let { onSelect, onClose, optionColor = '#00ff99' }: Props = $props();
   
   // Estado
   let searchTerm = $state('');
@@ -16,6 +18,20 @@
   let isLoading = $state(false);
   let showTrending = $state(true);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let userCountry = $state<string>('');
+  let userLanguage = $state<string>('');
+  let contentType = $state<'gifs' | 'stickers'>('gifs');
+  
+  // Detectar ubicación del usuario al inicio
+  $effect(() => {
+    getUserLocation().then(location => {
+      userCountry = location.country;
+      userLanguage = location.language.toUpperCase();
+      console.log(`[GiphyPicker] Resultados localizados para: ${location.country} (${location.language})`);
+    }).catch(err => {
+      console.warn('[GiphyPicker] No se pudo detectar ubicación:', err);
+    });
+  });
   
   // Cargar trending al inicio
   $effect(() => {
@@ -27,7 +43,7 @@
   async function loadTrending() {
     isLoading = true;
     try {
-      gifs = await getTrendingGifs(20, 'g');
+      gifs = await getTrendingGifs(20, 'g', contentType);
       showTrending = true;
     } catch (error) {
       console.error('Error cargando trending GIFs:', error);
@@ -35,6 +51,18 @@
       isLoading = false;
     }
   }
+  
+  // Recargar cuando cambia el tipo de contenido
+  $effect(() => {
+    const type = contentType; // Capturar el valor
+    if (searchTerm.trim()) {
+      // Trigger search
+      const event = new Event('input', { bubbles: true });
+      handleSearch();
+    } else {
+      loadTrending();
+    }
+  });
   
   async function handleSearch() {
     if (!searchTerm.trim()) {
@@ -56,7 +84,8 @@
         gifs = await searchGiphy(searchTerm, {
           limit: 20,
           rating: 'g',
-          lang: 'es'
+          lang: 'es',
+          type: contentType
         });
       } catch (error) {
         console.error('Error buscando GIFs:', error);
@@ -85,9 +114,17 @@
         {/if}
         {showTrending ? 'GIFs Trending' : 'Buscar GIFs'}
       </h3>
-      {#if onClose}
-        <button class="close-btn" onclick={onClose} type="button">✕</button>
-      {/if}
+      <div class="header-actions">
+        {#if userCountry && userLanguage}
+          <div class="location-badge" title="Resultados localizados para tu país">
+            <Globe size={12} />
+            <span>{userLanguage}</span>
+          </div>
+        {/if}
+        {#if onClose}
+          <button class="close-btn" onclick={onClose} type="button">✕</button>
+        {/if}
+      </div>
     </div>
     
     <!-- Barra de búsqueda -->
@@ -112,6 +149,24 @@
           ✕
         </button>
       {/if}
+    </div>
+    
+    <!-- Filtros de tipo -->
+    <div class="content-filters">
+      <button
+        class="filter-btn {contentType === 'gifs' ? 'active' : ''}"
+        onclick={() => { contentType = 'gifs'; }}
+        type="button"
+      >
+        GIFs
+      </button>
+      <button
+        class="filter-btn {contentType === 'stickers' ? 'active' : ''}"
+        onclick={() => { contentType = 'stickers'; }}
+        type="button"
+      >
+        Stickers
+      </button>
     </div>
   </div>
   
@@ -204,6 +259,30 @@
     height: 20px;
   }
   
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .location-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  
+  .location-badge:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
   .close-btn {
     background: rgba(255, 255, 255, 0.1);
     border: none;
@@ -253,7 +332,7 @@
   
   .search-input:focus {
     background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(0, 255, 153, 0.4);
+    border-color: var(--option-color);
   }
   
   .search-input::placeholder {
@@ -295,7 +374,7 @@
     height: 40px;
     animation: spin 1s linear infinite;
     margin-bottom: 12px;
-    color: #00ff99;
+    color: var(--option-color);
   }
   
   @keyframes spin {
@@ -305,7 +384,7 @@
   
   .gifs-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 8px;
     padding: 12px;
     overflow-y: auto;
@@ -314,25 +393,26 @@
   
   .gif-item {
     position: relative;
-    aspect-ratio: 1;
     border: none;
     padding: 0;
     cursor: pointer;
     border-radius: 10px;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.3);
+    background: #000000;
     transition: all 0.2s;
+    min-height: 100px;
   }
   
   .gif-item:hover {
     transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 255, 153, 0.3);
+    box-shadow: 0 4px 12px var(--option-color-shadow);
+    z-index: 1;
   }
   
   .gif-item img {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
+    display: block;
   }
   
   .gif-overlay {
@@ -375,11 +455,11 @@
   }
   
   .trending-btn {
-    background: rgba(0, 255, 153, 0.15);
-    border: 1px solid rgba(0, 255, 153, 0.3);
+    background: var(--option-color-light);
+    border: 1px solid var(--option-color);
     border-radius: 8px;
     padding: 10px 20px;
-    color: #00ff99;
+    color: var(--option-color);
     font-weight: 600;
     cursor: pointer;
     display: flex;
@@ -389,7 +469,7 @@
   }
   
   .trending-btn:hover {
-    background: rgba(0, 255, 153, 0.25);
+    background: var(--option-color-medium);
     transform: translateY(-2px);
   }
   
@@ -406,7 +486,7 @@
   }
   
   .powered-by strong {
-    color: #00ff99;
+    color: var(--option-color);
     font-weight: 700;
   }
   
@@ -421,11 +501,53 @@
   }
   
   .gifs-grid::-webkit-scrollbar-thumb {
-    background: rgba(0, 255, 153, 0.3);
+    background: var(--option-color-medium);
     border-radius: 4px;
   }
   
   .gifs-grid::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 255, 153, 0.5);
+    background: var(--option-color);
+  }
+  
+  /* Filtros de tipo de contenido */
+  .content-filters {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  
+  .filter-btn {
+    flex: 1;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .filter-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+  }
+  
+  .filter-btn.active {
+    background: var(--option-color-light);
+    border-color: var(--option-color);
+    color: white;
+  }
+  
+  /* Variables CSS para el color de la opción */
+  .giphy-picker {
+    --option-color: v-bind(optionColor);
+    --option-color-light: color-mix(in srgb, v-bind(optionColor) 15%, transparent);
+    --option-color-medium: color-mix(in srgb, v-bind(optionColor) 35%, transparent);
+    --option-color-shadow: color-mix(in srgb, v-bind(optionColor) 40%, transparent);
   }
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
-  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles } from 'lucide-svelte';
+  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles, Search } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   import { currentUser } from '$lib/stores';
   import { apiPost } from '$lib/api/client';
@@ -8,6 +8,7 @@
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import LinkPreview from '$lib/components/LinkPreview.svelte';
   import PollMaximizedView from '$lib/components/PollMaximizedView.svelte';
+  import GiphyPicker from '$lib/components/GiphyPicker.svelte';
   import { giphyGifUrl } from '$lib/services/giphy';
   import { 
     extractUrls, 
@@ -188,6 +189,10 @@
   
   // Estado para vista maximizada (nuevo componente separado)
   let maximizedOption = $state<string | null>(null);
+  
+  // Estado para el buscador de GIFs
+  let showGiphyPicker = $state(false);
+  let giphyTarget = $state<'main' | string | null>(null); // 'main' para imagen principal, optionId para opción específica
   
   // Función para pausar todos los videos
   function pauseAllVideos(exceptVideo?: HTMLVideoElement) {
@@ -680,6 +685,34 @@
     } catch (error) {
       console.error('[Giphy Fallback] Error buscando GIF para imagen principal:', error);
     }
+  }
+  
+  // Abrir el buscador de GIFs de Giphy
+  function openGiphyPicker(target: 'main' | string) {
+    giphyTarget = target;
+    showGiphyPicker = true;
+  }
+  
+  // Manejar la selección de un GIF del picker
+  function handleGifSelect(gifUrl: string) {
+    console.log('[GiphyPicker] GIF seleccionado:', gifUrl, 'para:', giphyTarget);
+    
+    if (giphyTarget === 'main') {
+      // Asignar a la imagen principal
+      imageUrl = gifUrl;
+      console.log('[GiphyPicker] ✅ GIF asignado a imagen principal');
+    } else if (giphyTarget) {
+      // Asignar a una opción específica
+      const optionIndex = options.findIndex(opt => opt.id === giphyTarget);
+      if (optionIndex !== -1) {
+        options[optionIndex].imageUrl = gifUrl;
+        console.log('[GiphyPicker] ✅ GIF asignado a opción:', options[optionIndex].label);
+      }
+    }
+    
+    // Cerrar el picker
+    showGiphyPicker = false;
+    giphyTarget = null;
   }
   
   // Handle image file selection
@@ -2139,6 +2172,7 @@
                     <X class="w-3.5 h-3.5" />
                   </div>
                 {/if}
+                
                 <div
                   role="button"
                   tabindex="0"
@@ -2161,6 +2195,28 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                   </svg>
+                </div>
+                
+                <!-- Botón de búsqueda de GIFs - al lado del badge de color -->
+                <div
+                  role="button"
+                  tabindex="0"
+                  class="giphy-search-badge-bottom"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    openGiphyPicker(option.id);
+                  }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openGiphyPicker(option.id);
+                    }
+                  }}
+                  title="Buscar GIF en Giphy"
+                  aria-label="Buscar GIF en Giphy"
+                >
+                  <Sparkles class="w-4 h-4" />
                 </div>
                 
                 <!-- Botón de minimizar ELIMINADO - Ver MAXIMIZED_MODE_BACKUP.md -->
@@ -2662,6 +2718,24 @@
 
 <!-- Modal de Autenticación -->
 <AuthModal bind:isOpen={showAuthModal} on:login={handleAuthComplete} />
+
+<!-- Buscador de GIFs de Giphy -->
+{#if showGiphyPicker}
+  {@const targetOption = giphyTarget && giphyTarget !== 'main' ? options.find(opt => opt.id === giphyTarget) : null}
+  {@const pickerColor = targetOption?.color || '#00ff99'}
+  <div class="giphy-picker-overlay" transition:fade={{ duration: 200 }}>
+    <div class="giphy-picker-container">
+      <GiphyPicker 
+        onSelect={handleGifSelect}
+        onClose={() => {
+          showGiphyPicker = false;
+          giphyTarget = null;
+        }}
+        optionColor={pickerColor}
+      />
+    </div>
+  </div>
+{/if}
 
 <style>
   .modal-overlay {
@@ -3611,6 +3685,56 @@
     height: 20px !important;
   }
   
+  /* Botón de búsqueda de GIFs - al lado del badge de color */
+  .giphy-search-badge-bottom {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(calc(-50% + 24px));
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(30, 30, 35, 0.95);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(147, 197, 253, 0.5);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 5;
+    pointer-events: auto;
+  }
+  
+  .vote-card.is-active .giphy-search-badge-bottom {
+    left: auto;
+    right: 60px;
+    transform: translateX(0);
+  }
+  
+  .giphy-search-badge-bottom:hover {
+    background: rgba(147, 197, 253, 0.2);
+    border-color: rgba(147, 197, 253, 0.9);
+    transform: translateX(calc(-50% + 24px)) scale(1.15);
+    box-shadow: 0 3px 10px rgba(147, 197, 253, 0.4);
+  }
+  
+  .vote-card.is-active .giphy-search-badge-bottom:hover {
+    transform: translateX(0) scale(1.15);
+  }
+  
+  .giphy-search-badge-bottom :global(svg) {
+    width: 1rem;
+    height: 1rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  /* Ocultar en cards colapsadas - solo visible cuando está desplegada */
+  .vote-card.collapsed .giphy-search-badge-bottom {
+    display: none !important;
+  }
+  
   /* Wrapper para LinkPreview en opciones */
   .option-link-preview-wrapper {
     width: 100%;
@@ -3800,6 +3924,27 @@
   .animate-cards-button:disabled {
     opacity: 0.7;
     cursor: wait;
+  }
+  
+  /* Overlay del GiphyPicker */
+  .giphy-picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 35000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+  }
+  
+  .giphy-picker-container {
+    width: 90%;
+    max-width: 700px;
+    max-height: 80vh;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   }
 
   /* Botón flotante abajo a la derecha */

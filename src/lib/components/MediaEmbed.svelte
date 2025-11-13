@@ -354,12 +354,7 @@
       {@html processEmbedHTML(embedHTML)}
     </div>
   {:else if (embedType === 'generic' || embedType === 'opengraph' || embedType === 'text' || embedType === 'website') && metadata}
-    <button 
-      class="mini-card linkedin-card" 
-      onclick={() => window.open(metadata.url, '_blank')}
-      type="button"
-      aria-label={`Abrir ${metadata.title}`}
-    >
+    <div class="mini-card linkedin-card">
       <div class="linkedin-image">
         <img 
           src={metadata.image} 
@@ -398,22 +393,27 @@
           }}
         />
       </div>
-      <div class="linkedin-content">
+      <button 
+        class="linkedin-content"
+        onclick={() => window.open(metadata.url, '_blank')}
+        type="button"
+        aria-label={`Abrir ${metadata.title}`}
+      >
         <h4>{metadata.title}</h4>
         {#if metadata.description}
           <p>{metadata.description}</p>
         {/if}
-      </div>
-    </button>
+      </button>
+    </div>
   {/if}
 </div>
 
 <style>
   .media-embed {
     position: relative;
-    border-radius: 12px;
+    border-radius: 0;
     overflow: hidden;
-    background: #2c2c2e;
+    background: #000000;
     display: block;
   }
   
@@ -425,8 +425,9 @@
   
   .full-mode {
     width: 100%;
-    height: 100%;
     min-height: 180px;
+    display: flex;
+    flex-direction: column;
   }
   
   .loading-state,
@@ -467,31 +468,20 @@
   .mini-card {
     width: 100%;
     height: 100%;
-    background: #2c2c2e;
+    background: #000000;
     border: none;
-    border-radius: 10px;
-    cursor: pointer;
+    border-radius: 0;
     position: relative;
     overflow: hidden;
-    transition: transform 0.2s;
     padding: 0;
     display: block;
-  }
-  
-  .mini-card:hover {
-    transform: scale(1.02);
   }
   
   .mini-card img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    opacity: 0.9;
-    transition: opacity 0.3s;
-  }
-  
-  .mini-card:hover img {
-    opacity: 0.75;
+    opacity: 1;
   }
   
   .mini-card h4 {
@@ -513,52 +503,64 @@
     white-space: nowrap;
   }
   
-  /* Layout vertical: imagen arriba, texto abajo */
+  /* Layout: imagen arriba, texto debajo (en full mode) */
   .linkedin-card {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    background: rgba(44, 44, 46, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.95);
+    border: none;
     min-height: 150px;
-  }
-  
-  .linkedin-card:hover {
-    transform: none;
-    border-color: rgba(255, 255, 255, 0.2);
-    background: rgba(44, 44, 46, 1);
   }
   
   .linkedin-image {
     width: 100%;
-    height: 90%;
-    flex-shrink: 0;
     overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000000;
+    position: relative;
   }
   
   .linkedin-image img {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
+    max-height: calc(100vh - 200px);
+    max-width: 100%;
+    object-fit: contain;
     opacity: 1;
+    display: block;
   }
   
   .linkedin-content {
-    flex: 1;
-    padding: 10px 12px;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    padding: 8px 12px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    text-align: center;
+    text-align: right;
+    align-items: flex-end;
     min-width: 0;
-    gap: 4px;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(10px);
+    max-width: 70%;
+    gap: 2px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    z-index: 10;
+    pointer-events: auto;
+  }
+  
+  .linkedin-content:hover {
+    background: transparent;
   }
   
   .linkedin-content h4 {
     margin: 0;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     color: white;
     overflow: hidden;
@@ -572,7 +574,7 @@
   
   .linkedin-content p {
     margin: 0;
-    font-size: 11px;
+    font-size: 9px;
     color: rgba(255, 255, 255, 0.5);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -583,23 +585,44 @@
     line-height: 1.3;
   }
   
-  /* Ajustes para modo preview (espacios pequeños) */
+  /* Ajustes para modo full - texto superpuesto sobre imagen */
+  .full-mode .linkedin-card {
+    height: auto;
+  }
+  
+  .full-mode .linkedin-image {
+    position: relative;
+  }
+  
+  /* Ajustes para modo preview (espacios pequeños) - superpuesto */
   .preview-mode .linkedin-card {
     min-height: 130px;
+    height: 100%;
   }
   
   .preview-mode .linkedin-image {
-    width: 100%;
-    height: 90px;
+    position: relative;
+    height: 100%;
+    flex: 1;
+    display: block;
+  }
+  
+  .preview-mode .linkedin-image img {
+    height: 100%;
+    max-height: none;
+    object-fit: cover;
   }
   
   .preview-mode .linkedin-content {
     padding: 6px 8px;
     gap: 2px;
+    max-width: 80%;
   }
   
   .preview-mode .linkedin-content h4 {
     font-size: 11px;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
   
   .preview-mode .linkedin-content p {

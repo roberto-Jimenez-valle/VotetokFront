@@ -30,6 +30,7 @@
     creator?: PollCreator;
     stats?: PollStats;
     readOnly?: boolean; // Modo solo lectura
+    showAllOptions?: boolean; // Mostrar todas las opciones en vertical con scroll
     onClose: () => void;
     onOptionChange: (optionId: string) => void;
     onSwipeVertical?: (direction: 'up' | 'down') => void; // Swipe vertical para cambiar encuesta
@@ -50,6 +51,7 @@
     creator,
     stats,
     readOnly = false,
+    showAllOptions = false,
     onClose,
     onOptionChange,
     onSwipeVertical = () => {},
@@ -133,16 +135,27 @@
         hasImageUrl: !!activeOption.imageUrl,
         imageUrl: activeOption.imageUrl
       } : null,
-      percentage
+      percentage,
+      showAllOptions
     });
   });
+
+  // No inicializar automáticamente ninguna opción como activa
+  // Se activará solo cuando el usuario haga scroll
 
   // Estado local SOLO para swipe visual
   let touchStartX = $state(0);
   let touchStartY = $state(0);
   let isDragging = $state(false);
   
-  // Estado para doble click/tap
+  // Estado para scroll de opciones (modo showAllOptions)
+  let optionsScrollContainer: HTMLElement | null = null;
+  let scrollStartY = $state(0);
+  let isAtBottom = $state(false);
+  let isAtTop = $state(false);
+  let activeScrollOptionId = $state<string | null>(null); // Opción visible en el scroll
+  
+  // Estado para doble click/tap (solo para modo single-option)
   let lastTapTime = 0;
   let tapTimeout: ReturnType<typeof setTimeout> | null = null;
   
@@ -171,11 +184,63 @@
     onOptionChange(optionId);
   }
 
+  // Detectar si el scroll está al final o al principio
+  function checkScrollPosition() {
+    if (!optionsScrollContainer) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = optionsScrollContainer;
+    isAtBottom = scrollTop + clientHeight >= scrollHeight - 5; // 5px de tolerancia
+    isAtTop = scrollTop <= 5;
+    
+    // Detectar qué opción está más visible (más cerca del centro)
+    if (showAllOptions) {
+      const containerRect = optionsScrollContainer.getBoundingClientRect();
+      const centerY = containerRect.top + containerRect.height / 2;
+      
+      const optionCards = optionsScrollContainer.querySelectorAll('.option-card-vertical');
+      let closestOption: Element | null = null;
+      let minDistance = Infinity;
+      
+      optionCards.forEach((card) => {
+        const cardRect = card.getBoundingClientRect();
+        const cardCenterY = cardRect.top + cardRect.height / 2;
+        const distance = Math.abs(cardCenterY - centerY);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestOption = card;
+        }
+      });
+      
+      if (closestOption) {
+        const optionId = (closestOption as HTMLElement).getAttribute('data-option-id');
+        if (optionId && optionId !== activeScrollOptionId) {
+          activeScrollOptionId = optionId;
+        }
+      }
+    }
+    
+    console.log('[PollMaximizedView] Scroll position:', {
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+      isAtBottom,
+      isAtTop,
+      activeScrollOptionId
+    });
+  }
+  
   // Swipe handlers con doble tap
   function handleTouchStart(e: TouchEvent) {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
+    scrollStartY = e.touches[0].clientY;
     isDragging = true;
+    
+    // Actualizar posición de scroll
+    if (showAllOptions) {
+      checkScrollPosition();
+    }
   }
 
   function handleTouchEnd(e: TouchEvent) {
@@ -223,15 +288,34 @@
       } else {
         // Swipe vertical (cambiar encuesta) - threshold de 80px
         if (Math.abs(deltaY) > 80) {
-          transitionX = 0;
-          if (deltaY < 0) {
-            // Swipe hacia arriba → siguiente encuesta (sale hacia arriba)
-            transitionY = 300;
-            onSwipeVertical('down');
+          // Si estamos en modo showAllOptions, solo cambiar si estamos en los bordes
+          if (showAllOptions) {
+            if (deltaY < 0 && isAtBottom) {
+              // Swipe hacia arriba Y estamos al final → siguiente encuesta
+              console.log('[PollMaximizedView] 📱 Cambio a siguiente (al final del scroll)');
+              transitionX = 0;
+              transitionY = 300;
+              onSwipeVertical('down');
+            } else if (deltaY > 0 && isAtTop) {
+              // Swipe hacia abajo Y estamos al inicio → encuesta anterior
+              console.log('[PollMaximizedView] 📱 Cambio a anterior (al inicio del scroll)');
+              transitionX = 0;
+              transitionY = -300;
+              onSwipeVertical('up');
+            }
+            // Si no estamos en los bordes, el scroll normal funciona
           } else {
-            // Swipe hacia abajo → encuesta anterior (sale hacia abajo)
-            transitionY = -300;
-            onSwipeVertical('up');
+            // Modo normal (una opción a la vez)
+            transitionX = 0;
+            if (deltaY < 0) {
+              // Swipe hacia arriba → siguiente encuesta (sale hacia arriba)
+              transitionY = 300;
+              onSwipeVertical('down');
+            } else {
+              // Swipe hacia abajo → encuesta anterior (sale hacia abajo)
+              transitionY = -300;
+              onSwipeVertical('up');
+            }
           }
         }
       }
@@ -294,8 +378,45 @@
     </div>
   {/key}
 
-  <!-- Contenedor de la opción activa -->
-  {#if activeOption}
+  <!-- Mostrar todas las opciones en scroll vertical O una opción activa -->
+  {#if showAllOptions}
+    <!-- Modo: Todas las opciones en scroll vertical -->
+    <div 
+      class="all-options-container"
+      bind:this={optionsScrollContainer}
+      onscroll={checkScrollPosition}
+    >
+      {#each options as option, idx}
+        <button
+          type="button"
+          class="option-card-vertical"
+          class:voted={option.voted}
+          class:active={activeScrollOptionId === option.id}
+          style="border-color: {option.color}; --option-color: {option.color};"
+          data-option-id={option.id}
+          onclick={() => {
+            if (readOnly) {
+              console.log('[PollMaximizedView] 🗳️ Click - Votando:', option.id, option.label);
+              onVote(option.id);
+            }
+          }}
+        >
+          <div class="option-number" style="background: {option.color};">{idx + 1}</div>
+          <div class="option-content-vertical">
+            <div class="option-label-vertical">{option.label}</div>
+            <div class="option-stats">
+              <span class="option-pct" style="color: {option.color};">{Math.round(option.pct || 0)}%</span>
+              <span class="option-votes">{option.votes || 0} votos</span>
+            </div>
+          </div>
+          {#if option.voted}
+            <div class="voted-checkmark" style="color: {option.color};">✓</div>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {:else if activeOption}
+    <!-- Modo: Una opción a la vez (comportamiento actual) -->
     {#key activeOptionId}
       <div 
         class="option-content-container"
@@ -410,8 +531,8 @@
     {/key}
   {/if}
 
-  <!-- Porcentaje abajo a la izquierda -->
-  {#if activeOption}
+  <!-- Porcentaje abajo a la izquierda (solo en modo single-option) -->
+  {#if activeOption && !showAllOptions}
     <div class="percentage-bottom-left">
       <div class="percentage-text">{percentage}%</div>
     </div>
@@ -575,27 +696,29 @@
     </div>
   {/if}
 
-  <!-- Barra inferior con color y dots -->
-  <div class="bottom-bar">
-    <!-- Dots de navegación - todos opacos -->
-    <div class="navigation-dots">
-      {#each options as option, idx}
-        <button
-          type="button"
-          class="dot"
-          class:active={option.id === activeOptionId}
-          style="background: {option.color};"
-          onclick={() => goToOption(option.id)}
-          aria-label="Ir a opción {idx + 1}"
-        ></button>
-      {/each}
+  <!-- Barra inferior con color y dots (solo en modo single-option) -->
+  {#if !showAllOptions}
+    <div class="bottom-bar">
+      <!-- Dots de navegación - todos opacos -->
+      <div class="navigation-dots">
+        {#each options as option, idx}
+          <button
+            type="button"
+            class="dot"
+            class:active={option.id === activeOptionId}
+            style="background: {option.color};"
+            onclick={() => goToOption(option.id)}
+            aria-label="Ir a opción {idx + 1}"
+          ></button>
+        {/each}
+      </div>
+      
+      <!-- Franja de color que sube según porcentaje -->
+      {#if activeOption}
+        <div class="color-stripe" style="background: {activeOption.color}; height: {Math.max(8, percentage)}px;"></div>
+      {/if}
     </div>
-    
-    <!-- Franja de color que sube según porcentaje -->
-    {#if activeOption}
-      <div class="color-stripe" style="background: {activeOption.color}; height: {Math.max(8, percentage)}px;"></div>
-    {/if}
-  </div>
+  {/if}
 
 </div>
 
@@ -609,6 +732,111 @@
     flex-direction: column;
     overflow: hidden;
     touch-action: pan-y;
+  }
+
+  /* Contenedor de todas las opciones en scroll vertical */
+  .all-options-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 20px;
+    padding-bottom: 20px; /* Sin barra inferior, menos padding */
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Tarjeta de opción en modo vertical */
+  .option-card-vertical {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 80px;
+    width: 100%;
+  }
+
+  .option-card-vertical:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--option-color);
+    transform: translateX(4px);
+  }
+
+  .option-card-vertical.voted {
+    border-color: var(--option-color);
+    background: color-mix(in srgb, var(--option-color) 15%, transparent);
+  }
+
+  .option-card-vertical.active {
+    border-color: var(--option-color);
+    background: color-mix(in srgb, var(--option-color) 20%, transparent);
+    border-width: 3px;
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--option-color) 40%, transparent);
+  }
+
+  .option-number {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 18px;
+  }
+
+  .option-content-vertical {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .option-label-vertical {
+    color: white;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .option-stats {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+  }
+
+  .option-pct {
+    font-weight: 700;
+    font-size: 24px;
+  }
+
+  .option-votes {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .voted-checkmark {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
   }
 
   .close-button {
@@ -641,7 +869,7 @@
     padding: 20px;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: none;
     min-height: 80px;
     max-height: 120px;
     display: flex;

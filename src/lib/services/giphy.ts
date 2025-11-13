@@ -3,11 +3,13 @@
  * Obtiene URLs de GIFs de forma sencilla
  */
 
+import { getUserLanguage } from './geolocation';
+
 // API Key pública de Giphy (beta/testing)
 // Para producción, usa tu propia key de https://developers.giphy.com/
 const GIPHY_API_KEY = import.meta.env.VITE_GIPHY_API_KEY || 'dc6zaTOxFJmzC';
 
-const GIPHY_BASE_URL = 'https://api.giphy.com/v1/gifs';
+const GIPHY_BASE_URL = 'https://api.giphy.com/v1';
 
 // Log para verificar que la API Key se cargó correctamente
 if (typeof window !== 'undefined') {
@@ -74,7 +76,9 @@ export async function giphyGifUrl(
   rating: 'g' | 'pg' | 'pg-13' | 'r' = 'g'
 ): Promise<string> {
   try {
-    const url = `${GIPHY_BASE_URL}/translate?api_key=${GIPHY_API_KEY}&s=${encodeURIComponent(term)}&rating=${rating}`;
+    // Detectar idioma del usuario automáticamente
+    const userLang = await getUserLanguage().catch(() => 'es');
+    const url = `${GIPHY_BASE_URL}/gifs/translate?api_key=${GIPHY_API_KEY}&s=${encodeURIComponent(term)}&rating=${rating}&lang=${userLang}`;
     
     const res = await fetch(url);
     
@@ -107,17 +111,21 @@ export async function searchGiphy(
     offset?: number;
     rating?: 'g' | 'pg' | 'pg-13' | 'r';
     lang?: string;
+    type?: 'gifs' | 'stickers';
   } = {}
 ): Promise<GiphyGif[]> {
   const {
     limit = 25,
     offset = 0,
     rating = 'g',
-    lang = 'es'
+    lang,
+    type = 'gifs'
   } = options;
 
   try {
-    const url = `${GIPHY_BASE_URL}/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}&rating=${rating}&lang=${lang}`;
+    // Detectar idioma del usuario automáticamente si no se especifica
+    const userLang = lang || await getUserLanguage().catch(() => 'es');
+    const url = `${GIPHY_BASE_URL}/${type}/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}&rating=${rating}&lang=${userLang}`;
     
     const res = await fetch(url);
     
@@ -143,10 +151,13 @@ export async function searchGiphy(
  */
 export async function getTrendingGifs(
   limit: number = 25,
-  rating: 'g' | 'pg' | 'pg-13' | 'r' = 'g'
+  rating: 'g' | 'pg' | 'pg-13' | 'r' = 'g',
+  type: 'gifs' | 'stickers' = 'gifs'
 ): Promise<GiphyGif[]> {
   try {
-    const url = `${GIPHY_BASE_URL}/trending?api_key=${GIPHY_API_KEY}&limit=${limit}&rating=${rating}`;
+    // Detectar idioma del usuario automáticamente para trending localizados
+    const userLang = await getUserLanguage().catch(() => 'es');
+    const url = `${GIPHY_BASE_URL}/${type}/trending?api_key=${GIPHY_API_KEY}&limit=${limit}&rating=${rating}`;
     
     const res = await fetch(url);
     
@@ -171,7 +182,7 @@ export async function getTrendingGifs(
  */
 export async function getGifById(id: string): Promise<GiphyGif | null> {
   try {
-    const url = `${GIPHY_BASE_URL}/${id}?api_key=${GIPHY_API_KEY}`;
+    const url = `${GIPHY_BASE_URL}/gifs/${id}?api_key=${GIPHY_API_KEY}`;
     
     const res = await fetch(url);
     
