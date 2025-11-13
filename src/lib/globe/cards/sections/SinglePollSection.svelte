@@ -1630,44 +1630,6 @@
   </div>
 </div>
 
-<!-- Debug Console para móvil (siempre visible) -->
-<button 
-  class="debug-toggle-btn"
-  onclick={() => {
-    showDebugConsole = !showDebugConsole;
-    addDebugLog('🔵 Toggle console: ' + showDebugConsole);
-  }}
-  type="button"
-  aria-label="Toggle debug console"
->
-  🐛
-</button>
-
-{#if showDebugConsole}
-  <div class="debug-console">
-    <div class="debug-header">
-      <span>Debug Console</span>
-      <div>
-        <button onclick={copyDebugLogs} type="button">📋 Copiar</button>
-        <button onclick={() => {
-          debugLogs = [];
-          addDebugLog('🗑️ Logs limpiados');
-        }} type="button">🗑️ Limpiar</button>
-        <button onclick={() => showDebugConsole = false} type="button">✕</button>
-      </div>
-    </div>
-    <div class="debug-logs">
-      {#if debugLogs.length === 0}
-        <div class="debug-log">Sin logs aún... Toca una opción.</div>
-      {:else}
-        {#each debugLogs as log}
-          <div class="debug-log">{log}</div>
-        {/each}
-      {/if}
-    </div>
-  </div>
-{/if}
-
 <!-- Tooltip del título truncado (fuera de todo para máxima visibilidad) -->
 {#if showTitleTooltip}
   <div class="title-tooltip-overlay" onclick={hideTitleTooltip}>
@@ -2950,93 +2912,6 @@
     40% { content: '..'; }
     60%, 100% { content: '...'; }
   }
-  
-  /* Debug Console para móvil */
-  .debug-toggle-btn {
-    position: fixed;
-    bottom: 200px;
-    bottom: calc(200px + env(safe-area-inset-bottom));
-    right: 20px;
-    right: calc(20px + env(safe-area-inset-right));
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: #ff6b6b;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    z-index: 9999;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  .debug-toggle-btn:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
-  }
-  
-  .debug-toggle-btn:active {
-    transform: scale(0.95);
-  }
-  
-  .debug-console {
-    position: fixed;
-    bottom: 80px;
-    right: 20px;
-    width: calc(100vw - 40px);
-    max-width: 500px;
-    height: 400px;
-    background: rgba(20, 20, 20, 0.98);
-    border: 1px solid #333;
-    border-radius: 12px;
-    z-index: 9998;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  }
-  
-  .debug-header {
-    padding: 12px 16px;
-    background: #2a2a2a;
-    border-bottom: 1px solid #333;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: white;
-    font-weight: bold;
-    border-radius: 12px 12px 0 0;
-  }
-  
-  .debug-header div {
-    display: flex;
-    gap: 8px;
-  }
-  
-  .debug-header button {
-    background: #444;
-    border: none;
-    color: white;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-  }
-  
-  .debug-logs {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    color: #0f0;
-  }
-  
-  .debug-log {
-    padding: 4px 0;
-    border-bottom: 1px solid #222;
-    word-break: break-all;
-  }
-  
   /* Modal fullscreen para preview (estilo Instagram) */
   .preview-modal-overlay {
     position: fixed;
