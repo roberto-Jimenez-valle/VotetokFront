@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
-  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2 } from 'lucide-svelte';
+  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   import { currentUser } from '$lib/stores';
   import { apiPost } from '$lib/api/client';
@@ -164,6 +164,7 @@
   let activeAccordionIndex = $state<number | null>(0);
   let currentPage = $state(0);
   let pageTransitionDirection = $state<'left' | 'right'>('right');
+  let isAnimatingCards = $state(false);
   
   // Variables para swipe táctil
   let touchStartX = $state(0);
@@ -392,6 +393,59 @@
     } else if (isCurrentlyActive && activeAccordionIndex !== null && activeAccordionIndex >= paginatedOptions.items.length - 1) {
       // Ajustar el índice si ahora está fuera de rango
       activeAccordionIndex = Math.max(0, paginatedOptions.items.length - 2);
+    }
+  }
+  
+  // Animar cards automáticamente con GIFs de Giphy
+  async function animateCardsWithGifs() {
+    isAnimatingCards = true;
+    
+    try {
+      console.log('[AnimateCards] 🎬 Iniciando búsqueda de GIFs...');
+      
+      // Filtrar opciones que tienen texto pero no tienen imagen
+      const optionsToAnimate = options.filter(opt => opt.label.trim() && !opt.imageUrl);
+      
+      if (optionsToAnimate.length === 0) {
+        console.log('[AnimateCards] ⚠️ No hay opciones para animar');
+        isAnimatingCards = false;
+        return;
+      }
+      
+      console.log(`[AnimateCards] 📝 ${optionsToAnimate.length} opciones para animar`);
+      
+      // Buscar GIFs para cada opción
+      for (const option of optionsToAnimate) {
+        try {
+          // Usar el label sin URL como término de búsqueda
+          const searchTerm = getLabelWithoutUrl(option.label);
+          console.log(`[AnimateCards] 🔍 Buscando GIF para: "${searchTerm}"`);
+          
+          const gifUrl = await giphyGifUrl(searchTerm);
+          
+          if (gifUrl) {
+            // Actualizar la opción con el GIF encontrado
+            const optionToUpdate = options.find(opt => opt.id === option.id);
+            if (optionToUpdate) {
+              optionToUpdate.imageUrl = gifUrl;
+              console.log(`[AnimateCards] ✅ GIF agregado a "${searchTerm}"`);
+            }
+          } else {
+            console.log(`[AnimateCards] ❌ No se encontró GIF para "${searchTerm}"`);
+          }
+          
+          // Delay entre requests para no saturar la API
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error(`[AnimateCards] Error buscando GIF para "${option.label}":`, error);
+        }
+      }
+      
+      console.log('[AnimateCards] ✨ Animación completada');
+    } catch (error) {
+      console.error('[AnimateCards] Error general:', error);
+    } finally {
+      isAnimatingCards = false;
     }
   }
   
@@ -2142,6 +2196,24 @@
             
             <!-- Botones alineados a la derecha -->
             <div class="action-buttons">
+            <!-- Botón de animar cards -->
+            {#if options.some(opt => opt.label.trim() && !opt.imageUrl)}
+              <button
+                type="button"
+                class="animate-cards-button"
+                onclick={animateCardsWithGifs}
+                disabled={isAnimatingCards}
+                title={isAnimatingCards ? "Buscando GIFs..." : "Animar cards con GIFs"}
+                aria-label="Animar cards con GIFs"
+              >
+                {#if isAnimatingCards}
+                  <Loader2 class="w-5 h-5 animate-spin" />
+                {:else}
+                  <Sparkles class="w-5 h-5" />
+                {/if}
+              </button>
+            {/if}
+            
             <!-- Botón de maximizar -->
             {#if activeAccordionIndex !== null && paginatedOptions.items[activeAccordionIndex]}
               {@const activeOption = paginatedOptions.items[activeAccordionIndex]}
@@ -3699,6 +3771,37 @@
     transform: translateY(0);
   }
 
+  /* Botón de animar cards */
+  .animate-cards-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: 2px solid rgba(102, 126, 234, 0.5);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+
+  .animate-cards-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.6);
+    border-color: rgba(102, 126, 234, 0.8);
+  }
+
+  .animate-cards-button:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .animate-cards-button:disabled {
+    opacity: 0.7;
+    cursor: wait;
+  }
+
   /* Botón flotante abajo a la derecha */
   .add-option-floating-bottom {
     width: 48px;
@@ -5002,6 +5105,20 @@
     .maximized-dot.active {
       width: 24px;
       height: 8px;
+    }
+  }
+
+  /* Animación de spin para Loader2 */
+  :global(.animate-spin) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
     }
   }
 </style>

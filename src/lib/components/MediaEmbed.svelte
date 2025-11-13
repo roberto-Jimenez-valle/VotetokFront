@@ -531,7 +531,7 @@
   
   .linkedin-image {
     width: 100%;
-    height: 120px;
+    height: 90%;
     flex-shrink: 0;
     overflow: hidden;
   }

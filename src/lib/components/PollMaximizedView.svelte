@@ -744,7 +744,7 @@
     width: 100% !important;
     min-width: 100% !important;
     max-width: 100% !important;
-    height: auto !important;
+    
     object-fit: contain !important;
     object-position: center !important;
     border-radius: 0 !important;
