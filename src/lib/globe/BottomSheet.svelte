@@ -68,7 +68,7 @@
   let isDraggingColor = false;
   
   // Estado del modal de autenticación
-  let showAuthModal = $state(false);
+  let showAuthModal = false;
   let pendingVoteData: { optionKey: string; pollId?: string } | null = null;
   
   // Función para verificar si un elemento está truncado
