@@ -22,10 +22,17 @@
   }
   
   function handleGoogleLogin() {
-    // TODO: Implementar login con Google
-    console.log('Login con Google');
-    dispatch('login', { provider: 'google' });
-    close();
+    console.log('[AuthModal] 🔵 CLICK DETECTADO - Iniciando login con Google');
+    console.log('[AuthModal] 🌐 window.location actual:', window.location.href);
+    console.log('[AuthModal] 🎯 Redirigiendo a:', '/api/auth/google');
+    
+    try {
+      // Redirigir al endpoint de Google OAuth
+      window.location.href = '/api/auth/google';
+      console.log('[AuthModal] ✅ Redirección ejecutada');
+    } catch (error) {
+      console.error('[AuthModal] ❌ Error al redirigir:', error);
+    }
   }
   
   function handleVoutopLogin() {
@@ -78,6 +85,7 @@
       <!-- Botón de Google -->
       <button
         class="auth-btn google-btn"
+        type="button"
         onclick={handleGoogleLogin}
       >
         <svg class="auth-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Header from '$lib/header.svelte';
 	// Usamos un componente dedicado GlobeGL basado en Globe.gl
 	import GlobeGL from '$lib/GlobeGL.svelte';
@@ -6,6 +7,7 @@
 	import CreatePollModal from '$lib/CreatePollModal.svelte';
 	import UserProfileModal from '$lib/UserProfileModal.svelte';
 	import type { Poll } from '$lib/types';
+	import { handleAuthCallback } from '$lib/utils/handleAuthCallback';
 
 	// topUsers eliminado - usar API
 
@@ -28,6 +30,11 @@
 	// Debug: observar cambios
 	$effect(() => {
 		console.log('[+page] Profile modal state changed:', { isProfileModalOpen, selectedProfileUserId });
+	});
+	
+	// Manejar callback de autenticación OAuth
+	onMount(() => {
+		handleAuthCallback();
 	});
 	
 	// Referencia al componente GlobeGL
