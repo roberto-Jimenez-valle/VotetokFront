@@ -23,6 +23,11 @@
     totalViews: number;
   }
 
+  interface VotedOption {
+    label: string;
+    color: string;
+  }
+
   interface Props {
     options: PollOption[];
     activeOptionId: string;
@@ -31,10 +36,13 @@
     stats?: PollStats;
     readOnly?: boolean; // Modo solo lectura
     showAllOptions?: boolean; // Mostrar todas las opciones en vertical con scroll
+    hasVoted?: boolean; // Si el usuario ha votado
+    votedOption?: VotedOption; // Opción votada por el usuario
     onClose: () => void;
     onOptionChange: (optionId: string) => void;
     onSwipeVertical?: (direction: 'up' | 'down') => void; // Swipe vertical para cambiar encuesta
     onVote?: (optionId: string) => void; // Votar con doble click
+    onClearVote?: () => void; // Limpiar voto
     onTitleChange?: (title: string) => void;
     onLabelChange?: (optionId: string, label: string) => void;
     onOpenColorPicker?: (optionId: string) => void;
@@ -52,10 +60,13 @@
     stats,
     readOnly = false,
     showAllOptions = false,
+    hasVoted = false,
+    votedOption,
     onClose,
     onOptionChange,
     onSwipeVertical = () => {},
     onVote = () => {},
+    onClearVote = () => {},
     onTitleChange = () => {},
     onLabelChange = () => {},
     onOpenColorPicker = () => {},
@@ -78,6 +89,14 @@
   let modalDragStartY = $state(0);
   let modalDragCurrentY = $state(0);
   let isModalDragging = $state(false);
+
+  // Animaciones de voto
+  let showVoteConfirmation = $state(false);
+  let showVoteRemoval = $state(false);
+  let voteConfirmationColor = $state('#10b981');
+  let voteRemovalColor = $state('#ef4444');
+  let voteConfirmationTimeout: any = null;
+  let voteRemovalTimeout: any = null;
 
   function formatNumber(num: number): string {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -261,6 +280,26 @@
         // Doble tap detectado - votar
         if (activeOption && readOnly) {
           console.log('[PollMaximizedView] 🗳️ Doble tap - Votando:', activeOption.id);
+          
+          // Determinar si es un voto o eliminación
+          const isUnvoting = activeOption.voted;
+          
+          if (isUnvoting) {
+            voteRemovalColor = activeOption.color;
+            showVoteRemoval = true;
+            if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+            voteRemovalTimeout = setTimeout(() => {
+              showVoteRemoval = false;
+            }, 800);
+          } else {
+            voteConfirmationColor = activeOption.color;
+            showVoteConfirmation = true;
+            if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+            voteConfirmationTimeout = setTimeout(() => {
+              showVoteConfirmation = false;
+            }, 800);
+          }
+          
           onVote(activeOption.id);
         }
         lastTapTime = 0; // Reset
@@ -420,6 +459,26 @@
           onclick={() => {
             if (readOnly) {
               console.log('[PollMaximizedView] 🗳️ Click - Votando:', option.id, option.label);
+              
+              // Determinar si es un voto o eliminación
+              const isUnvoting = option.voted;
+              
+              if (isUnvoting) {
+                voteRemovalColor = option.color;
+                showVoteRemoval = true;
+                if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+                voteRemovalTimeout = setTimeout(() => {
+                  showVoteRemoval = false;
+                }, 800);
+              } else {
+                voteConfirmationColor = option.color;
+                showVoteConfirmation = true;
+                if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+                voteConfirmationTimeout = setTimeout(() => {
+                  showVoteConfirmation = false;
+                }, 800);
+              }
+              
               onVote(option.id);
             }
           }}
@@ -725,6 +784,82 @@
     </div>
   {/if}
 
+  <!-- Botones de acción (solo en modo readOnly) -->
+  {#if readOnly && (activeOption || showAllOptions)}
+    <div class="vote-actions">
+      <!-- Lado izquierdo: Votos, Vistas y Globo -->
+      <div class="action-group-left">
+        <button 
+          class="action-badge action-vote {hasVoted ? 'has-voted' : 'no-vote'}" 
+          type="button" 
+          title={hasVoted ? `Tu voto: ${votedOption?.label || ''} (Click para quitar)` : "Aún no has votado"}
+          style="{hasVoted && votedOption ? `--vote-color: ${votedOption.color};` : ''}"
+          onclick={(e) => {
+            e.stopPropagation();
+            if (hasVoted) {
+              onClearVote();
+            }
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill={hasVoted ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          <span>{formatNumber(stats?.totalVotes || 0)}</span>
+        </button>
+        <button class="action-badge" type="button" title="Vistas">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>{formatNumber(stats?.totalViews || 0)}</span>
+        </button>
+        <button 
+          class="action-badge action-globe" 
+          type="button" 
+          title="Ver en el globo"
+          aria-label="Ver en el globo"
+          onclick={onOpenInGlobe}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Lado derecho: Guardar, Republicar, Compartir -->
+      <div class="action-group-right">
+        <button class="action-badge" type="button" title="Guardar" onclick={onBookmark}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>{formatNumber(0)}</span>
+        </button>
+        <button class="action-badge" type="button" title="Republicar" onclick={onRepost}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M17 1l4 4-4 4"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <path d="M7 23l-4-4 4-4"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+          <span>{formatNumber(0)}</span>
+        </button>
+        <button class="action-badge action-share" type="button" title="Compartir" onclick={onShare}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="18" cy="5" r="3"/>
+            <circle cx="6" cy="12" r="3"/>
+            <circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          <span>{formatNumber(0)}</span>
+        </button>
+      </div>
+    </div>
+  {/if}
+
   <!-- Barra inferior con color y dots (solo en modo single-option) -->
   {#if !showAllOptions}
     <div class="bottom-bar">
@@ -744,8 +879,27 @@
       
       <!-- Franja de color que sube según porcentaje -->
       {#if activeOption}
-        <div class="color-stripe" style="background: {activeOption.color}; height: {Math.max(8, percentage)}px;"></div>
+        <div class="color-stripe" style="background: {activeOption.color}; height: {Math.max(50, Math.min(150, 50 + percentage))}px;"></div>
       {/if}
+    </div>
+  {/if}
+
+  <!-- Tooltip de confirmación de voto -->
+  {#if showVoteConfirmation}
+    <div class="vote-confirmation-tooltip" style="--vote-color: {voteConfirmationColor}">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+  {/if}
+  
+  <!-- Tooltip de eliminación de voto -->
+  {#if showVoteRemoval}
+    <div class="vote-removal-tooltip" style="--vote-color: {voteRemovalColor}">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
     </div>
   {/if}
 
@@ -909,6 +1063,94 @@
 
   .poll-title-section.voted {
     border-bottom-color: var(--vote-color);
+  }
+
+  /* Botones de acción - posicionados encima de la barra de color */
+  .vote-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    margin: 0;
+    gap: 8px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    padding-bottom: 12px;
+  }
+  
+  .action-group-left,
+  .action-group-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  /* Botones de acción - estilo sutil sin bordes */
+  .action-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .action-badge:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+    transform: translateY(-1px);
+  }
+  
+  .action-badge:active {
+    transform: translateY(0);
+  }
+  
+  .action-badge svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+  }
+  
+  .action-badge:hover svg {
+    opacity: 1;
+  }
+  
+  .action-badge span {
+    font-weight: 500;
+    font-size: 12px;
+  }
+  
+  .action-globe {
+    color: rgba(59, 130, 246, 0.8);
+  }
+  
+  .action-globe:hover {
+    color: rgb(59, 130, 246);
+  }
+  
+  .action-share:hover {
+    color: rgba(16, 185, 129, 0.9);
+  }
+  
+  /* Botón de votos con estados */
+  .action-vote.has-voted {
+    color: var(--vote-color, #10b981);
+  }
+  
+  .action-vote.has-voted svg {
+    opacity: 1;
+  }
+  
+  .action-vote:hover {
+    color: rgba(16, 185, 129, 0.9);
   }
 
   .poll-title-input {
@@ -1107,10 +1349,11 @@
 
   /* Porcentaje abajo a la izquierda, por encima de dots */
   .percentage-bottom-left {
-    position: fixed;
-    bottom: 80px;
+    position: absolute;
+    bottom: 145px;
     left: 20px;
-    z-index: 1000;
+    z-index: 10;
+    pointer-events: none;
   }
 
   .percentage-text {
@@ -1122,8 +1365,8 @@
 
   /* Botones de acción casi en el bottom derecho - horizontal */
   .action-buttons-bottom {
-    position: fixed;
-    bottom: 80px;
+    position: absolute;
+    bottom: 50px;
     right: 20px;
     display: flex;
     flex-direction: row;
@@ -1255,32 +1498,48 @@
 
   /* Barra inferior */
   .bottom-bar {
-    position: fixed;
+    position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 1000;
+    height: 50px;
     display: flex;
     flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    z-index: 1;
     pointer-events: none;
   }
 
+  .bottom-bar .color-stripe {
+    z-index: 1;
+  }
+
   .navigation-dots {
+    position: absolute;
+    bottom: 145px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     gap: 8px;
-    padding: 16px 20px;
+    padding: 8px 20px;
     justify-content: center;
     background: transparent;
-    z-index: 1001;
+    z-index: 10;
     pointer-events: auto;
   }
 
   .color-stripe {
+    position: absolute;
+    bottom: 0;
+    left: 0;
     width: 100%;
-    max-height: 100px;
-    min-height: 8px;
-    transition: all 0.3s ease;
-    align-self: flex-end;
+    border-radius: 0;
+    transition: height 0.3s ease;
+    opacity: 0.8;
+    z-index: 3;
+    min-height: 50px;
+    max-height: 150px;
   }
 
   .dot {
@@ -1636,6 +1895,86 @@
     .action-item {
       padding: 14px 12px;
       font-size: 15px;
+    }
+  }
+
+  /* Tooltip de confirmación de voto */
+  .vote-confirmation-tooltip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--vote-color, #10b981);
+    color: white;
+    padding: 12px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1000;
+    animation: voteConfirmFlyUp 0.8s ease-out forwards;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .vote-confirmation-tooltip svg {
+    flex-shrink: 0;
+  }
+  
+  @keyframes voteConfirmFlyUp {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.8);
+    }
+    20% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -150%) scale(0.8);
+    }
+  }
+  
+  /* Tooltip de eliminación de voto */
+  .vote-removal-tooltip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--vote-color, #ef4444);
+    color: white;
+    padding: 12px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1000;
+    animation: voteRemovalFlyUp 0.8s ease-out forwards;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .vote-removal-tooltip svg {
+    flex-shrink: 0;
+  }
+  
+  @keyframes voteRemovalFlyUp {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
+    }
+    20% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.1) rotate(90deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -150%) scale(0.8) rotate(180deg);
     }
   }
 </style>
