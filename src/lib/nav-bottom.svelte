@@ -9,10 +9,9 @@
 	interface Props {
 		hidden?: boolean;
 		modalOpen?: boolean;
-		isAuthenticated?: boolean;
 	}
 	
-	let { hidden = $bindable(false), modalOpen = false, isAuthenticated = false }: Props = $props();
+	let { hidden = $bindable(false), modalOpen = false }: Props = $props();
 	let activeItem = $state('home');
 	let isLaunching = $state(false);
 	
@@ -320,6 +319,6 @@
 </style>
 
 <!-- Modales -->
-<SearchModal bind:isOpen={searchModalOpen} isAuthenticated={isAuthenticated} on:openPollInGlobe={handleOpenPollInGlobe} />
+<SearchModal bind:isOpen={searchModalOpen} on:openPollInGlobe={handleOpenPollInGlobe} />
 <NotificationsModal bind:isOpen={notificationsModalOpen} />
 <ProfileModal bind:isOpen={profileModalOpen} />

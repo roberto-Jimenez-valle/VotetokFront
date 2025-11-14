@@ -95,6 +95,11 @@
 			// Usuario autenticado con OAuth - PRIORIDAD
 			try {
 				const user = JSON.parse(realAuthUser);
+				
+				// Guardar token en el store authToken para que apiCall funcione
+				setAuth(realAuthToken, user);
+				
+				// También actualizar el store currentUser con el formato esperado
 				setCurrentUser({
 					id: user.userId,
 					username: user.username,

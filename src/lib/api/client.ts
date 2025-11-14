@@ -59,6 +59,9 @@ export async function apiCall(
   const authHeaders: Record<string, string> = {}
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`
+    console.log('[apiCall] ✅ Token JWT encontrado, agregando a headers')
+  } else {
+    console.log('[apiCall] ⚠️ No hay token JWT - petición sin autenticación')
   }
 
   // Combinar headers

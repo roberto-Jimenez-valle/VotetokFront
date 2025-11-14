@@ -73,8 +73,14 @@ export const handle: Handle = async ({ event, resolve }) => {
   // ============================================
   const user = await extractAuthOptional(event)
   
+  if (pathname.includes('/follow')) {
+    console.log('[Hook] 🔐 Endpoint /follow - Usuario extraído:', user ? `ID ${user.userId}` : 'Sin usuario')
+  }
+  
   // Agregar usuario a locals para uso en endpoints
   event.locals.user = user || undefined
+  // Alias para compatibilidad con código legacy
+  event.locals.session = user || undefined
 
   // ============================================
   // 4. RATE LIMITING ESPECÍFICO
@@ -125,6 +131,13 @@ declare global {
   namespace App {
     interface Locals {
       user?: {
+        userId: number
+        username: string
+        email?: string
+        role: 'user' | 'verified' | 'premium' | 'moderator' | 'admin'
+      }
+      // Alias para compatibilidad con código legacy
+      session?: {
         userId: number
         username: string
         email?: string

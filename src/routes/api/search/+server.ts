@@ -7,7 +7,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const query = url.searchParams.get('q') || '';
 		const filter = url.searchParams.get('filter') || 'all';
 		const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-		const session = locals.session;
+		const user = locals.user;
 		
 		// Subfiltros
 		const sort = url.searchParams.get('sort') || 'all'; // all, trending, o recent
@@ -109,18 +109,18 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				: {};
 			
 			// Filtrar según el tipo de usuario
-			if (userType === 'followers' && session?.userId) {
+			if (userType === 'followers' && user?.userId) {
 				// Solo seguidores del usuario actual
 				whereClauseUsers.followers = {
 					some: {
-						followingId: session.userId
+						followingId: user.userId
 					}
 				};
-			} else if (userType === 'following' && session?.userId) {
+			} else if (userType === 'following' && user?.userId) {
 				// Solo usuarios que el usuario actual sigue
 				whereClauseUsers.following = {
 					some: {
-						followerId: session.userId
+						followerId: user.userId
 					}
 				};
 			}
@@ -162,11 +162,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			});
 
 			// Obtener lista de usuarios que el usuario actual sigue
-			let followingIds: string[] = [];
-			if (session?.userId) {
-				const following = await prisma.follow.findMany({
+			let followingIds: number[] = [];
+			if (user?.userId) {
+				const following = await prisma.userFollower.findMany({
 					where: {
-						followerId: session.userId,
+						followerId: user.userId,
 						followingId: { in: users.map(u => u.id) }
 					},
 					select: { followingId: true }

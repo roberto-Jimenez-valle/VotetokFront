@@ -4,6 +4,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { apiCall } from '$lib/api/client';
   import { formatNumber } from '$lib/utils/pollHelpers';
+  import { currentUser } from '$lib/stores';
   import AuthModal from '$lib/AuthModal.svelte';
   import UserProfileModal from '$lib/UserProfileModal.svelte';
   
@@ -11,11 +12,13 @@
   
   interface Props {
     isOpen?: boolean;
-    isAuthenticated?: boolean;
   }
   
-  let { isOpen = $bindable(false), isAuthenticated = false }: Props = $props();
+  let { isOpen = $bindable(false) }: Props = $props();
   let showAuthModal = $state(false);
+  
+  // Derived authentication state
+  const isAuthenticated = $derived(!!$currentUser);
   
   // Estado para modal de perfil
   let isProfileModalOpen = $state(false);
@@ -322,8 +325,8 @@
   }
   
   async function handleFollowToggle(user: any) {
-    // Verificar si está autenticado
-    if (!isAuthenticated) {
+    // Verificar si está autenticado usando el store
+    if (!$currentUser) {
       showAuthModal = true;
       return;
     }

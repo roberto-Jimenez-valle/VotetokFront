@@ -6,19 +6,20 @@ import { prisma } from '$lib/server/prisma';
 export const POST: RequestHandler = async ({ params, locals }) => {
 	try {
 		const { id } = params;
-		const session = locals.session;
+		const user = locals.user;
+		const targetUserId = parseInt(id);
 
-		if (!session?.userId) {
+		if (!user?.userId) {
 			return json({ error: 'No autenticado' }, { status: 401 });
 		}
 
-		if (session.userId === id) {
+		if (user.userId === targetUserId) {
 			return json({ error: 'No puedes seguirte a ti mismo' }, { status: 400 });
 		}
 
 		// Verificar que el usuario a seguir existe
 		const userToFollow = await prisma.user.findUnique({
-			where: { id }
+			where: { id: targetUserId }
 		});
 
 		if (!userToFollow) {
@@ -26,11 +27,11 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		}
 
 		// Verificar si ya lo sigue
-		const existingFollow = await prisma.follow.findUnique({
+		const existingFollow = await prisma.userFollower.findUnique({
 			where: {
 				followerId_followingId: {
-					followerId: session.userId,
-					followingId: id
+					followerId: user.userId,
+					followingId: targetUserId
 				}
 			}
 		});
@@ -40,10 +41,10 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		}
 
 		// Crear la relación de seguimiento
-		await prisma.follow.create({
+		await prisma.userFollower.create({
 			data: {
-				followerId: session.userId,
-				followingId: id
+				followerId: user.userId,
+				followingId: targetUserId
 			}
 		});
 
@@ -58,18 +59,19 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
 		const { id } = params;
-		const session = locals.session;
+		const user = locals.user;
+		const targetUserId = parseInt(id);
 
-		if (!session?.userId) {
+		if (!user?.userId) {
 			return json({ error: 'No autenticado' }, { status: 401 });
 		}
 
 		// Eliminar la relación de seguimiento
-		await prisma.follow.delete({
+		await prisma.userFollower.delete({
 			where: {
 				followerId_followingId: {
-					followerId: session.userId,
-					followingId: id
+					followerId: user.userId,
+					followingId: targetUserId
 				}
 			}
 		});
