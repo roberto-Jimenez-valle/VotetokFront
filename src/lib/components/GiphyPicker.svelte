@@ -227,7 +227,7 @@
     background: rgba(20, 20, 22, 0.98);
     border-radius: 16px;
     overflow: hidden;
-    max-height: 600px;
+    height: 100%; /* Ocupa toda la altura del contenedor padre */
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
   
@@ -235,6 +235,7 @@
     padding: 16px;
     background: rgba(0, 0, 0, 0.4);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0; /* Evita que se comprima */
   }
   
   .title-row {
@@ -367,6 +368,7 @@
     justify-content: center;
     padding: 60px 20px;
     color: rgba(255, 255, 255, 0.6);
+    flex: 1; /* Ocupa el espacio disponible */
   }
   
   :global(.spinner) {
@@ -388,7 +390,8 @@
     gap: 8px;
     padding: 12px;
     overflow-y: auto;
-    max-height: 440px;
+    flex: 1; /* Ocupa el espacio disponible */
+    min-height: 0; /* Permite que funcione el overflow */
   }
   
   .gif-item {
@@ -448,6 +451,7 @@
     justify-content: center;
     padding: 60px 20px;
     color: rgba(255, 255, 255, 0.6);
+    flex: 1; /* Ocupa el espacio disponible */
   }
   
   .empty-state p {
@@ -478,6 +482,7 @@
     background: rgba(0, 0, 0, 0.4);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     text-align: center;
+    flex-shrink: 0; /* Evita que se comprima */
   }
   
   .powered-by {

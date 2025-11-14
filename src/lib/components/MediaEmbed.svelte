@@ -392,18 +392,20 @@
             }
           }}
         />
+        
+        <!-- Texto GIPHY dentro del contenedor de la imagen -->
+        <button 
+          class="linkedin-content"
+          onclick={() => window.open(metadata.url, '_blank')}
+          type="button"
+          aria-label={`Abrir ${metadata.title}`}
+        >
+          <h4>{url.includes('giphy') ? 'GIPHY' : metadata.title}</h4>
+          {#if metadata.description && !url.includes('giphy')}
+            <p>{metadata.description}</p>
+          {/if}
+        </button>
       </div>
-      <button 
-        class="linkedin-content"
-        onclick={() => window.open(metadata.url, '_blank')}
-        type="button"
-        aria-label={`Abrir ${metadata.title}`}
-      >
-        <h4>{metadata.title}</h4>
-        {#if metadata.description}
-          <p>{metadata.description}</p>
-        {/if}
-      </button>
     </div>
   {/if}
 </div>
@@ -425,7 +427,7 @@
   
   .full-mode {
     width: 100%;
-    min-height: 180px;
+    height: 100%;
     display: flex;
     flex-direction: column;
   }
@@ -536,22 +538,31 @@
   
   .linkedin-content {
     position: absolute;
-    bottom: 0;
-    right: 0;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
     padding: 8px 12px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    text-align: right;
-    align-items: flex-end;
+    text-align: center;
+    align-items: center;
     min-width: 0;
-    max-width: 70%;
+    max-width: 90%;
     gap: 2px;
     background: transparent;
     border: none;
     cursor: pointer;
     z-index: 10;
     pointer-events: auto;
+    opacity: 0;
+    animation: showText 0s linear 0.39s forwards;
+  }
+  
+  @keyframes showText {
+    to {
+      opacity: 1;
+    }
   }
   
   .linkedin-content:hover {
@@ -560,7 +571,7 @@
   
   .linkedin-content h4 {
     margin: 0;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     color: white;
     overflow: hidden;
@@ -570,6 +581,7 @@
     -webkit-box-orient: vertical;
     line-clamp: 2;
     line-height: 1.4;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   }
   
   .linkedin-content p {
@@ -587,11 +599,20 @@
   
   /* Ajustes para modo full - texto superpuesto sobre imagen */
   .full-mode .linkedin-card {
-    height: auto;
+    height: 100%;
+    flex: 1;
   }
   
   .full-mode .linkedin-image {
     position: relative;
+    flex: 1;
+    height: 100%;
+  }
+  
+  .full-mode .linkedin-image img {
+    height: 100%;
+    max-height: 100%;
+    object-fit: contain;
   }
   
   /* Ajustes para modo preview (espacios pequeños) - superpuesto */

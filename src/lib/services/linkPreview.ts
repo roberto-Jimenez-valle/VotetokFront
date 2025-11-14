@@ -143,7 +143,7 @@ export function isGif(url: string): boolean {
  * Detecta si una URL es de Giphy
  */
 export function isGiphyUrl(url: string): boolean {
-  return url.includes('giphy.com') || url.includes('media.giphy.com');
+  return url.includes('giphy.com') || url.includes('giphy');
 }
 
 /**

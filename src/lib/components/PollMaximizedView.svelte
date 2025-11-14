@@ -162,20 +162,21 @@
   // Transiciones dinámicas
   let transitionX = $state(0);
   let transitionY = $state(0);
+  let showVoteBorder = $state(true); // Controla visibilidad del borde de voto
+  
+  // Variables derivadas para entrada (inversas a las de salida)
+  let inTransitionX = $derived(-transitionX);
+  let inTransitionY = $derived(-transitionY);
 
   // Navegación simple con transiciones
   function goToPrevious() {
     if (activeIndex > 0) {
-      transitionX = -300; // Sale hacia la izquierda, entra desde derecha
-      transitionY = 0;
       onOptionChange(options[activeIndex - 1].id);
     }
   }
 
   function goToNext() {
     if (activeIndex < options.length - 1) {
-      transitionX = 300; // Sale hacia la derecha, entra desde izquierda
-      transitionY = 0;
       onOptionChange(options[activeIndex + 1].id);
     }
   }
@@ -273,17 +274,22 @@
       if (Math.abs(deltaX) > Math.abs(deltaY)) {
         // Swipe horizontal (cambiar opción) - threshold de 50px
         if (Math.abs(deltaX) > 50) {
-          if (deltaX < 0) {
-            // Swipe a la izquierda → siguiente (sale hacia izquierda)
-            transitionX = 300;
-            transitionY = 0;
-            goToNext();
-          } else {
-            // Swipe a la derecha → anterior (sale hacia derecha)
-            transitionX = -300;
-            transitionY = 0;
-            goToPrevious();
-          }
+          showVoteBorder = false;
+          setTimeout(() => {
+            if (deltaX < 0) {
+              // Swipe a la izquierda → siguiente (sale hacia izquierda)
+              transitionX = 300;
+              transitionY = 0;
+              goToNext();
+              setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
+            } else {
+              // Swipe a la derecha → anterior (sale hacia derecha)
+              transitionX = -300;
+              transitionY = 0;
+              goToPrevious();
+              setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
+            }
+          }, 50);
         }
       } else {
         // Swipe vertical (cambiar encuesta) - threshold de 80px
@@ -293,29 +299,41 @@
             if (deltaY < 0 && isAtBottom) {
               // Swipe hacia arriba Y estamos al final → siguiente encuesta
               console.log('[PollMaximizedView] 📱 Cambio a siguiente (al final del scroll)');
-              transitionX = 0;
-              transitionY = 300;
-              onSwipeVertical('down');
+              showVoteBorder = false;
+              setTimeout(() => {
+                transitionX = 0;
+                transitionY = 300;
+                onSwipeVertical('down');
+                setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
+              }, 50);
             } else if (deltaY > 0 && isAtTop) {
               // Swipe hacia abajo Y estamos al inicio → encuesta anterior
               console.log('[PollMaximizedView] 📱 Cambio a anterior (al inicio del scroll)');
-              transitionX = 0;
-              transitionY = -300;
-              onSwipeVertical('up');
+              showVoteBorder = false;
+              setTimeout(() => {
+                transitionX = 0;
+                transitionY = -300;
+                onSwipeVertical('up');
+                setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
+              }, 50);
             }
             // Si no estamos en los bordes, el scroll normal funciona
           } else {
             // Modo normal (una opción a la vez)
-            transitionX = 0;
-            if (deltaY < 0) {
-              // Swipe hacia arriba → siguiente encuesta (sale hacia arriba)
-              transitionY = 300;
-              onSwipeVertical('down');
-            } else {
-              // Swipe hacia abajo → encuesta anterior (sale hacia abajo)
-              transitionY = -300;
-              onSwipeVertical('up');
-            }
+            showVoteBorder = false;
+            setTimeout(() => {
+              transitionX = 0;
+              if (deltaY < 0) {
+                // Swipe hacia arriba → siguiente encuesta (sale hacia arriba)
+                transitionY = 300;
+                onSwipeVertical('down');
+              } else {
+                // Swipe hacia abajo → encuesta anterior (sale hacia abajo)
+                transitionY = -300;
+                onSwipeVertical('up');
+              }
+              setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
+            }, 50);
           }
         }
       }
@@ -351,8 +369,10 @@
   {#key pollTitle}
     <div 
       class="poll-title-section"
-      in:fly={{ y: transitionY, duration: 250 }}
-      out:fly={{ y: -transitionY, duration: 250 }}
+      class:voted={activeOption?.voted && showVoteBorder}
+      style={activeOption?.voted && showVoteBorder ? `--vote-color: ${activeOption.color}` : ''}
+      in:fly|local={{ y: transitionY, duration: 250, delay: 250 }}
+      out:fly|local={{ y: inTransitionY, duration: 250, delay: 0 }}
     >
       <div class="poll-header">
         {#if creator}
@@ -381,11 +401,14 @@
   <!-- Mostrar todas las opciones en scroll vertical O una opción activa -->
   {#if showAllOptions}
     <!-- Modo: Todas las opciones en scroll vertical -->
-    <div 
-      class="all-options-container"
-      bind:this={optionsScrollContainer}
-      onscroll={checkScrollPosition}
-    >
+    {#key pollTitle}
+      <div 
+        class="all-options-container"
+        bind:this={optionsScrollContainer}
+        onscroll={checkScrollPosition}
+        in:fly={{ y: transitionY, duration: 250, delay: 250 }}
+        out:fly={{ y: inTransitionY, duration: 250, delay: 0 }}
+      >
       {#each options as option, idx}
         <button
           type="button"
@@ -414,16 +437,22 @@
           {/if}
         </button>
       {/each}
-    </div>
+      </div>
+    {/key}
   {:else if activeOption}
     <!-- Modo: Una opción a la vez (comportamiento actual) -->
-    {#key activeOptionId}
+    {#key `${pollTitle}-${activeOptionId}`}
+      <!-- Borde de voto que cubre toda la pantalla -->
+      {#if activeOption.voted && showVoteBorder}
+        <div class="vote-border-overlay" style="--vote-color: {activeOption.color}"></div>
+      {/if}
+      
       <div 
         class="option-content-container"
         class:voted={activeOption.voted}
         style={activeOption.voted ? `--vote-color: ${activeOption.color}` : ''}
-        in:fly={{ x: transitionX, y: transitionY, duration: 250 }}
-        out:fly={{ x: -transitionX, y: -transitionY, duration: 250 }}
+        in:fly={{ x: transitionX, y: transitionY, duration: 250, delay: 250 }}
+        out:fly={{ x: inTransitionX, y: inTransitionY, duration: 250, delay: 0 }}
       >
         {#if activeOption.imageUrl}
           <!-- Media Preview con texto dentro -->
@@ -435,8 +464,8 @@
               height="auto"
               autoplay={true}
             />
-
-            <!-- Texto con flechas en el bottom del preview -->
+            
+            <!-- Texto con flechas superpuesto sobre el preview -->
             <div class="text-with-arrows">
               <!-- Label de opción -->
               {#if readOnly}
@@ -869,12 +898,17 @@
     padding: 20px;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
-    border-bottom: none;
+    border-bottom: 4px solid transparent;
     min-height: 80px;
     max-height: 120px;
     display: flex;
     align-items: center;
-    overflow-y: auto;
+    overflow-y: hidden;
+    transition: border-color 0.2s ease;
+  }
+
+  .poll-title-section.voted {
+    border-bottom-color: var(--vote-color);
   }
 
   .poll-title-input {
@@ -898,56 +932,60 @@
 
   /* Contenedor principal de la opción */
   .option-content-container {
-    flex: 1;
+    flex: 1; /* Ocupa el espacio disponible */
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
     padding: 0;
-    padding-bottom: 100px;
     gap: 0;
     position: relative;
     box-sizing: border-box;
+    will-change: transform, opacity;
+    width: 100%;
+    max-height: 55%; /* Permite que funcione el overflow */
   }
 
-  /* Marco de voto - siempre presente pero transparente cuando no votado */
-  .option-content-container::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border: 4px solid transparent;
+  /* Capa de borde de voto que cubre toda la pantalla (sin incluir título) */
+  .vote-border-overlay {
+    position: fixed;
+    top: 120px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 4px solid var(--vote-color);
+    border-top: none;
     border-radius: 0;
     pointer-events: none;
-    z-index: 10;
+    z-index: 5;
     transition: border-color 0.2s ease;
-  }
-
-  .option-content-container.voted::before {
-    border-color: var(--vote-color);
   }
 
   /* Media preview - centrado vertical, todo el ancho */
   .media-preview {
-    width: 100vw;
-    height: 75vh;
+    width: 100%;
+    flex: 1; /* Ocupa el espacio disponible */
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background: transparent;
+    background: #000;
     border-radius: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center; /* Centrado vertical */
     position: relative;
+    min-height: 0; /* Permite que funcione el overflow */
   }
 
   .media-preview :global(.media-embed) {
     width: 100% !important;
     flex: 1;
+    max-height: 100%;
+    position: relative;
     border-radius: 0 !important;
     background: transparent !important;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     overflow: hidden !important;
     justify-content: center;
   }
@@ -965,17 +1003,29 @@
     height: 100% !important;
     min-height: 100% !important;
     border-radius: 0 !important;
+    opacity: 0;
+    animation: showMedia 0s linear 0.39s forwards;
   }
 
   .media-preview :global(.media-embed video),
   .media-preview :global(.media-embed img) {
     width: 100% !important;
+    height: 100% !important;
     min-width: 100% !important;
     max-width: 100% !important;
-    
+    min-height: 100% !important;
+    max-height: 100% !important;
     object-fit: contain !important;
     object-position: center !important;
     border-radius: 0 !important;
+    opacity: 0;
+    animation: showMedia 0s linear 0.39s forwards;
+  }
+
+  @keyframes showMedia {
+    to {
+      opacity: 1;
+    }
   }
 
   /* Contenedor para opciones sin media - texto centrado */
@@ -994,6 +1044,7 @@
     gap: 20px;
     width: 100%;
     max-width: 600px;
+    min-height: 180px;
   }
 
   .option-label-input-centered {
@@ -1010,6 +1061,7 @@
     line-height: 1.5;
     text-align: center;
     transition: all 0.2s;
+    min-height: 96px;
   }
 
   .option-label-input-centered:focus {
@@ -1028,15 +1080,21 @@
     align-items: flex-end;
   }
 
-  /* Texto con flechas debajo - vertical, dentro del preview */
+  /* Texto con flechas arriba - vertical, por encima del preview */
   .text-with-arrows {
+    bottom: 0;
+    margin:4px;
+    left: 0;
+    right: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 16px 12px;
-    width: 100%;
-    background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.6) 70%, transparent 100%);
+    gap: 4px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
+    z-index: 10;
+    opacity: 0;
+    animation: showMedia 0s linear 0.39s forwards;
   }
 
   /* Flechas debajo a los lados */
@@ -1044,6 +1102,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    min-height: 32px;
   }
 
   /* Porcentaje abajo a la izquierda, por encima de dots */
@@ -1077,7 +1136,7 @@
     background: transparent;
     border: none;
     border-radius: 0;
-    padding: 12px 16px;
+    padding: 0;
     color: white;
     font-size: 16px;
     font-weight: 500;
@@ -1355,7 +1414,7 @@
     font-weight: 600;
     line-height: 1.4;
     text-align: center;
-    padding: 12px 16px;
+    padding: 0;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   }
 
@@ -1367,6 +1426,7 @@
     text-align: center;
     padding: 20px;
     text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+    min-height: 96px;
   }
 
   /* Header con avatar */

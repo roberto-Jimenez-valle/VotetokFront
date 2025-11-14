@@ -965,59 +965,50 @@
               return;
             }
             
-            // Para polls normales: abrir maximizado directamente (como CreatePollModal)
-            const wasCollapsed = state !== 'expanded' || activeAccordionIndex !== index;
+            // Para polls normales: usar single/doble touch
+            // Una opción se considera colapsada si NO es la activa en el acordeón
+            const wasCollapsed = activeAccordionIndex !== index;
             
             addDebugLog('📱🖐️ TOUCH EVENT HANDLER');
             const debugInfo = `📱 Estado: wasCollapsed=${wasCollapsed}, key=${option.key}, hasImageUrl=${!!option.imageUrl}, imageUrl=${option.imageUrl}`;
             addDebugLog(debugInfo);
             
-            // Si está colapsada, abrirla primero
+            // Si está colapsada, primer touch solo expande
             if (wasCollapsed) {
               e.preventDefault();
               e.stopPropagation();
               addDebugLog('✅ Abriendo opción colapsada');
               handleSetActive(index);
-              return; // NO mostrar tooltip de doble click
+              // Resetear contador de taps
+              clickCount = 0;
+              pendingOptionKey = null;
+              return;
             }
             
-            addDebugLog('[Touch] Ya estaba desplegada');
-            
-            // Si ya está desplegada, abrir modal fullscreen (con o sin imagen)
+            // Ya está desplegada: distinguir single vs double touch
             e.preventDefault();
             e.stopPropagation();
-            openPreviewModal(option);
-            return;
             
-            console.log('[SinglePoll] Touch #' + clickCount, option.key);
+            clickCount += 1;
+            pendingOptionKey = option.key;
             
             if (clickTimeout) clearTimeout(clickTimeout);
             
             clickTimeout = setTimeout(() => {
               console.log('[SinglePoll] ⏰ Touch timeout ejecutado! clickCount:', clickCount);
               if (clickCount === 1) {
-                // Touch simple - Mostrar tooltip (solo si ya estaba expandida)
-                if (!wasCollapsed) {
-                  console.log('[SinglePoll] Touch simple - Mostrando tooltip');
-                  showDoubleClickTooltip = true;
-                  if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                  tooltipTimeout = setTimeout(() => {
-                    showDoubleClickTooltip = false;
-                  }, 2000);
-                } else {
-                  console.log('[SinglePoll] Touch simple en colapsada - Solo abierta');
-                }
+                // Touch simple en opción ya desplegada → abrir vista maximizada
+                addDebugLog('[Touch] Single tap en opción expandida → abrir PollMaximizedView');
+                openPreviewModal(option);
               } else if (clickCount >= 2) {
-                // Doble touch - VOTAR o DESVOTAR (y abrir si estaba colapsada)
+                // Doble touch → solo votar / desvotar, sin abrir maximizada
                 console.log('[SinglePoll] ✅ DOBLE TOUCH confirmado - Votando:', pendingOptionKey);
                 showDoubleClickTooltip = false;
                 if (tooltipTimeout) clearTimeout(tooltipTimeout);
                 
-                // Verificar si ya votó esta opción (desvoto)
                 const isUnvoting = isPollVoted;
                 
                 if (isUnvoting) {
-                  // Mostrar X de eliminación
                   voteRemovalColor = option.color;
                   showVoteRemoval = true;
                   if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
@@ -1025,7 +1016,6 @@
                     showVoteRemoval = false;
                   }, 800);
                 } else {
-                  // Mostrar check de confirmación
                   voteConfirmationColor = option.color;
                   showVoteConfirmation = true;
                   if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
@@ -1082,8 +1072,9 @@
               return;
             }
             
-            // Para polls normales: abrir maximizado directamente (como CreatePollModal)
-            const wasCollapsed = state !== 'expanded' || activeAccordionIndex !== index;
+            // Para polls normales: usar single/double click
+            // Igual que en móvil, colapsada = no es la opción activa del acordeón
+            const wasCollapsed = activeAccordionIndex !== index;
             
             addDebugLog('🖱️🖱️ CLICK EVENT HANDLER (DESKTOP)');
             console.log('[SinglePoll] 🔍 Estado:', { 
@@ -1094,50 +1085,84 @@
               pollType: poll.type 
             });
             
-            // Si está colapsada, abrirla primero
+            // Si está colapsada, primer click solo expande
             if (wasCollapsed) {
               addDebugLog('✅ [Click] Opción cerrada -> Abriendo');
               e.preventDefault();
               e.stopPropagation();
               handleSetActive(index);
-              return; // NO mostrar tooltip de doble click
+              clickCount = 0;
+              pendingOptionKey = null;
+              return;
             }
             
             addDebugLog('[Click] ⚠️ Ya estaba desplegada');
             
-            // Si ya está desplegada, abrir modal fullscreen (con o sin imagen)
+            // Ya está desplegada: distinguir single vs double click
             e.preventDefault();
             e.stopPropagation();
-            openPreviewModal(option);
-            return;
-            
-            console.log('[SinglePoll] Click #' + clickCount, option.key);
-            console.log('[SinglePoll] clickCount actual:', clickCount, 'pendingOptionKey:', option.key);
-            
-            // Cancelar timeout anterior
+
+            // Si el navegador ya detecta doble click (detail >= 2), procesar directamente como voto
+            if (e.detail >= 2) {
+              console.log('[SinglePoll] 🖱️ detail>=2 → tratar como doble click inmediato');
+
+              showDoubleClickTooltip = false;
+              if (tooltipTimeout) clearTimeout(tooltipTimeout);
+
+              const isUnvoting = isPollVoted;
+
+              if (isUnvoting) {
+                voteRemovalColor = option.color;
+                showVoteRemoval = true;
+                if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+                voteRemovalTimeout = setTimeout(() => {
+                  showVoteRemoval = false;
+                }, 800);
+              } else {
+                voteConfirmationColor = option.color;
+                showVoteConfirmation = true;
+                if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+                voteConfirmationTimeout = setTimeout(() => {
+                  showVoteConfirmation = false;
+                }, 800);
+              }
+
+              dispatch('optionClick', {
+                event: e,
+                optionKey: option.key,
+                pollId: poll.id,
+                optionColor: option.color
+              });
+
+              // Resetear estado de doble click manual
+              clickCount = 0;
+              pendingOptionKey = null;
+              if (clickTimeout) {
+                clearTimeout(clickTimeout);
+              }
+              return;
+            }
+
+            // Caso normal: usar contador + timeout para distinguir single/double click
+            clickCount += 1;
+            pendingOptionKey = option.key;
+
             if (clickTimeout) {
               console.log('[SinglePoll] Cancelando timeout anterior');
               clearTimeout(clickTimeout);
             }
-            
-            // Esperar medio segundo para ver si es doble click
-            console.log('[SinglePoll] Programando timeout de 500ms...');
+
+            console.log('[SinglePoll] Click #' + clickCount, option.key);
+            console.log('[SinglePoll] clickCount actual:', clickCount, 'pendingOptionKey:', option.key);
+
             clickTimeout = setTimeout(() => {
               console.log('[SinglePoll] ⏰ Timeout ejecutado! clickCount:', clickCount);
               if (clickCount === 1) {
-                // Es click simple - Mostrar tooltip (solo si ya estaba expandida)
-                if (!wasCollapsed) {
-                  console.log('[SinglePoll] Click simple confirmado - Mostrando tooltip');
-                  showDoubleClickTooltip = true;
-                  if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                  tooltipTimeout = setTimeout(() => {
-                    showDoubleClickTooltip = false;
-                  }, 2000);
-                } else {
-                  console.log('[SinglePoll] Click simple en colapsada - Solo abierta');
-                }
+                // Click simple en opción ya desplegada → abrir vista maximizada
+                console.log('[SinglePoll] Click simple confirmado - abrir PollMaximizedView');
+                openPreviewModal(option);
               } else if (clickCount >= 2) {
-                // Es doble click - VOTAR o DESVOTAR (y abrir si estaba colapsada)
+                // Doble click → solo votar / desvotar, sin abrir maximizada
                 console.log('[SinglePoll] ✅ DOBLE CLICK confirmado - Votando:', pendingOptionKey);
                 console.log('[SinglePoll] Despachando evento optionClick:', {
                   optionKey: pendingOptionKey,
@@ -1147,12 +1172,10 @@
                 });
                 showDoubleClickTooltip = false;
                 if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                
-                // Verificar si ya votó esta opción (desvoto)
+
                 const isUnvoting = isPollVoted;
-                
+
                 if (isUnvoting) {
-                  // Mostrar X de eliminación
                   voteRemovalColor = option.color;
                   showVoteRemoval = true;
                   if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
@@ -1160,7 +1183,6 @@
                     showVoteRemoval = false;
                   }, 800);
                 } else {
-                  // Mostrar check de confirmación
                   voteConfirmationColor = option.color;
                   showVoteConfirmation = true;
                   if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
@@ -1168,18 +1190,16 @@
                     showVoteConfirmation = false;
                   }, 800);
                 }
-                
-                // Despachar el evento
+
                 dispatch('optionClick', { 
                   event: e, 
                   optionKey: pendingOptionKey, 
                   pollId: poll.id, 
                   optionColor: option.color 
                 });
-                
-                console.log('[SinglePoll] Evento optionClick despachado');
+                console.log('[SinglePoll] Evento optionClick despachado desde click');
               }
-              
+
               // Reset
               clickCount = 0;
               pendingOptionKey = null;

@@ -3941,7 +3941,7 @@
   .giphy-picker-container {
     width: 90%;
     max-width: 700px;
-    max-height: 80vh;
+    height: min(600px, 80vh); /* Usa 600px o 80vh, lo que sea menor */
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
