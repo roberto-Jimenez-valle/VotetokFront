@@ -39,6 +39,12 @@
     isOpen = false;
   }
   
+  function handleAvatarError(e: Event) {
+    const target = e.target as HTMLImageElement;
+    const initial = $currentUser?.username?.[0]?.toUpperCase() || 'U';
+    target.src = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22 viewBox=%220 0 150 150%22%3E%3Ccircle cx=%2275%22 cy=%2275%22 r=%2275%22 fill=%22%23374151%22/%3E%3Ctext x=%2275%22 y=%2290%22 font-size=%2260%22 text-anchor=%22middle%22 fill=%22%23fff%22%3E${initial}%3C/text%3E%3C/svg%3E`;
+  }
+
   function handleLogout() {
     console.log('[ProfileModal] 🚪 Cerrando sesión...');
     
@@ -129,7 +135,18 @@
       <!-- Perfil del usuario -->
       <div class="profile-section">
         <div class="profile-avatar">
-          <img src={$currentUser?.avatarUrl || 'https://i.pravatar.cc/150?u=maria'} alt={$currentUser?.displayName || 'Usuario'} />
+          {#if $currentUser?.avatarUrl}
+            <img 
+              src={$currentUser.avatarUrl} 
+              alt={$currentUser.displayName || $currentUser.username}
+              onerror={handleAvatarError}
+            />
+          {:else}
+            <img 
+              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Ccircle cx='75' cy='75' r='75' fill='%23374151'/%3E%3Cpath d='M75 70a20 20 0 1 0 0-40 20 20 0 0 0 0 40zm0 10c-20 0-60 10-60 30v15h120v-15c0-20-40-30-60-30z' fill='%239ca3af'/%3E%3C/svg%3E" 
+              alt={$currentUser?.displayName || 'Usuario'}
+            />
+          {/if}
           {#if $currentUser?.verified}
             <div class="verified-badge">✓</div>
           {/if}
