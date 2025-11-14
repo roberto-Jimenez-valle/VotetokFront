@@ -3,6 +3,7 @@
   import { X, User, Settings, LogOut, Shield, HelpCircle, Bell, Moon, Sun, Globe } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
   import { currentUser } from '$lib/stores';
+  import { logout } from '$lib/stores/auth';
   
   const dispatch = createEventDispatcher();
   
@@ -39,9 +40,27 @@
   }
   
   function handleLogout() {
-    console.log('Cerrar sesión');
+    console.log('[ProfileModal] 🚪 Cerrando sesión...');
+    
+    // Limpiar autenticación OAuth
+    logout();
+    
+    // Limpiar también usuario de prueba
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('votetok-test-user');
+    }
+    
+    // Limpiar currentUser del store principal
+    currentUser.set(null);
+    
+    console.log('[ProfileModal] ✅ Sesión cerrada');
     dispatch('logout');
     closeModal();
+    
+    // Recargar página para limpiar todo el estado
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   }
   
   function handleSettings() {

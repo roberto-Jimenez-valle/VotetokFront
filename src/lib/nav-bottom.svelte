@@ -4,6 +4,7 @@
 	import SearchModal from '$lib/SearchModal.svelte';
 	import NotificationsModal from '$lib/NotificationsModal.svelte';
 	import ProfileModal from '$lib/ProfileModal.svelte';
+	import { currentUser } from '$lib/stores';
 
 	interface Props {
 		hidden?: boolean;
@@ -157,7 +158,11 @@
 		class="nav-btn-profile"
 		aria-label="Perfil"
 	>
-		<img src="https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=150&h=150&fit=crop&crop=face?width=40&height=40" alt="Perfil" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover" />
+		{#if $currentUser?.avatarUrl}
+			<img src={$currentUser.avatarUrl} alt={$currentUser.displayName || $currentUser.username} class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover" />
+		{:else}
+			<img src="https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=150&h=150&fit=crop&crop=face?width=40&height=40" alt="Perfil" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover" />
+		{/if}
 	</button>
 	</div>
 </nav>
