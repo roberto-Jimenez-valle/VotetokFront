@@ -3,7 +3,7 @@
   import { X, MapPin, Calendar, Check, UserPlus, UserMinus, Loader2, TrendingUp, BarChart } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   import SinglePollSection from '$lib/globe/cards/sections/SinglePollSection.svelte';
-  import { apiCall } from '$lib/api/client';
+  import { apiCall, apiDelete } from '$lib/api/client';
   import { currentUser } from '$lib/stores';
   
   const dispatch = createEventDispatcher();
@@ -486,11 +486,8 @@
                         try {
                           const numericPollId = typeof pollId === 'string' ? parseInt(pollId) : pollId;
                           
-                          await fetch(`/api/polls/${numericPollId}/vote`, {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: $currentUser?.id || null })
-                          });
+                          // Usar apiDelete con autenticación
+                          await apiDelete(`/api/polls/${numericPollId}/vote`);
                           
                           delete votesState[pollIdStr];
                           votesState = { ...votesState };
@@ -565,11 +562,8 @@
                           try {
                             const numericPollId = typeof pollId === 'string' ? parseInt(pollId) : pollId;
                             
-                            await fetch(`/api/polls/${numericPollId}/vote`, {
-                              method: 'DELETE',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ userId: $currentUser?.id || null })
-                            });
+                            // Usar apiDelete con autenticación
+                            await apiDelete(`/api/polls/${numericPollId}/vote`);
                             
                             delete votesState[pollIdStr];
                             votesState = { ...votesState };

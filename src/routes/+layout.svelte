@@ -4,7 +4,7 @@
 	import UnifiedThemeToggle from '$lib/components/UnifiedThemeToggle.svelte';
 	import UnderConstruction from '$lib/UnderConstruction.svelte';
 	import { setCurrentUser } from '$lib/stores';
-	import { currentUser as authUser, isAuthenticated } from '$lib/stores/auth';
+	import { currentUser as authUser, isAuthenticated, setAuth } from '$lib/stores/auth';
 	
 	let { children } = $props();
 	let hasAccess = $state(false);
@@ -48,6 +48,42 @@
 		if (!hasAccess) {
 			console.log('🔒 Acceso restringido - mostrando página en construcción');
 			return;
+		}
+		
+		// 🔑 Capturar token de OAuth callback si existe en la URL
+		const urlParams = new URLSearchParams(window.location.search);
+		const authSuccess = urlParams.get('auth');
+		const tokenFromUrl = urlParams.get('token');
+		const userFromUrl = urlParams.get('user');
+		
+		if (authSuccess === 'success' && tokenFromUrl && userFromUrl) {
+			try {
+				const userData = JSON.parse(decodeURIComponent(userFromUrl));
+				
+				// Usar setAuth para guardar token y actualizar stores correctamente
+				setAuth(tokenFromUrl, userData);
+				
+				// También actualizar el store currentUser con el formato esperado
+				setCurrentUser({
+					id: userData.userId,
+					username: userData.username,
+					displayName: userData.displayName,
+					email: userData.email,
+					avatarUrl: userData.avatarUrl,
+					verified: userData.verified || false,
+					countryIso3: userData.countryIso3,
+					subdivisionId: userData.subdivisionId,
+					role: userData.role
+				});
+				
+				console.log('✅ Token de OAuth guardado exitosamente para:', userData.username);
+				
+				// Limpiar URL sin recargar la página
+				const cleanUrl = window.location.pathname;
+				window.history.replaceState({}, document.title, cleanUrl);
+			} catch (error) {
+				console.error('❌ Error al procesar callback de OAuth:', error);
+			}
 		}
 		
 		// 👤 Cargar usuario: primero intenta OAuth real, luego test user
@@ -229,15 +265,6 @@
 		color: #c9d1d9;
 		letter-spacing: 1px;
 		animation: fadeInUp 1s ease-out;
-	}
-	
-	/* Imagen del splash */
-	.splash-image {
-		max-width: 400px;
-		width: 90%;
-		height: auto;
-		object-fit: contain;
-		animation: fadeInUp 1s ease-out 0.2s backwards;
 	}
 	
 	/* Animaciones */

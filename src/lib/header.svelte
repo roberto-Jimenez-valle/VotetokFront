@@ -2,7 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import SinglePollSection from './globe/cards/sections/SinglePollSection.svelte';
   import { currentUser } from '$lib/stores';
-  import { apiCall, apiPost } from '$lib/api/client';
+  import { apiCall, apiPost, apiDelete } from '$lib/api/client';
   import { createEventListenerManager } from '$lib/utils/eventListenerCleanup';
   import '$lib/styles/trending-ranking.css';
   
@@ -774,16 +774,8 @@
     try {
       const numericPollId = typeof pollId === 'string' ? parseInt(pollId) : pollId;
       
-      // Llamar a la API para eliminar el voto
-      await fetch(`/api/polls/${numericPollId}/vote`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId: $currentUser?.id || null
-        })
-      });
+      // Llamar a la API para eliminar el voto (con autenticación)
+      await apiDelete(`/api/polls/${numericPollId}/vote`);
       
       // Actualizar estado local
       delete userVotes[pollId];

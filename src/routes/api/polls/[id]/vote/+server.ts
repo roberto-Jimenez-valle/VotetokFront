@@ -165,9 +165,10 @@ export const DELETE: RequestHandler = async ({ params, request, getClientAddress
     const { id } = params;
     
     // Obtener userId del contexto de sesión (locals.user) o null para anónimos
-    const userId = locals.user?.id || null;
+    const userId = locals.user?.userId || locals.user?.id || null;
     const ipAddress = getClientAddress();
     
+    console.log('[API Vote DELETE] locals.user:', locals.user);
     console.log('[API Vote DELETE] Buscando voto para pollId:', id, 'userId:', userId, 'IP:', ipAddress);
     
     // Buscar el voto existente
