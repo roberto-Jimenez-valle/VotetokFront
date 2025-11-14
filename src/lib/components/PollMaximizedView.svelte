@@ -792,12 +792,28 @@
         <button 
           class="action-badge action-vote {hasVoted ? 'has-voted' : 'no-vote'}" 
           type="button" 
-          title={hasVoted ? `Tu voto: ${votedOption?.label || ''} (Click para quitar)` : "Aún no has votado"}
+          title={hasVoted ? `Tu voto: ${votedOption?.label || ''} (Click para quitar)` : activeOption ? `Votar: ${activeOption.label}` : "Selecciona una opción"}
           style="{hasVoted && votedOption ? `--vote-color: ${votedOption.color};` : ''}"
           onclick={(e) => {
             e.stopPropagation();
             if (hasVoted) {
+              // Quitar voto
+              voteRemovalColor = votedOption?.color || '#ef4444';
+              showVoteRemoval = true;
+              if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
+              voteRemovalTimeout = setTimeout(() => {
+                showVoteRemoval = false;
+              }, 800);
               onClearVote();
+            } else if (activeOption) {
+              // Votar opción activa
+              voteConfirmationColor = activeOption.color;
+              showVoteConfirmation = true;
+              if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+              voteConfirmationTimeout = setTimeout(() => {
+                showVoteConfirmation = false;
+              }, 800);
+              onVote(activeOption.id);
             }
           }}
         >
@@ -1147,6 +1163,14 @@
   
   .action-vote.has-voted svg {
     opacity: 1;
+  }
+  
+  .action-vote.no-vote {
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .action-vote.no-vote span {
+    color: rgba(255, 255, 255, 0.9);
   }
   
   .action-vote:hover {

@@ -8,12 +8,13 @@
     onSelect: (gifUrl: string) => void;
     onClose?: () => void;
     optionColor?: string; // Color de la opción para personalizar el picker
+    initialSearch?: string; // Búsqueda inicial automática
   }
   
-  let { onSelect, onClose, optionColor = '#00ff99' }: Props = $props();
+  let { onSelect, onClose, optionColor = '#00ff99', initialSearch = '' }: Props = $props();
   
   // Estado
-  let searchTerm = $state('');
+  let searchTerm = $state(initialSearch);
   let gifs = $state<GiphyGif[]>([]);
   let isLoading = $state(false);
   let showTrending = $state(true);
@@ -33,9 +34,13 @@
     });
   });
   
-  // Cargar trending al inicio
+  // Cargar trending al inicio o buscar si hay initialSearch
   $effect(() => {
-    if (showTrending) {
+    if (initialSearch && initialSearch.trim()) {
+      // Si hay búsqueda inicial, buscar automáticamente
+      showTrending = false;
+      handleSearch();
+    } else if (showTrending) {
       loadTrending();
     }
   });

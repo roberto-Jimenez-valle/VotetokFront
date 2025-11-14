@@ -2723,6 +2723,7 @@
 {#if showGiphyPicker}
   {@const targetOption = giphyTarget && giphyTarget !== 'main' ? options.find(opt => opt.id === giphyTarget) : null}
   {@const pickerColor = targetOption?.color || '#00ff99'}
+  {@const initialSearchText = targetOption?.label || ''}
   <div class="giphy-picker-overlay" transition:fade={{ duration: 200 }}>
     <div class="giphy-picker-container">
       <GiphyPicker 
@@ -2732,6 +2733,7 @@
           giphyTarget = null;
         }}
         optionColor={pickerColor}
+        initialSearch={initialSearchText}
       />
     </div>
   </div>

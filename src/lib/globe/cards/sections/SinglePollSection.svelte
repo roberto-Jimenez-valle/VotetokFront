@@ -1532,13 +1532,17 @@
           bind:this={voteIconElement}
           class="action-badge action-vote {pollVotedOption ? 'has-voted' : 'no-vote'}" 
           type="button" 
-          title={pollVotedOption ? `Tu voto: ${votedOptionData?.label || pollVotedOption} (Click para quitar)` : "Aún no has votado"}
+          title={pollVotedOption ? `Tu voto: ${votedOptionData?.label || pollVotedOption} (Click para quitar)` : activeAccordionIndex !== null && paginatedPoll.items[activeAccordionIndex] ? `Votar: ${paginatedPoll.items[activeAccordionIndex].label}` : "Selecciona una opción"}
           style="{pollVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''}"
           ontouchend={(e) => {
             e.stopPropagation();
+            const activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
             console.log('[SinglePoll] 🗑️ Touch en botón de voto');
             console.log('[SinglePoll] pollVotedOption:', pollVotedOption);
+            console.log('[SinglePoll] activeOption:', activeOption);
+            
             if (pollVotedOption) {
+              // Quitar voto
               console.log('[SinglePoll] Despachando clearVote para:', poll.id);
               voteRemovalColor = votedOptionData?.color || '#ef4444';
               showVoteRemoval = true;
@@ -1546,15 +1550,28 @@
               voteRemovalTimeout = setTimeout(() => {
                 showVoteRemoval = false;
               }, 800);
-              
               dispatch('clearVote', { pollId: poll.id });
+            } else if (activeOption) {
+              // Votar opción activa
+              console.log('[SinglePoll] Votando opción activa:', activeOption.key);
+              voteConfirmationColor = activeOption.color;
+              showVoteConfirmation = true;
+              if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+              voteConfirmationTimeout = setTimeout(() => {
+                showVoteConfirmation = false;
+              }, 800);
+              dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
             }
           }}
           onclick={(e) => {
             e.stopPropagation();
+            const activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
             console.log('[SinglePoll] 👁️ Click en botón de voto');
             console.log('[SinglePoll] pollVotedOption:', pollVotedOption);
+            console.log('[SinglePoll] activeOption:', activeOption);
+            
             if (pollVotedOption) {
+              // Quitar voto
               console.log('[SinglePoll] Despachando clearVote para:', poll.id);
               voteRemovalColor = votedOptionData?.color || '#ef4444';
               showVoteRemoval = true;
@@ -1562,8 +1579,17 @@
               voteRemovalTimeout = setTimeout(() => {
                 showVoteRemoval = false;
               }, 800);
-              
               dispatch('clearVote', { pollId: poll.id });
+            } else if (activeOption) {
+              // Votar opción activa
+              console.log('[SinglePoll] Votando opción activa:', activeOption.key);
+              voteConfirmationColor = activeOption.color;
+              showVoteConfirmation = true;
+              if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+              voteConfirmationTimeout = setTimeout(() => {
+                showVoteConfirmation = false;
+              }, 800);
+              dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
             }
           }}
         >
@@ -2738,6 +2764,14 @@
   
   .action-vote.has-voted svg {
     opacity: 1;
+  }
+  
+  .action-vote.no-vote {
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .action-vote.no-vote span {
+    color: rgba(255, 255, 255, 0.9);
   }
   
   .action-vote:hover {
