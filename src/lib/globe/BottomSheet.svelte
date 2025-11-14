@@ -6,13 +6,13 @@
   import { currentUser } from '$lib/stores';
   import { apiGet, apiCall, apiPost, apiDelete } from '$lib/api/client';
   
-  
   // Componentes de sección completos
   import TrendingPollsSection from './cards/sections/TrendingPollsSection.svelte';
   import SinglePollSection from './cards/sections/SinglePollSection.svelte';
   import WhoToFollowSection from './cards/sections/WhoToFollowSection.svelte';
   import AdCard from './cards/sections/AdCard.svelte';
   import PollMaximizedView from '$lib/components/PollMaximizedView.svelte';
+  import AuthModal from '$lib/AuthModal.svelte';
 
   // Helper para reemplazar setTimeout con Promesas
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -66,6 +66,10 @@
   let selectedHue = 0;
   let selectedSaturation = 85;
   let isDraggingColor = false;
+  
+  // Estado del modal de autenticación
+  let showAuthModal = $state(false);
+  let pendingVoteData: { optionKey: string; pollId?: string } | null = null;
   
   // Función para verificar si un elemento está truncado
   function checkTruncation(element: HTMLElement | undefined): boolean {
@@ -1064,7 +1068,7 @@
               name: place.name,
               iso: place.level === 1 ? place.subdivisionId : undefined,
               type: type,
-              // ✅ Agregar parentName y parentNameLocal para nivel 3
+              // Agregar parentName y parentNameLocal para nivel 3
               parentName: place.parentName || null,
               parentNameLocal: place.parentNameLocal || null,
               subdivisionId: place.subdivisionId
@@ -1107,7 +1111,7 @@
       name: result.name, 
       iso: result.iso,
       parentName: result.parentName,
-      fromDirectSearch: true // 🔥 FLAG para indicar navegación limpia
+      fromDirectSearch: true // FLAG para indicar navegación limpia
     };
     const event = new CustomEvent('searchSelect', { detail: option });
     window.dispatchEvent(event);
@@ -1539,6 +1543,14 @@
     console.log('[BottomSheet handleVote] activePoll:', activePoll ? activePoll.id : 'null');
     console.log('[BottomSheet handleVote] additionalPolls.length:', additionalPolls.length);
     console.log('='.repeat(50));
+    
+    // Verificar autenticación ANTES de votar
+    if (!$currentUser) {
+      console.log('[BottomSheet] ⚠️ Usuario no autenticado - mostrando AuthModal');
+      pendingVoteData = { optionKey, pollId };
+      showAuthModal = true;
+      return;
+    }
     
     // Si es la encuesta principal (trending), abrir la encuesta específica
     if (!pollId && voteOptions.length > 0) {
@@ -2363,6 +2375,18 @@
         top: 0,
         behavior: 'smooth'
       });
+    }
+  }
+  
+  // Handler para cuando el usuario se autentica exitosamente
+  function handleAuthComplete() {
+    console.log('[BottomSheet] ✅ Usuario autenticado, reintentando voto');
+    showAuthModal = false;
+    
+    // Reintentar el voto pendiente
+    if (pendingVoteData) {
+      handleVote(pendingVoteData.optionKey, pendingVoteData.pollId);
+      pendingVoteData = null;
     }
   }
   
@@ -3773,6 +3797,9 @@
       </div>
     </div>
   {/if}
+
+  <!-- Modal de Autenticación -->
+  <AuthModal bind:isOpen={showAuthModal} on:login={handleAuthComplete} />
 
   <style>
     /* Los estilos ya están importados globalmente en el <script> */
