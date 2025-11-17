@@ -8,8 +8,12 @@
   const { poll, baseUrl } = data;
 
   onMount(() => {
-    // Redirigir a la página principal con el poll abierto
-    goto(`/?poll=${poll.id}`, { replaceState: true });
+    // Dar tiempo a los crawlers para leer los meta tags antes de redirigir
+    // Los crawlers no ejecutan JavaScript, verán los meta tags
+    // Los usuarios reales serán redirigidos después de un pequeño delay
+    setTimeout(() => {
+      goto(`/?poll=${poll.id}`);
+    }, 100);
   });
 </script>
 

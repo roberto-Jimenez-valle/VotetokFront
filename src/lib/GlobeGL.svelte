@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { page } from '$app/stores';
   import { apiGet, apiCall } from '$lib/api/client';
   
   // ========================================
@@ -6307,6 +6308,53 @@
       }
     }
   });
+
+  // ============================================
+  // WATCHER PARA CAMBIOS EN EL PARÁMETRO ?poll=
+  // ============================================
+  // Detecta cuando la URL cambia a /?poll=123 y abre la encuesta
+  $: {
+    const pollIdParam = $page.url.searchParams.get('poll');
+    
+    if (pollIdParam && globe) {
+      console.log('[Watcher] 🔗 Detectado cambio en parámetro poll:', pollIdParam);
+      
+      // Solo abrir si no es la encuesta activa actual
+      if (!activePoll || activePoll.id.toString() !== pollIdParam) {
+        console.log('[Watcher] 📊 Cargando encuesta desde URL:', pollIdParam);
+        
+        // Cargar y abrir la encuesta
+        apiCall(`/api/polls/${pollIdParam}`)
+          .then(response => response.json())
+          .then(pollData => {
+            const poll = pollData.data || pollData;
+            
+            console.log('[Watcher] ✅ Encuesta cargada:', poll.id, poll.title);
+            
+            // Recrear formato de opciones con colores
+            const options = poll.options?.map((opt: any, idx: number) => ({
+              id: opt.id,
+              key: opt.optionKey || opt.key,
+              label: opt.optionLabel || opt.optionText || opt.label,
+              color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][idx % 4],
+              votes: opt.votes || opt._count?.votes || 0
+            })) || [];
+            
+            // Crear evento sintético y abrir encuesta
+            const syntheticEvent = new CustomEvent('openpoll', {
+              detail: { poll, options }
+            }) as CustomEvent<{ poll: any; options: Array<{ id?: number; key: string; label: string; color: string; votes: number }> }>;
+            
+            handleOpenPollInGlobe(syntheticEvent);
+          })
+          .catch(error => {
+            console.error('[Watcher] ❌ Error cargando encuesta desde URL:', error);
+          });
+      } else {
+        console.log('[Watcher] ℹ️ Encuesta ya está abierta, ignorando');
+      }
+    }
+  }
 
   function resize() { /* GlobeCanvas maneja su propio tamaño vía CSS */ }
 
