@@ -1253,6 +1253,12 @@
                 // Emitir evento para que el padre elimine la opción
                 dispatch('cancelEditing', { pollId: poll.id, optionKey: option.key });
               }}
+              ontouchend={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                // Emitir evento para que el padre elimine la opción
+                dispatch('cancelEditing', { pollId: poll.id, optionKey: option.key });
+              }}
               title="Cerrar"
               type="button"
               aria-label="Cerrar opción"
@@ -1275,7 +1281,13 @@
                   editingOptionLabels = { ...editingOptionLabels, [option.key]: target.value };
                 }}
                 onclick={(e) => e.stopPropagation()}
+                ontouchstart={(e) => e.stopPropagation()}
+                ontouchmove={(e) => e.stopPropagation()}
+                ontouchend={(e) => e.stopPropagation()}
+                onmousedown={(e) => e.stopPropagation()}
+                onpointerdown={(e) => e.stopPropagation()}
                 maxlength="200"
+                autofocus
               ></textarea>
             </div>
             
@@ -1297,6 +1309,10 @@
                 e.stopPropagation();
                 dispatch('openColorPicker', { pollId: poll.id, optionKey: option.key });
               }}
+              ontouchend={(e) => {
+                e.stopPropagation();
+                dispatch('openColorPicker', { pollId: poll.id, optionKey: option.key });
+              }}
               title="Cambiar color"
               type="button"
               aria-label="Cambiar color"
@@ -1315,6 +1331,21 @@
                 if (currentLabel && currentLabel.trim()) {
                   const pollIdStr = poll.id.toString();
                   console.log('[SinglePollSection] Dispatching publishOption:', { 
+                    pollId: pollIdStr, 
+                    optionKey: option.key, 
+                    label: currentLabel.trim(), 
+                    color: option.color 
+                  });
+                  dispatch('publishOption', { pollId: pollIdStr, optionKey: option.key, label: currentLabel.trim(), color: option.color });
+                }
+              }}
+              ontouchend={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const currentLabel = editingOptionLabels[option.key] || option.label || '';
+                if (currentLabel && currentLabel.trim()) {
+                  const pollIdStr = poll.id.toString();
+                  console.log('[SinglePollSection] Touch - Dispatching publishOption:', { 
                     pollId: pollIdStr, 
                     optionKey: option.key, 
                     label: currentLabel.trim(), 

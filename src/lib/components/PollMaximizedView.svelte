@@ -40,6 +40,9 @@
     options: PollOption[];
     activeOptionId: string;
     pollTitle: string;
+    pollType?: 'simple' | 'multiple' | 'collaborative'; // Tipo de encuesta
+    pollRegion?: string; // Región de la encuesta
+    pollCreatedAt?: string | Date; // Fecha de creación
     creator?: PollCreator;
     stats?: PollStats;
     readOnly?: boolean; // Modo solo lectura
@@ -59,12 +62,16 @@
     onShare?: () => void;
     onBookmark?: () => void;
     onRepost?: () => void;
+    onAddOption?: () => void; // Añadir opción colaborativa
   }
 
   let { 
     options, 
     activeOptionId = $bindable(), 
     pollTitle,
+    pollType = 'simple',
+    pollRegion = 'General',
+    pollCreatedAt,
     creator,
     stats,
     readOnly = false,
@@ -83,7 +90,8 @@
     onOpenInGlobe = () => {},
     onShare = () => {},
     onBookmark = () => {},
-    onRepost = () => {}
+    onRepost = () => {},
+    onAddOption = () => {}
   }: Props = $props();
 
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -111,6 +119,19 @@
   let voteRemovalColor = $state('#ef4444');
   let voteConfirmationTimeout: any = null;
   let voteRemovalTimeout: any = null;
+
+  function getRelativeTime(minutes: number): string {
+    if (minutes < 1) return 'ahora';
+    if (minutes < 60) return `${Math.floor(minutes)}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d`;
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return `${weeks}sem`;
+    const months = Math.floor(days / 30);
+    return `${months}mes`;
+  }
 
   function formatNumber(num: number): string {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -460,6 +481,23 @@
           ></textarea>
         {/if}
       </div>
+      
+      <!-- Meta información de la encuesta -->
+      <div class="poll-meta">
+        <span class="poll-type">
+          {#if pollType === 'multiple'}
+            Encuesta ☑️
+          {:else if pollType === 'collaborative'}
+            Encuesta 👥
+          {:else}
+            Encuesta ⭕
+          {/if}
+          • {pollRegion}
+        </span>
+        {#if pollCreatedAt}
+          <span class="poll-time">• {getRelativeTime(Math.floor((Date.now() - new Date(pollCreatedAt).getTime()) / 60000))}</span>
+        {/if}
+      </div>
     </div>
   {/key}
 
@@ -540,6 +578,23 @@
           {/if}
         </button>
       {/each}
+      
+      <!-- Botón añadir opción (colaborativas) -->
+      {#if pollType === 'collaborative' && options.length < 10}
+        <button
+          type="button"
+          class="add-option-button"
+          onclick={onAddOption}
+          title="Añadir nueva opción"
+          aria-label="Añadir nueva opción"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>Añadir opción</span>
+        </button>
+      {/if}
       </div>
     {/key}
   {:else if activeOption}
@@ -1212,6 +1267,54 @@
 
   .poll-title-section.voted {
     border-bottom-color: var(--vote-color);
+  }
+
+  /* Meta información de la encuesta */
+  .poll-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .poll-type {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .poll-time {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  /* Botón añadir opción en showAllOptions */
+  .add-option-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin: 12px 0;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .add-option-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.02);
+  }
+
+  .add-option-button svg {
+    opacity: 0.6;
   }
 
   /* Botones de acción - posicionados encima de la barra de color */

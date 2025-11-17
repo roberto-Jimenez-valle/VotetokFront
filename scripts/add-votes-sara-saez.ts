@@ -2,23 +2,23 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-async function addVotesForSaraSaez() {
-  console.log('🌱 Agregando votos para Sara Sáez Serrano...');
+async function addVotesForUser(searchTerm?: string) {
+  const searching = searchTerm || 'sara';
+  console.log(`🌱 Agregando votos para usuario que coincida con "${searching}"...`);
 
   try {
-    // Buscar usuario Sara Sáez Serrano
+    // Buscar usuario
     const user = await prisma.user.findFirst({
       where: {
         OR: [
-          { username: { contains: 'sara', mode: 'insensitive' } },
-          { displayName: { contains: 'Sara Sáez', mode: 'insensitive' } },
-          { displayName: { contains: 'Sara Saez', mode: 'insensitive' } }
+          { username: { contains: searching, mode: 'insensitive' } },
+          { displayName: { contains: searching, mode: 'insensitive' } }
         ]
       }
     });
 
     if (!user) {
-      console.log('❌ Usuario Sara Sáez Serrano no encontrado');
+      console.log(`❌ Usuario con "${searching}" no encontrado`);
       console.log('Buscando todos los usuarios para referencia...');
       
       const allUsers = await prisma.user.findMany({
@@ -167,4 +167,6 @@ async function addVotesForSaraSaez() {
   }
 }
 
-addVotesForSaraSaez();
+// Obtener término de búsqueda de argumentos de línea de comandos o usar por defecto
+const searchTerm = process.argv[2];
+addVotesForUser(searchTerm);

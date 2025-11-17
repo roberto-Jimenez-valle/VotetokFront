@@ -187,7 +187,7 @@ export const POST: RequestHandler = async (event) => {
           title: title.trim(),
           description: description?.trim() || null,
           category: category || 'general',
-          type: type || 'poll',
+          type: type || 'simple',
           imageUrl: imageUrl || null,
           status: 'active',
           closedAt: closedAt,
