@@ -1554,6 +1554,38 @@
     return 'small';                           // <15% = 1x1 (pequeño)
   }
   
+  // Función para copiar URL al portapapeles (compartir)
+  function copyShareUrlToClipboard(url: string) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        console.log('[BottomSheet] ✅ Enlace copiado al portapapeles:', url);
+        // TODO: Mostrar toast de confirmación
+      }).catch((err) => {
+        console.error('[BottomSheet] Error copiando al portapapeles:', err);
+        fallbackCopyToClipboard(url);
+      });
+    } else {
+      fallbackCopyToClipboard(url);
+    }
+  }
+  
+  function fallbackCopyToClipboard(text: string) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      console.log('[BottomSheet] ✅ Enlace copiado (fallback):', text);
+    } catch (error) {
+      console.error('[BottomSheet] Error copiando (fallback):', error);
+    }
+    document.body.removeChild(textarea);
+  }
+  
   // Función para manejar el voto
   async function handleVote(optionKey: string, pollId?: string) {
     console.log('='.repeat(50));
@@ -3637,15 +3669,33 @@
         closePreviewModal();
       }
     }}
-    onShare={() => {
+    onShare={async () => {
       console.log('[BottomSheet] 📤 Compartir desde modal');
-      // TODO: Implementar compartir
-      if (navigator.share && previewModalPoll) {
-        navigator.share({
-          title: previewModalPoll.question || previewModalPoll.title,
-          text: 'Mira esta encuesta en VoteTok',
-          url: window.location.origin + '/?poll=' + previewModalPoll.id
-        }).catch(err => console.log('Error sharing:', err));
+      if (!previewModalPoll) return;
+      
+      const shareUrl = `${window.location.origin}/poll/${previewModalPoll.id}`;
+      const shareTitle = previewModalPoll.question || previewModalPoll.title;
+      const shareText = previewModalPoll.description || `Vota en esta encuesta: ${shareTitle}`;
+
+      // Intentar Web Share API
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl
+          });
+          console.log('[BottomSheet] ✅ Compartido exitosamente via Web Share API');
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') {
+            console.error('[BottomSheet] Error al compartir:', error);
+            // Fallback: copiar al portapapeles
+            copyShareUrlToClipboard(shareUrl);
+          }
+        }
+      } else {
+        // Fallback: copiar al portapapeles
+        copyShareUrlToClipboard(shareUrl);
       }
     }}
     onBookmark={() => {

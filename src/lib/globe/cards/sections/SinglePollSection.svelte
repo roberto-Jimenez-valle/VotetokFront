@@ -4,6 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
+  import { Share2 } from 'lucide-svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -439,6 +440,77 @@
   function handleSetActive(index: number) {
     dispatch('setActive', { pollId: poll.id, index });
   }
+
+  // Función de compartir con Open Graph
+  async function sharePoll(event: MouseEvent) {
+    event.stopPropagation();
+    
+    const shareUrl = `${window.location.origin}/poll/${poll.id}`;
+    const shareTitle = poll.question || poll.title;
+    const shareText = poll.description || `Vota en esta encuesta: ${shareTitle}`;
+
+    // Intentar usar Web Share API (disponible en móviles y algunos navegadores desktop)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl
+        });
+        console.log('[Share] Compartido exitosamente via Web Share API');
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.error('[Share] Error al compartir:', error);
+          // Fallback: copiar al portapapeles
+          copyToClipboard(shareUrl);
+        }
+      }
+    } else {
+      // Fallback: copiar al portapapeles
+      copyToClipboard(shareUrl);
+    }
+  }
+
+  function copyToClipboard(text: string) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showShareToast();
+      }).catch(() => {
+        // Fallback final
+        fallbackCopyToClipboard(text);
+      });
+    } else {
+      fallbackCopyToClipboard(text);
+    }
+  }
+
+  function fallbackCopyToClipboard(text: string) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      showShareToast();
+    } catch (error) {
+      console.error('[Share] Error copiando al portapapeles:', error);
+    }
+    document.body.removeChild(textarea);
+  }
+
+  let showShareToastFlag = false;
+  let shareToastTimeout: any = null;
+  
+  function showShareToast() {
+    showShareToastFlag = true;
+    if (shareToastTimeout) clearTimeout(shareToastTimeout);
+    shareToastTimeout = setTimeout(() => {
+      showShareToastFlag = false;
+    }, 2000);
+  }
   
   // Long press handlers
   function startLongPress(optionText: string, event: MouseEvent | TouchEvent) {
@@ -698,27 +770,39 @@
           </div>
         {/if}
       </div>
-      {#if poll.user?.avatarUrl}
+      <div class="header-actions">
+        <!-- Botón de compartir -->
         <button 
-          class="header-avatar header-avatar-real" 
-          onclick={(e) => {
-            e.stopPropagation();
-            if (poll.user?.id) {
-              console.log('[Avatar Click] Abriendo perfil de usuario:', poll.user.id);
-              selectedProfileUserId = poll.user.id;
-              isProfileModalOpen = true;
-              console.log('[Avatar Click] Estado actualizado:', { isProfileModalOpen, selectedProfileUserId });
-            }
-          }}
-          aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
+          class="share-button"
+          onclick={(e) => sharePoll(e)}
+          aria-label="Compartir encuesta"
+          title="Compartir"
         >
-          <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
+          <Share2 size={18} />
         </button>
-      {:else}
-        <div class="header-avatar header-avatar-real">
-          <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
-        </div>
-      {/if}
+        
+        {#if poll.user?.avatarUrl}
+          <button 
+            class="header-avatar header-avatar-real" 
+            onclick={(e) => {
+              e.stopPropagation();
+              if (poll.user?.id) {
+                console.log('[Avatar Click] Abriendo perfil de usuario:', poll.user.id);
+                selectedProfileUserId = poll.user.id;
+                isProfileModalOpen = true;
+                console.log('[Avatar Click] Estado actualizado:', { isProfileModalOpen, selectedProfileUserId });
+              }
+            }}
+            aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
+          >
+            <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
+          </button>
+        {:else}
+          <div class="header-avatar header-avatar-real">
+            <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
   
@@ -1692,6 +1776,13 @@
     </div>
   </div>
 </div>
+
+<!-- Toast de confirmación de compartir -->
+{#if showShareToastFlag}
+  <div class="share-toast" transition:fly={{ y: -20, duration: 300 }}>
+    ✓ Enlace copiado
+  </div>
+{/if}
 
 <!-- Tooltip del título truncado (fuera de todo para máxima visibilidad) -->
 {#if showTitleTooltip}
@@ -3089,6 +3180,72 @@
     color: rgba(255, 255, 255, 0.7);
     font-size: 14px;
     margin: 0;
+  }
+  
+  .title-tooltip-btn {
+    margin: 0;
+  }
+
+  /* Botón de compartir */
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .share-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+  }
+
+  .share-button:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+  }
+
+  .share-button:active {
+    transform: scale(0.95);
+  }
+
+  /* Toast de confirmación */
+  .share-toast {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4),
+                0 2px 8px rgba(16, 185, 129, 0.3);
+    z-index: 999999;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .share-toast {
+      top: 60px;
+      padding: 10px 20px;
+      font-size: 13px;
+    }
   }
   
 </style>
