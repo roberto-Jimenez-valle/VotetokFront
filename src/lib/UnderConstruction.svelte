@@ -1,77 +1,11 @@
 <script lang="ts">
 	let showCodeInput = $state(false);
-	let showUserSelection = $state(false);
 	let codeValue = $state('');
 	let errorMessage = $state('');
 	let clickCount = $state(0);
 	let clickTimer: NodeJS.Timeout | null = null;
-	let selectedUserId = $state<number | null>(null);
 
 	const SECRET_CODE = '031188';
-
-	// Lista de usuarios disponibles para testing
-	const availableUsers = [
-		{
-			id: 1,
-			username: 'maria_gonzalez',
-			displayName: 'María González',
-			email: 'maria@votetok.com',
-			avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop',
-			verified: true,
-			bio: 'Activista social y política',
-			countryIso3: 'ESP',
-			subdivisionId: '1',
-			role: 'user'
-		},
-		{
-			id: 2,
-			username: 'carlos_lopez',
-			displayName: 'Carlos López',
-			email: 'carlos@votetok.com',
-			avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-			verified: true,
-			bio: 'Analista político',
-			countryIso3: 'ESP',
-			subdivisionId: '2',
-			role: 'user'
-		},
-		{
-			id: 3,
-			username: 'laura_sanchez',
-			displayName: 'Laura Sánchez',
-			email: 'laura@votetok.com',
-			avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop',
-			verified: false,
-			bio: 'Periodista independiente',
-			countryIso3: 'MEX',
-			subdivisionId: '3',
-			role: 'user'
-		},
-		{
-			id: 4,
-			username: 'juan_martin',
-			displayName: 'Juan Martín',
-			email: 'juan@votetok.com',
-			avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop',
-			verified: true,
-			bio: 'Economista',
-			countryIso3: 'ARG',
-			subdivisionId: '4',
-			role: 'user'
-		},
-		{
-			id: 5,
-			username: 'sofia_herrera',
-			displayName: 'Sofía Herrera',
-			email: 'sofia@votetok.com',
-			avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop',
-			verified: false,
-			bio: 'Estudiante de ciencias políticas',
-			countryIso3: 'COL',
-			subdivisionId: '5',
-			role: 'user'
-		}
-	];
 
 	function handleLogoClick() {
 		clickCount++;
@@ -95,10 +29,10 @@
 		e?.preventDefault();
 		
 		if (codeValue === SECRET_CODE) {
-			// Código correcto, mostrar selección de usuarios
-			showCodeInput = false;
-			showUserSelection = true;
-			codeValue = '';
+			// Código correcto, dar acceso directamente sin selección de usuario
+			localStorage.setItem('votetok-access', 'granted');
+			// Recargar la página para entrar a la aplicación
+			window.location.reload();
 		} else {
 			errorMessage = 'Código incorrecto';
 			codeValue = '';
@@ -108,17 +42,6 @@
 		}
 	}
 
-	function selectUser(userId: number) {
-		selectedUserId = userId;
-		const user = availableUsers.find(u => u.id === userId);
-		if (user) {
-			// Guardar usuario en localStorage
-			localStorage.setItem('votetok-test-user', JSON.stringify(user));
-			localStorage.setItem('votetok-access', 'granted');
-			// Recargar la página
-			window.location.reload();
-		}
-	}
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
@@ -199,35 +122,6 @@
 			</div>
 		{/if}
 
-		<!-- Selección de usuario (después de código correcto) -->
-		{#if showUserSelection}
-			<div class="user-selection-container">
-				<h3 class="selection-title">Selecciona tu usuario</h3>
-				<p class="selection-subtitle">Elige con qué usuario quieres entrar a la aplicación</p>
-				
-				<div class="users-grid">
-					{#each availableUsers as user}
-						<button 
-							class="user-card" 
-							class:selected={selectedUserId === user.id}
-							onclick={() => selectUser(user.id)}
-						>
-							<div class="user-avatar-container">
-								<img src={user.avatarUrl} alt={user.displayName} class="user-avatar" />
-								{#if user.verified}
-									<div class="verified-badge">✓</div>
-								{/if}
-							</div>
-							<div class="user-info">
-								<div class="user-name">{user.displayName}</div>
-								<div class="user-username">@{user.username}</div>
-								<div class="user-bio">{user.bio}</div>
-							</div>
-						</button>
-					{/each}
-				</div>
-			</div>
-		{/if}
 	</div>
 
 	<!-- Footer -->
@@ -474,137 +368,6 @@
 		margin: 0;
 	}
 
-	.user-selection-container {
-		margin-top: 2rem;
-		padding: 1.5rem;
-		background: #f7fafc;
-		border-radius: 12px;
-		animation: slideDown 0.3s ease;
-	}
-
-	.selection-title {
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: #2d3748;
-		margin: 0 0 0.5rem 0;
-	}
-
-	.selection-subtitle {
-		font-size: 0.875rem;
-		color: #718096;
-		margin: 0 0 1.5rem 0;
-	}
-
-	.users-grid {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: 1rem;
-		max-height: 400px;
-		overflow-y: auto;
-		padding-right: 0.5rem;
-	}
-
-	.users-grid::-webkit-scrollbar {
-		width: 6px;
-	}
-
-	.users-grid::-webkit-scrollbar-track {
-		background: #e2e8f0;
-		border-radius: 3px;
-	}
-
-	.users-grid::-webkit-scrollbar-thumb {
-		background: #cbd5e0;
-		border-radius: 3px;
-	}
-
-	.users-grid::-webkit-scrollbar-thumb:hover {
-		background: #a0aec0;
-	}
-
-	.user-card {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		padding: 1rem;
-		background: white;
-		border: 2px solid #e2e8f0;
-		border-radius: 10px;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		text-align: left;
-		width: 100%;
-	}
-
-	.user-card:hover {
-		border-color: #667eea;
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-	}
-
-	.user-card.selected {
-		border-color: #667eea;
-		background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-		box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-	}
-
-	.user-avatar-container {
-		position: relative;
-		flex-shrink: 0;
-	}
-
-	.user-avatar {
-		width: 60px;
-		height: 60px;
-		border-radius: 50%;
-		object-fit: cover;
-		border: 2px solid #e2e8f0;
-	}
-
-	.verified-badge {
-		position: absolute;
-		bottom: -2px;
-		right: -2px;
-		width: 20px;
-		height: 20px;
-		background: #667eea;
-		color: white;
-		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 0.75rem;
-		font-weight: 700;
-		border: 2px solid white;
-	}
-
-	.user-info {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.user-name {
-		font-size: 1rem;
-		font-weight: 700;
-		color: #2d3748;
-		margin-bottom: 0.25rem;
-	}
-
-	.user-username {
-		font-size: 0.875rem;
-		color: #667eea;
-		margin-bottom: 0.5rem;
-	}
-
-	.user-bio {
-		font-size: 0.75rem;
-		color: #718096;
-		line-height: 1.4;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
 	@media (max-width: 640px) {
 		.construction-content {
 			padding: 2rem 1.5rem;
@@ -620,27 +383,6 @@
 
 		.features {
 			grid-template-columns: 1fr;
-		}
-
-		.user-card {
-			padding: 0.875rem;
-		}
-
-		.user-avatar {
-			width: 50px;
-			height: 50px;
-		}
-
-		.user-name {
-			font-size: 0.875rem;
-		}
-
-		.user-username {
-			font-size: 0.75rem;
-		}
-
-		.user-bio {
-			font-size: 0.6875rem;
 		}
 	}
 </style>

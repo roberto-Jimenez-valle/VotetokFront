@@ -36,7 +36,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
       return json({ data: {} });
     }
 
-    // Obtener votos de usuarios seguidos en esta encuesta
+    // Obtener el último voto de cada usuario seguido en esta encuesta
+    // Agrupamos por userId y tomamos solo el más reciente
     const votes = await prisma.vote.findMany({
       where: {
         pollId,
@@ -58,9 +59,12 @@ export const GET: RequestHandler = async ({ params, url }) => {
           },
         },
       },
+      orderBy: {
+        createdAt: 'desc', // Más recientes primero
+      },
     });
 
-    // Agrupar por opción
+    // Agrupar por opción y eliminar duplicados
     const friendsByOption: Record<string, Array<{
       id: string;
       name: string;
@@ -69,13 +73,19 @@ export const GET: RequestHandler = async ({ params, url }) => {
       verified: boolean;
     }>> = {};
 
+    // Usar un Set para rastrear usuarios ya agregados por opción
+    const addedUsersByOption: Record<string, Set<number>> = {};
+
     for (const vote of votes) {
       const optionKey = vote.option.optionKey;
       if (!friendsByOption[optionKey]) {
         friendsByOption[optionKey] = [];
+        addedUsersByOption[optionKey] = new Set();
       }
 
-      if (vote.user) {
+      // Solo agregar si el usuario no ha sido agregado ya para esta opción
+      if (vote.user && !addedUsersByOption[optionKey].has(vote.user.id)) {
+        addedUsersByOption[optionKey].add(vote.user.id);
         friendsByOption[optionKey].push({
           id: vote.user.id.toString(),
           name: vote.user.displayName,

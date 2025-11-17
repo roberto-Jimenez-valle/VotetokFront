@@ -28,6 +28,14 @@
     color: string;
   }
 
+  interface Friend {
+    id: string;
+    name: string;
+    username?: string;
+    avatarUrl?: string | null;
+    verified?: boolean;
+  }
+
   interface Props {
     options: PollOption[];
     activeOptionId: string;
@@ -38,6 +46,7 @@
     showAllOptions?: boolean; // Mostrar todas las opciones en vertical con scroll
     hasVoted?: boolean; // Si el usuario ha votado
     votedOption?: VotedOption; // Opción votada por el usuario
+    friendsByOption?: Record<string, Friend[]>; // Amigos que votaron por opción
     onClose: () => void;
     onOptionChange: (optionId: string) => void;
     onSwipeVertical?: (direction: 'up' | 'down') => void; // Swipe vertical para cambiar encuesta
@@ -62,6 +71,7 @@
     showAllOptions = false,
     hasVoted = false,
     votedOption,
+    friendsByOption = {},
     onClose,
     onOptionChange,
     onSwipeVertical = () => {},
@@ -89,6 +99,10 @@
   let modalDragStartY = $state(0);
   let modalDragCurrentY = $state(0);
   let isModalDragging = $state(false);
+
+  // Estado del modal de votantes
+  let showVotersModal = $state(false);
+  let selectedOptionForVoters = $state<string | null>(null);
 
   // Animaciones de voto
   let showVoteConfirmation = $state(false);
@@ -140,6 +154,18 @@
     isModalDragging = false;
     modalDragCurrentY = 0;
     modalDragStartY = 0;
+  }
+
+  // Abrir modal de votantes
+  function openVotersModal(optionKey: string) {
+    selectedOptionForVoters = optionKey;
+    showVotersModal = true;
+  }
+
+  // Cerrar modal de votantes
+  function closeVotersModal() {
+    showVotersModal = false;
+    selectedOptionForVoters = null;
   }
 
   // Debug logs
@@ -490,6 +516,24 @@
               <span class="option-pct" style="color: {option.color};">{Math.round(option.pct || 0)}%</span>
               <span class="option-votes">{option.votes || 0} votos</span>
             </div>
+            
+            <!-- Avatares de amigos que votaron -->
+            {#if friendsByOption[option.id] && friendsByOption[option.id].length > 0}
+              <div class="friend-avatars-container" onclick={(e) => { e.stopPropagation(); openVotersModal(option.id); }}>
+                {#each friendsByOption[option.id].slice(0, 3) as friend, i}
+                  <img 
+                    class="friend-avatar" 
+                    src={friend.avatarUrl || DEFAULT_AVATAR}
+                    alt={friend.name}
+                    loading="lazy"
+                    style="z-index: {10 - i};"
+                  />
+                {/each}
+                {#if friendsByOption[option.id].length > 3}
+                  <div class="more-avatars">+{friendsByOption[option.id].length - 3}</div>
+                {/if}
+              </div>
+            {/if}
           </div>
           {#if option.voted}
             <div class="voted-checkmark" style="color: {option.color};">✓</div>
@@ -623,6 +667,24 @@
   {#if activeOption && !showAllOptions}
     <div class="percentage-bottom-left">
       <div class="percentage-text">{percentage}%</div>
+    </div>
+  {/if}
+
+  <!-- Avatares de amigos encima de la barra de progreso -->
+  {#if activeOption && !showAllOptions && friendsByOption[activeOption.id] && friendsByOption[activeOption.id].length > 0}
+    <div class="friend-avatars-above-progress" onclick={() => openVotersModal(activeOption.id)}>
+      {#each friendsByOption[activeOption.id].slice(0, 3) as friend, i}
+        <img 
+          class="friend-avatar" 
+          src={friend.avatarUrl || DEFAULT_AVATAR}
+          alt={friend.name}
+          loading="lazy"
+          style="z-index: {10 - i};"
+        />
+      {/each}
+      {#if friendsByOption[activeOption.id].length > 3}
+        <div class="more-avatars">+{friendsByOption[activeOption.id].length - 3}</div>
+      {/if}
     </div>
   {/if}
 
@@ -920,6 +982,77 @@
   {/if}
 
 </div>
+
+<!-- Modal de votantes -->
+{#if showVotersModal && selectedOptionForVoters}
+  <!-- Backdrop -->
+  <div
+    class="voters-modal-backdrop"
+    onclick={closeVotersModal}
+    transition:fade={{ duration: 200 }}
+  ></div>
+
+  <!-- Bottom Sheet -->
+  <div
+    class="voters-modal-sheet"
+    transition:fly={{ y: 400, duration: 300 }}
+  >
+    <!-- Handle bar -->
+    <div class="voters-handle-bar"></div>
+
+    <!-- Header -->
+    <div class="voters-modal-header">
+      <h3>Quién votó por esta opción</h3>
+      <button
+        class="voters-close-btn"
+        onclick={closeVotersModal}
+        aria-label="Cerrar"
+      >
+        ✕
+      </button>
+    </div>
+
+    <!-- Lista de votantes agrupada por opción -->
+    <div class="voters-modal-content">
+      {#each options as option}
+        {@const voters = friendsByOption[option.id]}
+        {#if voters && voters.length > 0}
+          <div class="voters-option-group">
+            <div class="voters-option-header" style="border-left-color: {option.color};">
+              <div class="voters-option-label">{option.label}</div>
+              <div class="voters-option-count">{voters.length} {voters.length === 1 ? 'voto' : 'votos'}</div>
+            </div>
+            
+            <div class="voters-list">
+              {#each voters as friend}
+                <div class="voter-item">
+                  <img 
+                    src={friend.avatarUrl || DEFAULT_AVATAR}
+                    alt={friend.name}
+                    class="voter-avatar"
+                  />
+                  <div class="voter-info">
+                    <div class="voter-name">
+                      {friend.name}
+                      {#if friend.verified}
+                        <svg class="verified-icon" width="16" height="16" viewBox="0 0 24 24" fill="#3b82f6">
+                          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      {/if}
+                    </div>
+                    {#if friend.username}
+                      <div class="voter-username">@{friend.username}</div>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      {/each}
+    </div>
+  </div>
+{/if}
 
 <style>
   .maximized-container {
@@ -1385,6 +1518,23 @@
     font-weight: 700;
     color: white;
     text-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+  }
+
+  /* Avatares de amigos encima de la barra de progreso */
+  .friend-avatars-above-progress {
+    position: absolute;
+    bottom: 90px;
+    left: 20px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .friend-avatars-above-progress:hover {
+    transform: scale(1.05);
   }
 
   /* Botones de acción casi en el bottom derecho - horizontal */
@@ -1999,6 +2149,221 @@
     100% {
       opacity: 0;
       transform: translate(-50%, -150%) scale(0.8) rotate(180deg);
+    }
+  }
+
+  /* Avatares de amigos */
+  .friend-avatars-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .friend-avatars-container:hover {
+    transform: scale(1.05);
+  }
+
+  .friend-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #000;
+    object-fit: cover;
+    margin-left: -8px;
+  }
+
+  .friend-avatar:first-child {
+    margin-left: 0;
+  }
+
+  .more-avatars {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    border: 2px solid #000;
+    margin-left: -8px;
+  }
+
+  /* Modal de votantes */
+  .voters-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 100000;
+    backdrop-filter: blur(4px);
+  }
+
+  .voters-modal-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 24px 24px 0 0;
+    padding: 0 0 20px 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 100001;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .voters-handle-bar {
+    width: 40px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    margin: 12px auto;
+  }
+
+  .voters-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .voters-modal-header h3 {
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .voters-close-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: white;
+    font-size: 20px;
+    transition: all 0.2s ease;
+  }
+
+  .voters-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+  }
+
+  .voters-modal-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .voters-option-group {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .voters-option-header {
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 4px solid;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .voters-option-label {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .voters-option-count {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .voters-list {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .voter-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    transition: background 0.2s ease;
+  }
+
+  .voter-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .voter-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .voter-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .voter-name {
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .verified-icon {
+    flex-shrink: 0;
+  }
+
+  .voter-username {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    margin-top: 2px;
+  }
+
+  @media (max-width: 640px) {
+    .voters-modal-header h3 {
+      font-size: 16px;
+    }
+
+    .voter-avatar {
+      width: 36px;
+      height: 36px;
+    }
+
+    .voter-name {
+      font-size: 14px;
+    }
+
+    .voter-username {
+      font-size: 13px;
     }
   }
 </style>

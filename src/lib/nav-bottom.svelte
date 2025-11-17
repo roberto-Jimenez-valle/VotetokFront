@@ -4,6 +4,7 @@
 	import SearchModal from '$lib/SearchModal.svelte';
 	import NotificationsModal from '$lib/NotificationsModal.svelte';
 	import ProfileModal from '$lib/ProfileModal.svelte';
+	import AuthModal from '$lib/AuthModal.svelte';
 	import { currentUser } from '$lib/stores';
 
 	interface Props {
@@ -19,6 +20,7 @@
 	let searchModalOpen = $state(false);
 	let notificationsModalOpen = $state(false);
 	let profileModalOpen = $state(false);
+	let authModalOpen = $state(false);
 	
 	// Colores aleatorios para el borde y las ondas
 	const colors = [
@@ -81,10 +83,26 @@
 	}
 	
 	function openProfile() {
+		// Verificar si el usuario está autenticado
+		if (!$currentUser) {
+			// Si no está autenticado, mostrar modal de login
+			activeItem = 'profile';
+			searchModalOpen = false;
+			notificationsModalOpen = false;
+			profileModalOpen = false;
+			authModalOpen = true;
+			if (modalOpen) {
+				dispatch('closeCreatePoll');
+			}
+			return;
+		}
+		
+		// Si está autenticado, abrir perfil normalmente
 		activeItem = 'profile';
 		// Cerrar otros modales
 		searchModalOpen = false;
 		notificationsModalOpen = false;
+		authModalOpen = false;
 		profileModalOpen = true;
 		// Cerrar modal de crear encuesta si está abierta
 		if (modalOpen) {
@@ -98,6 +116,7 @@
 		searchModalOpen = false;
 		notificationsModalOpen = false;
 		profileModalOpen = false;
+		authModalOpen = false;
 		// Cerrar modal de crear encuesta si está abierta
 		if (modalOpen) {
 			dispatch('closeCreatePoll');
@@ -160,7 +179,13 @@
 		{#if $currentUser?.avatarUrl}
 			<img src={$currentUser.avatarUrl} alt={$currentUser.displayName || $currentUser.username} class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover" />
 		{:else}
-			<img src="https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=150&h=150&fit=crop&crop=face?width=40&height=40" alt="Perfil" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover" />
+			<!-- Avatar por defecto cuando NO está logueado -->
+			<div class="default-avatar">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+					<circle cx="12" cy="7" r="4"></circle>
+				</svg>
+			</div>
 		{/if}
 	</button>
 	</div>
@@ -312,6 +337,41 @@
 		transform: scale(1.05);
 	}
 
+	/* Avatar por defecto cuando no está logueado */
+	.default-avatar {
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		background: #2a2c31;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #9ca3af;
+		transition: all 0.2s ease;
+	}
+
+	.default-avatar svg {
+		width: 18px;
+		height: 18px;
+	}
+
+	.nav-btn-profile:hover .default-avatar {
+		background: #3a3c41;
+		color: #d1d5db;
+	}
+
+	@media (min-width: 640px) {
+		.default-avatar {
+			width: 36px;
+			height: 36px;
+		}
+
+		.default-avatar svg {
+			width: 20px;
+			height: 20px;
+		}
+	}
+
 	/* Transición de ocultación */
 	.translate-y-full {
 		transform: translateY(100%);
@@ -322,3 +382,4 @@
 <SearchModal bind:isOpen={searchModalOpen} on:openPollInGlobe={handleOpenPollInGlobe} />
 <NotificationsModal bind:isOpen={notificationsModalOpen} />
 <ProfileModal bind:isOpen={profileModalOpen} />
+<AuthModal bind:isOpen={authModalOpen} />

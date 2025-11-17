@@ -1380,7 +1380,9 @@
                 </button>
               {/if}
               
-              <img class="creator-avatar" src={option.avatarUrl || DEFAULT_AVATAR} alt={option.label} loading="lazy" />
+              {#if option.avatarUrl && option.avatarUrl !== poll.user?.avatarUrl}
+                <img class="creator-avatar" src={option.avatarUrl} alt={option.label} loading="lazy" />
+              {/if}
             </div>
             {/if}
 
@@ -1400,17 +1402,23 @@
               
               <!-- Avatares de amigos posicionados absolutamente (solo si hay amigos que votaron) -->
               {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
-                <div class="friend-avatars-absolute">
-                  {#each poll.friendsByOption[option.key].slice(0, 3) as friend, i}
-                    <img 
-                      class="friend-avatar-floating" 
-                      src={friend.avatarUrl || DEFAULT_AVATAR}
-                      alt={friend.name}
-                      loading="lazy"
-                      style="z-index: {10 - i};"
-                    />
-                  {/each}
-                </div>
+                {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
+                {#if filteredFriends.length > 0}
+                  <div class="friend-avatars-absolute">
+                    {#each filteredFriends.slice(0, 3) as friend, i}
+                      <img 
+                        class="friend-avatar-floating" 
+                        src={friend.avatarUrl || DEFAULT_AVATAR}
+                        alt={friend.name}
+                        loading="lazy"
+                        style="z-index: {10 - i};"
+                      />
+                    {/each}
+                    {#if filteredFriends.length > 3}
+                      <div class="more-friends-badge">+{filteredFriends.length - 3}</div>
+                    {/if}
+                  </div>
+                {/if}
               {/if}
             </div>
           {/if}

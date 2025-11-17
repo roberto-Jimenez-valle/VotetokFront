@@ -283,6 +283,9 @@
                       style="z-index: {10 - i};"
                     />
                   {/each}
+                  {#if activePoll.friendsByOption[option.key].length > 3}
+                    <div class="more-friends-badge">+{activePoll.friendsByOption[option.key].length - 3}</div>
+                  {/if}
                 </div>
               {/if}
             </div>

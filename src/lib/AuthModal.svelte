@@ -35,12 +35,6 @@
     }
   }
   
-  function handleVoutopLogin() {
-    // TODO: Implementar login con VouTop
-    console.log('Login con VouTop');
-    dispatch('login', { provider: 'voutop' });
-    close();
-  }
 </script>
 
 {#if isOpen}
@@ -65,7 +59,7 @@
 
     <!-- Header -->
     <div class="auth-modal-header">
-      <h2 id="auth-modal-title">Iniciar sesión para publicar</h2>
+      <h2 id="auth-modal-title">Iniciar sesión</h2>
       <button
         class="close-btn"
         onclick={close}
@@ -78,8 +72,7 @@
     <!-- Content -->
     <div class="auth-modal-content">
       <p class="auth-description">
-        Para publicar encuestas necesitas tener una cuenta.
-        Elige cómo quieres iniciar sesión:
+        Inicia sesión para votar, crear encuestas y participar en la comunidad.
       </p>
 
       <!-- Botón de Google -->
@@ -97,28 +90,6 @@
         Continuar con Google
       </button>
 
-      <!-- Separador -->
-      <div class="separator">
-        <span>o</span>
-      </div>
-
-      <!-- Botón de VouTop -->
-      <button
-        class="auth-btn voutop-btn"
-        onclick={handleVoutopLogin}
-      >
-        <svg class="auth-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="10" fill="url(#gradient)"/>
-          <path d="M9 9l3 3-3 3m3-6l3 3-3 3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
-              <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
-            </linearGradient>
-          </defs>
-        </svg>
-        Continuar con VouTop
-      </button>
 
       <!-- Política de privacidad -->
       <p class="privacy-text">
@@ -270,47 +241,9 @@
     border-color: #4a4a5e;
   }
 
-  .voutop-btn {
-    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-    color: white;
-    border: none;
-  }
-
-  .voutop-btn:hover {
-    opacity: 0.9;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
-  }
-
   .auth-icon {
     width: 24px;
     height: 24px;
-  }
-
-  .separator {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    color: #999;
-    margin: 8px 0;
-  }
-
-  .separator::before,
-  .separator::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid #e0e0e0;
-  }
-
-  :global(html.dark) .separator::before,
-  :global(html.dark) .separator::after {
-    border-bottom-color: #3a3a4e;
-  }
-
-  .separator span {
-    padding: 0 16px;
-    font-size: 14px;
-    font-weight: 500;
   }
 
   .privacy-text {

@@ -286,7 +286,26 @@
           )
           .sort((a: any, b: any) => (b.trendingScore || b.totalVotes || 0) - (a.trendingScore || a.totalVotes || 0));
         
-        trendingPollsData = uniquePolls;
+        // Cargar amigos que votaron para cada encuesta trending
+        const pollsWithFriends = await Promise.all(uniquePolls.map(async (poll: any) => {
+          let friendsByOption = {};
+          try {
+            if (currentUserId) {
+              const friendsData = await apiGet('/api/polls/' + poll.id + '/friends-votes?userId=' + currentUserId);
+              friendsByOption = friendsData.data || {};
+            }
+          } catch (e) {
+            // Silenciar error - no es crítico si falla
+            console.debug('Friends votes not available for trending poll', poll.id);
+          }
+          
+          return {
+            ...poll,
+            friendsByOption: friendsByOption
+          };
+        }));
+        
+        trendingPollsData = pollsWithFriends;
       } else {
         trendingPollsData = [];
       }
@@ -902,8 +921,9 @@
   export const mainPollShares: number = 0;
   export const mainPollReposts: number = 0;
   // ID del usuario actual (para cargar amigos que votaron)
-  // Usuario por defecto: María González (id: 4) que sigue a 5 usuarios
-  export let currentUserId: number = 4;
+  // Se obtiene del store currentUser - reactivo
+  let currentUserId: number | null = null;
+  $: currentUserId = $currentUser?.id || null;
   // Amigos que han votado por opción (opcional)
   export const friendsByOption: Record<string, Array<{ id: string; name: string; avatarUrl?: string }>> = {};
   // Visitas por opción (opcional)
@@ -3553,6 +3573,7 @@
       totalVotes: previewModalPoll.stats?.totalVotes || previewModalPoll.totalVotes || 0,
       totalViews: previewModalPoll.stats?.totalViews || previewModalPoll.totalViews || 0
     }}
+    friendsByOption={previewModalPoll.friendsByOption || {}}
     readOnly={true}
     showAllOptions={previewModalShowAllOptions}
     onClose={closePreviewModal}

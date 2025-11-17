@@ -4557,9 +4557,30 @@
     
     console.log('[HandleOpenPoll] 📊 Total de votos:', totalVotes);
     
+    // CARGAR AMIGOS QUE VOTARON EN ESTA ENCUESTA (opcional)
+    let friendsByOption = {};
+    try {
+      // Solo intentar cargar si el usuario está autenticado
+      const currentUserId = await import('$lib/stores').then(m => {
+        let userId: number | null = null;
+        m.currentUser.subscribe(user => { userId = user?.id || null; })();
+        return userId;
+      });
+      
+      if (currentUserId) {
+        const friendsData = await apiGet('/api/polls/' + poll.id + '/friends-votes?userId=' + currentUserId);
+        friendsByOption = friendsData.data || {};
+        console.log('[HandleOpenPoll] 👥 Amigos cargados para opciones:', Object.keys(friendsByOption).length);
+      }
+    } catch (e) {
+      // Silenciar error - no es crítico si falla
+      console.debug('[HandleOpenPoll] Friends votes not available for poll', poll.id);
+    }
+    
     // CRÍTICO: Asegurar que poll.options también está formateado correctamente
     const formattedPoll = {
       ...pollDataFromApi,
+      friendsByOption: friendsByOption,
       options: options.map((opt, idx) => {
         const apiOption = pollDataFromApi.options?.[idx];
         const votes = apiOption?.votes || apiOption?._count?.votes || opt.votes || 0;

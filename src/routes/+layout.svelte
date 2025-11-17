@@ -227,7 +227,7 @@
 		<div class="splash-content">
 			<!-- Logo VouTop -->
 			<div class="logo-text">VouTop</div>
-			<!-- Imagen debajo del logo -->
+			<!-- Barra de opciones eliminada: ya se muestra en BottomSheet -->
 		</div>
 	</div>
 	{/if}
