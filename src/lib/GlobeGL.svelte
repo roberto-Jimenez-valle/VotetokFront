@@ -6002,54 +6002,14 @@
     
     window.addEventListener('popstate', popstateHandler as any);
     
-    // Verificar si hay un parámetro poll en la URL para abrir directamente
-    const urlParams = new URLSearchParams(window.location.search);
-    const pollIdParam = urlParams.get('poll');
-    
-    if (pollIdParam) {
-      console.log('[Init] 🔗 Detectado parámetro poll en URL:', pollIdParam);
-      
-      // Cargar y abrir la encuesta
-      try {
-        const response = await apiCall(`/api/polls/${pollIdParam}`);
-        if (response.ok) {
-          const pollData = await response.json();
-          const poll = pollData.data || pollData;
-          
-          // Recrear formato de opciones
-          const options = poll.options?.map((opt: any, idx: number) => ({
-            key: opt.optionKey || opt.key,
-            label: opt.optionText || opt.label,
-            color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][idx % 4],
-            votes: 0
-          })) || [];
-          
-          // Crear evento sintético para handleOpenPollInGlobe
-          const syntheticEvent = new CustomEvent('openpoll', {
-            detail: { poll, options }
-          }) as CustomEvent<{ poll: any; options: Array<{ key: string; label: string; color: string; votes: number }> }>;
-          
-          // Esperar un tick para que el globo esté inicializado
-          await tick();
-          await handleOpenPollInGlobe(syntheticEvent);
-          
-          console.log('[Init] ✅ Encuesta abierta desde URL');
-        } else {
-          console.error('[Init] ❌ Error al cargar encuesta:', response.status);
-        }
-      } catch (error) {
-        console.error('[Init] ❌ Error cargando encuesta desde URL:', error);
-      }
-    } else {
-      // Establecer estado inicial en el historial si no existe
-      if (!history.state) {
-        const initialState = {
-          level: 'world',
-          pollMode: 'trending',
-          timestamp: Date.now()
-        };
-        history.replaceState(initialState, '', '/');
-      }
+    // Establecer estado inicial en el historial si no existe (siempre, incluso con pollId)
+    if (!history.state) {
+      const initialState = {
+        level: 'world',
+        pollMode: 'trending',
+        timestamp: Date.now()
+      };
+      history.replaceState(initialState, '', '/');
     }
     
     // Inicializar controlador de bottom sheet
@@ -6296,6 +6256,56 @@
     };
     
     window.addEventListener('palettechange', paletteChangeHandler);
+    
+    // ============================================
+    // VERIFICAR PARÁMETRO POLL EN URL (AL FINAL DEL MOUNT)
+    // ============================================
+    // Esperar a que todo esté inicializado antes de abrir encuesta desde URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const pollIdParam = urlParams.get('poll');
+    
+    if (pollIdParam) {
+      console.log('[Init] 🔗 Detectado parámetro poll en URL:', pollIdParam);
+      
+      // Esperar un momento más para asegurar que worldPolygons están cargados
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Cargar y abrir la encuesta
+      try {
+        const response = await apiCall(`/api/polls/${pollIdParam}`);
+        if (response.ok) {
+          const pollData = await response.json();
+          const poll = pollData.data || pollData;
+          
+          console.log('[Init] 📊 Encuesta cargada desde URL:', poll.id, poll.title);
+          
+          // Recrear formato de opciones CON colores correctos
+          const options = poll.options?.map((opt: any, idx: number) => ({
+            id: opt.id,
+            key: opt.optionKey || opt.key,
+            label: opt.optionLabel || opt.optionText || opt.label,
+            color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][idx % 4],
+            votes: opt.votes || opt._count?.votes || 0
+          })) || [];
+          
+          console.log('[Init] 🎨 Opciones con colores:', options.map(o => ({ label: o.label, color: o.color })));
+          
+          // Crear evento sintético para handleOpenPollInGlobe
+          const syntheticEvent = new CustomEvent('openpoll', {
+            detail: { poll, options }
+          }) as CustomEvent<{ poll: any; options: Array<{ id?: number; key: string; label: string; color: string; votes: number }> }>;
+          
+          // Abrir la encuesta - handleOpenPollInGlobe manejará todo
+          await handleOpenPollInGlobe(syntheticEvent);
+          
+          console.log('[Init] ✅ Encuesta abierta desde URL con colores aplicados');
+        } else {
+          console.error('[Init] ❌ Error al cargar encuesta:', response.status);
+        }
+      } catch (error) {
+        console.error('[Init] ❌ Error cargando encuesta desde URL:', error);
+      }
+    }
   });
 
   function resize() { /* GlobeCanvas maneja su propio tamaño vía CSS */ }
