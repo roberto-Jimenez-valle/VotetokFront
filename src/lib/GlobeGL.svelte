@@ -293,6 +293,7 @@
   // Control para evitar doble carga de encuestas desde URL
   let isInitialMount = true;
   let lastProcessedPollId: string | null = null;
+  let isClosingPoll = false; // Flag para prevenir que el watcher reaccione durante un cierre manual
 
   // Función para calcular el área aproximada de un polígono (en grados cuadrados) - CON CACHE
   function calculatePolygonArea(feature: any): number {
@@ -4085,7 +4086,17 @@
   
   // Función para cerrar la encuesta activa y volver a modo trending
   async function closePoll(skipTrendingLoad = false) {
-    console.log('[closePoll] 🔄 Cerrando encuesta | skipTrendingLoad:', skipTrendingLoad);
+    console.log('[closePoll] 🔄 INICIO | skipTrendingLoad:', skipTrendingLoad, 
+                'isClosingPoll:', isClosingPoll, 
+                'isNavigatingFromHistory:', isNavigatingFromHistory);
+    
+    // Activar flag para prevenir que el watcher reaccione
+    isClosingPoll = true;
+    console.log('[closePoll] 🚫 Flag isClosingPoll activado');
+    
+    // Resetear el ID ANTES de hacer pushState para evitar que el watcher reaccione
+    lastProcessedPollId = null;
+    console.log('[closePoll] 🔄 lastProcessedPollId reseteado a null');
     
     // HISTORY API: Volver a modo trending (solo si no viene de popstate y no se va a abrir otra encuesta)
     if (!isNavigatingFromHistory && !skipTrendingLoad) {
@@ -4101,9 +4112,6 @@
     // FASE 3: Limpiar contexto de encuesta usando store
     globalActivePoll.close();
     activePollOptions = [];
-    
-    // Resetear el ID de encuesta procesada para permitir re-abrir la misma encuesta
-    lastProcessedPollId = null;
     
     // Limpiar caches de datos por nivel usando stores
     globalAnswersData.set({});
@@ -4163,6 +4171,11 @@
     } else {
       console.log('[closePoll] ⏭️ Saltando carga de trending (se abrirá otra encuesta)');
     }
+    
+    // Desactivar flag al finalizar
+    console.log('[closePoll] ✅ Desactivando flag isClosingPoll');
+    isClosingPoll = false;
+    console.log('[closePoll] ✅ FIN | isClosingPoll:', isClosingPoll);
   }
   
   // Función para cargar datos de trending (múltiples encuestas agregadas)
@@ -6128,14 +6141,20 @@
           // Esperar un momento para que los polígonos se rendericen
           await new Promise(resolve => setTimeout(resolve, 100));
           
-          // AHORA cargar trending si NO hay encuesta activa
-          if (!activePoll) {
-            console.log('[Init] 🌍 Cargando trending inicial...');
+          // Verificar si hay parámetro ?poll= en la URL ANTES de cargar trending
+          const urlParams = new URLSearchParams(window.location.search);
+          const hasPollParam = urlParams.get('poll');
+          
+          // AHORA cargar trending solo si NO hay encuesta activa Y NO hay parámetro poll en URL
+          if (!activePoll && !hasPollParam) {
+            console.log('[Init] 🌍 Cargando trending inicial (no hay poll en URL)...');
             await loadTrendingData();
             
             // Forzar actualización de colores después de cargar trending
             await new Promise(resolve => requestAnimationFrame(resolve));
             await updateGlobeColors();
+          } else if (hasPollParam) {
+            console.log('[Init] ⏭️ Saltando trending inicial, hay poll en URL:', hasPollParam);
           }
                   }
       }
@@ -6278,6 +6297,10 @@
       // Marcar como procesado para evitar doble carga en el watcher
       lastProcessedPollId = pollIdParam;
       
+      // CRÍTICO: Marcar que estamos navegando desde carga inicial
+      // para evitar que handleOpenPollInGlobe cierre encuestas o haga pushState
+      isNavigatingFromHistory = true;
+      
       // Esperar un momento más para asegurar que worldPolygons están cargados
       await new Promise(resolve => setTimeout(resolve, 200));
       
@@ -6315,38 +6338,69 @@
         }
       } catch (error) {
         console.error('[Init] ❌ Error cargando encuesta desde URL:', error);
+      } finally {
+        // Limpiar flag
+        isNavigatingFromHistory = false;
+        // Marcar que la carga inicial ha terminado DESPUÉS de cargar la encuesta
+        isInitialMount = false;
+        console.log('[Init] ✅ Carga inicial completada, watcher habilitado');
       }
+    } else {
+      // Si no hay poll en URL, marcar como terminado ahora
+      isInitialMount = false;
+      console.log('[Init] ✅ Carga inicial completada (sin poll), watcher habilitado');
     }
-    
-    // Marcar que la carga inicial ha terminado
-    isInitialMount = false;
   });
 
   // ============================================
   // WATCHER PARA CAMBIOS EN EL PARÁMETRO ?poll=
   // ============================================
   // Detecta cuando la URL cambia a /?poll=123 y abre la encuesta
+  // También detecta cuando se quita el parámetro y cierra la encuesta
   // SOLO se ejecuta después de la carga inicial para evitar doble procesamiento
   $: {
     const pollIdParam = $page.url.searchParams.get('poll');
     
-    // Solo procesar si:
-    // 1. NO es la carga inicial (isInitialMount = false)
-    // 2. Hay un pollId en la URL
-    // 3. El globo está listo
-    // 4. Es diferente al último procesado
-    if (!isInitialMount && pollIdParam && globe && pollIdParam !== lastProcessedPollId) {
+    console.log('[Watcher] 🔍 Ejecutando | pollIdParam:', pollIdParam, 
+                'lastProcessed:', lastProcessedPollId, 
+                'isInitialMount:', isInitialMount, 
+                'isClosingPoll:', isClosingPoll,
+                'activePoll:', !!activePoll);
+    
+    // Ignorar durante carga inicial
+    if (isInitialMount) {
+      console.log('[Watcher] ⏭️ Ignorando (carga inicial)');
+    }
+    // Ignorar si ya estamos cerrando una encuesta
+    else if (isClosingPoll) {
+      console.log('[Watcher] ⏸️ Ignorando (ya estamos cerrando)', { pollIdParam, lastProcessedPollId });
+    }
+    // ÚNICO CASO: Cambió a otra encuesta (cerrar anterior y abrir nueva)
+    else if (pollIdParam && globe && pollIdParam !== lastProcessedPollId) {
       console.log('[Watcher] 🔗 Detectado cambio en parámetro poll:', pollIdParam, '(anterior:', lastProcessedPollId, ')');
       
       // Marcar como procesado ANTES de cargar para evitar re-ejecuciones
       lastProcessedPollId = pollIdParam;
       
-      console.log('[Watcher] 📊 Cargando encuesta desde URL:', pollIdParam);
-      
-      // Cargar y abrir la encuesta
-      apiCall(`/api/polls/${pollIdParam}`)
-        .then(response => response.json())
-        .then(pollData => {
+      // Si hay una encuesta activa, cerrarla primero y esperar
+      const loadNewPoll = async () => {
+        // Marcar que estamos navegando desde el watcher para evitar pushState
+        isNavigatingFromHistory = true;
+        
+        try {
+          if (activePoll) {
+            console.log('[Watcher] 🔄 Cerrando encuesta anterior antes de abrir nueva');
+            // Cerrar sin cargar trending, vamos a abrir otra encuesta inmediatamente
+            await closePoll(true);
+            // Esperar un frame para que se complete el cierre
+            await new Promise(resolve => requestAnimationFrame(resolve));
+          }
+          
+          console.log('[Watcher] 📊 Cargando encuesta desde URL:', pollIdParam);
+          
+          // Cargar y abrir la encuesta
+          const response = await apiCall(`/api/polls/${pollIdParam}`);
+          const pollData = await response.json();
           const poll = pollData.data || pollData;
           
           console.log('[Watcher] ✅ Encuesta cargada:', poll.id, poll.title);
@@ -6365,11 +6419,17 @@
             detail: { poll, options }
           }) as CustomEvent<{ poll: any; options: Array<{ id?: number; key: string; label: string; color: string; votes: number }> }>;
           
-          handleOpenPollInGlobe(syntheticEvent);
-        })
-        .catch(error => {
+          await handleOpenPollInGlobe(syntheticEvent);
+        } catch (error) {
           console.error('[Watcher] ❌ Error cargando encuesta desde URL:', error);
-        });
+        } finally {
+          // Limpiar flag
+          isNavigatingFromHistory = false;
+        }
+      };
+      
+      // Ejecutar la carga de manera asíncrona
+      loadNewPoll();
     }
   }
 
