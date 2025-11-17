@@ -3536,7 +3536,34 @@
             </svg>
             Guardar para después
           </button>
-          <button class="poll-option-item" onclick={closePollOptionsModal} type="button">
+          <button class="poll-option-item" onclick={async () => {
+            if (!selectedPollForOptions) return;
+            
+            const shareUrl = `${window.location.origin}/poll/${selectedPollForOptions.id}`;
+            const shareTitle = selectedPollForOptions.question || selectedPollForOptions.title;
+            const shareText = selectedPollForOptions.description || `Vota en esta encuesta: ${shareTitle}`;
+
+            // Intentar Web Share API
+            if (navigator.share) {
+              try {
+                await navigator.share({
+                  title: shareTitle,
+                  text: shareText,
+                  url: shareUrl
+                });
+                console.log('[BottomSheet] ✅ Compartido exitosamente via Web Share API');
+              } catch (error) {
+                if ((error as Error).name !== 'AbortError') {
+                  console.error('[BottomSheet] Error al compartir:', error);
+                  copyShareUrlToClipboard(shareUrl);
+                }
+              }
+            } else {
+              copyShareUrlToClipboard(shareUrl);
+            }
+            
+            closePollOptionsModal();
+          }} type="button">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="18" cy="5" r="3"></circle>
               <circle cx="6" cy="12" r="3"></circle>
@@ -3546,7 +3573,13 @@
             </svg>
             Compartir encuesta
           </button>
-          <button class="poll-option-item" onclick={closePollOptionsModal} type="button">
+          <button class="poll-option-item" onclick={() => {
+            if (!selectedPollForOptions) return;
+            
+            const shareUrl = `${window.location.origin}/poll/${selectedPollForOptions.id}`;
+            copyShareUrlToClipboard(shareUrl);
+            closePollOptionsModal();
+          }} type="button">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>

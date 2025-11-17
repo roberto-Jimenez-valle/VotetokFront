@@ -4,7 +4,6 @@
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
-  import { Share2 } from 'lucide-svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -770,39 +769,27 @@
           </div>
         {/if}
       </div>
-      <div class="header-actions">
-        <!-- Botón de compartir -->
+      {#if poll.user?.avatarUrl}
         <button 
-          class="share-button"
-          onclick={(e) => sharePoll(e)}
-          aria-label="Compartir encuesta"
-          title="Compartir"
+          class="header-avatar header-avatar-real" 
+          onclick={(e) => {
+            e.stopPropagation();
+            if (poll.user?.id) {
+              console.log('[Avatar Click] Abriendo perfil de usuario:', poll.user.id);
+              selectedProfileUserId = poll.user.id;
+              isProfileModalOpen = true;
+              console.log('[Avatar Click] Estado actualizado:', { isProfileModalOpen, selectedProfileUserId });
+            }
+          }}
+          aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
         >
-          <Share2 size={18} />
+          <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
         </button>
-        
-        {#if poll.user?.avatarUrl}
-          <button 
-            class="header-avatar header-avatar-real" 
-            onclick={(e) => {
-              e.stopPropagation();
-              if (poll.user?.id) {
-                console.log('[Avatar Click] Abriendo perfil de usuario:', poll.user.id);
-                selectedProfileUserId = poll.user.id;
-                isProfileModalOpen = true;
-                console.log('[Avatar Click] Estado actualizado:', { isProfileModalOpen, selectedProfileUserId });
-              }
-            }}
-            aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
-          >
-            <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
-          </button>
-        {:else}
-          <div class="header-avatar header-avatar-real">
-            <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
-          </div>
-        {/if}
-      </div>
+      {:else}
+        <div class="header-avatar header-avatar-real">
+          <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
+        </div>
+      {/if}
     </div>
   </div>
   
@@ -1762,7 +1749,7 @@
           </svg>
           <span>{formatNumber(0)}</span>
         </button>
-        <button class="action-badge action-share" type="button" title="Compartir">
+        <button class="action-badge action-share" type="button" title="Compartir" onclick={(e) => sharePoll(e)}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <circle cx="18" cy="5" r="3"/>
             <circle cx="6" cy="12" r="3"/>
@@ -3184,39 +3171,6 @@
   
   .title-tooltip-btn {
     margin: 0;
-  }
-
-  /* Botón de compartir */
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .share-button {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    padding: 0;
-  }
-
-  .share-button:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: white;
-    border-color: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
-  }
-
-  .share-button:active {
-    transform: scale(0.95);
   }
 
   /* Toast de confirmación */
