@@ -2,12 +2,15 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { prisma } from '$lib/server/prisma';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
   const pollId = Number(params.id);
   
   if (isNaN(pollId)) {
     throw error(400, 'ID de encuesta inválido');
   }
+  
+  // Obtener la URL base del servidor
+  const baseUrl = `${url.protocol}//${url.host}`;
 
   const poll = await prisma.poll.findUnique({
     where: { id: pollId },
@@ -55,6 +58,7 @@ export const load: PageServerLoad = async ({ params }) => {
   };
 
   return {
-    poll: transformedPoll
+    poll: transformedPoll,
+    baseUrl
   };
 };

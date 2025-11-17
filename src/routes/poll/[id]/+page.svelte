@@ -5,7 +5,7 @@
 
   export let data: PageData;
 
-  const { poll } = data;
+  const { poll, baseUrl } = data;
 
   onMount(() => {
     // Redirigir a la página principal con el poll abierto
@@ -22,20 +22,22 @@
   <meta property="og:type" content="article" />
   <meta property="og:title" content={poll.title} />
   <meta property="og:description" content={poll.description || `Vota en esta encuesta: ${poll.title}`} />
-  <meta property="og:url" content={`https://votetok.com/poll/${poll.id}`} />
-  <meta property="og:image" content={`https://votetok.com/api/polls/${poll.id}/og-image`} />
+  <meta property="og:url" content={`${baseUrl}/poll/${poll.id}`} />
+  <meta property="og:image" content={`${baseUrl}/api/polls/${poll.id}/og-image`} />
+  <meta property="og:image:secure_url" content={`${baseUrl}/api/polls/${poll.id}/og-image`} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
+  <meta property="og:image:type" content="image/svg+xml" />
   <meta property="og:site_name" content="VouTop" />
   
   <!-- Twitter Cards -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={poll.title} />
   <meta name="twitter:description" content={poll.description || `Vota en esta encuesta: ${poll.title}`} />
-  <meta name="twitter:image" content={`https://votetok.com/api/polls/${poll.id}/og-image`} />
+  <meta name="twitter:image" content={`${baseUrl}/api/polls/${poll.id}/og-image`} />
   
   <!-- WhatsApp específico -->
-  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:alt" content={`Preview de la encuesta: ${poll.title}`} />
   <meta property="og:locale" content="es_ES" />
 </svelte:head>
 
