@@ -2,6 +2,7 @@
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { apiGet, apiCall } from '$lib/api/client';
   
   // ========================================
@@ -1333,8 +1334,8 @@
           const url = activePoll 
             ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(iso)}`
             : `/?country=${encodeURIComponent(iso)}`;
-          history.pushState(historyState, '', url);
-          console.log('[History] 📍 Navegando a país:', countryName, url);
+          console.log('[History] 📍 Navegando a país con goto():', countryName, url);
+          await goto(url, { replaceState: false, noScroll: true, keepFocus: true });
         } else {
           console.log('[History] 🔄 Restaurando país desde historial:', countryName);
         }
@@ -1794,8 +1795,8 @@
           const url = activePoll
             ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`
             : `/?country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`;
-          history.pushState(historyState, '', url);
-          console.log('[History] 📍 Navegando a subdivisión:', subdivisionName, url);
+          console.log('[History] 📍 Navegando a subdivisión con goto():', subdivisionName, url);
+          await goto(url, { replaceState: false, noScroll: true, keepFocus: true });
         } else {
           console.log('[History] 🔄 Restaurando subdivisión desde historial:', subdivisionName);
         }
@@ -2109,13 +2110,8 @@
       // HISTORY API: Volver al estado mundial (solo si no viene de popstate)
       // IMPORTANTE: Si hay una encuesta activa, NO sobrescribir el estado
       if (!isNavigatingFromHistory && !activePoll) {
-        const historyState = {
-          level: 'world',
-          pollMode: 'trending',
-          timestamp: Date.now()
-        };
-        history.pushState(historyState, '', '/');
-        console.log('[History] 📍 Navegando al mundo (trending)');
+        console.log('[History] 📍 Navegando al mundo (trending) con goto()');
+        await goto('/', { replaceState: false, noScroll: true, keepFocus: true });
       } else if (activePoll) {
         console.log('[History] 📊 Navegando al mundo pero manteniendo estado de encuesta activa');
       } else {
@@ -4100,13 +4096,16 @@
     
     // HISTORY API: Volver a modo trending (solo si no viene de popstate y no se va a abrir otra encuesta)
     if (!isNavigatingFromHistory && !skipTrendingLoad) {
-      const historyState = {
-        level: 'world',
-        pollMode: 'trending',
-        timestamp: Date.now()
-      };
-      history.pushState(historyState, '', '/');
-      console.log('[History] 🔄 Volviendo a modo trending');
+      const currentUrl = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '';
+      
+      // Solo navegar si la URL es diferente
+      if (currentUrl !== '/') {
+        console.log('[History] 🔄 Volviendo a modo trending con goto()');
+        // Usar goto() en lugar de pushState para que $page se actualice
+        await goto('/', { replaceState: false, noScroll: true, keepFocus: true });
+      } else {
+        console.log('[History] ⏭️ URL ya es /, skipping goto()');
+      }
     }
     
     // FASE 3: Limpiar contexto de encuesta usando store
@@ -4172,7 +4171,8 @@
       console.log('[closePoll] ⏭️ Saltando carga de trending (se abrirá otra encuesta)');
     }
     
-    // Desactivar flag al finalizar
+    // Desactivar flag al finalizar - esperar un tick para que el watcher procese primero
+    await new Promise(resolve => setTimeout(resolve, 100));
     console.log('[closePoll] ✅ Desactivando flag isClosingPoll');
     isClosingPoll = false;
     console.log('[closePoll] ✅ FIN | isClosingPoll:', isClosingPoll);
@@ -4629,15 +4629,17 @@
     
     // HISTORY API: Guardar estado de encuesta en el historial
     if (!isNavigatingFromHistory) {
-      const historyState = {
-        level: 'world',
-        pollId: poll.id,
-        pollMode: 'specific',
-        timestamp: Date.now()
-      };
       const url = `/?poll=${encodeURIComponent(poll.id)}`;
-      history.pushState(historyState, '', url);
-      console.log('[History] 📊 Abriendo encuesta:', poll.id, url);
+      const currentUrl = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '';
+      
+      // Solo navegar si la URL es diferente
+      if (currentUrl !== url) {
+        console.log('[History] 📊 Abriendo encuesta con goto():', poll.id, url);
+        // Usar goto() en lugar de pushState para que $page se actualice
+        await goto(url, { replaceState: false, noScroll: true, keepFocus: true });
+      } else {
+        console.log('[History] ⏭️ URL ya es correcta, skipping goto():', url);
+      }
     }
     
     // Actualizar colorMap con los colores de las opciones DE LA ENCUESTA
@@ -6023,14 +6025,45 @@
     
     window.addEventListener('popstate', popstateHandler as any);
     
-    // Establecer estado inicial en el historial si no existe (siempre, incluso con pollId)
+    // DEBUG: Verificar URL al inicio del onMount
+    console.log('[Init] 🔍 URL al inicio de onMount:', {
+      windowLocationHref: typeof window !== 'undefined' ? window.location.href : 'ssr',
+      windowLocationSearch: typeof window !== 'undefined' ? window.location.search : 'ssr',
+      pageUrlHref: $page.url.href,
+      pageUrlSearch: $page.url.search,
+      historyState: history.state
+    });
+    
+    // Establecer estado inicial en el historial si no existe
     if (!history.state) {
-      const initialState = {
+      // CRÍTICO: Capturar parámetros de URL ANTES de cualquier modificación
+      // Usar window.location directamente para evitar problemas de sincronización con $page
+      const currentUrl = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/';
+      const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+      const pollParam = urlParams.get('poll');
+      
+      console.log('[History] 📍 Capturados:', { currentUrl, pollParam, search: window.location.search });
+      
+      const initialState: any = {
         level: 'world',
-        pollMode: 'trending',
+        pollMode: pollParam ? 'specific' : 'trending',
         timestamp: Date.now()
       };
-      history.replaceState(initialState, '', '/');
+      
+      // Si hay poll param, incluirlo en el estado
+      if (pollParam) {
+        initialState.pollId = pollParam;
+      }
+      
+      // Preservar la URL actual con sus parámetros
+      history.replaceState(initialState, '', currentUrl);
+      console.log('[History] 🔄 Estado inicial establecido:', initialState, 'URL:', currentUrl);
+      
+      // DEBUG: Verificar URL después del replaceState
+      console.log('[History] 🔍 URL después de replaceState:', {
+        windowLocationHref: typeof window !== 'undefined' ? window.location.href : 'ssr',
+        windowLocationSearch: typeof window !== 'undefined' ? window.location.search : 'ssr'
+      });
     }
     
     // Inicializar controlador de bottom sheet
@@ -6288,8 +6321,17 @@
     // VERIFICAR PARÁMETRO POLL EN URL (AL FINAL DEL MOUNT)
     // ============================================
     // Esperar a que todo esté inicializado antes de abrir encuesta desde URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const pollIdParam = urlParams.get('poll');
+    // IMPORTANTE: Usar $page.url.searchParams en lugar de window.location para sincronización con SvelteKit
+    const pollIdParam = $page.url.searchParams.get('poll');
+    
+    console.log('[Init] 🔍 Verificando parámetro poll en URL...', {
+      pollIdParam,
+      currentUrl: typeof window !== 'undefined' ? window.location.href : 'ssr',
+      pageUrl: $page.url.href,
+      hasGlobe: !!globe,
+      hasWorldPolygons: !!worldPolygons,
+      worldPolygonsLength: worldPolygons?.length || 0
+    });
     
     if (pollIdParam) {
       console.log('[Init] 🔗 Detectado parámetro poll en URL:', pollIdParam);
@@ -6301,8 +6343,22 @@
       // para evitar que handleOpenPollInGlobe cierre encuestas o haga pushState
       isNavigatingFromHistory = true;
       
-      // Esperar un momento más para asegurar que worldPolygons están cargados
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Esperar a que globe y worldPolygons estén disponibles
+      let retries = 0;
+      while ((!globe || !worldPolygons || worldPolygons.length === 0) && retries < 10) {
+        console.log('[Init] ⏳ Esperando globe y worldPolygons...', { retry: retries, hasGlobe: !!globe, worldPolygonsLength: worldPolygons?.length || 0 });
+        await new Promise(resolve => setTimeout(resolve, 200));
+        retries++;
+      }
+      
+      if (!globe) {
+        console.error('[Init] ❌ Globe no disponible después de esperar');
+        isNavigatingFromHistory = false;
+        isInitialMount = false;
+        return;
+      }
+      
+      console.log('[Init] ✅ Globe y worldPolygons disponibles, cargando encuesta...');
       
       // Cargar y abrir la encuesta
       try {
@@ -6341,6 +6397,9 @@
       } finally {
         // Limpiar flag
         isNavigatingFromHistory = false;
+        // Esperar un tick para asegurar que la encuesta está completamente abierta
+        await tick();
+        await new Promise(resolve => setTimeout(resolve, 50));
         // Marcar que la carga inicial ha terminado DESPUÉS de cargar la encuesta
         isInitialMount = false;
         console.log('[Init] ✅ Carga inicial completada, watcher habilitado');
@@ -6375,7 +6434,12 @@
     else if (isClosingPoll) {
       console.log('[Watcher] ⏸️ Ignorando (ya estamos cerrando)', { pollIdParam, lastProcessedPollId });
     }
-    // ÚNICO CASO: Cambió a otra encuesta (cerrar anterior y abrir nueva)
+    // CASO 1: Se quitó el parámetro poll de la URL (cerrar encuesta)
+    else if (!pollIdParam && lastProcessedPollId && activePoll) {
+      console.log('[Watcher] 🚪 Poll param eliminado, limpiando lastProcessedPollId');
+      lastProcessedPollId = null;
+    }
+    // CASO 2: Cambió a otra encuesta (cerrar anterior y abrir nueva)
     else if (pollIdParam && globe && pollIdParam !== lastProcessedPollId) {
       console.log('[Watcher] 🔗 Detectado cambio en parámetro poll:', pollIdParam, '(anterior:', lastProcessedPollId, ')');
       
@@ -6626,11 +6690,18 @@
                   
       // DISABLED: Auto-loading world polygons on ready - now controlled by NavigationManager
       // Only initialize NavigationManager to world view
-      // NO navegar a mundo si ya hay encuesta abierta
-      if (navigationManager && !activePoll) {
-                navigationManager!.navigateToWorld();
+      // NO navegar a mundo si ya hay encuesta abierta O si hay parámetro poll en URL
+      const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+      const hasPollParam = urlParams.has('poll');
+      
+      if (navigationManager && !activePoll && !hasPollParam) {
+        console.log('[Init] 🌍 Navegando a mundo (sin poll en URL)');
+        navigationManager!.navigateToWorld();
+      } else if (hasPollParam) {
+        console.log('[Init] ⏭️ Skipping navigateToWorld - poll param presente:', urlParams.get('poll'));
       } else if (activePoll) {
-              }
+        console.log('[Init] ⏭️ Skipping navigateToWorld - activePoll ya existe');
+      }
       
       setTilesEnabled(false);
       updateGlobeColors();
@@ -6954,8 +7025,8 @@
               timestamp: Date.now()
             };
             const url = `/?country=${encodeURIComponent(iso)}`;
-            history.pushState(historyState, '', url);
-            console.log('[History] 📍 Territorio especial (nivel country):', name);
+            console.log('[History] 📍 Territorio especial (nivel country) con goto():', name);
+            await goto(url, { replaceState: false, noScroll: true, keepFocus: true });
           }
           
           // Activar polígono centrado con etiqueta
