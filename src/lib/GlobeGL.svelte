@@ -218,6 +218,11 @@
   let subdivisionLevelColorMap: Record<string, string> = {};
   let intensityMin = 0;
   let intensityMax = 1;
+  
+  // Cache de ubicación del usuario (para no detectarla múltiples veces)
+  let cachedUserCountryCentroid: { lat: number; lng: number } | null = null;
+  let cachedUserCountryIso: string | null = null;
+  let userLocationDetected = false;
   // Professional 3-level navigation system
   type NavigationLevel = 'world' | 'country' | 'subdivision';
   type NavigationState = {
@@ -4198,9 +4203,100 @@
       await new Promise(resolve => requestAnimationFrame(resolve));
     }
     
-    // Hacer zoom out
-    scheduleZoom(0, 0, 2.0, 500);
-    await delay(600);
+    // ENFOCAR PAÍS DEL USUARIO (USAR CACHE SI EXISTE)
+    let userCountryCentroid: { lat: number; lng: number } | null = null;
+    let userCountryIso: string | null = null;
+    
+    // Verificar si ya tenemos la ubicación en cache
+    if (userLocationDetected && cachedUserCountryCentroid && cachedUserCountryIso) {
+      console.log('[closePoll] 💾 Usando ubicación del usuario desde cache:', cachedUserCountryIso);
+      userCountryCentroid = cachedUserCountryCentroid;
+      userCountryIso = cachedUserCountryIso;
+    } else {
+      console.log('[closePoll] 🔍 Detectando ubicación del usuario por IP (primera vez)...');
+      
+      try {
+        // Usar geolocalización por IP (no requiere permisos)
+        const response = await fetch('https://ipapi.co/json/', { 
+          signal: AbortSignal.timeout(3000) 
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const latitude = data.latitude;
+          const longitude = data.longitude;
+          const countryCode = data.country_code; // ISO2
+          
+          console.log('[closePoll] 📍 Ubicación por IP:', latitude, longitude, 'País:', countryCode);
+          
+          // Buscar el país más cercano a estas coordenadas
+          if (worldPolygons && worldPolygons.length > 0) {
+            console.log('[closePoll] 🗺️ Buscando país entre', worldPolygons.length, 'polígonos');
+            
+            // Intentar buscar por código ISO primero
+            let closestCountry = worldPolygons.find((poly: any) => {
+              const props = poly.properties || {};
+              return props.CNTR_ID === countryCode || 
+                     props.iso_a2 === countryCode ||
+                     props.ISO_A2 === countryCode;
+            });
+            
+            // Si no encuentra por ISO, buscar por coordenadas más cercanas
+            if (!closestCountry && latitude && longitude) {
+              let minDistance = Infinity;
+              worldPolygons.forEach((poly: any) => {
+                const centroid = calculatePolygonCentroid(poly);
+                if (centroid) {
+                  const distance = Math.sqrt(
+                    Math.pow(centroid.lat - latitude, 2) + 
+                    Math.pow(centroid.lng - longitude, 2)
+                  );
+                  if (distance < minDistance) {
+                    minDistance = distance;
+                    closestCountry = poly;
+                  }
+                }
+              });
+            }
+            
+            if (closestCountry) {
+              userCountryCentroid = calculatePolygonCentroid(closestCountry);
+              userCountryIso = closestCountry.properties?.ISO3_CODE || 
+                              closestCountry.properties?.ISO_A3 || 
+                              closestCountry.properties?.iso_a3 || null;
+              console.log('[closePoll] 🌍 País encontrado:', userCountryIso, 'en', userCountryCentroid);
+              
+              // GUARDAR EN CACHE
+              cachedUserCountryCentroid = userCountryCentroid;
+              cachedUserCountryIso = userCountryIso;
+              userLocationDetected = true;
+              console.log('[closePoll] 💾 Ubicación guardada en cache');
+            }
+          }
+        }
+      } catch (error) {
+        console.log('[closePoll] ⚠️ Error al detectar ubicación:', error);
+      }
+    }
+    
+    // Hacer zoom al país del usuario o a coordenadas por defecto
+    if (userCountryCentroid && userCountryIso) {
+      console.log('[closePoll] 🎯 Enfocando país del usuario:', userCountryIso);
+      setTimeout(() => {
+        globe?.pointOfView({ 
+          lat: userCountryCentroid.lat, 
+          lng: userCountryCentroid.lng, 
+          altitude: 2.0 
+        }, 1000);
+      }, 300);
+    } else {
+      console.log('[closePoll] 🌍 Usando vista mundial por defecto');
+      setTimeout(() => {
+        globe?.pointOfView({ lat: 0, lng: 0, altitude: 2.0 }, 1000);
+      }, 300);
+    }
+    
+    await delay(800);
     
     // Cargar datos de trending mundial (solo si no se va a abrir otra encuesta)
     if (!skipTrendingLoad) {
@@ -4559,11 +4655,8 @@
     SHEET_STATE = 'collapsed';
     setSheetState('collapsed');
     
-    // CRÍTICO: Esperar un tick antes de iniciar zoom para que el BottomSheet termine su transición
+    // CRÍTICO: Esperar un tick antes de procesar para que el BottomSheet termine su transición
     await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // CRÍTICO: Iniciar zoom inmediatamente para que se ejecute en paralelo con la carga de datos
-    scheduleZoom(20, 0, 2.5, 1000, 100);
     
     console.log('[HandleOpenPoll] 🔵 Llamada recibida:', {
       pollId: poll?.id || 'null',
@@ -4749,7 +4842,59 @@
     
     console.log('[OpenPoll] 📊 Encuesta abierta:', poll.id, '| Países con datos:', Object.keys(newAnswersData).length);
     
-    // IMPORTANTE: Navegar a vista mundial para mostrar los colores de la encuesta
+    // IDENTIFICAR EL TERRITORIO CON MÁS VOTOS PRIMERO
+    let topCountryIso: string | null = null;
+    let topCountryCentroid: { lat: number; lng: number } | null = null;
+    let maxVotes = 0;
+    
+    try {
+      console.log('[OpenPoll] 🔍 Buscando país con más votos...');
+      
+      // Calcular totales de votos por país
+      const countryVoteTotals: Record<string, number> = {};
+      Object.entries(newAnswersData).forEach(([iso, votes]) => {
+        const total = Object.values(votes as Record<string, number>).reduce((sum, v) => sum + v, 0);
+        countryVoteTotals[iso] = total;
+      });
+      
+      console.log('[OpenPoll] 📊 Totales por país:', Object.keys(countryVoteTotals).length, 'países');
+      
+      // Encontrar el país con más votos
+      Object.entries(countryVoteTotals).forEach(([iso, total]) => {
+        if (total > maxVotes) {
+          maxVotes = total;
+          topCountryIso = iso;
+        }
+      });
+      
+      console.log('[OpenPoll] 🏆 País con más votos:', topCountryIso, 'con', maxVotes, 'votos');
+      
+      if (topCountryIso && worldPolygons && worldPolygons.length > 0) {
+        // Buscar el polígono del país
+        const countryPolygon = worldPolygons.find((p: any) => {
+          const props = p.properties || {};
+          return props.iso_a3 === topCountryIso || 
+                 props.ISO_A3 === topCountryIso ||
+                 props.ISO3_CODE === topCountryIso ||
+                 props.iso_a3_eh === topCountryIso ||
+                 props.adm0_a3 === topCountryIso ||
+                 props.ADM0_A3 === topCountryIso ||
+                 props.wb_a3 === topCountryIso ||
+                 props.WB_A3 === topCountryIso ||
+                 props.id === topCountryIso ||
+                 props.ID === topCountryIso;
+        });
+        
+        if (countryPolygon) {
+          topCountryCentroid = calculatePolygonCentroid(countryPolygon);
+          console.log('[OpenPoll] 📍 Centroide del país con más votos:', topCountryCentroid);
+        }
+      }
+    } catch (error) {
+      console.error('[OpenPoll] ❌ Error al buscar país con más votos:', error);
+    }
+    
+    // NAVEGAR A VISTA MUNDIAL con enfoque directo al país con más votos
     if (navigationManager) {
       await navigationManager!.navigateToWorld();
       await tick();
@@ -4768,97 +4913,20 @@
     
     console.log('[OpenPoll] 🎨 Colores calculados para', Object.keys(isoDominantKey).length, 'países');
     
-    // IDENTIFICAR Y ENFOCAR EL TERRITORIO CON MÁS VOTOS
-    try {
-      console.log('[OpenPoll] 🔍 Buscando país con más votos...');
+    // HACER UNA SOLA TRANSICIÓN DIRECTA AL PAÍS CON MÁS VOTOS
+    if (topCountryCentroid && topCountryIso) {
+      const focusAltitude = 1.7; // Altitud para mantener vista amplia del mundo
       
-      // Calcular totales de votos por país
-      const countryVoteTotals: Record<string, number> = {};
-      Object.entries(newAnswersData).forEach(([iso, votes]) => {
-        const total = Object.values(votes as Record<string, number>).reduce((sum, v) => sum + v, 0);
-        countryVoteTotals[iso] = total;
-      });
+      console.log(`[OpenPoll] 🎯 Enfocando ${topCountryIso} (${maxVotes} votos) en lat:${topCountryCentroid.lat.toFixed(2)}, lng:${topCountryCentroid.lng.toFixed(2)}, alt:${focusAltitude}`);
       
-      console.log('[OpenPoll] 📊 Totales por país:', Object.keys(countryVoteTotals).length, 'países');
-      
-      // Encontrar el país con más votos
-      let maxVotes = 0;
-      let topCountryIso: string | null = null;
-      Object.entries(countryVoteTotals).forEach(([iso, total]) => {
-        if (total > maxVotes) {
-          maxVotes = total;
-          topCountryIso = iso;
-        }
-      });
-      
-      console.log('[OpenPoll] 🏆 País con más votos:', topCountryIso, 'con', maxVotes, 'votos');
-      
-      if (topCountryIso && worldPolygons && worldPolygons.length > 0) {
-        // Buscar el polígono del país con múltiples variantes de propiedades
-        const countryPolygon = worldPolygons.find((p: any) => {
-          const props = p.properties || {};
-          return props.iso_a3 === topCountryIso || 
-                 props.ISO_A3 === topCountryIso ||
-                 props.ISO3_CODE === topCountryIso ||
-                 props.iso_a3_eh === topCountryIso ||
-                 props.adm0_a3 === topCountryIso ||
-                 props.ADM0_A3 === topCountryIso ||
-                 props.wb_a3 === topCountryIso ||
-                 props.WB_A3 === topCountryIso ||
-                 props.id === topCountryIso ||
-                 props.ID === topCountryIso;
-        });
-        
-        // Debug: mostrar las propiedades del primer polígono para entender la estructura
-        if (!countryPolygon && worldPolygons.length > 0) {
-          const sampleProps = worldPolygons[0]?.properties || {};
-          console.log('[OpenPoll] 🔍 Ejemplo de propiedades de polígono:', Object.keys(sampleProps));
-          
-          // Intentar encontrar algún polígono que contenga "ARE" en alguna propiedad
-          const anyMatch = worldPolygons.find((p: any) => {
-            const props = p.properties || {};
-            return Object.values(props).some(v => v === topCountryIso);
-          });
-          
-          if (anyMatch) {
-            console.log('[OpenPoll] 💡 Encontrado ARE en otra propiedad:', anyMatch.properties);
-          }
-        }
-        
-        console.log('[OpenPoll] 🗺️ Polígono encontrado:', !!countryPolygon);
-        
-        if (countryPolygon) {
-          // Calcular centroide del país
-          const centroid = calculatePolygonCentroid(countryPolygon);
-          
-          console.log('[OpenPoll] 📍 Centroide calculado:', centroid);
-          
-          if (centroid) {
-            // Enfocar el país con altitud apropiada para vista mundial
-            const focusAltitude = 1.2; // Altitud más cercana para ver mejor el país
-            
-            console.log(`[OpenPoll] 🎯 Preparando enfoque a ${topCountryIso} (${maxVotes} votos) en lat:${centroid.lat.toFixed(2)}, lng:${centroid.lng.toFixed(2)}, alt:${focusAltitude}`);
-            
-            // Esperar a que termine el zoom inicial y la carga de datos
-            setTimeout(() => {
-              console.log('[OpenPoll] 🎬 Ejecutando movimiento de cámara hacia', topCountryIso);
-              globe?.pointOfView({ 
-                lat: centroid.lat, 
-                lng: centroid.lng, 
-                altitude: focusAltitude 
-              }, 2000); // Duración más larga para que sea más visible
-            }, 1200); // Delay mayor para asegurar que termine el zoom inicial
-          } else {
-            console.warn('[OpenPoll] ⚠️ No se pudo calcular el centroide del país');
-          }
-        } else {
-          console.warn('[OpenPoll] ⚠️ No se encontró el polígono del país:', topCountryIso);
-        }
-      } else {
-        console.warn('[OpenPoll] ⚠️ No hay polígonos mundiales o país con votos');
-      }
-    } catch (error) {
-      console.error('[OpenPoll] ❌ Error al enfocar país con más votos:', error);
+      // Hacer la transición inmediatamente
+      setTimeout(() => {
+        globe?.pointOfView({ 
+          lat: topCountryCentroid.lat, 
+          lng: topCountryCentroid.lng, 
+          altitude: focusAltitude 
+        }, 800); // Duración de animación rápida
+      }, 200); // Delay mínimo para que se carguen los polígonos
     }
     
     // Generar marcadores geográficos
