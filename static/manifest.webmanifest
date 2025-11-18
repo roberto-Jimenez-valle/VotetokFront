@@ -1,6 +1,7 @@
 {
-  "name": "voutopRed",
-  "short_name": "voutop",
+  "name": "Voutop",
+  "short_name": "Voutop",
+  "description": "Red social de encuestas geolocalizadas",
   "id": "/",
   "start_url": "/",
   "scope": "/",

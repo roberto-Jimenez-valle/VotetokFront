@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import UnifiedThemeToggle from '$lib/components/UnifiedThemeToggle.svelte';
 	import UnderConstruction from '$lib/UnderConstruction.svelte';
+	import InstallPWABanner from '$lib/InstallPWABanner.svelte';
 	import { setCurrentUser } from '$lib/stores';
 	import { currentUser as authUser, isAuthenticated, setAuth } from '$lib/stores/auth';
 	
@@ -241,6 +242,9 @@
 	<!-- Botón de pantalla completa movido al BottomSheet -->
 
 	{@render children()}
+	
+	<!-- Banner de instalación PWA -->
+	<InstallPWABanner />
 {/if}
 
 <style>

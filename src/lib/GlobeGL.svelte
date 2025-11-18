@@ -336,6 +336,46 @@
     return area / 2;
   }
   
+  // Función para calcular el centroide de un polígono
+  function calculatePolygonCentroid(feature: any): { lat: number; lng: number } | null {
+    try {
+      if (!feature?.geometry?.coordinates) return null;
+      
+      const coords = feature.geometry.coordinates;
+      let allPoints: number[][] = [];
+      
+      // Extraer todos los puntos según el tipo de geometría
+      if (feature.geometry.type === 'MultiPolygon') {
+        // Para MultiPolygon, tomar el primer polígono (generalmente el más grande)
+        if (coords[0] && coords[0][0]) {
+          allPoints = coords[0][0];
+        }
+      } else if (feature.geometry.type === 'Polygon') {
+        // Para Polygon, tomar el anillo exterior
+        allPoints = coords[0];
+      }
+      
+      if (allPoints.length === 0) return null;
+      
+      // Calcular el promedio de todas las coordenadas
+      let sumLng = 0;
+      let sumLat = 0;
+      
+      for (const [lng, lat] of allPoints) {
+        sumLng += lng;
+        sumLat += lat;
+      }
+      
+      return {
+        lat: sumLat / allPoints.length,
+        lng: sumLng / allPoints.length
+      };
+    } catch (e) {
+      console.warn('[Centroid] Error calculating centroid:', e);
+      return null;
+    }
+  }
+  
   // Función para calcular el zoom adaptativo basado en el tamaño del país - CON CACHE
   function calculateAdaptiveZoom(feature: any): number {
     const featureId = feature?.properties?.ISO_A3 || feature?.properties?.ID_1 || feature?.properties?.ID_2 || '';
@@ -4728,6 +4768,99 @@
     
     console.log('[OpenPoll] 🎨 Colores calculados para', Object.keys(isoDominantKey).length, 'países');
     
+    // IDENTIFICAR Y ENFOCAR EL TERRITORIO CON MÁS VOTOS
+    try {
+      console.log('[OpenPoll] 🔍 Buscando país con más votos...');
+      
+      // Calcular totales de votos por país
+      const countryVoteTotals: Record<string, number> = {};
+      Object.entries(newAnswersData).forEach(([iso, votes]) => {
+        const total = Object.values(votes as Record<string, number>).reduce((sum, v) => sum + v, 0);
+        countryVoteTotals[iso] = total;
+      });
+      
+      console.log('[OpenPoll] 📊 Totales por país:', Object.keys(countryVoteTotals).length, 'países');
+      
+      // Encontrar el país con más votos
+      let maxVotes = 0;
+      let topCountryIso: string | null = null;
+      Object.entries(countryVoteTotals).forEach(([iso, total]) => {
+        if (total > maxVotes) {
+          maxVotes = total;
+          topCountryIso = iso;
+        }
+      });
+      
+      console.log('[OpenPoll] 🏆 País con más votos:', topCountryIso, 'con', maxVotes, 'votos');
+      
+      if (topCountryIso && worldPolygons && worldPolygons.length > 0) {
+        // Buscar el polígono del país con múltiples variantes de propiedades
+        const countryPolygon = worldPolygons.find((p: any) => {
+          const props = p.properties || {};
+          return props.iso_a3 === topCountryIso || 
+                 props.ISO_A3 === topCountryIso ||
+                 props.ISO3_CODE === topCountryIso ||
+                 props.iso_a3_eh === topCountryIso ||
+                 props.adm0_a3 === topCountryIso ||
+                 props.ADM0_A3 === topCountryIso ||
+                 props.wb_a3 === topCountryIso ||
+                 props.WB_A3 === topCountryIso ||
+                 props.id === topCountryIso ||
+                 props.ID === topCountryIso;
+        });
+        
+        // Debug: mostrar las propiedades del primer polígono para entender la estructura
+        if (!countryPolygon && worldPolygons.length > 0) {
+          const sampleProps = worldPolygons[0]?.properties || {};
+          console.log('[OpenPoll] 🔍 Ejemplo de propiedades de polígono:', Object.keys(sampleProps));
+          
+          // Intentar encontrar algún polígono que contenga "ARE" en alguna propiedad
+          const anyMatch = worldPolygons.find((p: any) => {
+            const props = p.properties || {};
+            return Object.values(props).some(v => v === topCountryIso);
+          });
+          
+          if (anyMatch) {
+            console.log('[OpenPoll] 💡 Encontrado ARE en otra propiedad:', anyMatch.properties);
+          }
+        }
+        
+        console.log('[OpenPoll] 🗺️ Polígono encontrado:', !!countryPolygon);
+        
+        if (countryPolygon) {
+          // Calcular centroide del país
+          const centroid = calculatePolygonCentroid(countryPolygon);
+          
+          console.log('[OpenPoll] 📍 Centroide calculado:', centroid);
+          
+          if (centroid) {
+            // Enfocar el país con altitud apropiada para vista mundial
+            const focusAltitude = 1.2; // Altitud más cercana para ver mejor el país
+            
+            console.log(`[OpenPoll] 🎯 Preparando enfoque a ${topCountryIso} (${maxVotes} votos) en lat:${centroid.lat.toFixed(2)}, lng:${centroid.lng.toFixed(2)}, alt:${focusAltitude}`);
+            
+            // Esperar a que termine el zoom inicial y la carga de datos
+            setTimeout(() => {
+              console.log('[OpenPoll] 🎬 Ejecutando movimiento de cámara hacia', topCountryIso);
+              globe?.pointOfView({ 
+                lat: centroid.lat, 
+                lng: centroid.lng, 
+                altitude: focusAltitude 
+              }, 2000); // Duración más larga para que sea más visible
+            }, 1200); // Delay mayor para asegurar que termine el zoom inicial
+          } else {
+            console.warn('[OpenPoll] ⚠️ No se pudo calcular el centroide del país');
+          }
+        } else {
+          console.warn('[OpenPoll] ⚠️ No se encontró el polígono del país:', topCountryIso);
+        }
+      } else {
+        console.warn('[OpenPoll] ⚠️ No hay polígonos mundiales o país con votos');
+      }
+    } catch (error) {
+      console.error('[OpenPoll] ❌ Error al enfocar país con más votos:', error);
+    }
+    
     // Generar marcadores geográficos
     
     const pollMarkers: VotePoint[] = [];
@@ -6119,8 +6252,12 @@
       if (countryFeature) {
         const area = calculatePolygonArea(countryFeature);
         const adaptiveAltitude = calculateAdaptiveZoom(countryFeature);
-        const centroid = centroidOf(countryFeature);
+        const centroid = calculatePolygonCentroid(countryFeature);
         
+        if (!centroid) {
+          console.error('[testAdaptiveZoom] No se pudo calcular el centroide');
+          return null;
+        }
                                         
         // Aplicar el zoom
         globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 1000);
@@ -6155,8 +6292,12 @@
       if (subdivisionFeature) {
         const area = calculatePolygonArea(subdivisionFeature);
         const adaptiveAltitude = calculateAdaptiveZoomSubdivision(subdivisionFeature);
-        const centroid = centroidOf(subdivisionFeature);
+        const centroid = calculatePolygonCentroid(subdivisionFeature);
         
+        if (!centroid) {
+          console.error('[testAdaptiveZoomSubdivision] No se pudo calcular el centroide');
+          return null;
+        }
                                         
         // Aplicar el zoom
         globe?.pointOfView({ lat: centroid.lat, lng: centroid.lng, altitude: adaptiveAltitude }, 1000);
