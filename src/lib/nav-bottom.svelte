@@ -121,6 +121,8 @@
 		if (modalOpen) {
 			dispatch('closeCreatePoll');
 		}
+		// Disparar evento para abrir el bottomsheet
+		dispatch('openBottomSheet');
 	}
 	
 	// Propagar evento para abrir encuesta en globo

@@ -4502,6 +4502,15 @@
     } as CustomEvent);
   }
   
+  // Función pública exportable para abrir el BottomSheet
+  export function openBottomSheet() {
+    console.log('[GlobeGL] 📊 openBottomSheet llamado - expandiendo sheet');
+    if (sheetCtrl) {
+      SHEET_STATE = 'expanded';
+      sheetCtrl.setState('expanded');
+    }
+  }
+  
   // Función para abrir una encuesta en el globo con sus opciones visualizadas
   async function handleOpenPollInGlobe(event: CustomEvent<{ poll: any; options: Array<{ id?: number; key: string; label: string; color: string; votes: number }> }>) {
     const { poll, options } = event.detail;

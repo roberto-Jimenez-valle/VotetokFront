@@ -103,6 +103,18 @@
 		}
 	}
 	
+	function handleOpenBottomSheet() {
+		console.log('[+page] 📊 Abrir BottomSheet desde botón Inicio');
+		
+		// Llamar directamente a la función exportada de GlobeGL
+		if (globeGLComponent && globeGLComponent.openBottomSheet) {
+			globeGLComponent.openBottomSheet();
+			console.log('[+page] ✅ Función openBottomSheet llamada en GlobeGL');
+		} else {
+			console.error('[+page] ❌ globeGLComponent o su método openBottomSheet no disponible');
+		}
+	}
+	
 	// handlePollSelected eliminado - ya no se necesita
 	
 	// Escuchar cambios en la variable global
@@ -161,6 +173,7 @@
 				on:openCreatePoll={handleOpenCreatePoll}
 				on:closeCreatePoll={handleCloseCreatePoll}
 				on:openPollInGlobe={handleOpenPollInGlobeFromHeader}
+				on:openBottomSheet={handleOpenBottomSheet}
 			/>
 		</div>
 		

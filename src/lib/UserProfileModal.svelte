@@ -672,6 +672,21 @@
     overflow-y: auto;
     padding: 0 20px 20px;
     touch-action: pan-y;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  .modal-content::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .modal-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .modal-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
   }
 
   .loading-state,
