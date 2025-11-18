@@ -39,7 +39,7 @@ export const GET: RequestHandler = async ({ url }) => {
         username: user.username,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        bio: user.bio || 'Usuario de VoteTok',
+        bio: user.bio || 'Usuario de voutop',
         verified: user.verified,
         pollsCount: user._count.polls,
         followersCount: user._count.followers,

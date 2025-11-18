@@ -1,4 +1,4 @@
-# 📊 Análisis y Arquitectura de Base de Datos - VoteTok
+# 📊 Análisis y Arquitectura de Base de Datos - voutop
 
 ## 🔍 ANÁLISIS DE DATOS DE PRUEBA ACTUALES
 

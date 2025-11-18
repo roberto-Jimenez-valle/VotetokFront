@@ -3341,7 +3341,7 @@
         <!-- Insertar anuncios cada 3 encuestas -->
         {#if pollIndex === 2}
           <AdCard 
-            title="VoteTok Premium"
+            title="voutop Premium"
             description="Accede a encuestas exclusivas y anÃ¡lisis detallados"
             ctaText="Probar gratis"
             imageUrl="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=200&h=200&fit=crop"
@@ -3521,6 +3521,17 @@
             <h3>{selectedPollForOptions.title}</h3>
             <p>Por {selectedPollForOptions.user?.displayName || 'Anónimo'}</p>
           </div>
+          <button 
+            class="poll-options-close-btn" 
+            onclick={closePollOptionsModal}
+            type="button"
+            aria-label="Cerrar"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="poll-options-list">
           <button class="poll-option-item" onclick={() => { openTrendingPoll(selectedPollForOptions); closePollOptionsModal(); }} type="button">
@@ -3964,5 +3975,140 @@
       max-width: 100px;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    
+    /* Estilos para modal de opciones de encuesta */
+    :global(.poll-options-overlay) {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 30001;
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    
+    @media (min-width: 768px) {
+      :global(.poll-options-overlay) {
+        right: auto;
+        width: 700px;
+      }
+    }
+    
+    :global(.poll-options-modal) {
+      background: #181a20;
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 700px;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 20px;
+      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+    
+    :global(.poll-options-modal::-webkit-scrollbar) {
+      width: 4px;
+    }
+    
+    :global(.poll-options-modal::-webkit-scrollbar-track) {
+      background: transparent;
+    }
+    
+    :global(.poll-options-modal::-webkit-scrollbar-thumb) {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+    
+    :global(.modal-drag-handle) {
+      width: 40px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 2px;
+      margin: 0 auto 16px;
+    }
+    
+    :global(.poll-options-header) {
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    
+    :global(.poll-options-title) {
+      flex: 1;
+    }
+    
+    :global(.poll-options-title h3) {
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 4px 0;
+    }
+    
+    :global(.poll-options-title p) {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      margin: 0;
+    }
+    
+    :global(.poll-options-close-btn) {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+    
+    :global(.poll-options-close-btn:hover) {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      transform: scale(1.05);
+    }
+    
+    :global(.poll-options-list) {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    :global(.poll-option-item) {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      text-align: left;
+    }
+    
+    :global(.poll-option-item:hover) {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateX(4px);
+    }
+    
+    :global(.poll-option-item svg) {
+      flex-shrink: 0;
+      color: rgba(255, 255, 255, 0.7);
     }
   </style>

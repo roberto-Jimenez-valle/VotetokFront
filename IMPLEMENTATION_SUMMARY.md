@@ -1,4 +1,4 @@
-# ✅ RESUMEN DE IMPLEMENTACIÓN - REFACTORIZACIÓN VOTETOK
+# ✅ RESUMEN DE IMPLEMENTACIÓN - REFACTORIZACIÓN voutop
 
 **Última actualización:** 5 de Noviembre, 2025  
 **Duración total:** ~4 horas  
@@ -162,12 +162,12 @@ listeners.cleanup(); // Remueve TODOS automáticamente
 npx prisma migrate dev --name optimize_indices
 
 # Opción B: Ejecutar SQL directamente
-psql -U postgres -d votetok -f prisma/migrations/20251103_optimize_indices/migration.sql
+psql -U postgres -d voutop -f prisma/migrations/20251103_optimize_indices/migration.sql
 ```
 
 **Verificar índices:**
 ```bash
-psql -U postgres -d votetok -f scripts/check-db-indices.sql
+psql -U postgres -d voutop -f scripts/check-db-indices.sql
 ```
 
 ### 2. Testing de Bundle con Code Splitting

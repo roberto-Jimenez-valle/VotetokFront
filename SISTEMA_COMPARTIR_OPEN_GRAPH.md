@@ -7,7 +7,7 @@ Implementado sistema completo para compartir encuestas en redes sociales (WhatsA
 ### ✅ 1. Ruta Dinámica con Meta Tags
 **Archivo:** `src/routes/poll/[id]/+page.svelte` y `+page.server.ts`
 
-- **URL compartible:** `https://votetok.com/poll/[id]`
+- **URL compartible:** `https://voutop.com/poll/[id]`
 - **SSR (Server-Side Rendering):** Los meta tags se generan en el servidor
 - **Redirección automática:** Tras cargar los meta tags, redirige a `/?poll=[id]`
 - **Meta tags implementados:**
@@ -88,7 +88,7 @@ async function sharePoll(event: MouseEvent) {
 
 ### 2. Enlace compartido en WhatsApp/Facebook
 
-Cuando alguien pega `https://votetok.com/poll/123`:
+Cuando alguien pega `https://voutop.com/poll/123`:
 
 **a) Primer render (SSR):**
 - SvelteKit genera la página en el servidor
@@ -99,8 +99,8 @@ Cuando alguien pega `https://votetok.com/poll/123`:
 ```html
 <meta property="og:title" content="¿Cuál es tu color favorito?" />
 <meta property="og:description" content="Vota en esta encuesta" />
-<meta property="og:image" content="https://votetok.com/api/polls/123/og-image" />
-<meta property="og:url" content="https://votetok.com/poll/123" />
+<meta property="og:image" content="https://voutop.com/api/polls/123/og-image" />
+<meta property="og:url" content="https://voutop.com/poll/123" />
 ```
 
 **c) API de imagen genera SVG:**
@@ -131,7 +131,7 @@ Cuando alguien pega `https://votetok.com/poll/123`:
 │                                          │
 │ Vota ahora en VouTop                    │
 └─────────────────────────────────────────┘
-  https://votetok.com/poll/123
+  https://voutop.com/poll/123
 ```
 
 ## Ventajas del Sistema
@@ -234,8 +234,8 @@ https://www.opengraph.xyz/
 <meta property="og:type" content="article" />
 <meta property="og:title" content="¿Cuál es tu color favorito?" />
 <meta property="og:description" content="Vota en esta encuesta" />
-<meta property="og:url" content="https://votetok.com/poll/123" />
-<meta property="og:image" content="https://votetok.com/api/polls/123/og-image" />
+<meta property="og:url" content="https://voutop.com/poll/123" />
+<meta property="og:image" content="https://voutop.com/api/polls/123/og-image" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:type" content="image/png" />
@@ -246,7 +246,7 @@ https://www.opengraph.xyz/
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="¿Cuál es tu color favorito?" />
 <meta name="twitter:description" content="Vota en esta encuesta" />
-<meta name="twitter:image" content="https://votetok.com/api/polls/123/og-image" />
+<meta name="twitter:image" content="https://voutop.com/api/polls/123/og-image" />
 ```
 
 ## Notas Técnicas

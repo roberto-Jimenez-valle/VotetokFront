@@ -64,24 +64,24 @@
 
   <script>
     function clearTestUser() {
-      localStorage.removeItem('votetok-test-user');
+      localStorage.removeItem('voutop-test-user');
       showMessage('✅ Usuario de prueba eliminado');
       showStatus();
     }
 
     function clearAllAuth() {
-      localStorage.removeItem('votetok-test-user');
-      localStorage.removeItem('votetok-auth-token');
-      localStorage.removeItem('votetok-user');
-      localStorage.removeItem('votetok-refresh-token');
+      localStorage.removeItem('voutop-test-user');
+      localStorage.removeItem('voutop-auth-token');
+      localStorage.removeItem('voutop-user');
+      localStorage.removeItem('voutop-refresh-token');
       showMessage('✅ Toda la autenticación ha sido limpiada');
       showStatus();
     }
 
     function showStatus() {
-      const testUser = localStorage.getItem('votetok-test-user');
-      const authToken = localStorage.getItem('votetok-auth-token');
-      const authUser = localStorage.getItem('votetok-user');
+      const testUser = localStorage.getItem('voutop-test-user');
+      const authToken = localStorage.getItem('voutop-auth-token');
+      const authUser = localStorage.getItem('voutop-user');
       
       let html = '<div class="info"><h3>📊 Estado Actual:</h3>';
       

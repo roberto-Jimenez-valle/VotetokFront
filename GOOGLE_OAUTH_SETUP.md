@@ -9,7 +9,7 @@
 2. **Crear un proyecto nuevo** (o seleccionar uno existente)
    - Click en el selector de proyectos (arriba a la izquierda)
    - "Nuevo proyecto"
-   - Nombre: `VoteTok` (o el que prefieras)
+   - Nombre: `voutop` (o el que prefieras)
 
 3. **Habilitar Google+ API**
    - Menú → "APIs y servicios" → "Biblioteca"
@@ -20,7 +20,7 @@
    - Menú → "APIs y servicios" → "Pantalla de consentimiento de OAuth"
    - Tipo: "Externo" (o "Interno" si es G Suite)
    - Completar información:
-     - Nombre de la aplicación: `VoteTok`
+     - Nombre de la aplicación: `voutop`
      - Correo de asistencia: tu email
      - Logo (opcional)
      - Dominio autorizado: tu dominio de producción
@@ -34,7 +34,7 @@
    - Menú → "APIs y servicios" → "Credenciales"
    - Click en "+ CREAR CREDENCIALES" → "ID de cliente de OAuth 2.0"
    - Tipo de aplicación: "Aplicación web"
-   - Nombre: `VoteTok Web Client`
+   - Nombre: `voutop Web Client`
    
    **Orígenes de JavaScript autorizados:**
    ```

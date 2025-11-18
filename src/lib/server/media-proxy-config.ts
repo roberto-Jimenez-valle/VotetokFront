@@ -250,7 +250,7 @@ export function sanitizeIframeUrl(url: string): string {
  */
 export function getSecureFetchHeaders(): HeadersInit {
   return {
-    'User-Agent': 'VouTop-MediaProxy/1.0 (https://votetok.app)',
+    'User-Agent': 'VouTop-MediaProxy/1.0 (https://voutop.app)',
     'Accept': 'image/*,video/*,audio/*',
     'Accept-Language': 'en-US,en;q=0.5',
     'Cache-Control': 'no-cache',

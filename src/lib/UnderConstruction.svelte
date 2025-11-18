@@ -30,7 +30,7 @@
 		
 		if (codeValue === SECRET_CODE) {
 			// Código correcto, dar acceso directamente sin selección de usuario
-			localStorage.setItem('votetok-access', 'granted');
+			localStorage.setItem('voutop-access', 'granted');
 			// Recargar la página para entrar a la aplicación
 			window.location.reload();
 		} else {
@@ -69,7 +69,7 @@
 					</defs>
 				</svg>
 			</div>
-			<h1 class="logo-text">VoteTok</h1>
+			<h1 class="logo-text">voutop</h1>
 		</div>
 
 		<!-- Título principal -->
@@ -126,7 +126,7 @@
 
 	<!-- Footer -->
 	<footer class="construction-footer">
-		<p>&copy; 2024 VoteTok. Todos los derechos reservados.</p>
+		<p>&copy; 2024 voutop. Todos los derechos reservados.</p>
 	</footer>
 </div>
 

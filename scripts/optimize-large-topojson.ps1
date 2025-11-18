@@ -1,7 +1,7 @@
 # Script para optimizar los archivos TopoJSON más grandes
 # Usa mapshaper para simplificar geometrías
 
-$baseDir = "C:\Users\rober\proyectos\VoteTokFront\static\geojson"
+$baseDir = "C:\Users\rober\proyectos\voutopFront\static\geojson"
 
 # Lista de los 20 archivos más grandes (según el análisis previo)
 $targetFiles = @(

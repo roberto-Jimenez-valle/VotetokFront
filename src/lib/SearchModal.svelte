@@ -69,7 +69,7 @@
   // Cargar búsquedas recientes del localStorage
   function loadRecentSearches() {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('votetok-recent-searches');
+      const stored = localStorage.getItem('voutop-recent-searches');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -90,7 +90,7 @@
       const newSearch = { text, type };
       const filtered = recentSearches.filter(s => s.text !== text);
       const updated = [newSearch, ...filtered].slice(0, 5); // Máximo 5
-      localStorage.setItem('votetok-recent-searches', JSON.stringify(updated));
+      localStorage.setItem('voutop-recent-searches', JSON.stringify(updated));
       loadRecentSearches();
     }
   }

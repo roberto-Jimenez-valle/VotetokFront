@@ -100,7 +100,7 @@ El modal de opciones existe en `BottomSheet.svelte` y se abre correctamente, per
 ### URLs Generadas
 Ambas opciones generan:
 ```
-https://votetok.com/poll/123
+https://voutop.com/poll/123
 ```
 
 Con Open Graph completo para preview en redes sociales.
@@ -146,7 +146,7 @@ Ahora hay **4 formas** de compartir una encuesta:
 ```
 [BottomSheet] ✅ Compartido exitosamente via Web Share API
 // o
-[BottomSheet] ✅ Enlace copiado al portapapeles: https://votetok.com/poll/123
+[BottomSheet] ✅ Enlace copiado al portapapeles: https://voutop.com/poll/123
 ```
 
 ## Archivos Modificados

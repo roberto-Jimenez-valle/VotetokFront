@@ -1,4 +1,4 @@
-# 📊 Resumen de Migración a Base de Datos - VoteTok
+# 📊 Resumen de Migración a Base de Datos - voutop
 
 ## ✅ Completado Exitosamente
 

@@ -5,7 +5,7 @@ $WEB_PORT = 5173
 $DB_PORT = 5555
 
 Write-Host ""
-Write-Host "INICIANDO VOTETOK - Desarrollo Completo" -ForegroundColor Cyan
+Write-Host "INICIANDO voutop - Desarrollo Completo" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 

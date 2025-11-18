@@ -1,4 +1,4 @@
-# 🔍 PROMPT COMPLETO PARA AUDITORÍA Y REFACTORIZACIÓN DE VOTETOK
+# 🔍 PROMPT COMPLETO PARA AUDITORÍA Y REFACTORIZACIÓN DE voutop
 
 ## 📋 CONTEXTO DE LA APLICACIÓN
 
@@ -27,7 +27,7 @@ Necesito que realices una **auditoría técnica completa** de toda la aplicació
 ## 📂 ESTRUCTURA DEL PROYECTO
 
 ```
-VoteTokFront/
+voutopFront/
 ├── src/
 │   ├── lib/
 │   │   ├── GlobeGL.svelte              # Componente principal del globo (4000+ líneas) ⚠️
@@ -562,7 +562,7 @@ VoteTokFront/
    - Conexiones activas promedio
    - Tiempo de respuesta promedio por endpoint
 
-#### K.8 Casos Específicos de VoteTok
+#### K.8 Casos Específicos de voutop
 
 1. **Tabla de encuestas (polls)**
    - Índices en user_id, created_at, status

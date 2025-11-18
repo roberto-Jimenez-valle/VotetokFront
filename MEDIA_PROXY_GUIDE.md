@@ -376,7 +376,7 @@ async def fetch_media(url: str) -> Response:
             response = await client.get(
                 url,
                 headers={
-                    'User-Agent': 'VouTop-MediaProxy/1.0 (https://votetok.app)',
+                    'User-Agent': 'VouTop-MediaProxy/1.0 (https://voutop.app)',
                     'Accept': 'image/*,video/*,audio/*'
                 }
             )
@@ -908,7 +908,7 @@ upstream voutop {
 
 server {
     listen 80;
-    server_name votetok.app;
+    server_name voutop.app;
     
     location /api/media-proxy {
         proxy_pass http://voutop;

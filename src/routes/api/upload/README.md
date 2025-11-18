@@ -286,7 +286,7 @@ Las imágenes son accesibles públicamente en:
 
 Ejemplo completo:
 ```
-https://votetok.com/uploads/polls/poll_1730833200000_abc123def456789.jpg
+https://voutop.com/uploads/polls/poll_1730833200000_abc123def456789.jpg
 ```
 
 ## Seguridad

@@ -281,7 +281,7 @@ Si quieres controlar la URL base en producción:
 
 ```env
 # .env o Railway variables
-PUBLIC_BASE_URL=https://votetok.com
+PUBLIC_BASE_URL=https://voutop.com
 ```
 
 Y en el código:

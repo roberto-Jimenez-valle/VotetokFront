@@ -1,4 +1,4 @@
-# 📊 AUDITORÍA TÉCNICA DE VOTETOK - ANÁLISIS INICIAL
+# 📊 AUDITORÍA TÉCNICA DE voutop - ANÁLISIS INICIAL
 
 **Fecha:** 3 de Noviembre, 2025
 **Versión:** 1.0.0

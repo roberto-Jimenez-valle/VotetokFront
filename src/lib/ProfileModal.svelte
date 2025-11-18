@@ -53,7 +53,7 @@
     
     // Limpiar también usuario de prueba
     if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('votetok-test-user');
+      localStorage.removeItem('voutop-test-user');
     }
     
     // Limpiar currentUser del store principal

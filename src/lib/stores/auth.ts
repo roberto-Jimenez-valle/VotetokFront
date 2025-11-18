@@ -29,8 +29,8 @@ export const isAuthenticated = writable<boolean>(false)
 export function initAuth() {
   if (!browser) return
   
-  const token = localStorage.getItem('votetok-auth-token')
-  const userData = localStorage.getItem('votetok-user')
+  const token = localStorage.getItem('voutop-auth-token')
+  const userData = localStorage.getItem('voutop-user')
   
   if (token && userData) {
     try {
@@ -51,8 +51,8 @@ export function initAuth() {
 export function setAuth(token: string, user: User) {
   if (!browser) return
   
-  localStorage.setItem('votetok-auth-token', token)
-  localStorage.setItem('votetok-user', JSON.stringify(user))
+  localStorage.setItem('voutop-auth-token', token)
+  localStorage.setItem('voutop-user', JSON.stringify(user))
   
   authToken.set(token)
   currentUser.set(user)
@@ -65,8 +65,8 @@ export function setAuth(token: string, user: User) {
 export function logout() {
   if (!browser) return
   
-  localStorage.removeItem('votetok-auth-token')
-  localStorage.removeItem('votetok-user')
+  localStorage.removeItem('voutop-auth-token')
+  localStorage.removeItem('voutop-user')
   
   authToken.set(null)
   currentUser.set(null)
@@ -83,7 +83,7 @@ export function updateUser(userData: Partial<User>) {
     if (!user) return null
     
     const updatedUser = { ...user, ...userData }
-    localStorage.setItem('votetok-user', JSON.stringify(updatedUser))
+    localStorage.setItem('voutop-user', JSON.stringify(updatedUser))
     return updatedUser
   })
 }

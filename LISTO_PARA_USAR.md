@@ -95,7 +95,7 @@ npm run dev
 
 ## ✨ **¡Todo Funcionando!**
 
-Tu aplicación VoteTok está lista con:
+Tu aplicación voutop está lista con:
 - ✅ Base de datos SQLite
 - ✅ API REST completa (9 endpoints)
 - ✅ Datos reales (sin mock)

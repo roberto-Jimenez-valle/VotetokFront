@@ -101,7 +101,7 @@ He actualizado **TODOS** los puntos donde se puede compartir una encuesta en la 
 
 Todas las opciones generan:
 ```
-https://votetok.com/poll/123
+https://voutop.com/poll/123
 ```
 
 Con meta tags Open Graph completos para preview en redes sociales.
@@ -116,7 +116,7 @@ if (navigator.share) {
   await navigator.share({
     title: "Título de la encuesta",
     text: "Descripción o texto predeterminado",
-    url: "https://votetok.com/poll/123"
+    url: "https://voutop.com/poll/123"
   });
 }
 ```
@@ -227,10 +227,10 @@ Para verificar que funciona, busca en la consola:
 [BottomSheet] ✅ Compartido exitosamente via Web Share API
 
 // Éxito con portapapeles
-[BottomSheet] ✅ Enlace copiado al portapapeles: https://votetok.com/poll/123
+[BottomSheet] ✅ Enlace copiado al portapapeles: https://voutop.com/poll/123
 
 // Fallback antiguo
-[BottomSheet] ✅ Enlace copiado (fallback): https://votetok.com/poll/123
+[BottomSheet] ✅ Enlace copiado (fallback): https://voutop.com/poll/123
 ```
 
 ## Documentación Relacionada

@@ -8,7 +8,7 @@ Usuario cambia paleta →
 Espera 5 segundos → 
 Modal aparece → 
 Usuario hace click en "Guardar" →
-localStorage.setItem('votetok-theme', JSON.stringify({isDark: false, paletteIndex: 10}))
+localStorage.setItem('voutop-theme', JSON.stringify({isDark: false, paletteIndex: 10}))
 ```
 
 ### 2. CARGA (cuando recarga la página)

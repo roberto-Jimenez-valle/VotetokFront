@@ -14,7 +14,7 @@ async function main() {
     user = await prisma.user.create({
       data: {
         username: 'testuser',
-        email: 'test@votetok.com',
+        email: 'test@voutop.com',
         displayName: 'Usuario de Prueba',
         avatarUrl: 'https://i.pravatar.cc/150?u=testuser',
         bio: 'Usuario de prueba para encuestas',

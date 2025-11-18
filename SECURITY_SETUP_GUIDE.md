@@ -46,7 +46,7 @@ cp .env.example .env
 ```bash
 JWT_SECRET=a7f3e9c2b8d4f6a1e5c9b3d7f2a6e8c4b9d5f1a3e7c2b6d8f4a9e1c5b7d3f6a2
 APP_SECRET=d1e7c3a9f5b2e8d4c6a8f2b7e3d9c5a1f8e4b6d2a7c3f9e5b1d8a4c6f2e7b3d9
-VITE_APP_ID=votetok-web-v1
+VITE_APP_ID=voutop-web-v1
 VITE_APP_SECRET=d1e7c3a9f5b2e8d4c6a8f2b7e3d9c5a1f8e4b6d2a7c3f9e5b1d8a4c6f2e7b3d9
 ```
 
@@ -279,7 +279,7 @@ import { setAuth } from '$lib/stores/auth'
 
 // 1. Login
 const result = await apiPost('/api/auth/login', {
-  email: 'demo@votetok.com',
+  email: 'demo@voutop.com',
   password: 'password123'
 })
 

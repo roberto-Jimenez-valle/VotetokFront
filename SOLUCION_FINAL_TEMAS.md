@@ -63,7 +63,7 @@ Todos están compitiendo y sobrescribiéndose.
 4. Arrastra toggle para cambiar a DÍA
 5. Espera 5 segundos → Modal aparece
 6. Click "Guardar"
-7. **Abre DevTools → Application → Local Storage → Verifica `votetok-theme`**
+7. **Abre DevTools → Application → Local Storage → Verifica `voutop-theme`**
 8. Recarga página
 9. **Verifica en consola:**
    - ¿Dice "Clase .dark REMOVIDA"?

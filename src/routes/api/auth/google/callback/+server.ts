@@ -146,7 +146,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     })
 
     // 5. Guardar tokens en cookies httpOnly
-    cookies.set('votetok-auth-token', jwtAccessToken, {
+    cookies.set('voutop-auth-token', jwtAccessToken, {
       path: '/',
       httpOnly: true,
       secure: url.protocol === 'https:',
@@ -154,7 +154,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       maxAge: 60 * 60 * 24 * 7, // 7 días
     })
 
-    cookies.set('votetok-refresh-token', jwtRefreshToken, {
+    cookies.set('voutop-refresh-token', jwtRefreshToken, {
       path: '/',
       httpOnly: true,
       secure: url.protocol === 'https:',

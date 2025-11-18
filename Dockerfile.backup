@@ -1,5 +1,5 @@
 # ===============================================
-# MULTI-STAGE DOCKER BUILD FOR VOTETOK
+# MULTI-STAGE DOCKER BUILD FOR voutop
 # ===============================================
 
 # Stage 1: Dependencies

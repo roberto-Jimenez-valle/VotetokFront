@@ -8,14 +8,14 @@ async function fixRealisticData() {
     // 1. Crear más usuarios realistas
         
     const additionalUsers = [
-      { username: 'tech_guru', displayName: 'Alex Tech', email: 'alex@votetok.com', bio: 'Apasionado de la tecnología y la innovación', verified: true },
-      { username: 'eco_warrior', displayName: 'Elena Verde', email: 'elena@votetok.com', bio: 'Activista ambiental', verified: false },
-      { username: 'music_lover', displayName: 'David Música', email: 'david@votetok.com', bio: 'Melómano empedernido', verified: false },
-      { username: 'sports_fan', displayName: 'Roberto Deporte', email: 'roberto@votetok.com', bio: 'Fanático del deporte', verified: false },
-      { username: 'foodie_life', displayName: 'Ana Cocina', email: 'ana@votetok.com', bio: 'Chef y amante de la comida', verified: true },
-      { username: 'movie_buff', displayName: 'Pedro Cine', email: 'pedro@votetok.com', bio: 'Cinéfilo profesional', verified: false },
-      { username: 'gamer_pro', displayName: 'Luis Gaming', email: 'luis@votetok.com', bio: 'Gamer profesional', verified: true },
-      { username: 'book_worm', displayName: 'Carmen Libros', email: 'carmen@votetok.com', bio: 'Lectora empedernida', verified: false },
+      { username: 'tech_guru', displayName: 'Alex Tech', email: 'alex@voutop.com', bio: 'Apasionado de la tecnología y la innovación', verified: true },
+      { username: 'eco_warrior', displayName: 'Elena Verde', email: 'elena@voutop.com', bio: 'Activista ambiental', verified: false },
+      { username: 'music_lover', displayName: 'David Música', email: 'david@voutop.com', bio: 'Melómano empedernido', verified: false },
+      { username: 'sports_fan', displayName: 'Roberto Deporte', email: 'roberto@voutop.com', bio: 'Fanático del deporte', verified: false },
+      { username: 'foodie_life', displayName: 'Ana Cocina', email: 'ana@voutop.com', bio: 'Chef y amante de la comida', verified: true },
+      { username: 'movie_buff', displayName: 'Pedro Cine', email: 'pedro@voutop.com', bio: 'Cinéfilo profesional', verified: false },
+      { username: 'gamer_pro', displayName: 'Luis Gaming', email: 'luis@voutop.com', bio: 'Gamer profesional', verified: true },
+      { username: 'book_worm', displayName: 'Carmen Libros', email: 'carmen@voutop.com', bio: 'Lectora empedernida', verified: false },
     ];
 
     for (const userData of additionalUsers) {

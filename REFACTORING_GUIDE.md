@@ -1,4 +1,4 @@
-# 📚 GUÍA DE REFACTORIZACIÓN DE VOTETOK
+# 📚 GUÍA DE REFACTORIZACIÓN DE voutop
 
 **Fecha:** 3 de Noviembre, 2025
 **Estado:** En Progreso
@@ -216,7 +216,7 @@ console.log('Lista:', listeners.list());
 
 ```bash
 # Ejecutar en PostgreSQL
-psql -d votetok -f scripts/check-db-indices.sql
+psql -d voutop -f scripts/check-db-indices.sql
 ```
 
 ---

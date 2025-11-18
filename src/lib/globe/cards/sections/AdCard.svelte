@@ -7,7 +7,7 @@
   const dispatch = createEventDispatcher();
   
   // Props
-  export let title: string = 'VoteTok Premium';
+  export let title: string = 'voutop Premium';
   export let description: string = 'Accede a encuestas exclusivas y análisis detallados';
   export let ctaText: string = 'Probar gratis';
   export let imageUrl: string = 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=200&h=200&fit=crop';

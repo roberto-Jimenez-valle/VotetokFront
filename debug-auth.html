@@ -101,7 +101,7 @@
             const lsDiv = document.getElementById('localstorage-status');
             
             // Token
-            const token = localStorage.getItem('votetok-auth-token');
+            const token = localStorage.getItem('voutop-auth-token');
             if (token) {
                 tokenDiv.innerHTML = `
                     <span class="status ok">✅ Token encontrado</span>
@@ -115,7 +115,7 @@
             }
             
             // Usuario OAuth
-            const authUser = localStorage.getItem('votetok-user');
+            const authUser = localStorage.getItem('voutop-user');
             if (authUser) {
                 try {
                     const user = JSON.parse(authUser);
@@ -133,7 +133,7 @@
                 }
             } else {
                 // Usuario de prueba
-                const testUser = localStorage.getItem('votetok-test-user');
+                const testUser = localStorage.getItem('voutop-test-user');
                 if (testUser) {
                     try {
                         const user = JSON.parse(testUser);
@@ -154,7 +154,7 @@
             }
             
             // localStorage completo
-            const allKeys = Object.keys(localStorage).filter(k => k.startsWith('votetok-'));
+            const allKeys = Object.keys(localStorage).filter(k => k.startsWith('voutop-'));
             lsDiv.innerHTML = `
                 <div class="value">
                     ${allKeys.map(key => `<strong>${key}:</strong> ${localStorage.getItem(key)?.substring(0, 100)}...`).join('<br>')}
@@ -168,10 +168,10 @@
         
         function clearAuth() {
             if (confirm('¿Limpiar toda la autenticación?')) {
-                localStorage.removeItem('votetok-auth-token');
-                localStorage.removeItem('votetok-user');
-                localStorage.removeItem('votetok-test-user');
-                localStorage.removeItem('votetok-refresh-token');
+                localStorage.removeItem('voutop-auth-token');
+                localStorage.removeItem('voutop-user');
+                localStorage.removeItem('voutop-test-user');
+                localStorage.removeItem('voutop-refresh-token');
                 addLog('Autenticación limpiada', 'success');
                 setTimeout(() => checkAuth(), 100);
             }
@@ -180,7 +180,7 @@
         async function testFollowRequest() {
             addLog('Iniciando prueba de petición follow...');
             
-            const token = localStorage.getItem('votetok-auth-token');
+            const token = localStorage.getItem('voutop-auth-token');
             if (!token) {
                 addLog('❌ No hay token - la petición fallará', 'error');
             } else {

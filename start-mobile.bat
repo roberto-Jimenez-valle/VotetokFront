@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo 🚀 VoteTok Mobile HTTPS Tunnel
+echo 🚀 voutop Mobile HTTPS Tunnel
 echo ========================================
 echo.
 echo 1. Asegurate de que el servidor este corriendo (npm run dev)

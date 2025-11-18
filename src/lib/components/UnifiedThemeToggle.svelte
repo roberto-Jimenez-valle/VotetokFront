@@ -394,7 +394,7 @@
   function saveTheme() {
     if (pendingSaveData) {
       const dataToSave = JSON.stringify(pendingSaveData);
-      localStorage.setItem('votetok-theme', dataToSave);
+      localStorage.setItem('voutop-theme', dataToSave);
       console.log('[Theme] ✅ Tema guardado en localStorage:', pendingSaveData);
       console.log('[Theme] Datos guardados:', dataToSave);
     } else {
@@ -411,7 +411,7 @@
   
   function loadSavedTheme() {
     try {
-      const saved = localStorage.getItem('votetok-theme');
+      const saved = localStorage.getItem('voutop-theme');
       console.log('[Theme] localStorage raw:', saved);
       if (saved) {
         const parsed = JSON.parse(saved);

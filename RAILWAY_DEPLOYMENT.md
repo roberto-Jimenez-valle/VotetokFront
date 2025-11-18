@@ -82,7 +82,7 @@ El script `postbuild` debe ejecutarse. Verifica en los logs de build:
 
 ---
 
-## Pasos para desplegar VoteTok en Railway (Desde Cero)
+## Pasos para desplegar voutop en Railway (Desde Cero)
 
 ### 1. Crear cuenta en Railway
 1. Ve a https://railway.app
@@ -94,7 +94,7 @@ El script `postbuild` debe ejecutarse. Verifica en los logs de build:
 git init
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/TU_USUARIO/VoteTok.git
+git remote add origin https://github.com/TU_USUARIO/voutop.git
 git push -u origin main
 ```
 
@@ -103,7 +103,7 @@ git push -u origin main
 1. Click en **"New Project"**
 2. Selecciona **"Deploy from GitHub repo"**
 3. Autoriza Railway para acceder a tu GitHub
-4. Selecciona tu repositorio **VoteTok**
+4. Selecciona tu repositorio **voutop**
 
 ### 4. Configurar PostgreSQL (Recomendado)
 

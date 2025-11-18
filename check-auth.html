@@ -100,8 +100,8 @@
     <script>
         // Verificar autenticación
         function checkAuth() {
-            const token = localStorage.getItem('votetok-auth-token');
-            const user = localStorage.getItem('votetok-user');
+            const token = localStorage.getItem('voutop-auth-token');
+            const user = localStorage.getItem('voutop-user');
             
             const statusEl = document.getElementById('auth-status');
             const tokenEl = document.getElementById('token-info');
@@ -138,7 +138,7 @@
             resultEl.style.display = 'block';
             outputEl.innerHTML = '<p>⏳ Enviando solicitud...</p>';
             
-            const token = localStorage.getItem('votetok-auth-token');
+            const token = localStorage.getItem('voutop-auth-token');
             
             if (!token) {
                 outputEl.innerHTML = '<span class="status error">❌ No hay token. Inicia sesión primero.</span>';
@@ -194,8 +194,8 @@
         // Limpiar autenticación
         function clearAuth() {
             if (confirm('¿Seguro que quieres cerrar sesión?')) {
-                localStorage.removeItem('votetok-auth-token');
-                localStorage.removeItem('votetok-user');
+                localStorage.removeItem('voutop-auth-token');
+                localStorage.removeItem('voutop-user');
                 location.reload();
             }
         }

@@ -25,7 +25,7 @@ console.log(`   APP_SECRET: ${appSecret.substring(0, 20)}... (${appSecret.length
 
 // Crear archivo .env limpio (TODO EN UNA LÍNEA)
 const envContent = `# ============================================
-# CONFIGURACIÓN DE SEGURIDAD - VoteTok
+# CONFIGURACIÓN DE SEGURIDAD - voutop
 # ============================================
 
 # JWT Secret (64 caracteres hex)
@@ -39,7 +39,7 @@ APP_SECRET=${appSecret}
 # ============================================
 
 # App ID (identificador de la aplicación)
-VITE_APP_ID=votetok-web-v1
+VITE_APP_ID=voutop-web-v1
 
 # App Secret (MISMO valor que APP_SECRET del backend)
 VITE_APP_SECRET=${appSecret}
@@ -73,6 +73,6 @@ console.log('\n✅ Archivo .env regenerado correctamente')
 console.log('\n📋 Configuración final:')
 console.log(`   JWT_SECRET: ${jwtSecret.substring(0, 15)}...`)
 console.log(`   APP_SECRET: ${appSecret.substring(0, 15)}...`)
-console.log(`   VITE_APP_ID: votetok-web-v1`)
+console.log(`   VITE_APP_ID: voutop-web-v1`)
 console.log(`   VITE_APP_SECRET: ${appSecret.substring(0, 15)}...`)
 console.log('\n⚠️  IMPORTANTE: Reinicia el servidor con Ctrl+C y luego npm run dev\n')

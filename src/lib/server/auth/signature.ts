@@ -11,9 +11,9 @@ const TIMESTAMP_TOLERANCE = 5 * 60 * 1000 // 5 minutos
 
 // App IDs válidos
 const VALID_APP_IDS = new Set([
-  'votetok-web-v1',
-  'votetok-ios-v1',
-  'votetok-android-v1'
+  'voutop-web-v1',
+  'voutop-ios-v1',
+  'voutop-android-v1'
 ])
 
 export interface AppSignatureData {

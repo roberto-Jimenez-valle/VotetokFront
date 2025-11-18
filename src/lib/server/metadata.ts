@@ -162,7 +162,7 @@ export async function fetchMetadata(url: string): Promise<Metadata | null> {
       { 
         signal: controller.signal,
         headers: {
-          'User-Agent': 'VoteTok/1.0 (https://votetok.app)'
+          'User-Agent': 'voutop/1.0 (https://voutop.app)'
         }
       }
     );

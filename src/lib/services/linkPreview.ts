@@ -191,7 +191,7 @@ function chunkArray<T>(array: T[], size: number): T[][] {
  * Cache de previews en memoria (session storage)
  */
 export class LinkPreviewCache {
-  private static CACHE_KEY = 'votetok_link_previews';
+  private static CACHE_KEY = 'voutop_link_previews';
   private static CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
   
   static get(url: string): LinkPreviewData | null {

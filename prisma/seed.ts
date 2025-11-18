@@ -23,7 +23,7 @@ async function main() {
     prisma.user.create({
       data: {
         username: 'maria_gonzalez',
-        email: 'maria@votetok.com',
+        email: 'maria@voutop.com',
         displayName: 'María González',
         avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop',
         verified: true,
@@ -33,7 +33,7 @@ async function main() {
     prisma.user.create({
       data: {
         username: 'carlos_lopez',
-        email: 'carlos@votetok.com',
+        email: 'carlos@voutop.com',
         displayName: 'Carlos López',
         avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
         verified: true,
@@ -43,7 +43,7 @@ async function main() {
     prisma.user.create({
       data: {
         username: 'laura_sanchez',
-        email: 'laura@votetok.com',
+        email: 'laura@voutop.com',
         displayName: 'Laura Sánchez',
         avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop',
         verified: false,
@@ -53,7 +53,7 @@ async function main() {
     prisma.user.create({
       data: {
         username: 'juan_martin',
-        email: 'juan@votetok.com',
+        email: 'juan@voutop.com',
         displayName: 'Juan Martín',
         avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop',
         verified: true,
@@ -63,7 +63,7 @@ async function main() {
     prisma.user.create({
       data: {
         username: 'sofia_herrera',
-        email: 'sofia@votetok.com',
+        email: 'sofia@voutop.com',
         displayName: 'Sofía Herrera',
         avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop',
         verified: false,

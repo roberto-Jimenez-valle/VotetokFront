@@ -20,7 +20,7 @@ npx tsx scripts/seed-test-user-with-interests.ts
 ```
 
 Esto creará:
-- ✅ Usuario `testuser` con email `testuser@votetok.com`
+- ✅ Usuario `testuser` con email `testuser@voutop.com`
 - ✅ 5 intereses en diferentes categorías
 - ✅ 5 hashtags seguidos
 - ✅ 1 usuario seguido
@@ -39,7 +39,7 @@ onMount(() => {
     id: 1, // Usar el ID del usuario creado
     username: 'testuser',
     displayName: 'Usuario de Prueba',
-    email: 'testuser@votetok.com',
+    email: 'testuser@voutop.com',
     avatarUrl: 'https://i.pravatar.cc/150?u=testuser',
     verified: false,
     countryIso3: 'ESP',

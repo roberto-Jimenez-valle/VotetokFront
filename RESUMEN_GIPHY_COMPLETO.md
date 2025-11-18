@@ -351,7 +351,7 @@ Si algo no funciona:
 - ✅ Proxear GIFs sin errores CORS
 - ✅ Funcionar en desarrollo y producción
 
-**Todo está listo para usar en VoteTok.** 🚀✨
+**Todo está listo para usar en voutop.** 🚀✨
 
 ---
 

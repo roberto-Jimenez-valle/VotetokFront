@@ -196,7 +196,7 @@ APP_SECRET=tu-app-secret-aqui
 NODE_ENV=production
 
 # Frontend (VITE_)
-VITE_APP_ID=votetok-web-v1
+VITE_APP_ID=voutop-web-v1
 VITE_APP_SECRET=tu-app-secret-aqui     (mismo que APP_SECRET)
 VITE_GIPHY_API_KEY=JiEJUHdqINWZXrJe9Qya0nJ6piG4kZ6Z
 ```

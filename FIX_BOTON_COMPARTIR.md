@@ -87,7 +87,7 @@ onShare={() => {
   if (navigator.share && previewModalPoll) {
     navigator.share({
       title: previewModalPoll.question || previewModalPoll.title,
-      text: 'Mira esta encuesta en VoteTok',
+      text: 'Mira esta encuesta en voutop',
       url: window.location.origin + '/?poll=' + previewModalPoll.id  // ❌ URL antigua
     }).catch(err => console.log('Error sharing:', err));
   }
@@ -145,7 +145,7 @@ onShare={async () => {
 
 Ambas vistas ahora generan:
 ```
-https://votetok.com/poll/123
+https://voutop.com/poll/123
 ```
 
 Que incluye:
@@ -175,7 +175,7 @@ npm run dev
 ```
 [Share] Compartido exitosamente via Web Share API
 // o
-[BottomSheet] ✅ Enlace copiado al portapapeles: https://votetok.com/poll/123
+[BottomSheet] ✅ Enlace copiado al portapapeles: https://voutop.com/poll/123
 ```
 
 ## Archivos Modificados

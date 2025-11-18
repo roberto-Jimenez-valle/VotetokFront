@@ -1,4 +1,4 @@
-# 🎉 Migración Completada - VoteTok
+# 🎉 Migración Completada - voutop
 
 ## ✅ TODO COMPLETADO AUTOMÁTICAMENTE
 
@@ -163,7 +163,7 @@ curl -X POST http://localhost:5173/api/polls/1/vote \
 ## 📁 **Estructura Final del Proyecto:**
 
 ```
-VoteTokFront/
+voutopFront/
 ├── prisma/
 │   ├── schema.prisma          ✅ Esquema de BD
 │   ├── seed.ts                ✅ Datos iniciales
@@ -325,7 +325,7 @@ npx prisma migrate deploy
 
 ## 🎉 **¡COMPLETADO AL 100%!**
 
-Tu aplicación VoteTok ha sido migrada exitosamente de datos mock a una base de datos real con:
+Tu aplicación voutop ha sido migrada exitosamente de datos mock a una base de datos real con:
 
 - 📊 **11 tablas relacionales**
 - 🔗 **9 endpoints de API REST**

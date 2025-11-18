@@ -57,7 +57,7 @@ async function main() {
 		user = await prisma.user.create({
 			data: {
 				username: 'user_' + Date.now(),
-				email: 'user_' + Date.now() + '@votetok.com',
+				email: 'user_' + Date.now() + '@voutop.com',
 				displayName: 'Usuario Demo',
 				avatarUrl: '/default-avatar.svg',
 				verified: true

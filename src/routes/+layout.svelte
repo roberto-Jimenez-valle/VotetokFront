@@ -41,7 +41,7 @@
 	
 	onMount(() => {
 		// 🔐 Verificar acceso
-		const access = localStorage.getItem('votetok-access');
+		const access = localStorage.getItem('voutop-access');
 		hasAccess = access === 'granted';
 		
 		// Si no tiene acceso, no continuar con el resto de la inicialización
@@ -88,8 +88,8 @@
 		
 		// 👤 Cargar usuario: primero intenta OAuth real, luego test user
 		// 1. Verificar autenticación real (OAuth/JWT)
-		const realAuthToken = localStorage.getItem('votetok-auth-token');
-		const realAuthUser = localStorage.getItem('votetok-user');
+		const realAuthToken = localStorage.getItem('voutop-auth-token');
+		const realAuthUser = localStorage.getItem('voutop-user');
 		
 		if (realAuthToken && realAuthUser) {
 			// Usuario autenticado con OAuth - PRIORIDAD
@@ -117,7 +117,7 @@
 			}
 		} else {
 			// 2. Fallback: Usuario de prueba (solo desarrollo)
-			const savedUser = localStorage.getItem('votetok-test-user');
+			const savedUser = localStorage.getItem('voutop-test-user');
 			if (savedUser) {
 				try {
 					const user = JSON.parse(savedUser);

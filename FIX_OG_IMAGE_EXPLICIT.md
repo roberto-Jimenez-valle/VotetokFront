@@ -12,7 +12,7 @@ incluso si puede deducirse su valor a partir de otras etiquetas.
 ### 1. URL Base Calculada en el Cliente
 El `baseUrl` se calculaba en el cliente con:
 ```typescript
-const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://votetok.com';
+const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://voutop.com';
 ```
 
 **Problema:** Los crawlers de WhatsApp/Facebook leen el HTML inicial del servidor (SSR), no ejecutan JavaScript. La URL quedaba como variable no resuelta.
@@ -63,7 +63,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 ```typescript
 export let data: PageData;
 const { poll } = data;
-const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://votetok.com';
+const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://voutop.com';
 ```
 
 **Después:**
@@ -137,7 +137,7 @@ const { poll, baseUrl } = data;  // ← Recibir del servidor
 - Funciona en cualquier entorno:
   - `http://localhost:5173` (desarrollo)
   - `https://abc123.ngrok.io` (testing con ngrok)
-  - `https://votetok.com` (producción)
+  - `https://voutop.com` (producción)
 - No hay URLs hardcodeadas
 
 ### ✅ 3. Completo y Explícito
@@ -214,7 +214,7 @@ https://tu-url.com/api/polls/1/og-image
 // Cliente (JavaScript)
 const baseUrl = typeof window !== 'undefined' 
   ? window.location.origin 
-  : 'https://votetok.com';
+  : 'https://voutop.com';
 
 // Meta tags con variable no resuelta
 <meta property="og:image" content={`${baseUrl}/api/polls/${poll.id}/og-image`} />
@@ -257,7 +257,7 @@ git push origin main
 
 # Espera el deploy
 # Verifica en Facebook Debugger:
-https://votetok.com/poll/1
+https://voutop.com/poll/1
 ```
 
 ## Checklist de Validación
@@ -290,8 +290,8 @@ Si todos están ✅, el problema está resuelto! 🎉
 
 ### HTML Generado (ejemplo)
 ```html
-<meta property="og:image" content="https://votetok.com/api/polls/1/og-image">
-<meta property="og:image:secure_url" content="https://votetok.com/api/polls/1/og-image">
+<meta property="og:image" content="https://voutop.com/api/polls/1/og-image">
+<meta property="og:image:secure_url" content="https://voutop.com/api/polls/1/og-image">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/svg+xml">
@@ -307,7 +307,7 @@ Si todos están ✅, el problema está resuelto! 🎉
 │ ¿Cuál es tu color favorito?             │
 │ Vota en esta encuesta                   │
 └─────────────────────────────────────────┘
-https://votetok.com/poll/1
+https://voutop.com/poll/1
 ```
 
 ¡Ahora el error "og:image debe proporcionarse de forma explícita" está resuelto! ✅
