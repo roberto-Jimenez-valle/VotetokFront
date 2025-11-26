@@ -2932,15 +2932,27 @@
         hasVoted = userVoteForPoll === optionKey;
       }
 
-      return {
+      const transformedOption = {
         id: optionKey,
-        label: opt.label || opt.optionLabel || "",
+        label: opt.label || opt.optionLabel || opt.optionText || "",
         color: opt.color || "#10b981",
-        imageUrl: opt.imageUrl,
+        imageUrl: opt.imageUrl || opt.image || opt.mediaUrl,
+        type: opt.type,
+        artist: opt.artist,
+        description: opt.description,
         pct: pct,
         votes: votes,
         voted: hasVoted,
       };
+
+      console.log("[BottomSheet] Opción transformada:", {
+        key: optionKey,
+        label: transformedOption.label,
+        hasImage: !!transformedOption.imageUrl,
+        imageUrl: transformedOption.imageUrl
+      });
+
+      return transformedOption;
     });
 
     if (transformedOptions.length === 0) {
@@ -3892,6 +3904,21 @@
             goToChartView(pollId);
           }}
           on:openPreviewModal={handleOpenPreviewModal}
+          on:openMaximized={(e: any) => {
+            const { pollId, optionIndex } = e.detail;
+            const poll = activePoll?.id.toString() === pollId ? activePoll : null;
+            if (poll && poll.options && poll.options[optionIndex]) {
+              // Abrir el modal maximized con la opción específica
+              const option = poll.options[optionIndex];
+              const customEvent = new CustomEvent('openPreviewModal', {
+                detail: { 
+                  option: { key: option.key, label: option.label },
+                  pollId: pollId 
+                }
+              });
+              handleOpenPreviewModal(customEvent as any);
+            }
+          }}
         />
 
         <!-- Separador después de encuesta activa -->
@@ -4038,6 +4065,21 @@
             )}
           on:goToChart={(e) => goToChartView(e.detail.pollId)}
           on:openPreviewModal={handleOpenPreviewModal}
+          on:openMaximized={(e: any) => {
+            const { pollId, optionIndex } = e.detail;
+            const foundPoll = additionalPolls.find((p) => p.id.toString() === pollId);
+            if (foundPoll && foundPoll.options && foundPoll.options[optionIndex]) {
+              // Abrir el modal maximized con la opción específica
+              const option = foundPoll.options[optionIndex];
+              const customEvent = new CustomEvent('openPreviewModal', {
+                detail: { 
+                  option: { key: option.key, label: option.label },
+                  pollId: pollId 
+                }
+              });
+              handleOpenPreviewModal(customEvent as any);
+            }
+          }}
         />
       {/each}
 
@@ -4472,6 +4514,13 @@
       console.log("[BottomSheet] 🌍 Abrir en mapa desde modal");
       if (previewModalPoll) {
         openAdditionalPollInGlobe(previewModalPoll);
+        closePreviewModal();
+      }
+    }}
+    onGoToChart={() => {
+      console.log("[BottomSheet] 📊 Abrir gráfico desde modal");
+      if (previewModalPoll) {
+        goToChartView(previewModalPoll.id.toString());
         closePreviewModal();
       }
     }}

@@ -440,6 +440,24 @@
     dispatch('setActive', { pollId: poll.id, index });
   }
 
+  // Detectar scroll y actualizar índice activo
+  function handleScrollChange() {
+    if (!pollGridRef) return;
+    
+    const scrollLeft = pollGridRef.scrollLeft;
+    const slideWidth = pollGridRef.children[0]?.clientWidth || 0;
+    
+    if (slideWidth === 0) return;
+    
+    // Calcular qué slide está más centrado
+    const newIndex = Math.round(scrollLeft / slideWidth);
+    
+    // Actualizar solo si cambió
+    if (newIndex !== activeAccordionIndex && newIndex >= 0 && newIndex < sortedPollOptions.length) {
+      handleSetActive(newIndex);
+    }
+  }
+
   // Función de compartir con Open Graph
   async function sharePoll(event: MouseEvent) {
     event.stopPropagation();
@@ -627,10 +645,33 @@
 </script>
 
 <div class="poll-item">
-  <!-- Header de la encuesta -->
-  <div class="poll-header">
-    <div class="header-with-avatar">
-      <div class="header-content">
+  <!-- Sin DataBar superior, ahora va dentro del header -->
+
+  <!-- Header de la encuesta simplificado -->
+  <div class="poll-header-compact">
+    <div class="header-compact-inner">
+      <div class="header-avatar-mini">
+        {#if poll.user?.avatarUrl}
+          <button 
+            class="avatar-button-mini" 
+            onclick={(e) => {
+              e.stopPropagation();
+              if (poll.user?.id) {
+                selectedProfileUserId = poll.user.id;
+                isProfileModalOpen = true;
+              }
+            }}
+            aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
+          >
+            <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
+          </button>
+        {:else}
+          <div class="avatar-mini-default">
+            <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
+          </div>
+        {/if}
+      </div>
+      <div class="header-content-compact">
         {#if poll.type === 'hashtag'}
           <div class="poll-question-wrapper">
             <div class="poll-question-row" style="position: relative;">
@@ -768,34 +809,46 @@
             </div>
           </div>
         {/if}
-      </div>
-      {#if poll.user?.avatarUrl}
-        <button 
-          class="header-avatar header-avatar-real" 
-          onclick={(e) => {
-            e.stopPropagation();
-            if (poll.user?.id) {
-              console.log('[Avatar Click] Abriendo perfil de usuario:', poll.user.id);
-              selectedProfileUserId = poll.user.id;
-              isProfileModalOpen = true;
-              console.log('[Avatar Click] Estado actualizado:', { isProfileModalOpen, selectedProfileUserId });
-            }
-          }}
-          aria-label="Ver perfil de {poll.user.displayName || 'usuario'}"
-        >
-          <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
-        </button>
-      {:else}
-        <div class="header-avatar header-avatar-real">
-          <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
+        
+        <!-- Indicadores de opciones (debajo del título) -->
+        <div class="options-indicators">
+          {#each sortedPollOptions as opt, idx}
+            {@const isCurrentOption = idx === activeAccordionIndex}
+            {@const isPollVoted = poll.type === 'multiple'
+              ? (multipleVotes[poll.id]?.includes(opt.key) || 
+                 (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(opt.key))
+              : (displayVotes[poll.id] || userVotes[poll.id]) === opt.key}
+            <button
+              class="option-indicator {isCurrentOption ? 'active' : ''}"
+              style="background-color: {isPollVoted ? opt.color : 'rgba(255, 255, 255, 0.25)'}; opacity: {isCurrentOption ? 1 : 0.3};"
+              onclick={(e) => {
+                e.stopPropagation();
+                // Actualizar índice activo primero
+                handleSetActive(idx);
+                // Scroll a la opción correspondiente
+                if (pollGridRef && pollGridRef.children[0]) {
+                  const containerWidth = pollGridRef.clientWidth;
+                  const slideWidth = pollGridRef.children[0]?.clientWidth || containerWidth;
+                  const targetScrollLeft = idx * slideWidth;
+                  
+                  pollGridRef.scrollTo({
+                    left: targetScrollLeft,
+                    behavior: 'smooth'
+                  });
+                }
+              }}
+              aria-label="Ver opción {idx + 1}: {opt.label}"
+              type="button"
+            ></button>
+          {/each}
         </div>
-      {/if}
+      </div>
     </div>
   </div>
   
-  <!-- Grid de opciones o vista de gráfico histórico -->
-  <div class="vote-cards-container" style="position: relative;">
-    <!-- Vista de gráfico histórico (currentPage === -1) - Renderizado como una tarjeta -->
+  <!-- Contenedor de opciones con scroll horizontal (estilo PollMaximizedView) -->
+  <div class="poll-options-scroll-container" style="position: relative;">
+    <!-- Vista de gráfico histórico (currentPage === -1) -->
     {#if currentPage === -1}
       <div class="historical-chart-wrapper">
         <!-- Área del gráfico con botones dentro -->
@@ -953,20 +1006,15 @@
         </div>
       {/if}
 
+      <!-- Scroll horizontal para opciones (estilo PollMaximizedView) -->
       <div 
-        class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {isSingleOptionPoll ? 'compact-one' : ''} pagination-{paginationDirection}"
-      style="--items: {paginatedPoll.items.length}; overflow: hidden;"
-      role="group"
-      aria-label="Opciones de {poll.question || poll.title}"
-      bind:this={pollGridRef}
-      onpointerdown={handleDragStart}
-      ontouchstart={(e) => {
-        const touch = e.touches[0];
-        touchStartPosition = { x: touch.clientX, y: touch.clientY };
-        handleDragStart(e);
-      }}
-    >
-      {#each paginatedPoll.items as option, index (`${currentPage}-${option.key || option.id || index}`)}
+        class="options-horizontal-scroll"
+        role="region"
+        aria-label="Opciones de {poll.question || poll.title}"
+        bind:this={pollGridRef}
+        onscroll={handleScrollChange}
+      >
+      {#each sortedPollOptions as option, index (option.key || option.id || index)}
         {@const isPollVoted = poll.type === 'multiple'
           ? (multipleVotes[poll.id]?.includes(option.key) || 
              (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(option.key))
@@ -974,108 +1022,49 @@
         {@const isNewOption = poll.type === 'collaborative' && option.isEditing === true}
         {@const displayPct = isNewOption ? 25 : option.pct}
         
-        <svelte:element
-          this={isNewOption ? 'div' : 'button'}
-          role={isNewOption ? 'region' : undefined}
-          class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {(state !== 'expanded' || activeAccordionIndex !== index) ? 'collapsed' : ''} {isPollVoted ? 'voted' : ''}" 
-          style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, displayPct))}%; --fill-pct-val: {Math.max(0, Math.min(100, displayPct))}; --fill-window: 120px; --flex: {Math.max(0.5, displayPct / 10)};"
-          in:fly|local={{ x: paginationDirection === 'forward' ? 300 : -300, duration: 400, easing: cubicOut }}
-          out:fly|local={{ x: paginationDirection === 'forward' ? -300 : 300, duration: 300, easing: cubicOut }} 
+        <div
+          class="option-slide {index === activeAccordionIndex ? 'is-active' : ''} {isPollVoted ? 'voted' : ''}"
+          style="scroll-snap-stop: always;" 
           ontouchstart={(e: TouchEvent) => {
-            if (isNewOption || isSingleOptionPoll) return;
-            touchStartPosition = { 
-              x: e.touches[0].clientX, 
-              y: e.touches[0].clientY 
+            if (isNewOption) return;
+            // Guardar posición inicial del touch
+            touchStartPosition = {
+              x: e.touches[0].clientX,
+              y: e.touches[0].clientY
             };
-            startLongPress(option.label, e);
           }}
-          onmousedown={(e: MouseEvent) => {
-            if (isNewOption || isSingleOptionPoll) return;
-            startLongPress(option.label, e);
-          }}
-          onmouseup={() => cancelLongPress()}
-          onmouseleave={() => cancelLongPress()}
           ontouchend={(e: TouchEvent) => {
+            if (isNewOption) return;
+            
             // Cancelar long press al soltar
             cancelLongPress();
             
-            // PREVENIR click sintético del navegador
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Manejar touch para móvil (igual que onclick)
-            if (isNewOption || isSingleOptionPoll) { return; }
-            
-            // Verificar si hubo movimiento (drag) vs tap estático
+            // Detectar si hubo movimiento significativo (swipe)
             if (touchStartPosition && e.changedTouches[0]) {
-              const touch = e.changedTouches[0];
-              const deltaX = Math.abs(touch.clientX - touchStartPosition.x);
-              const deltaY = Math.abs(touch.clientY - touchStartPosition.y);
+              const deltaX = Math.abs(e.changedTouches[0].clientX - touchStartPosition.x);
+              const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartPosition.y);
               
-              // Si hubo movimiento significativo, es un drag, no un tap
+              // Si hubo movimiento > threshold, es un swipe, no un tap
               if (deltaX > TOUCH_MOVE_THRESHOLD || deltaY > TOUCH_MOVE_THRESHOLD) {
-                console.log('[SinglePoll] Movimiento detectado, ignorando tap:', { deltaX, deltaY });
+                console.log('[SinglePoll] 👉 Swipe detectado, ignorando tap. Delta:', { deltaX, deltaY });
+                touchStartPosition = null;
                 return;
               }
             }
             
-            // Si el long press acaba de activarse, ignorar este touch
-            if (longPressActivated) {
-              console.log('[SinglePoll] Touch ignorado - long press activo');
-              longPressActivated = false;
-              return;
-            }
-            
-            // Para polls múltiples o colaborativas: voto con un touch
-            if (poll.type === 'multiple' || poll.type === 'collaborative') {
-              if (state !== 'expanded' || activeAccordionIndex !== index) {
-                handleSetActive(index);
-                return;
-              }
-              dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
-              return;
-            }
-            
-            // Para polls normales: usar single/doble touch
-            // Una opción se considera colapsada si NO es la activa en el acordeón
-            const wasCollapsed = activeAccordionIndex !== index;
-            
-            addDebugLog('📱🖐️ TOUCH EVENT HANDLER');
-            const debugInfo = `📱 Estado: wasCollapsed=${wasCollapsed}, key=${option.key}, hasImageUrl=${!!option.imageUrl}, imageUrl=${option.imageUrl}`;
-            addDebugLog(debugInfo);
-            
-            // Si está colapsada, primer touch solo expande
-            if (wasCollapsed) {
-              e.preventDefault();
-              e.stopPropagation();
-              addDebugLog('✅ Abriendo opción colapsada');
-              handleSetActive(index);
-              // Resetear contador de taps
-              clickCount = 0;
-              pendingOptionKey = null;
-              return;
-            }
-            
-            // Ya está desplegada: distinguir single vs double touch
             e.preventDefault();
             e.stopPropagation();
             
             clickCount += 1;
             pendingOptionKey = option.key;
+            touchStartPosition = null;
             
             if (clickTimeout) clearTimeout(clickTimeout);
             
             clickTimeout = setTimeout(() => {
-              console.log('[SinglePoll] ⏰ Touch timeout ejecutado! clickCount:', clickCount);
-              if (clickCount === 1) {
-                // Touch simple en opción ya desplegada → abrir vista maximizada
-                addDebugLog('[Touch] Single tap en opción expandida → abrir PollMaximizedView');
-                openPreviewModal(option);
-              } else if (clickCount >= 2) {
-                // Doble touch → solo votar / desvotar, sin abrir maximizada
+              if (clickCount >= 2) {
+                // Doble touch → votar / desvotar
                 console.log('[SinglePoll] ✅ DOBLE TOUCH confirmado - Votando:', pendingOptionKey);
-                showDoubleClickTooltip = false;
-                if (tooltipTimeout) clearTimeout(tooltipTimeout);
                 
                 const isUnvoting = isPollVoted;
                 
@@ -1101,7 +1090,13 @@
                   pollId: poll.id, 
                   optionColor: option.color 
                 });
-                console.log('[SinglePoll] Evento optionClick despachado desde touch');
+              } else if (clickCount === 1) {
+                // Single touch → abrir maximized con esta opción
+                console.log('[SinglePoll] 👆 SINGLE TOUCH - Abriendo maximized:', pendingOptionKey);
+                dispatch('openMaximized', { 
+                  pollId: poll.id, 
+                  optionIndex: index 
+                });
               }
               
               clickCount = 0;
@@ -1109,67 +1104,8 @@
             }, DOUBLE_CLICK_DELAY);
           }}
           onclick={(e: MouseEvent) => {
-            if (isNewOption || isSingleOptionPoll) { return; }
+            if (isNewOption) return;
             
-            // Ignorar clicks en el botón de tooltip
-            const target = e.target as HTMLElement;
-            if (target.closest('.option-tooltip-btn')) {
-              console.log('[SinglePoll] Click en botón tooltip - ignorando');
-              return;
-            }
-            
-            // Si el long press acaba de activarse, ignorar este click
-            if (longPressActivated) {
-              console.log('[SinglePoll] Click ignorado - long press activo');
-              return;
-            }
-            
-            // Cancelar cualquier opción en edición antes de proceder
-            const editingOption = poll.options.find((opt: any) => opt.isEditing);
-            if (editingOption) {
-              dispatch('cancelEditing', { pollId: poll.id, optionKey: editingOption.key });
-              return;
-            }
-            
-            // Para polls múltiples o colaborativas: voto con un click
-            if (poll.type === 'multiple' || poll.type === 'collaborative') {
-              if (state !== 'expanded' || activeAccordionIndex !== index) {
-                e.preventDefault();
-                e.stopPropagation();
-                handleSetActive(index); 
-                return; 
-              }
-              dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
-              return;
-            }
-            
-            // Para polls normales: usar single/double click
-            // Igual que en móvil, colapsada = no es la opción activa del acordeón
-            const wasCollapsed = activeAccordionIndex !== index;
-            
-            addDebugLog('🖱️🖱️ CLICK EVENT HANDLER (DESKTOP)');
-            console.log('[SinglePoll] 🔍 Estado:', { 
-              wasCollapsed, 
-              state, 
-              activeAccordionIndex, 
-              index,
-              pollType: poll.type 
-            });
-            
-            // Si está colapsada, primer click solo expande
-            if (wasCollapsed) {
-              addDebugLog('✅ [Click] Opción cerrada -> Abriendo');
-              e.preventDefault();
-              e.stopPropagation();
-              handleSetActive(index);
-              clickCount = 0;
-              pendingOptionKey = null;
-              return;
-            }
-            
-            addDebugLog('[Click] ⚠️ Ya estaba desplegada');
-            
-            // Ya está desplegada: distinguir single vs double click
             e.preventDefault();
             e.stopPropagation();
 
@@ -1214,35 +1150,16 @@
               return;
             }
 
-            // Caso normal: usar contador + timeout para distinguir single/double click
+            // Doble click para votar
             clickCount += 1;
             pendingOptionKey = option.key;
 
-            if (clickTimeout) {
-              console.log('[SinglePoll] Cancelando timeout anterior');
-              clearTimeout(clickTimeout);
-            }
-
-            console.log('[SinglePoll] Click #' + clickCount, option.key);
-            console.log('[SinglePoll] clickCount actual:', clickCount, 'pendingOptionKey:', option.key);
+            if (clickTimeout) clearTimeout(clickTimeout);
 
             clickTimeout = setTimeout(() => {
-              console.log('[SinglePoll] ⏰ Timeout ejecutado! clickCount:', clickCount);
-              if (clickCount === 1) {
-                // Click simple en opción ya desplegada → abrir vista maximizada
-                console.log('[SinglePoll] Click simple confirmado - abrir PollMaximizedView');
-                openPreviewModal(option);
-              } else if (clickCount >= 2) {
-                // Doble click → solo votar / desvotar, sin abrir maximizada
+              if (clickCount >= 2) {
+                // Doble click → votar / desvotar
                 console.log('[SinglePoll] ✅ DOBLE CLICK confirmado - Votando:', pendingOptionKey);
-                console.log('[SinglePoll] Despachando evento optionClick:', {
-                  optionKey: pendingOptionKey,
-                  pollId: poll.id,
-                  pollType: poll.type,
-                  color: option.color
-                });
-                showDoubleClickTooltip = false;
-                if (tooltipTimeout) clearTimeout(tooltipTimeout);
 
                 const isUnvoting = isPollVoted;
 
@@ -1268,7 +1185,13 @@
                   pollId: poll.id, 
                   optionColor: option.color 
                 });
-                console.log('[SinglePoll] Evento optionClick despachado desde click');
+              } else if (clickCount === 1) {
+                // Single click → abrir maximized con esta opción
+                console.log('[SinglePoll] 👆 SINGLE CLICK - Abriendo maximized:', pendingOptionKey);
+                dispatch('openMaximized', { 
+                  pollId: poll.id, 
+                  optionIndex: index 
+                });
               }
 
               // Reset
@@ -1276,35 +1199,6 @@
               pendingOptionKey = null;
             }, DOUBLE_CLICK_DELAY);
           }}
-          onfocus={() => !isSingleOptionPoll && !isNewOption ? handleSetActive(index) : null}
-          onkeydown={(e: KeyboardEvent) => {
-            if (isNewOption) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              
-              // Cancelar cualquier opción en edición antes de proceder
-              const editingOption = poll.options.find((opt: any) => opt.isEditing);
-              if (editingOption) {
-                dispatch('cancelEditing', { pollId: poll.id, optionKey: editingOption.key });
-                return;
-              }
-              
-              // Primer toque: abrir la card si está colapsada
-              if (state !== 'expanded' || activeAccordionIndex !== index) {
-                e.stopPropagation();
-                handleSetActive(index); 
-                return; 
-              }
-              
-              // Segundo toque: votar SOLO si está completamente desplegada
-              if (state === 'expanded' && activeAccordionIndex === index) {
-                dispatch('optionClick', { event: e, optionKey: option.key, pollId: poll.id, optionColor: option.color });
-              } else {
-                e.stopPropagation();
-              }
-            }
-          }}
-          type={isNewOption ? undefined : 'button'}
         >
           {#if isNewOption}
             <!-- Layout para opciones nuevas: Avatar + Botón X arriba, textarea medio, porcentaje abajo -->
@@ -1435,96 +1329,68 @@
               </svg>
             </button>
           {:else}
-            <!-- Layout normal para opciones existentes -->
+            <!-- Layout estilo PollMaximizedView (reducido) -->
             
-            <!-- MediaEmbed de fondo (si hay imageUrl) -->
-            {#if option.imageUrl}
-              <div class="option-media-background {activeAccordionIndex === index ? 'interactive' : ''}">
-                <MediaEmbed 
-                  url={option.imageUrl} 
-                  mode="full"
-                />
-                <div class="media-overlay"></div>
-              </div>
-            {/if}
-            
-            <!-- Header con avatar y título -->
-            {#if !isSingleOptionPoll}
-            <div class="card-header {activeAccordionIndex === index && option.imageUrl ? 'with-preview' : ''}" style="position: relative;">
-              <h2 class="question-title">{option.label}</h2>
+            <!-- Fondo de color + overlay de gradiente -->
+            <div class="option-background-maximized" style="--option-color: {option.color};">
+              <!-- Noise texture overlay -->
+              <div class="noise-overlay"></div>
               
-              <!-- Botón de tooltip para texto largo (solo cuando está desplegada/activa) -->
-              {#if activeAccordionIndex === index && option.label && option.label.length > 50}
-                <button 
-                  class="option-tooltip-btn"
-                  onpointerdown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                  }}
-                  onmousedown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                  }}
-                  ontouchstart={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                  }}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    console.log('[OptionTooltip] Botón clickeado!');
-                    showTitleTooltipHandler(option.label, e);
-                  }}
-                  title="Ver texto completo"
-                  type="button"
-                >
-                  ⋯
-                </button>
-              {/if}
-              
-              {#if option.avatarUrl && option.avatarUrl !== poll.user?.avatarUrl}
-                <img class="creator-avatar" src={option.avatarUrl} alt={option.label} loading="lazy" />
+              <!-- MediaEmbed de fondo (si hay imageUrl) -->
+              {#if option.imageUrl}
+                <div class="media-embed-background">
+                  <MediaEmbed 
+                    url={option.imageUrl} 
+                    mode="full"
+                    width="100%"
+                    height="100%"
+                  />
+                </div>
+                <div class="media-gradient-overlay"></div>
               {/if}
             </div>
-            {/if}
-
-            <!-- Contenido principal -->
-            <div class="card-content" class:card-content-full={isSingleOptionPoll}>
-              <!-- Porcentaje tradicional para múltiples opciones -->
-              <div class="percentage-display">
-                <span
-                  class="percentage-large"
-                  style="font-size: {(activeAccordionIndex === index && state === 'expanded'
-                    ? fontSizeForPct(displayPct)
-                    : Math.min(fontSizeForPct(displayPct), 21))}px"
-                >
-                  {Math.round(displayPct)}
-                </span>
-              </div>
+            
+            <!-- Contenido centrado (label + percentage) -->
+            <div class="option-content-maximized">
+              <!-- Label grande en uppercase -->
+              <h2 class="option-label-maximized">
+                {option.label}
+              </h2>
               
-              <!-- Avatares de amigos posicionados absolutamente (solo si hay amigos que votaron) -->
-              {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
-                {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
-                {#if filteredFriends.length > 0}
-                  <div class="friend-avatars-absolute">
-                    {#each filteredFriends.slice(0, 3) as friend, i}
-                      <img 
-                        class="friend-avatar-floating" 
-                        src={friend.avatarUrl || DEFAULT_AVATAR}
-                        alt={friend.name}
-                        loading="lazy"
-                        style="z-index: {10 - i};"
-                      />
-                    {/each}
-                    {#if filteredFriends.length > 3}
-                      <div class="more-friends-badge">+{filteredFriends.length - 3}</div>
-                    {/if}
-                  </div>
-                {/if}
+              <!-- Porcentaje grande si ha votado -->
+              {#if pollVotedOption}
+                <div class="option-percentage-voted">
+                  <span class="percentage-value-large" style="color: {option.color}">
+                    {Math.round(displayPct)}%
+                  </span>
+                  <span class="percentage-subtitle">del total</span>
+                </div>
               {/if}
+              
             </div>
+            
+            <!-- Avatares de amigos (si hay) -->
+            {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
+              {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
+              {#if filteredFriends.length > 0}
+                <div class="friend-avatars-maximized">
+                  {#each filteredFriends.slice(0, 3) as friend, i}
+                    <img 
+                      class="friend-avatar-mini" 
+                      src={friend.avatarUrl || DEFAULT_AVATAR}
+                      alt={friend.name}
+                      loading="lazy"
+                      style="z-index: {10 - i};"
+                    />
+                  {/each}
+                  {#if filteredFriends.length > 3}
+                    <div class="more-friends-count">+{filteredFriends.length - 3}</div>
+                  {/if}
+                </div>
+              {/if}
+            {/if}
           {/if}
-        </svelte:element>
+        </div>
       {/each}
     </div>
     {/if}
@@ -1556,38 +1422,23 @@
     </div>
   {/if}
   
-  <!-- Controles inferiores: centro (estadísticas + paginación), derecha (acciones) -->
+  <!-- Controles inferiores simplificados (solo estadísticas y acciones) -->
   <div class="bottom-controls-container">
     <div class="bottom-controls-center">
       <button
-        class="stats-icon-btn {currentPage === -1 ? 'active' : ''}"
+        class="stats-icon-btn"
         type="button"
         title="Ver estadísticas"
         aria-label="Ver estadísticas"
         onclick={(e) => {
           e.stopPropagation();
-          if (currentPage === -1) {
-            handlePageChange(0);
-          } else {
-            handlePageChange(-1);
-          }
+          dispatch('goToChart', { pollId: poll.id.toString() });
         }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
         </svg>
       </button>
-
-      <div class="pagination-dots">
-        {#each Array(paginatedPoll.totalPages) as _, pageIndex}
-          <button 
-            class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
-            onclick={() => handlePageChange(pageIndex)}
-            type="button"
-            aria-label="Página {pageIndex + 1}"
-          ></button>
-        {/each}
-      </div>
     </div>
     
     <!-- Lado derecho: Botones de acción -->
@@ -2854,6 +2705,17 @@
   .poll-item {
     margin-bottom: 0;
     padding-bottom: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(26, 26, 31, 0.95) 0%,
+      rgba(30, 30, 35, 0.98) 100%
+    );
+    border-radius: 20px;
+    overflow: visible;
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
   
   /* Reducir padding de botones individuales */
@@ -3199,6 +3061,471 @@
       top: 60px;
       padding: 10px 20px;
       font-size: 13px;
+    }
+  }
+
+  /* ========================================
+     NUEVOS ESTILOS TIPO POLLMAXIMIZEDVIEW
+     ======================================== */
+
+  /* Header compacto */
+  .poll-header-compact {
+    padding: 12px 16px 8px 16px;
+    margin-bottom: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.4) 0%,
+      rgba(0, 0, 0, 0.2) 50%,
+      transparent 100%
+    );
+    backdrop-filter: blur(8px);
+  }
+
+  .header-compact-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-avatar-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .avatar-button-mini,
+  .avatar-mini-default {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .avatar-button-mini {
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .avatar-button-mini:hover {
+    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .avatar-button-mini img,
+  .avatar-mini-default img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .header-content-compact {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Reducir tamaño del título en header compact */
+  .header-content-compact .poll-question {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 6px;
+    color: white;
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.6),
+      0 1px 3px rgba(0, 0, 0, 0.4);
+    letter-spacing: -0.01em;
+  }
+
+  .header-content-compact .poll-meta {
+    font-size: 11px;
+    opacity: 0.85;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    font-weight: 600;
+  }
+
+  /* Indicadores de opciones (barras tipo Instagram Stories) */
+  .options-indicators {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    padding: 10px 12px 8px 12px;
+    margin: 0 -12px;
+  }
+
+  .option-indicator {
+    flex: 1;
+    height: 4px;
+    border: none;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .option-indicator.active {
+    height: 5px;
+    box-shadow: 
+      0 0 12px currentColor,
+      0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .option-indicator.active::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      transparent 100%
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .option-indicator:hover {
+    opacity: 0.9;
+    transform: scaleY(1.2);
+  }
+
+  /* Fondo de opción estilo maximizado */
+  .option-background-maximized {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 18px;
+    overflow: hidden;
+    z-index: 0;
+    background-color: transparent;
+  }
+  
+  .option-background-maximized::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--option-color);
+    opacity: 0.7;
+    z-index: 0;
+  }
+
+  .noise-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: url('https://grainy-gradients.vercel.app/noise.svg');
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+
+  .media-embed-background {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  .media-gradient-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.3) 0%,
+      transparent 40%,
+      transparent 60%,
+      rgba(0, 0, 0, 0.4) 100%
+    );
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* Contenido centrado */
+  .option-content-maximized {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px 16px;
+    height: 100%;
+    text-align: center;
+  }
+
+  /* Label grande en uppercase */
+  .option-label-maximized {
+    font-size: 36px;
+    font-weight: 900;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+    text-shadow: 
+      0 3px 12px rgba(0, 0, 0, 0.7),
+      0 6px 24px rgba(0, 0, 0, 0.5),
+      0 1px 3px rgba(0, 0, 0, 0.8);
+    word-wrap: break-word;
+    max-width: 90%;
+    margin: 0;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+  }
+
+  /* Porcentaje cuando ha votado */
+  .option-percentage-voted {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .percentage-value-large {
+    font-size: 42px;
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 
+      0 3px 12px rgba(0, 0, 0, 0.5),
+      0 1px 4px rgba(0, 0, 0, 0.3);
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  }
+
+  .percentage-subtitle {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Indicador "Doble toque para votar" */
+  .vote-hint-indicator {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    opacity: 0.9;
+    animation: pulse-hint 2.5s ease-in-out infinite;
+    margin-top: 12px;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  @keyframes pulse-hint {
+    0%, 100% {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+  }
+
+  .vote-hint-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .tap-line {
+    width: 2.5px;
+    height: 16px;
+    background: white;
+    border-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .vote-hint-text {
+    font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: white;
+    text-shadow: 
+      0 2px 4px rgba(0, 0, 0, 0.6),
+      0 1px 2px rgba(0, 0, 0, 0.4);
+    font-weight: 700;
+  }
+
+  /* Avatares de amigos en diseño maximizado */
+  .friend-avatars-maximized {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 10;
+  }
+
+  .friend-avatar-mini {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    object-fit: cover;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease;
+  }
+
+  .friend-avatar-mini:hover {
+    transform: scale(1.15);
+  }
+
+  .more-friends-count {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Contenedor principal de scroll horizontal */
+  .poll-options-scroll-container {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.1) 0%,
+      transparent 20%,
+      transparent 80%,
+      rgba(0, 0, 0, 0.1) 100%
+    );
+  }
+
+  /* Scroll horizontal estilo PollMaximizedView */
+  .options-horizontal-scroll {
+    display: flex;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    gap: 0;
+    height: 250px;
+  }
+
+  .options-horizontal-scroll::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+
+  /* Cada slide/opción ocupa el 100% del ancho */
+  .option-slide {
+    flex-shrink: 0;
+    width: 100%;
+    height: 100%;
+    scroll-snap-align: start;
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    margin: 0;
+    background: #2a2c31;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+      0 4px 16px rgba(0, 0, 0, 0.3),
+      0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .option-slide.is-active {
+    transform: scale(1.02);
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 4px 16px rgba(0, 0, 0, 0.3),
+      inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+  }
+
+  .option-slide:active {
+    transform: scale(0.98);
+  }
+
+  /* Responsive para móviles */
+  @media (max-width: 640px) {
+    .poll-header-compact {
+      padding: 10px 14px 6px 14px;
+    }
+
+    .header-content-compact .poll-question {
+      font-size: 15px;
+    }
+
+    .header-content-compact .poll-meta {
+      font-size: 10px;
+    }
+
+    .avatar-button-mini,
+    .avatar-mini-default {
+      width: 26px;
+      height: 26px;
+    }
+
+    .option-label-maximized {
+      font-size: 28px;
+    }
+
+    .percentage-value-large {
+      font-size: 36px;
+    }
+
+    .percentage-subtitle {
+      font-size: 11px;
+    }
+
+    .options-horizontal-scroll {
+      height: 220px;
+    }
+
+    .option-slide {
+      width: 100%;
+      margin: 0;
+      border-radius: 16px;
+    }
+
+    .options-indicators {
+      gap: 3px;
+      padding: 8px 10px 6px 10px;
+      margin: 0 -10px;
+    }
+
+    .option-indicator {
+      height: 3.5px;
+    }
+
+    .option-indicator.active {
+      height: 4.5px;
     }
   }
   

@@ -78,6 +78,7 @@
     onBookmark?: () => void;
     onRepost?: () => void;
     onOpenInGlobe?: () => void;
+    onGoToChart?: () => void;
     onOpenAuthModal?: () => void;
     onTitleChange?: (title: string) => void;
     onLabelChange?: (optionId: string, newLabel: string) => void;
@@ -103,6 +104,7 @@
     onBookmark = () => {},
     onRepost = () => {},
     onOpenInGlobe = () => {},
+    onGoToChart = () => {},
     onOpenAuthModal = () => {
       showAuthModal = true;
     },
@@ -449,7 +451,7 @@
           <div class="flex flex-col items-start gap-2">
             <div class="flex items-center gap-2 opacity-80">
               <div
-                class="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10"
+                class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-2 ring-white/20"
               >
                 {#if creator?.avatar}
                   <img
@@ -461,11 +463,6 @@
                   <User size={14} class="text-white" />
                 {/if}
               </div>
-              <span
-                class="text-[11px] font-bold uppercase tracking-widest text-white/90 drop-shadow-md"
-              >
-                {creator?.username || "Anon"}
-              </span>
             </div>
             {#if readOnly}
               <h2
@@ -862,6 +859,15 @@
           class="text-white/80 hover:text-white transition-colors"
         >
           <Globe size={22} stroke-width={2} />
+        </button>
+
+        <!-- Statistics Chart -->
+        <button
+          onclick={onGoToChart}
+          class="text-white/80 hover:text-white transition-colors"
+          title="Ver estadísticas"
+        >
+          <BarChart3 size={22} stroke-width={2} />
         </button>
       </div>
 
