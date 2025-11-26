@@ -96,6 +96,7 @@
     showAllOptions = false,
     hasVoted = false,
     isAuthenticated = false,
+    friendsByOption = {},
     onClose,
     onOptionChange,
     onSwipeVertical = () => {},
@@ -672,6 +673,36 @@
                     >
                       Doble toque para votar
                     </span>
+                  </div>
+                {/if}
+
+                <!-- Avatares de amigos -->
+                {#if friendsByOption && friendsByOption[opt.id] && friendsByOption[opt.id].length > 0}
+                  <div class="absolute bottom-4 right-4 flex items-center gap-1 z-20">
+                    {#each friendsByOption[opt.id].slice(0, 3) as friend, idx}
+                      <div 
+                        class="relative" 
+                        style="z-index: {10 - idx};"
+                        title={hasVoted ? friend.name : 'Vota para ver quién eligió esta opción'}
+                      >
+                        {#if hasVoted}
+                          <img 
+                            src={friend.avatarUrl || '/default-avatar.png'}
+                            alt={friend.name}
+                            class="w-8 h-8 rounded-full border-2 border-white/40 object-cover shadow-lg hover:scale-110 transition-transform"
+                          />
+                        {:else}
+                          <div class="w-8 h-8 rounded-full border-2 border-white/40 bg-white/10 backdrop-blur-md flex items-center justify-center shadow-lg hover:scale-110 transition-transform cursor-help">
+                            <span class="text-white text-sm font-bold drop-shadow-md">?</span>
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
+                    {#if friendsByOption[opt.id].length > 3}
+                      <div class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/60 backdrop-blur-md flex items-center justify-center shadow-lg">
+                        <span class="text-white text-xs font-bold">+{friendsByOption[opt.id].length - 3}</span>
+                      </div>
+                    {/if}
                   </div>
                 {/if}
               </div>

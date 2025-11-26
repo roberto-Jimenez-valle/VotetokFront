@@ -818,9 +818,14 @@
               ? (multipleVotes[poll.id]?.includes(opt.key) || 
                  (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(opt.key))
               : (displayVotes[poll.id] || userVotes[poll.id]) === opt.key}
+            {@const hasVotedAny = !!(displayVotes[poll.id] || userVotes[poll.id])}
+            {@const totalVotes = sortedPollOptions.reduce((sum, o) => sum + (o.votes || 0), 0)}
+            {@const flexWeight = hasVotedAny 
+              ? Math.max(opt.votes || 0, totalVotes * 0.02) 
+              : 1}
             <button
               class="option-indicator {isCurrentOption ? 'active' : ''}"
-              style="background-color: {isPollVoted ? opt.color : 'rgba(255, 255, 255, 0.25)'}; opacity: {isCurrentOption ? 1 : 0.3};"
+              style="flex: {flexWeight} 1 0%; opacity: {isCurrentOption ? 1 : (hasVotedAny ? 0.3 : 0.5)}; transform: {hasVotedAny && isCurrentOption ? 'scaleY(1.5)' : 'scaleY(1)'};"
               onclick={(e) => {
                 e.stopPropagation();
                 // Actualizar índice activo primero
@@ -839,7 +844,12 @@
               }}
               aria-label="Ver opción {idx + 1}: {opt.label}"
               type="button"
-            ></button>
+            >
+              <div
+                class="indicator-fill"
+                style="width: {hasVotedAny ? '100%' : (idx < activeAccordionIndex ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {isPollVoted ? opt.color : (hasVotedAny ? 'rgba(255, 255, 255, 0.2)' : '#fff')};"
+              ></div>
+            </button>
           {/each}
         </div>
       </div>
@@ -1048,10 +1058,13 @@
               if (deltaX > TOUCH_MOVE_THRESHOLD || deltaY > TOUCH_MOVE_THRESHOLD) {
                 console.log('[SinglePoll] 👉 Swipe detectado, ignorando tap. Delta:', { deltaX, deltaY });
                 touchStartPosition = null;
+                clickCount = 0;
+                pendingOptionKey = null;
                 return;
               }
             }
             
+            // Solo prevenir eventos si es un tap válido
             e.preventDefault();
             e.stopPropagation();
             
@@ -1092,9 +1105,8 @@
                 });
               } else if (clickCount === 1) {
                 // Single touch → abrir maximized con esta opción
-                console.log('[SinglePoll] 👆 SINGLE TOUCH - Abriendo maximized:', pendingOptionKey);
                 dispatch('openMaximized', { 
-                  pollId: poll.id, 
+                  pollId: poll.id.toString(), 
                   optionIndex: index 
                 });
               }
@@ -1228,7 +1240,7 @@
               type="button"
               aria-label="Cerrar opción"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
@@ -1282,7 +1294,7 @@
               type="button"
               aria-label="Cambiar color"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
               </svg>
             </button>
@@ -1324,7 +1336,7 @@
               disabled={!editingOptionLabels[option.key] || !editingOptionLabels[option.key].trim()}
               aria-label="Publicar opción"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M20 6L9 17l-5-5"/>
               </svg>
             </button>
@@ -1339,14 +1351,6 @@
               <!-- MediaEmbed de fondo (si hay imageUrl) -->
               {#if option.imageUrl}
                 <div class="media-embed-background">
-                  {#if typeof window !== 'undefined'}
-                    {console.log('[SinglePoll] Renderizando imagen:', { 
-                      label: option.label, 
-                      imageUrl: option.imageUrl,
-                      index: index,
-                      isActive: index === activeAccordionIndex
-                    })}
-                  {/if}
                   <MediaEmbed 
                     url={option.imageUrl} 
                     mode="full"
@@ -1355,14 +1359,6 @@
                   />
                 </div>
                 <div class="media-gradient-overlay"></div>
-              {:else}
-                {#if typeof window !== 'undefined'}
-                  {console.log('[SinglePoll] Sin imagen para:', { 
-                    label: option.label, 
-                    hasImageUrl: !!option.imageUrl,
-                    index: index 
-                  })}
-                {/if}
               {/if}
             </div>
             
@@ -1388,16 +1384,28 @@
             <!-- Avatares de amigos (si hay) -->
             {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
               {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
+              {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
               {#if filteredFriends.length > 0}
                 <div class="friend-avatars-maximized">
                   {#each filteredFriends.slice(0, 3) as friend, i}
-                    <img 
-                      class="friend-avatar-mini" 
-                      src={friend.avatarUrl || DEFAULT_AVATAR}
-                      alt={friend.name}
-                      loading="lazy"
+                    <div 
+                      class="friend-avatar-wrapper" 
                       style="z-index: {10 - i};"
-                    />
+                      title={userHasVoted ? friend.name : 'Vota para ver quién eligió esta opción'}
+                    >
+                      {#if userHasVoted}
+                        <img 
+                          class="friend-avatar-mini" 
+                          src={friend.avatarUrl || DEFAULT_AVATAR}
+                          alt={friend.name}
+                          loading="lazy"
+                        />
+                      {:else}
+                        <div class="friend-avatar-mystery">
+                          <span>?</span>
+                        </div>
+                      {/if}
+                    </div>
                   {/each}
                   {#if filteredFriends.length > 3}
                     <div class="more-friends-count">+{filteredFriends.length - 3}</div>
@@ -1455,7 +1463,7 @@
           type="button"
           title="{selectedCount === 0 ? 'Selecciona opciones' : `Confirmar ${selectedCount} ${selectedCount === 1 ? 'voto' : 'votos'}`}"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M20 6L9 17l-5-5"/>
           </svg>
           {#if selectedCount > 0}
@@ -1474,7 +1482,7 @@
           title="Añadir nueva opción"
           aria-label="Añadir nueva opción"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
@@ -2723,7 +2731,7 @@
       rgba(26, 26, 31, 0.95) 0%,
       rgba(30, 30, 35, 0.98) 100%
     );
-    border-radius: 20px;
+    border-radius: 0;
     overflow: visible;
     box-shadow: 
       0 8px 32px rgba(0, 0, 0, 0.3),
@@ -3165,53 +3173,33 @@
   /* Indicadores de opciones (barras tipo Instagram Stories) */
   .options-indicators {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     width: 100%;
     padding: 10px 12px 8px 12px;
     margin: 0 -12px;
   }
 
   .option-indicator {
-    flex: 1;
-    height: 4px;
+    height: 6px;
     border: none;
-    border-radius: 3px;
-    background-color: rgba(255, 255, 255, 0.25);
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 0;
     position: relative;
     overflow: hidden;
   }
-
-  .option-indicator.active {
-    height: 5px;
-    box-shadow: 
-      0 0 12px currentColor,
-      0 2px 8px rgba(0, 0, 0, 0.3);
-  }
-
-  .option-indicator.active::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.3) 50%,
-      transparent 100%
-    );
-    animation: shimmer 2s infinite;
-  }
-
-  @keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+  
+  .indicator-fill {
+    height: 100%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 2px;
   }
 
   .option-indicator:hover {
-    opacity: 0.9;
-    transform: scaleY(1.2);
+    opacity: 0.85;
   }
 
   /* Fondo de opción estilo maximizado */
@@ -3221,7 +3209,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    border-radius: 18px;
+    border-radius: 0;
     overflow: hidden;
     z-index: 0;
     background-color: transparent;
@@ -3395,6 +3383,11 @@
     z-index: 10;
   }
 
+  .friend-avatar-wrapper {
+    position: relative;
+    display: inline-block;
+  }
+
   .friend-avatar-mini {
     width: 24px;
     height: 24px;
@@ -3407,6 +3400,33 @@
 
   .friend-avatar-mini:hover {
     transform: scale(1.15);
+  }
+  
+  .friend-avatar-mystery {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: help;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  
+  .friend-avatar-mystery span {
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+  
+  .friend-avatar-mystery:hover {
+    transform: scale(1.15);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 100%);
   }
 
   .more-friends-count {
@@ -3462,7 +3482,7 @@
     height: 100%;
     scroll-snap-align: start;
     position: relative;
-    border-radius: 18px;
+    border-radius: 0;
     overflow: hidden;
     margin: 0;
     background: #2a2c31;
@@ -3524,21 +3544,17 @@
     .option-slide {
       width: 100%;
       margin: 0;
-      border-radius: 16px;
+      border-radius: 0;
     }
 
     .options-indicators {
-      gap: 3px;
+      gap: 2px;
       padding: 8px 10px 6px 10px;
       margin: 0 -10px;
     }
 
     .option-indicator {
-      height: 3.5px;
-    }
-
-    .option-indicator.active {
-      height: 4.5px;
+      height: 5px;
     }
   }
   
