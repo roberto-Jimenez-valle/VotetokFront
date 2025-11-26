@@ -847,7 +847,7 @@
             >
               <div
                 class="indicator-fill"
-                style="width: {hasVotedAny ? '100%' : (idx < activeAccordionIndex ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {isPollVoted ? opt.color : (hasVotedAny ? 'rgba(255, 255, 255, 0.2)' : '#fff')};"
+                style="width: {hasVotedAny ? '100%' : (idx < activeAccordionIndex ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {hasVotedAny ? opt.color : (isCurrentOption ? '#fff' : 'rgba(255, 255, 255, 0.2)')};"
               ></div>
             </button>
           {/each}
