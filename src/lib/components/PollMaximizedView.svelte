@@ -588,6 +588,40 @@
                         "{opt.description}"
                       </p>
                     {/if}
+                    
+                    <!-- Avatares de amigos en opciones de texto -->
+                    {#if friendsByOption && friendsByOption[opt.id] && friendsByOption[opt.id].length > 0}
+                      <div class="mt-4 flex items-center gap-2">
+                        {#each friendsByOption[opt.id].slice(0, 5) as friend, idx}
+                          <div 
+                            class="relative" 
+                            style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
+                            title={friend.name}
+                          >
+                            {#if hasVoted}
+                              <img 
+                                src={friend.avatarUrl || '/default-avatar.png'}
+                                alt={friend.name}
+                                class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg hover:scale-110 hover:z-50 transition-transform"
+                              />
+                            {:else}
+                              <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 backdrop-blur-md shadow-lg"></div>
+                            {/if}
+                          </div>
+                        {/each}
+                        {#if friendsByOption[opt.id].length > 5}
+                          <div 
+                            class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/70 backdrop-blur-md flex items-center justify-center shadow-lg"
+                            style="margin-left: -8px; z-index: 0;"
+                          >
+                            <span class="text-white text-xs font-bold">+{friendsByOption[opt.id].length - 5}</span>
+                          </div>
+                        {/if}
+                        {#if !hasVoted}
+                          <span class="text-white/60 text-sm ml-2">🔒 Vota para ver quién votó</span>
+                        {/if}
+                      </div>
+                    {/if}
                   </div>
                 </div>
               {:else}
