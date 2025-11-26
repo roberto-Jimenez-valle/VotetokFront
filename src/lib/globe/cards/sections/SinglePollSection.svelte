@@ -1339,6 +1339,14 @@
               <!-- MediaEmbed de fondo (si hay imageUrl) -->
               {#if option.imageUrl}
                 <div class="media-embed-background">
+                  {#if typeof window !== 'undefined'}
+                    {console.log('[SinglePoll] Renderizando imagen:', { 
+                      label: option.label, 
+                      imageUrl: option.imageUrl,
+                      index: index,
+                      isActive: index === activeAccordionIndex
+                    })}
+                  {/if}
                   <MediaEmbed 
                     url={option.imageUrl} 
                     mode="full"
@@ -1347,6 +1355,14 @@
                   />
                 </div>
                 <div class="media-gradient-overlay"></div>
+              {:else}
+                {#if typeof window !== 'undefined'}
+                  {console.log('[SinglePoll] Sin imagen para:', { 
+                    label: option.label, 
+                    hasImageUrl: !!option.imageUrl,
+                    index: index 
+                  })}
+                {/if}
               {/if}
             </div>
             
@@ -1422,25 +1438,8 @@
     </div>
   {/if}
   
-  <!-- Controles inferiores simplificados (solo estadísticas y acciones) -->
+  <!-- Controles inferiores simplificados (solo acciones) -->
   <div class="bottom-controls-container">
-    <div class="bottom-controls-center">
-      <button
-        class="stats-icon-btn"
-        type="button"
-        title="Ver estadísticas"
-        aria-label="Ver estadísticas"
-        onclick={(e) => {
-          e.stopPropagation();
-          dispatch('goToChart', { pollId: poll.id.toString() });
-        }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-      </button>
-    </div>
-    
     <!-- Lado derecho: Botones de acción -->
     <div class="bottom-controls-right">
       <!-- Botón confirmar votos múltiples -->
@@ -1578,6 +1577,20 @@
             <circle cx="12" cy="12" r="10"/>
             <line x1="2" y1="12" x2="22" y2="12"/>
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </button>
+        <button 
+          class="action-badge action-chart" 
+          type="button" 
+          title="Ver estadísticas"
+          aria-label="Ver estadísticas"
+          onclick={(e) => {
+            e.stopPropagation();
+            dispatch('goToChart', { pollId: poll.id.toString() });
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
         </button>
       </div>
