@@ -21,7 +21,7 @@ export async function apiCall(
 ): Promise<Response> {
   const method = options.method || 'GET'
   const path = new URL(url, window.location.origin).pathname
-  
+
   // Preparar body
   let bodyString: string | undefined
   if (options.body) {
@@ -34,24 +34,24 @@ export async function apiCall(
 
   // Generar headers de app signature
   let appHeaders: Record<string, string> = {}
-  
+
   // DESARROLLO: Skip app auth solo en IPs locales (Web Crypto no funciona sin HTTPS)
   // localhost mantiene autenticación normal
   const isLocalIP = window.location.hostname.startsWith('192.168.') ||
-                    window.location.hostname.startsWith('172.') ||
-                    window.location.hostname.startsWith('10.')
-  
+    window.location.hostname.startsWith('172.') ||
+    window.location.hostname.startsWith('10.')
+
   if (!options.skipAppAuth && !isLocalIP) {
     try {
       appHeaders = await createAppSignatureHeaders(method, path, bodyString)
-      console.log('[apiCall] Headers generados para:', method, path)
+      console.debug('[apiCall] Headers generados para:', method, path)
     } catch (err) {
       console.error('[apiCall] ❌ Error generando headers:', err)
       alert('Error de autenticación: ' + (err as Error).message)
       throw err
     }
   } else if (isLocalIP) {
-    console.log('[apiCall] ⚠️ App auth deshabilitada para IP local:', method, path)
+    console.debug('[apiCall] ⚠️ App auth deshabilitada para IP local:', method, path)
   }
 
   // Agregar JWT si existe (para endpoints protegidos)
@@ -59,9 +59,9 @@ export async function apiCall(
   const authHeaders: Record<string, string> = {}
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`
-    console.log('[apiCall] ✅ Token JWT encontrado, agregando a headers')
+    console.debug('[apiCall] ✅ Token JWT encontrado, agregando a headers')
   } else {
-    console.log('[apiCall] ⚠️ No hay token JWT - petición sin autenticación')
+    console.debug('[apiCall] ⚠️ No hay token JWT - petición sin autenticación')
   }
 
   // Combinar headers
@@ -83,12 +83,12 @@ export async function apiCall(
   // Manejar errores comunes
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    
+
     // Error específico con código
     if (error.code) {
       throw new ApiError(error.message || response.statusText, error.code, response.status, error)
     }
-    
+
     throw new ApiError(response.statusText, 'API_ERROR', response.status)
   }
 
@@ -184,27 +184,27 @@ export function handleApiError(err: unknown): string {
       case 'INVALID_APP_ID':
       case 'INVALID_SIGNATURE':
         return 'Por favor actualiza la app a la última versión'
-      
+
       case 'TIMESTAMP_EXPIRED':
         return 'El reloj de tu dispositivo está desincronizado. Por favor ajústalo.'
-      
+
       case 'AUTH_REQUIRED':
         return 'Debes iniciar sesión para realizar esta acción'
-      
+
       case 'FORBIDDEN':
         return 'No tienes permisos para realizar esta acción'
-      
+
       case 'RATE_LIMIT_EXCEEDED':
         const retryAfter = err.details?.retryAfter || 60
         return `Has alcanzado el límite. Intenta de nuevo en ${retryAfter} segundos.`
-      
+
       case 'NOT_OWNER':
         return 'Solo puedes modificar tu propio contenido'
-      
+
       default:
         return err.message || 'Error al procesar la solicitud'
     }
   }
-  
+
   return 'Error de conexión. Por favor intenta de nuevo.'
 }

@@ -20,8 +20,12 @@ import { prisma } from '$lib/server/prisma';
 export const GET: RequestHandler = async ({ params }) => {
 	const pollId = parseInt(params.id);
 
+	if (isNaN(pollId)) {
+		return json({ error: 'Invalid poll ID' }, { status: 400 });
+	}
+
 	try {
-		
+
 		// Obtener todas las opciones de la encuesta
 		const pollOptions = await prisma.pollOption.findMany({
 			where: { pollId },
@@ -50,7 +54,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			}
 		});
 
-		
+
 		// Crear mapa de optionId -> optionKey
 		const optionIdToKey = new Map(
 			pollOptions.map(opt => [opt.id, opt.optionKey])
@@ -60,6 +64,8 @@ export const GET: RequestHandler = async ({ params }) => {
 		const countryVotes: Record<string, Record<string, number>> = {};
 
 		for (const vote of votes) {
+			if (!vote.subdivision) continue;  // Skip si no tiene subdivisión
+
 			// Extraer código país: ESP.1.2 -> ESP, ESP -> ESP
 			const countryIso = vote.subdivision.subdivisionId.split('.')[0];
 			const optionKey = optionIdToKey.get(vote.optionId);
@@ -70,11 +76,15 @@ export const GET: RequestHandler = async ({ params }) => {
 				countryVotes[countryIso] = {};
 			}
 
-			countryVotes[countryIso][optionKey] = 
+			countryVotes[countryIso][optionKey] =
 				(countryVotes[countryIso][optionKey] || 0) + 1;
 		}
 
-		
+
+		console.log(`[API votes-by-country] Poll ${pollId}: ${votes.length} votos encontrados en BD`);
+		console.log(`[API votes-by-country] Poll ${pollId}: ${Object.keys(countryVotes).length} países con datos`);
+		console.log(`[API votes-by-country] Poll ${pollId}: Países:`, Object.keys(countryVotes));
+
 		return json({ data: countryVotes });
 
 	} catch (error) {

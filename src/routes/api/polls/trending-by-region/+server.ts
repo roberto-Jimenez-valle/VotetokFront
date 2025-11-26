@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ url }) => {
     const dateLimit = new Date();
     dateLimit.setHours(dateLimit.getHours() - hoursAgo);
 
-    
+
     // Obtener encuestas activas de la región
     const polls = await prisma.poll.findMany({
       where: {
@@ -70,7 +70,10 @@ export const GET: RequestHandler = async ({ url }) => {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { votes: { _count: 'desc' } }, // Priorizar encuestas con más votos
+        { createdAt: 'desc' }          // Desempate por fecha
+      ],
     });
 
     // Calcular score de trending
@@ -83,12 +86,12 @@ export const GET: RequestHandler = async ({ url }) => {
       const interactionsScore = poll._count.interactions * 2.0;
       const hoursOld = (Date.now() - poll.createdAt.getTime()) / (1000 * 60 * 60);
       const recencyFactor = Math.max(0, 1 - (hoursOld / hoursAgo));
-      
+
       const trendingScore = (
-        votesScore + 
-        viewsScore + 
-        engagementRate + 
-        commentsScore + 
+        votesScore +
+        viewsScore +
+        engagementRate +
+        commentsScore +
         interactionsScore
       ) * (1 + recencyFactor);
 
@@ -111,7 +114,7 @@ export const GET: RequestHandler = async ({ url }) => {
         }))
       }));
 
-    
+
     return json({
       data: trendingPolls,
       meta: {

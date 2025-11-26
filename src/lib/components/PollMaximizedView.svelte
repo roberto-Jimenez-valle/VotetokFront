@@ -1,16 +1,42 @@
 <script lang="ts">
-  import { ChevronDown, MoreVertical } from 'lucide-svelte';
-  import MediaEmbed from './MediaEmbed.svelte';
-  import { fade, fly } from 'svelte/transition';
+  import { onMount, tick } from "svelte";
+  import {
+    Share2,
+    Globe,
+    Zap,
+    BarChart3,
+    Music,
+    Youtube,
+    Video,
+    Type,
+    AlignLeft,
+    User,
+    MoreHorizontal,
+    Grid,
+    X,
+    Heart,
+    ChevronDown,
+  } from "lucide-svelte";
+  import { fade, fly, scale } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
+  import MediaEmbed from "./MediaEmbed.svelte";
+  import AuthModal from "../AuthModal.svelte";
 
+  // --- INTERFACES ---
   interface PollOption {
     id: string;
     label: string;
     color: string;
     imageUrl?: string;
-    pct?: number; // Porcentaje real de la encuesta
-    votes?: number; // Votos reales
-    voted?: boolean; // Si el usuario votó por esta opción
+    pct?: number;
+    votes?: number;
+    voted?: boolean;
+    // Campos adicionales para el nuevo diseño (opcionales para compatibilidad)
+    type?: "youtube" | "vimeo" | "image" | "text" | "spotify";
+    artist?: string;
+    description?: string;
+    youtubeId?: string;
+    vimeoId?: string;
   }
 
   interface PollCreator {
@@ -23,2450 +49,891 @@
     totalViews: number;
   }
 
-  interface VotedOption {
-    label: string;
-    color: string;
-  }
-
   interface Friend {
     id: string;
     name: string;
     username?: string;
     avatarUrl?: string | null;
-    verified?: boolean;
   }
 
   interface Props {
     options: PollOption[];
     activeOptionId: string;
     pollTitle: string;
-    pollType?: 'simple' | 'multiple' | 'collaborative'; // Tipo de encuesta
-    pollRegion?: string; // Región de la encuesta
-    pollCreatedAt?: string | Date; // Fecha de creación
+    pollType?: "simple" | "multiple" | "collaborative";
+    pollRegion?: string;
+    pollCreatedAt?: string | Date;
     creator?: PollCreator;
     stats?: PollStats;
-    readOnly?: boolean; // Modo solo lectura
-    showAllOptions?: boolean; // Mostrar todas las opciones en vertical con scroll
-    hasVoted?: boolean; // Si el usuario ha votado
-    votedOption?: VotedOption; // Opción votada por el usuario
-    friendsByOption?: Record<string, Friend[]>; // Amigos que votaron por opción
+    readOnly?: boolean;
+    showAllOptions?: boolean;
+    hasVoted?: boolean;
+    isAuthenticated?: boolean;
+    friendsByOption?: Record<string, Friend[]>;
     onClose: () => void;
     onOptionChange: (optionId: string) => void;
-    onSwipeVertical?: (direction: 'up' | 'down') => void; // Swipe vertical para cambiar encuesta
-    onVote?: (optionId: string) => void; // Votar con doble click
-    onClearVote?: () => void; // Limpiar voto
-    onTitleChange?: (title: string) => void;
-    onLabelChange?: (optionId: string, label: string) => void;
-    onOpenColorPicker?: (optionId: string) => void;
-    onOpenInGlobe?: () => void;
+    onSwipeVertical?: (direction: "up" | "down") => void;
+    onVote?: (optionId: string) => void;
     onShare?: () => void;
     onBookmark?: () => void;
     onRepost?: () => void;
-    onAddOption?: () => void; // Añadir opción colaborativa
+    onOpenInGlobe?: () => void;
+    onOpenAuthModal?: () => void;
+    onTitleChange?: (title: string) => void;
+    onLabelChange?: (optionId: string, newLabel: string) => void;
+    onOpenColorPicker?: (optionId: string) => void;
   }
 
-  let { 
-    options, 
-    activeOptionId = $bindable(), 
+  let {
+    options,
+    activeOptionId = $bindable(),
     pollTitle,
-    pollType = 'simple',
-    pollRegion = 'General',
-    pollCreatedAt,
+    pollType = "simple",
     creator,
     stats,
     readOnly = false,
     showAllOptions = false,
     hasVoted = false,
-    votedOption,
-    friendsByOption = {},
+    isAuthenticated = false,
     onClose,
     onOptionChange,
     onSwipeVertical = () => {},
     onVote = () => {},
-    onClearVote = () => {},
-    onTitleChange = () => {},
-    onLabelChange = () => {},
-    onOpenColorPicker = () => {},
-    onOpenInGlobe = () => {},
     onShare = () => {},
     onBookmark = () => {},
     onRepost = () => {},
-    onAddOption = () => {}
+    onOpenInGlobe = () => {},
+    onOpenAuthModal = () => {
+      showAuthModal = true;
+    },
+    onTitleChange = () => {},
+    onLabelChange = () => {},
+    onOpenColorPicker = () => {},
   }: Props = $props();
 
-  const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
+  let totalVotes = $derived(options.reduce((a, b) => a + (b.votes || 0), 0));
+  let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
+  let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
 
-  // Opción activa derivada (readonly, calculada reactivamente)
-  let activeOption = $derived(options.find(opt => opt.id === activeOptionId));
-  let activeIndex = $derived(options.findIndex(opt => opt.id === activeOptionId));
-  // Usar porcentaje real si existe, sino calcular
-  let percentage = $derived(activeOption?.pct !== undefined ? Math.round(activeOption.pct) : Math.round(100 / options.length));
-
-  // Estado del modal de opciones
-  let showOptionsModal = $state(false);
-  let modalDragStartY = $state(0);
-  let modalDragCurrentY = $state(0);
-  let isModalDragging = $state(false);
-
-  // Estado del modal de votantes
-  let showVotersModal = $state(false);
-  let selectedOptionForVoters = $state<string | null>(null);
-
-  // Animaciones de voto
-  let showVoteConfirmation = $state(false);
-  let showVoteRemoval = $state(false);
-  let voteConfirmationColor = $state('#10b981');
-  let voteRemovalColor = $state('#ef4444');
-  let voteConfirmationTimeout: any = null;
-  let voteRemovalTimeout: any = null;
-
-  function getRelativeTime(minutes: number): string {
-    if (minutes < 1) return 'ahora';
-    if (minutes < 60) return `${Math.floor(minutes)}m`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d`;
-    const weeks = Math.floor(days / 7);
-    if (weeks < 4) return `${weeks}sem`;
-    const months = Math.floor(days / 30);
-    return `${months}mes`;
-  }
-
-  function formatNumber(num: number): string {
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num.toString();
-  }
-
-  // Handlers para drag del modal
-  function handleModalDragStart(e: TouchEvent | PointerEvent) {
-    e.stopPropagation(); // Evitar que afecte al modal principal
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    modalDragStartY = clientY;
-    modalDragCurrentY = 0;
-    isModalDragging = true;
-  }
-
-  function handleModalDragMove(e: TouchEvent | PointerEvent) {
-    if (!isModalDragging) return;
-    
-    e.stopPropagation(); // Evitar que afecte al modal principal
-    e.preventDefault(); // Evitar scroll del body
-    
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const deltaY = clientY - modalDragStartY;
-    
-    // Solo permitir drag hacia abajo
-    if (deltaY > 0) {
-      modalDragCurrentY = deltaY;
-    }
-  }
-
-  function handleModalDragEnd() {
-    if (!isModalDragging) return;
-    
-    // Si se arrastró más de 100px hacia abajo, cerrar el modal
-    if (modalDragCurrentY > 100) {
-      showOptionsModal = false;
-    }
-    
-    // Reset
-    isModalDragging = false;
-    modalDragCurrentY = 0;
-    modalDragStartY = 0;
-  }
-
-  // Abrir modal de votantes
-  function openVotersModal(optionKey: string) {
-    selectedOptionForVoters = optionKey;
-    showVotersModal = true;
-  }
-
-  // Cerrar modal de votantes
-  function closeVotersModal() {
-    showVotersModal = false;
-    selectedOptionForVoters = null;
-  }
-
-  // Debug logs
-  $effect(() => {
-    console.log('[PollMaximizedView] Renderizando:', {
-      totalOptions: options.length,
-      activeOptionId,
-      activeIndex,
-      activeOption: activeOption ? {
-        id: activeOption.id,
-        label: activeOption.label,
-        hasImageUrl: !!activeOption.imageUrl,
-        imageUrl: activeOption.imageUrl
-      } : null,
-      percentage,
-      showAllOptions
-    });
-  });
-
-  // No inicializar automáticamente ninguna opción como activa
-  // Se activará solo cuando el usuario haga scroll
-
-  // Estado local SOLO para swipe visual
-  let touchStartX = $state(0);
-  let touchStartY = $state(0);
-  let isDragging = $state(false);
-  
-  // Estado para scroll de opciones (modo showAllOptions)
-  let optionsScrollContainer: HTMLElement | null = null;
-  let scrollStartY = $state(0);
-  let isAtBottom = $state(false);
-  let isAtTop = $state(false);
-  let activeScrollOptionId = $state<string | null>(null); // Opción visible en el scroll
-  
-  // Estado para doble click/tap (solo para modo single-option)
+  let scrollContainer: HTMLElement | null = null;
+  let showLikeAnim = $state(false);
+  let isGridOpen = $state(showAllOptions); // Mapear prop inicial
   let lastTapTime = 0;
-  let tapTimeout: ReturnType<typeof setTimeout> | null = null;
-  
-  // Transiciones dinámicas
-  let transitionX = $state(0);
-  let transitionY = $state(0);
-  let showVoteBorder = $state(true); // Controla visibilidad del borde de voto
-  
-  // Variables derivadas para entrada (inversas a las de salida)
-  let inTransitionX = $derived(-transitionX);
-  let inTransitionY = $derived(-transitionY);
+  let transitionY = $state(100);
+  let showAuthModal = $state(false);
 
-  // Navegación simple con transiciones
-  function goToPrevious() {
-    if (activeIndex > 0) {
-      onOptionChange(options[activeIndex - 1].id);
-    }
-  }
+  let isScrollingProgrammatically = false;
 
-  function goToNext() {
-    if (activeIndex < options.length - 1) {
-      onOptionChange(options[activeIndex + 1].id);
-    }
-  }
+  // --- LÓGICA DE SCROLL ---
+  function handleScroll() {
+    if (isScrollingProgrammatically) return;
 
-  function goToOption(optionId: string) {
-    onOptionChange(optionId);
-  }
-
-  // Detectar si el scroll está al final o al principio
-  function checkScrollPosition() {
-    if (!optionsScrollContainer) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = optionsScrollContainer;
-    isAtBottom = scrollTop + clientHeight >= scrollHeight - 5; // 5px de tolerancia
-    isAtTop = scrollTop <= 5;
-    
-    // Detectar qué opción está más visible (más cerca del centro)
-    if (showAllOptions) {
-      const containerRect = optionsScrollContainer.getBoundingClientRect();
-      const centerY = containerRect.top + containerRect.height / 2;
-      
-      const optionCards = optionsScrollContainer.querySelectorAll('.option-card-vertical');
-      let closestOption: Element | null = null;
-      let minDistance = Infinity;
-      
-      optionCards.forEach((card) => {
-        const cardRect = card.getBoundingClientRect();
-        const cardCenterY = cardRect.top + cardRect.height / 2;
-        const distance = Math.abs(cardCenterY - centerY);
-        
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestOption = card;
-        }
-      });
-      
-      if (closestOption) {
-        const optionId = (closestOption as HTMLElement).getAttribute('data-option-id');
-        if (optionId && optionId !== activeScrollOptionId) {
-          activeScrollOptionId = optionId;
-        }
+    if (scrollContainer) {
+      const index = Math.round(scrollContainer.scrollLeft / window.innerWidth);
+      if (index !== activeIndex && index >= 0 && index < options.length) {
+        onOptionChange(options[index].id);
       }
     }
-    
-    console.log('[PollMaximizedView] Scroll position:', {
-      scrollTop,
-      scrollHeight,
-      clientHeight,
-      isAtBottom,
-      isAtTop,
-      activeScrollOptionId
-    });
   }
-  
-  // Swipe handlers con doble tap
-  function handleTouchStart(e: TouchEvent) {
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-    scrollStartY = e.touches[0].clientY;
-    isDragging = true;
-    
-    // Actualizar posición de scroll
-    if (showAllOptions) {
-      checkScrollPosition();
+
+  function scrollToOption(index: number) {
+    if (scrollContainer) {
+      isScrollingProgrammatically = true;
+      scrollContainer.scrollTo({
+        left: index * window.innerWidth,
+        behavior: "smooth",
+      });
+      // Re-habilitar detección de scroll manual después de la animación
+      setTimeout(() => {
+        isScrollingProgrammatically = false;
+      }, 500);
     }
+  }
+
+  // Sincronizar scroll cuando cambia activeOptionId externamente
+  $effect(() => {
+    if (activeIndex >= 0 && scrollContainer) {
+      const currentScrollIndex = Math.round(
+        scrollContainer.scrollLeft / window.innerWidth,
+      );
+      // Solo hacer scroll si la diferencia es real para evitar bucles
+      if (currentScrollIndex !== activeIndex) {
+        scrollToOption(activeIndex);
+      }
+    }
+  });
+
+  // --- LÓGICA DE VOTO (DOBLE TAP) Y SWIPE VERTICAL ---
+  let touchStartY = 0;
+  let touchStartX = 0;
+  let lastTouchEndTime = 0;
+
+  function handleTouchStart(e: TouchEvent) {
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
   }
 
   function handleTouchEnd(e: TouchEvent) {
-    if (!isDragging) return;
-    
-    const touch = e.changedTouches[0];
-    const deltaX = touch.clientX - touchStartX;
-    const deltaY = touch.clientY - touchStartY;
-    const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    
-    // Si es un tap (sin movimiento significativo)
-    if (moveDistance < 10) {
-      const now = Date.now();
-      const timeSinceLastTap = now - lastTapTime;
-      
-      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-        // Doble tap detectado - votar
-        if (activeOption && readOnly) {
-          console.log('[PollMaximizedView] 🗳️ Doble tap - Votando:', activeOption.id);
-          
-          // Determinar si es un voto o eliminación
-          const isUnvoting = activeOption.voted;
-          
-          if (isUnvoting) {
-            voteRemovalColor = activeOption.color;
-            showVoteRemoval = true;
-            if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-            voteRemovalTimeout = setTimeout(() => {
-              showVoteRemoval = false;
-            }, 800);
-          } else {
-            voteConfirmationColor = activeOption.color;
-            showVoteConfirmation = true;
-            if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-            voteConfirmationTimeout = setTimeout(() => {
-              showVoteConfirmation = false;
-            }, 800);
-          }
-          
-          onVote(activeOption.id);
-        }
-        lastTapTime = 0; // Reset
+    // Si es click en controles interactivos, ignorar
+    if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+
+    const now = Date.now();
+    lastTouchEndTime = now;
+
+    // Lógica de Swipe Vertical
+    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndX = e.changedTouches[0].clientX;
+
+    const diffY = touchStartY - touchEndY;
+    const diffX = touchStartX - touchEndX;
+
+    // Si el movimiento vertical es mayor que el horizontal y supera un umbral
+    if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 50) {
+      if (diffY > 0) {
+        transitionY = window.innerHeight;
+        onSwipeVertical("down"); // Deslizar hacia arriba -> Siguiente
+        setTimeout(() => (transitionY = 100), 500);
       } else {
-        // Primer tap
-        lastTapTime = now;
+        transitionY = -window.innerHeight;
+        onSwipeVertical("up"); // Deslizar hacia abajo -> Anterior
+        setTimeout(() => (transitionY = 100), 500);
       }
-    } else {
-      // Es un swipe
-      // Determinar dirección predominante
-      if (Math.abs(deltaX) > Math.abs(deltaY)) {
-        // Swipe horizontal (cambiar opción) - threshold de 50px
-        if (Math.abs(deltaX) > 50) {
-          showVoteBorder = false;
-          setTimeout(() => {
-            if (deltaX < 0) {
-              // Swipe a la izquierda → siguiente (sale hacia izquierda)
-              transitionX = 300;
-              transitionY = 0;
-              goToNext();
-              setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
-            } else {
-              // Swipe a la derecha → anterior (sale hacia derecha)
-              transitionX = -300;
-              transitionY = 0;
-              goToPrevious();
-              setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
-            }
-          }, 50);
-        }
-      } else {
-        // Swipe vertical (cambiar encuesta) - threshold de 80px
-        if (Math.abs(deltaY) > 80) {
-          // Si estamos en modo showAllOptions, solo cambiar si estamos en los bordes
-          if (showAllOptions) {
-            if (deltaY < 0 && isAtBottom) {
-              // Swipe hacia arriba Y estamos al final → siguiente encuesta
-              console.log('[PollMaximizedView] 📱 Cambio a siguiente (al final del scroll)');
-              showVoteBorder = false;
-              setTimeout(() => {
-                transitionX = 0;
-                transitionY = 300;
-                onSwipeVertical('down');
-                setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
-              }, 50);
-            } else if (deltaY > 0 && isAtTop) {
-              // Swipe hacia abajo Y estamos al inicio → encuesta anterior
-              console.log('[PollMaximizedView] 📱 Cambio a anterior (al inicio del scroll)');
-              showVoteBorder = false;
-              setTimeout(() => {
-                transitionX = 0;
-                transitionY = -300;
-                onSwipeVertical('up');
-                setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
-              }, 50);
-            }
-            // Si no estamos en los bordes, el scroll normal funciona
-          } else {
-            // Modo normal (una opción a la vez)
-            showVoteBorder = false;
-            setTimeout(() => {
-              transitionX = 0;
-              if (deltaY < 0) {
-                // Swipe hacia arriba → siguiente encuesta (sale hacia arriba)
-                transitionY = 300;
-                onSwipeVertical('down');
-              } else {
-                // Swipe hacia abajo → encuesta anterior (sale hacia abajo)
-                transitionY = -300;
-                onSwipeVertical('up');
-              }
-              setTimeout(() => showVoteBorder = true, 500); // 250ms out + 250ms in
-            }, 50);
-          }
-        }
-      }
+      return;
     }
-    
-    isDragging = false;
+
+    // Lógica de Doble Tap (Touch)
+    const DOUBLE_TAP_DELAY = 300;
+    if (now - lastTapTime < DOUBLE_TAP_DELAY) {
+      if (!hasVoted && readOnly) {
+        // Check authentication before voting
+        if (!isAuthenticated) {
+          onOpenAuthModal();
+          lastTapTime = 0;
+          return;
+        }
+
+        const opt = options[activeIndex];
+        if (opt) {
+          onVote(opt.id);
+          showLikeAnim = true;
+          setTimeout(() => (showLikeAnim = false), 1000);
+        }
+      }
+      lastTapTime = 0; // Reset
+    } else {
+      lastTapTime = now;
+    }
   }
 
-  // Keyboard navigation
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Escape') {
-      e.preventDefault();
-      if (e.key === 'ArrowLeft') goToPrevious();
-      else if (e.key === 'ArrowRight') goToNext();
-      else onClose();
+  function handleClick(e: MouseEvent) {
+    // Si es click en controles interactivos, ignorar
+    if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+
+    // Si hubo un evento touch reciente, ignorar este click (ghost click)
+    if (Date.now() - lastTouchEndTime < 500) return;
+
+    // Lógica de Doble Click (Mouse)
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (now - lastTapTime < DOUBLE_TAP_DELAY) {
+      if (!hasVoted && readOnly) {
+        // Check authentication before voting
+        if (!isAuthenticated) {
+          onOpenAuthModal();
+          lastTapTime = 0;
+          return;
+        }
+
+        const opt = options[activeIndex];
+        if (opt) {
+          onVote(opt.id);
+          showLikeAnim = true;
+          setTimeout(() => (showLikeAnim = false), 1000);
+        }
+      }
+      lastTapTime = 0; // Reset
+    } else {
+      lastTapTime = now;
     }
   }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      if (e.key === " ") e.preventDefault();
+
+      if (!hasVoted && readOnly) {
+        // Check authentication before voting
+        if (!isAuthenticated) {
+          onOpenAuthModal();
+          return;
+        }
+
+        const opt = options[activeIndex];
+        if (opt) {
+          onVote(opt.id);
+          showLikeAnim = true;
+          setTimeout(() => (showLikeAnim = false), 1000);
+        }
+      }
+    }
+  }
+
+  // Mouse wheel handler for vertical navigation
+  function handleWheel(e: WheelEvent) {
+    if (Math.abs(e.deltaY) > 50) {
+      e.preventDefault();
+      if (e.deltaY > 0) {
+        transitionY = window.innerHeight;
+        onSwipeVertical("down");
+        setTimeout(() => (transitionY = 100), 500);
+      } else {
+        transitionY = -window.innerHeight;
+        onSwipeVertical("up");
+        setTimeout(() => (transitionY = 100), 500);
+      }
+    }
+  }
+
+  // Handle share with Web Share API
+  async function handleShare() {
+    console.log("[PollMaximizedView] Share button clicked");
+
+    try {
+      // Check if Web Share API is supported
+      if (navigator.share) {
+        console.log(
+          "[PollMaximizedView] Web Share API supported, opening share dialog",
+        );
+        await navigator.share({
+          title: pollTitle,
+          text: `Vota en esta encuesta: ${pollTitle}`,
+          url: window.location.href,
+        });
+        console.log("[PollMaximizedView] Share successful");
+      } else {
+        console.log(
+          "[PollMaximizedView] Web Share API not supported, using clipboard fallback",
+        );
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Enlace copiado al portapapeles");
+      }
+    } catch (error: any) {
+      // User cancelled or error occurred
+      if (error.name === "AbortError") {
+        console.log("[PollMaximizedView] User cancelled share");
+      } else {
+        console.error("[PollMaximizedView] Error sharing:", error);
+        // Try clipboard as fallback
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          alert("Enlace copiado al portapapeles");
+        } catch (clipboardError) {
+          console.error(
+            "[PollMaximizedView] Clipboard also failed:",
+            clipboardError,
+          );
+          alert("No se pudo compartir. URL: " + window.location.href);
+        }
+      }
+    }
+
+    // Also call the parent's onShare if provided
+    onShare();
+  }
+
+  // --- DETECCIÓN DE TIPO DE MEDIA (SI NO VIENE EXPLÍCITO) ---
+  function getMediaType(
+    opt: PollOption,
+  ): "youtube" | "vimeo" | "image" | "text" | "spotify" {
+    if (opt.type) return opt.type;
+    if (!opt.imageUrl) return "text";
+    if (
+      opt.imageUrl.includes("youtube.com") ||
+      opt.imageUrl.includes("youtu.be")
+    )
+      return "youtube";
+    if (opt.imageUrl.includes("vimeo.com")) return "vimeo";
+    if (opt.imageUrl.includes("spotify.com")) return "spotify";
+    return "image";
+  }
+
+  function getYoutubeId(url?: string): string {
+    if (!url) return "";
+    const regExp =
+      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return match && match[2].length === 11 ? match[2] : "";
+  }
+
+  function getVimeoId(url?: string): string {
+    if (!url) return "";
+    const match = url.match(/vimeo\.com\/(\d+)/);
+    return match ? match[1] : "";
+  }
+
+  function getSpotifyId(url?: string): { type: string; id: string } | null {
+    if (!url) return null;
+    const match = url.match(
+      /spotify\.com\/(track|album|playlist|artist)\/([a-zA-Z0-9]+)/,
+    );
+    if (match) {
+      return { type: match[1], id: match[2] };
+    }
+    return null;
+  }
+
+  let interactingOptionId = $state<string | null>(null);
+
+  $effect(() => {
+    // Reset interaction when changing slides
+    if (activeIndex !== -1) {
+      interactingOptionId = null;
+    }
+  });
+
+  // --- COMPONENTES VISUALES (INLINE) ---
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
-
-<!-- Backdrop y contenedor principal -->
-<div 
-  class="maximized-container"
-  role="dialog"
-  aria-modal="true"
-  aria-label="Vista maximizada de encuesta"
-  transition:fade={{ duration: 200 }}
-  ontouchstart={handleTouchStart}
-  ontouchend={handleTouchEnd}
+<div
+  class="fixed inset-0 z-[2147483647] w-full h-full flex flex-col bg-black text-white overflow-hidden select-none"
+  onwheel={handleWheel}
 >
-  <!-- Título de la encuesta con avatar -->
+  <!-- HEADER & DATA BAR -->
   {#key pollTitle}
-    <div 
-      class="poll-title-section"
-      class:voted={activeOption?.voted && showVoteBorder}
-      style={activeOption?.voted && showVoteBorder ? `--vote-color: ${activeOption.color}` : ''}
-      in:fly|local={{ y: transitionY, duration: 250, delay: 250 }}
-      out:fly|local={{ y: inTransitionY, duration: 250, delay: 0 }}
+    <div
+      in:fly={{ y: transitionY, duration: 500 }}
+      out:fly={{ y: -transitionY, duration: 500 }}
+      class="absolute inset-0 w-full h-full flex flex-col"
     >
-      <div class="poll-header">
-        {#if creator}
-          <img 
-            src={creator.avatar || DEFAULT_AVATAR} 
-            alt={creator.username}
-            class="creator-avatar"
-          />
-        {/if}
-        {#if readOnly}
-          <h2 class="poll-title-readonly">{pollTitle}</h2>
-        {:else}
-          <textarea
-            class="poll-title-input"
-            placeholder="¿Cuál es tu pregunta?"
-            value={pollTitle}
-            oninput={(e) => onTitleChange((e.target as HTMLTextAreaElement).value)}
-            rows="2"
-            maxlength="280"
-          ></textarea>
-        {/if}
-      </div>
-      
-      <!-- Meta información de la encuesta -->
-      <div class="poll-meta">
-        <span class="poll-type">
-          {#if pollType === 'multiple'}
-            Encuesta ☑️
-          {:else if pollType === 'collaborative'}
-            Encuesta 👥
-          {:else}
-            Encuesta ⭕
-          {/if}
-          • {pollRegion}
-        </span>
-        {#if pollCreatedAt}
-          <span class="poll-time">• {getRelativeTime(Math.floor((Date.now() - new Date(pollCreatedAt).getTime()) / 60000))}</span>
-        {/if}
-      </div>
-    </div>
-  {/key}
-
-  <!-- Mostrar todas las opciones en scroll vertical O una opción activa -->
-  {#if showAllOptions}
-    <!-- Modo: Todas las opciones en scroll vertical -->
-    {#key pollTitle}
-      <div 
-        class="all-options-container"
-        bind:this={optionsScrollContainer}
-        onscroll={checkScrollPosition}
-        in:fly={{ y: transitionY, duration: 250, delay: 250 }}
-        out:fly={{ y: inTransitionY, duration: 250, delay: 0 }}
+      <div
+        class="absolute top-0 left-0 w-full z-50 flex flex-col pointer-events-none"
       >
-      {#each options as option, idx}
-        <button
-          type="button"
-          class="option-card-vertical"
-          class:voted={option.voted}
-          class:active={activeScrollOptionId === option.id}
-          style="border-color: {option.color}; --option-color: {option.color};"
-          data-option-id={option.id}
-          onclick={() => {
-            if (readOnly) {
-              console.log('[PollMaximizedView] 🗳️ Click - Votando:', option.id, option.label);
-              
-              // Determinar si es un voto o eliminación
-              const isUnvoting = option.voted;
-              
-              if (isUnvoting) {
-                voteRemovalColor = option.color;
-                showVoteRemoval = true;
-                if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-                voteRemovalTimeout = setTimeout(() => {
-                  showVoteRemoval = false;
-                }, 800);
-              } else {
-                voteConfirmationColor = option.color;
-                showVoteConfirmation = true;
-                if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-                voteConfirmationTimeout = setTimeout(() => {
-                  showVoteConfirmation = false;
-                }, 800);
-              }
-              
-              onVote(option.id);
-            }
-          }}
+        <!-- DataBar -->
+        <div
+          class="w-full px-2 flex gap-0.5 h-1.5 pointer-events-none mt-2 z-50"
         >
-          <div class="option-number" style="background: {option.color};">{idx + 1}</div>
-          <div class="option-content-vertical">
-            <div class="option-label-vertical">{option.label}</div>
-            <div class="option-stats">
-              <span class="option-pct" style="color: {option.color};">{Math.round(option.pct || 0)}%</span>
-              <span class="option-votes">{option.votes || 0} votos</span>
+          {#each options as opt, idx}
+            {@const isActive = idx === activeIndex}
+            {@const flexWeight = hasVoted
+              ? Math.max(opt.votes || 0, totalVotes * 0.02)
+              : 1}
+            <div
+              class="h-full transition-all duration-700 ease-out overflow-hidden relative bg-white/20 backdrop-blur-sm rounded-sm"
+              style:flex="{flexWeight} 1 0%"
+              style:opacity={hasVoted ? (isActive ? 1 : 0.3) : 1}
+              style:transform={hasVoted && isActive
+                ? "scaleY(1.5)"
+                : "scaleY(1)"}
+            >
+              <div
+                class="h-full transition-all duration-300"
+                style:width={hasVoted
+                  ? "100%"
+                  : idx < activeIndex
+                    ? "100%"
+                    : isActive
+                      ? "100%"
+                      : "0%"}
+                style:background-color={hasVoted ? opt.color : "#fff"}
+              ></div>
             </div>
-            
-            <!-- Avatares de amigos que votaron -->
-            {#if friendsByOption[option.id] && friendsByOption[option.id].length > 0}
-              <div class="friend-avatars-container" onclick={(e) => { e.stopPropagation(); openVotersModal(option.id); }}>
-                {#each friendsByOption[option.id].slice(0, 3) as friend, i}
-                  <img 
-                    class="friend-avatar" 
-                    src={friend.avatarUrl || DEFAULT_AVATAR}
-                    alt={friend.name}
-                    loading="lazy"
-                    style="z-index: {10 - i};"
+          {/each}
+        </div>
+
+        <!-- QuestionHeader -->
+        <div
+          class="w-full px-4 py-6 z-40 relative pointer-events-none bg-gradient-to-b from-black/80 to-transparent"
+        >
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-2 opacity-80">
+              <div
+                class="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10"
+              >
+                {#if creator?.avatar}
+                  <img
+                    src={creator.avatar}
+                    alt={creator.username}
+                    class="w-full h-full rounded-full object-cover"
                   />
-                {/each}
-                {#if friendsByOption[option.id].length > 3}
-                  <div class="more-avatars">+{friendsByOption[option.id].length - 3}</div>
+                {:else}
+                  <User size={14} class="text-white" />
+                {/if}
+              </div>
+              <span
+                class="text-[11px] font-bold uppercase tracking-widest text-white/90 drop-shadow-md"
+              >
+                {creator?.username || "Anon"}
+              </span>
+            </div>
+            {#if readOnly}
+              <h2
+                class="font-serif italic text-3xl leading-tight max-w-[95%] text-white drop-shadow-xl"
+              >
+                {pollTitle}
+              </h2>
+            {:else}
+              <textarea
+                class="font-serif italic text-3xl leading-tight w-full bg-transparent border-none outline-none text-white placeholder-white/50 resize-none drop-shadow-xl"
+                placeholder="Escribe tu pregunta..."
+                value={pollTitle}
+                oninput={(e) => onTitleChange(e.currentTarget.value)}
+                rows="2"
+                style="pointer-events: auto;"
+              ></textarea>
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <!-- SCROLL CONTAINER (MAIN CONTENT) -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+      <div
+        bind:this={scrollContainer}
+        class="absolute inset-0 w-full h-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar focus:outline-none"
+        onscroll={handleScroll}
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+        onclick={handleClick}
+        onkeydown={handleKeyDown}
+        tabindex="0"
+        role="region"
+        aria-label="Opciones de encuesta"
+      >
+        {#each options as opt, i (opt.id)}
+          {@const type = getMediaType(opt)}
+          <div
+            class="w-full h-full flex-shrink-0 snap-center relative"
+            style="scroll-snap-stop: always;"
+          >
+            <!-- SlideContent -->
+            <div class="w-full h-full relative overflow-hidden">
+              {#if type === "text"}
+                <div
+                  class="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-zinc-950 relative overflow-hidden"
+                >
+                  <div
+                    class="absolute inset-0 opacity-30"
+                    style:background-color={opt.color}
+                  ></div>
+                  <div
+                    class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-40 mix-blend-overlay"
+                  ></div>
+                  <span
+                    class="text-[20rem] font-black leading-none absolute opacity-10 select-none pointer-events-none"
+                    style:color={opt.color}
+                  >
+                    {opt.label.charAt(0)}
+                  </span>
+                  <div
+                    class="relative z-10 flex flex-col items-center gap-6 max-w-lg"
+                  >
+                    {#if !readOnly}
+                      <textarea
+                        class="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words bg-transparent border-none outline-none w-full text-center resize-none overflow-hidden placeholder-white/50"
+                        placeholder="Opción {i + 1}"
+                        value={opt.label}
+                        oninput={(e) =>
+                          onLabelChange(opt.id, e.currentTarget.value)}
+                        onclick={(e) => e.stopPropagation()}
+                        rows="2"
+                      ></textarea>
+                      <button
+                        class="absolute top-8 right-8 w-10 h-10 rounded-full border-2 border-white/50 shadow-lg z-50 hover:scale-110 transition-transform"
+                        style:background-color={opt.color}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          onOpenColorPicker(opt.id);
+                        }}
+                        title="Cambiar color"
+                      ></button>
+                    {:else}
+                      <h1
+                        class="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words"
+                      >
+                        {opt.label}
+                      </h1>
+                    {/if}
+                    {#if opt.artist}
+                      <span
+                        class="text-sm font-bold uppercase tracking-widest text-white/60 bg-black/20 px-3 py-1 rounded-full"
+                      >
+                        {opt.artist}
+                      </span>
+                    {/if}
+                    {#if opt.description}
+                      <p
+                        class="text-xl text-white/80 font-serif italic leading-relaxed mt-4 max-w-sm"
+                      >
+                        "{opt.description}"
+                      </p>
+                    {/if}
+                  </div>
+                </div>
+              {:else}
+                <!-- Media Content -->
+                {#if opt.imageUrl}
+                  <img
+                    src={opt.imageUrl}
+                    alt={opt.label}
+                    class="absolute inset-0 w-full h-full object-cover -z-10 opacity-50 blur-xl"
+                  />
+                {/if}
+                <div
+                  class="absolute inset-0 z-0 bg-black flex items-center justify-center"
+                >
+                  <MediaEmbed
+                    url={opt.imageUrl || ""}
+                    mode="full"
+                    width="100%"
+                    height="350px"
+                    autoplay={i === activeIndex}
+                  />
+                </div>
+                <div
+                  class="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 pointer-events-none"
+                ></div>
+              {/if}
+            </div>
+
+            <!-- InfoOverlay -->
+            {#if type !== "text"}
+              <div
+                class="absolute bottom-0 left-0 w-full p-6 pb-20 z-40 pointer-events-none flex flex-col gap-2 max-w-[75%]"
+                style:opacity={i === activeIndex ? 1 : 0}
+                style:transition="opacity 0.3s"
+              >
+                <div
+                  class="flex flex-col items-start gap-1"
+                  in:fly={{ y: 20, duration: 500 }}
+                >
+                  {#if opt.artist}
+                    <span
+                      class="bg-white text-black text-[9px] font-black uppercase px-2 py-0.5 tracking-widest rounded-sm"
+                    >
+                      {opt.artist}
+                    </span>
+                  {/if}
+                  {#if !readOnly}
+                    <button
+                      class="absolute -top-12 right-0 w-10 h-10 rounded-full border-2 border-white/50 shadow-lg z-50 hover:scale-110 transition-transform"
+                      style:background-color={opt.color}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        onOpenColorPicker(opt.id);
+                      }}
+                      title="Cambiar color"
+                    ></button>
+                    <textarea
+                      class="text-5xl md:text-6xl font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words bg-transparent border-none outline-none w-full resize-none overflow-hidden placeholder-white/50"
+                      placeholder="Opción {i + 1}"
+                      value={opt.label}
+                      oninput={(e) =>
+                        onLabelChange(opt.id, e.currentTarget.value)}
+                      onclick={(e) => e.stopPropagation()}
+                      rows="2"
+                    ></textarea>
+                  {:else}
+                    <h1
+                      class="text-5xl md:text-6xl font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words"
+                    >
+                      {opt.label}
+                    </h1>
+                  {/if}
+
+                  {#if hasVoted}
+                    <div
+                      class="flex items-center gap-2 mt-2"
+                      in:fly={{ x: -20, duration: 500 }}
+                    >
+                      <span
+                        class="text-4xl font-black text-white"
+                        style:color={opt.color}
+                      >
+                        {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
+                      </span>
+                      <span
+                        class="text-xs text-zinc-400 font-medium uppercase tracking-wider"
+                        >del total</span
+                      >
+                    </div>
+                  {/if}
+                </div>
+
+                {#if !hasVoted}
+                  <div
+                    class="mt-4 flex items-center gap-3 opacity-80 animate-pulse"
+                  >
+                    <div
+                      class="w-8 h-8 rounded-full border border-white/30 flex items-center justify-center"
+                    >
+                      <div class="w-1 h-4 bg-white rounded-full"></div>
+                    </div>
+                    <span
+                      class="text-[10px] font-mono uppercase tracking-widest text-white shadow-black drop-shadow-md"
+                    >
+                      Doble toque para votar
+                    </span>
+                  </div>
                 {/if}
               </div>
             {/if}
           </div>
-          {#if option.voted}
-            <div class="voted-checkmark" style="color: {option.color};">✓</div>
-          {/if}
-        </button>
-      {/each}
-      
-      <!-- Botón añadir opción (colaborativas) -->
-      {#if pollType === 'collaborative' && options.length < 10}
-        <button
-          type="button"
-          class="add-option-button"
-          onclick={onAddOption}
-          title="Añadir nueva opción"
-          aria-label="Añadir nueva opción"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          <span>Añadir opción</span>
-        </button>
-      {/if}
-      </div>
-    {/key}
-  {:else if activeOption}
-    <!-- Modo: Una opción a la vez (comportamiento actual) -->
-    {#key `${pollTitle}-${activeOptionId}`}
-      <!-- Borde de voto que cubre toda la pantalla -->
-      {#if activeOption.voted && showVoteBorder}
-        <div class="vote-border-overlay" style="--vote-color: {activeOption.color}"></div>
-      {/if}
-      
-      <div 
-        class="option-content-container"
-        class:voted={activeOption.voted}
-        style={activeOption.voted ? `--vote-color: ${activeOption.color}` : ''}
-        in:fly={{ x: transitionX, y: transitionY, duration: 250, delay: 250 }}
-        out:fly={{ x: inTransitionX, y: inTransitionY, duration: 250, delay: 0 }}
-      >
-        {#if activeOption.imageUrl}
-          <!-- Media Preview con texto dentro -->
-          <div class="media-preview">
-            <MediaEmbed 
-              url={activeOption.imageUrl}
-              mode="full"
-              width="100%"
-              height="auto"
-              autoplay={true}
-            />
-            
-            <!-- Texto con flechas superpuesto sobre el preview -->
-            <div class="text-with-arrows">
-              <!-- Label de opción -->
-              {#if readOnly}
-                <div class="option-label-readonly">{activeOption.label}</div>
-              {:else}
-                <textarea
-                  class="option-label-input"
-                  placeholder="Opción {activeIndex + 1}"
-                  value={activeOption.label}
-                  oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
-                  rows="2"
-                  maxlength="150"
-                ></textarea>
-              {/if}
-
-              <!-- Flechas debajo a los lados -->
-              <div class="arrows-below">
-                <button
-                  type="button"
-                  class="nav-arrow-side left"
-                  onclick={goToPrevious}
-                  aria-label="Opción anterior"
-                  style="visibility: {activeIndex > 0 ? 'visible' : 'hidden'};"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-
-                <button
-                  type="button"
-                  class="nav-arrow-side right"
-                  onclick={goToNext}
-                  aria-label="Siguiente opción"
-                  style="visibility: {activeIndex < options.length - 1 ? 'visible' : 'hidden'};"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        {:else}
-          <!-- Sin media: texto centrado en toda la pantalla -->
-          <div class="text-only-container">
-            <div class="text-with-arrows-centered">
-              <!-- Label de opción centrado -->
-              {#if readOnly}
-                <div class="option-label-readonly-centered">{activeOption.label}</div>
-              {:else}
-                <textarea
-                  class="option-label-input-centered"
-                  placeholder="Opción {activeIndex + 1}"
-                  value={activeOption.label}
-                  oninput={(e) => onLabelChange(activeOption.id, (e.target as HTMLTextAreaElement).value)}
-                  rows="3"
-                  maxlength="150"
-                ></textarea>
-              {/if}
-
-              <!-- Flechas debajo a los lados -->
-              <div class="arrows-below">
-                <button
-                  type="button"
-                  class="nav-arrow-side left"
-                  onclick={goToPrevious}
-                  aria-label="Opción anterior"
-                  style="visibility: {activeIndex > 0 ? 'visible' : 'hidden'};"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-
-                <button
-                  type="button"
-                  class="nav-arrow-side right"
-                  onclick={goToNext}
-                  aria-label="Siguiente opción"
-                  style="visibility: {activeIndex < options.length - 1 ? 'visible' : 'hidden'};"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/key}
-  {/if}
-
-  <!-- Porcentaje abajo a la izquierda (solo en modo single-option) -->
-  {#if activeOption && !showAllOptions}
-    <div class="percentage-bottom-left">
-      <div class="percentage-text">{percentage}%</div>
-    </div>
-  {/if}
-
-  <!-- Avatares de amigos encima de la barra de progreso -->
-  {#if activeOption && !showAllOptions && friendsByOption[activeOption.id] && friendsByOption[activeOption.id].length > 0}
-    <div class="friend-avatars-above-progress" onclick={() => openVotersModal(activeOption.id)}>
-      {#each friendsByOption[activeOption.id].slice(0, 3) as friend, i}
-        <img 
-          class="friend-avatar" 
-          src={friend.avatarUrl || DEFAULT_AVATAR}
-          alt={friend.name}
-          loading="lazy"
-          style="z-index: {10 - i};"
-        />
-      {/each}
-      {#if friendsByOption[activeOption.id].length > 3}
-        <div class="more-avatars">+{friendsByOption[activeOption.id].length - 3}</div>
-      {/if}
-    </div>
-  {/if}
-
-  <!-- Botones de acción abajo a la derecha (solo en modo readonly) -->
-  {#if activeOption && readOnly}
-    <div class="bottom-right-buttons">
-      <!-- Botón de opciones (3 puntos) -->
-      <button
-        type="button"
-        class="options-button"
-        onclick={() => showOptionsModal = true}
-        aria-label="Opciones"
-      >
-        <MoreVertical size={28} />
-      </button>
-      
-      <!-- Botón de minimizar -->
-      <button
-        type="button"
-        class="minimize-button-bottom"
-        onclick={onClose}
-        aria-label="Minimizar"
-      >
-        <ChevronDown size={24} />
-      </button>
-    </div>
-  {/if}
-
-  <!-- Modal de opciones (bottom sheet) -->
-  {#if showOptionsModal}
-    <div 
-      class="options-modal-overlay" 
-      role="button"
-      tabindex="0"
-      onclick={(e) => { e.stopPropagation(); showOptionsModal = false; }}
-      onkeydown={(e) => e.key === 'Enter' && (showOptionsModal = false)}
-      ontouchstart={(e) => e.stopPropagation()}
-      ontouchmove={(e) => e.stopPropagation()}
-      ontouchend={(e) => e.stopPropagation()}
-      transition:fade={{ duration: 200 }}
-    >
-      <div 
-        class="options-modal-content"
-        role="dialog"
-        aria-modal="true"
-        tabindex="-1"
-        style={isModalDragging ? `transform: translateY(${modalDragCurrentY}px); transition: none;` : ''}
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.stopPropagation()}
-        ontouchstart={handleModalDragStart}
-        ontouchmove={handleModalDragMove}
-        ontouchend={handleModalDragEnd}
-        onpointerdown={handleModalDragStart}
-        onpointermove={handleModalDragMove}
-        onpointerup={handleModalDragEnd}
-        in:fly={{ y: 300, duration: 250 }}
-        out:fly|global={{ y: 300, duration: 250 }}
-      >
-        <div class="options-modal-header" style="cursor: grab; user-select: none;">
-          <div class="modal-handle"></div>
-        </div>
-        
-        <div class="options-modal-actions">
-          <!-- Info: Votos y Vistas -->
-          {#if stats}
-            <div class="stats-row">
-              <div class="stat-item">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 11l3 3L22 4"></path>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                </svg>
-                <span class="stat-label">Votos</span>
-                <span class="stat-value">{formatNumber(stats.totalVotes)}</span>
-              </div>
-              <div class="stat-item">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-                <span class="stat-label">Vistas</span>
-                <span class="stat-value">{formatNumber(stats.totalViews)}</span>
-              </div>
-            </div>
-          {/if}
-
-          <!-- Acciones -->
-          <button class="action-item" onclick={() => { onOpenInGlobe(); showOptionsModal = false; }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-            <span>Ver en el mapa</span>
-          </button>
-
-          <button class="action-item" onclick={() => { onBookmark(); showOptionsModal = false; }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span>Guardar</span>
-          </button>
-
-          <button class="action-item" onclick={() => { onRepost(); showOptionsModal = false; }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M17 1l4 4-4 4"/>
-              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-              <path d="M7 23l-4-4 4-4"/>
-              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-            </svg>
-            <span>Republicar</span>
-          </button>
-
-          <button class="action-item" onclick={() => { onShare(); showOptionsModal = false; }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <circle cx="18" cy="5" r="3"/>
-              <circle cx="6" cy="12" r="3"/>
-              <circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-            <span>Compartir</span>
-          </button>
-        </div>
-
-        <button class="cancel-button" onclick={() => showOptionsModal = false}>
-          Cancelar
-        </button>
-      </div>
-    </div>
-  {/if}
-
-  <!-- Botones de acción en el bottom derecho (solo en modo edición) -->
-  {#if activeOption && !readOnly}
-    <div class="action-buttons-bottom">
-      <!-- Botón de cambiar color (izquierda) -->
-      <button
-        type="button"
-        class="color-button"
-        style="background: {activeOption.color};"
-        onclick={() => onOpenColorPicker(activeOption.id)}
-        aria-label="Cambiar color"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-        </svg>
-      </button>
-
-      <!-- Botón de minimizar (derecha) -->
-      <button
-        type="button"
-        class="minimize-button"
-        onclick={onClose}
-        aria-label="Minimizar"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-        </svg>
-      </button>
-    </div>
-  {/if}
-
-  <!-- Botones de acción (solo en modo readOnly) -->
-  {#if readOnly && (activeOption || showAllOptions)}
-    <div class="vote-actions">
-      <!-- Lado izquierdo: Votos, Vistas y Globo -->
-      <div class="action-group-left">
-        <button 
-          class="action-badge action-vote {hasVoted ? 'has-voted' : 'no-vote'}" 
-          type="button" 
-          title={hasVoted ? `Tu voto: ${votedOption?.label || ''} (Click para quitar)` : activeOption ? `Votar: ${activeOption.label}` : "Selecciona una opción"}
-          style="{hasVoted && votedOption ? `--vote-color: ${votedOption.color};` : ''}"
-          onclick={(e) => {
-            e.stopPropagation();
-            if (hasVoted) {
-              // Quitar voto
-              voteRemovalColor = votedOption?.color || '#ef4444';
-              showVoteRemoval = true;
-              if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-              voteRemovalTimeout = setTimeout(() => {
-                showVoteRemoval = false;
-              }, 800);
-              onClearVote();
-            } else if (activeOption) {
-              // Votar opción activa
-              voteConfirmationColor = activeOption.color;
-              showVoteConfirmation = true;
-              if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-              voteConfirmationTimeout = setTimeout(() => {
-                showVoteConfirmation = false;
-              }, 800);
-              onVote(activeOption.id);
-            }
-          }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill={hasVoted ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 11l3 3L22 4"></path>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-          </svg>
-          <span>{formatNumber(stats?.totalVotes || 0)}</span>
-        </button>
-        <button class="action-badge" type="button" title="Vistas">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          <span>{formatNumber(stats?.totalViews || 0)}</span>
-        </button>
-        <button 
-          class="action-badge action-globe" 
-          type="button" 
-          title="Ver en el globo"
-          aria-label="Ver en el globo"
-          onclick={onOpenInGlobe}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="2" y1="12" x2="22" y2="12"/>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-        </button>
-      </div>
-      
-      <!-- Lado derecho: Guardar, Republicar, Compartir -->
-      <div class="action-group-right">
-        <button class="action-badge" type="button" title="Guardar" onclick={onBookmark}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span>{formatNumber(0)}</span>
-        </button>
-        <button class="action-badge" type="button" title="Republicar" onclick={onRepost}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M17 1l4 4-4 4"/>
-            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-            <path d="M7 23l-4-4 4-4"/>
-            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-          </svg>
-          <span>{formatNumber(0)}</span>
-        </button>
-        <button class="action-badge action-share" type="button" title="Compartir" onclick={onShare}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="18" cy="5" r="3"/>
-            <circle cx="6" cy="12" r="3"/>
-            <circle cx="18" cy="19" r="3"/>
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-          </svg>
-          <span>{formatNumber(0)}</span>
-        </button>
-      </div>
-    </div>
-  {/if}
-
-  <!-- Barra inferior con color y dots (solo en modo single-option) -->
-  {#if !showAllOptions}
-    <div class="bottom-bar">
-      <!-- Dots de navegación - todos opacos -->
-      <div class="navigation-dots">
-        {#each options as option, idx}
-          <button
-            type="button"
-            class="dot"
-            class:active={option.id === activeOptionId}
-            style="background: {option.color};"
-            onclick={() => goToOption(option.id)}
-            aria-label="Ir a opción {idx + 1}"
-          ></button>
         {/each}
       </div>
-      
-      <!-- Franja de color que sube según porcentaje -->
-      {#if activeOption}
-        <div class="color-stripe" style="background: {activeOption.color}; height: {Math.max(50, Math.min(150, 50 + percentage))}px;"></div>
-      {/if}
+    </div>
+  {/key}
+
+  <!-- LIKE ANIMATION -->
+  {#if showLikeAnim}
+    <div
+      class="absolute inset-0 z-50 pointer-events-none flex items-center justify-center"
+      in:scale={{ duration: 300, start: 0.5, easing: cubicOut }}
+      out:fade={{ duration: 200 }}
+    >
+      <Heart
+        size={120}
+        class="fill-white text-white drop-shadow-2xl animate-pulse"
+      />
     </div>
   {/if}
 
-  <!-- Tooltip de confirmación de voto -->
-  {#if showVoteConfirmation}
-    <div class="vote-confirmation-tooltip" style="--vote-color: {voteConfirmationColor}">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-    </div>
-  {/if}
-  
-  <!-- Tooltip de eliminación de voto -->
-  {#if showVoteRemoval}
-    <div class="vote-removal-tooltip" style="--vote-color: {voteRemovalColor}">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </div>
-  {/if}
-
-</div>
-
-<!-- Modal de votantes -->
-{#if showVotersModal && selectedOptionForVoters}
-  <!-- Backdrop -->
+  <!-- SOCIAL SIDEBAR -->
   <div
-    class="voters-modal-backdrop"
-    onclick={closeVotersModal}
-    transition:fade={{ duration: 200 }}
-  ></div>
-
-  <!-- Bottom Sheet -->
-  <div
-    class="voters-modal-sheet"
-    transition:fly={{ y: 400, duration: 300 }}
+    class="absolute right-3 bottom-20 z-50 flex flex-col gap-4 items-center pointer-events-auto"
   >
-    <!-- Handle bar -->
-    <div class="voters-handle-bar"></div>
-
-    <!-- Header -->
-    <div class="voters-modal-header">
-      <h3>Quién votó por esta opción</h3>
-      <button
-        class="voters-close-btn"
-        onclick={closeVotersModal}
-        aria-label="Cerrar"
+    <button onclick={() => (isGridOpen = true)} class="group">
+      <div
+        class="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10 group-active:scale-95 transition-all"
       >
-        ✕
-      </button>
-    </div>
+        <Grid size={20} class="text-white" stroke-width={2} />
+      </div>
+    </button>
 
-    <!-- Lista de votantes agrupada por opción -->
-    <div class="voters-modal-content">
-      {#each options as option}
-        {@const voters = friendsByOption[option.id]}
-        {#if voters && voters.length > 0}
-          <div class="voters-option-group">
-            <div class="voters-option-header" style="border-left-color: {option.color};">
-              <div class="voters-option-label">{option.label}</div>
-              <div class="voters-option-count">{voters.length} {voters.length === 1 ? 'voto' : 'votos'}</div>
-            </div>
-            
-            <div class="voters-list">
-              {#each voters as friend}
-                <div class="voter-item">
-                  <img 
-                    src={friend.avatarUrl || DEFAULT_AVATAR}
-                    alt={friend.name}
-                    class="voter-avatar"
-                  />
-                  <div class="voter-info">
-                    <div class="voter-name">
-                      {friend.name}
-                      {#if friend.verified}
-                        <svg class="verified-icon" width="16" height="16" viewBox="0 0 24 24" fill="#3b82f6">
-                          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                      {/if}
-                    </div>
-                    {#if friend.username}
-                      <div class="voter-username">@{friend.username}</div>
-                    {/if}
-                  </div>
+    <button class="group">
+      <div
+        class="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10 group-active:scale-95 transition-all"
+      >
+        <MoreHorizontal size={20} class="text-white" stroke-width={2} />
+      </div>
+    </button>
+
+    <!-- Close Button (Minimizar) -->
+    <button onclick={onClose} class="group mt-4">
+      <div
+        class="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10 group-active:scale-95 transition-all"
+      >
+        <ChevronDown size={24} class="text-white" />
+      </div>
+    </button>
+  </div>
+
+  <!-- GRID VIEW OVERLAY -->
+  {#if isGridOpen}
+    <div
+      class="absolute inset-0 z-50 bg-zinc-950/95 backdrop-blur-xl flex flex-col"
+      in:fly={{ y: 500, duration: 300 }}
+      out:fly={{ y: 500, duration: 300 }}
+    >
+      <div
+        class="p-6 flex justify-between items-center border-b border-white/10"
+      >
+        <h2 class="text-xl font-black uppercase tracking-wider text-white">
+          Todas las Opciones ({options.length})
+        </h2>
+        <button
+          onclick={() => (isGridOpen = false)}
+          class="p-2 bg-white/10 rounded-full hover:bg-white/20"
+        >
+          <X size={24} class="text-white" />
+        </button>
+      </div>
+      <div
+        class="flex-1 overflow-y-auto p-4 grid grid-cols-3 gap-1.5 content-start"
+      >
+        {#each options as opt, i}
+          {@const percent = hasVoted
+            ? Math.round(((opt.votes || 0) / maxVotes) * 100)
+            : 0}
+          {@const type = getMediaType(opt)}
+
+          <button
+            onclick={() => {
+              scrollToOption(i);
+              onOptionChange(opt.id);
+              isGridOpen = false;
+            }}
+            class="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden group border border-white/5 hover:border-white/50 transition-all"
+          >
+            {#if type === "text"}
+              <div
+                class="w-full h-full flex items-center justify-center"
+                style:background-color={`${opt.color}20`}
+              >
+                <Type style={`color: ${opt.color}`} />
+              </div>
+            {:else}
+              <img
+                src={opt.imageUrl}
+                alt={opt.label}
+                class="w-full h-full object-cover opacity-80 group-hover:opacity-100"
+              />
+            {/if}
+
+            <div
+              class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex flex-col justify-end p-2"
+            >
+              <span
+                class="text-[10px] font-bold text-white uppercase truncate w-full text-left"
+                >{opt.label}</span
+              >
+              {#if hasVoted}
+                <div
+                  class="w-full bg-white/20 h-1 rounded-full mt-1 overflow-hidden"
+                >
+                  <div
+                    class="h-full bg-white"
+                    style:width={`${percent}%`}
+                    style:background-color={opt.color}
+                  ></div>
                 </div>
-              {/each}
+              {/if}
             </div>
-          </div>
-        {/if}
-      {/each}
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  <!-- BOTTOM ACTION BAR -->
+  <div class="absolute bottom-0 left-0 right-0 z-50 pointer-events-auto">
+    <div
+      class="flex items-center justify-between px-6 py-4 bg-gradient-to-t from-black/90 via-black/70 to-transparent backdrop-blur-sm"
+    >
+      <!-- Left side actions -->
+      <div class="flex items-center gap-5">
+        <!-- Vote count -->
+        <button
+          class="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+            ></path>
+          </svg>
+          <span class="text-sm font-semibold"
+            >{stats?.totalVotes
+              ? stats.totalVotes / 1000 >= 1
+                ? (stats.totalVotes / 1000).toFixed(1) + "K"
+                : stats.totalVotes
+              : "0"}</span
+          >
+        </button>
+
+        <!-- Views count -->
+        <button
+          class="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span class="text-sm font-semibold">{stats?.totalViews || "0"}</span>
+        </button>
+
+        <!-- Globe -->
+        <button
+          onclick={onOpenInGlobe}
+          class="text-white/80 hover:text-white transition-colors"
+        >
+          <Globe size={22} stroke-width={2} />
+        </button>
+      </div>
+
+      <!-- Right side actions -->
+      <div class="flex items-center gap-5">
+        <!-- Bookmark -->
+        <button
+          onclick={onBookmark}
+          class="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+          <span class="text-xs font-medium">0</span>
+        </button>
+
+        <!-- Repost -->
+        <button
+          onclick={onRepost}
+          class="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M17 1l4 4-4 4" />
+            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+            <path d="M7 23l-4-4 4-4" />
+            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+          </svg>
+          <span class="text-xs font-medium">0</span>
+        </button>
+
+        <!-- Share -->
+        <button
+          onclick={handleShare}
+          class="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+        >
+          <Share2 size={22} stroke-width={2} />
+          <span class="text-xs font-medium">0</span>
+        </button>
+      </div>
     </div>
   </div>
-{/if}
+
+  <!-- AUTH MODAL -->
+  <AuthModal bind:isOpen={showAuthModal} />
+</div>
 
 <style>
-  .maximized-container {
-    position: fixed;
-    inset: 0;
-    background: #000;
-    z-index: 99999 !important;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    touch-action: pan-y;
-  }
-
-  /* Contenedor de todas las opciones en scroll vertical */
-  .all-options-container {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 20px;
-    padding-bottom: 20px; /* Sin barra inferior, menos padding */
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Tarjeta de opción en modo vertical */
-  .option-card-vertical {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    min-height: 80px;
-    width: 100%;
-  }
-
-  .option-card-vertical:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--option-color);
-    transform: translateX(4px);
-  }
-
-  .option-card-vertical.voted {
-    border-color: var(--option-color);
-    background: color-mix(in srgb, var(--option-color) 15%, transparent);
-  }
-
-  .option-card-vertical.active {
-    border-color: var(--option-color);
-    background: color-mix(in srgb, var(--option-color) 20%, transparent);
-    border-width: 3px;
-    transform: scale(1.02);
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--option-color) 40%, transparent);
-  }
-
-  .option-number {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 700;
-    font-size: 18px;
-  }
-
-  .option-content-vertical {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .option-label-vertical {
-    color: white;
-    font-size: 18px;
-    font-weight: 500;
-    line-height: 1.4;
-    text-align: left;
-  }
-
-  .option-stats {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 14px;
-  }
-
-  .option-pct {
-    font-weight: 700;
-    font-size: 24px;
-  }
-
-  .option-votes {
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  .voted-checkmark {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    font-weight: 700;
-  }
-
-  .close-button {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 10000;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    pointer-events: auto;
-  }
-
-  .close-button:hover {
-    background: rgba(0, 0, 0, 0.9);
-    transform: scale(1.1);
-  }
-
-  /* Título editable de la encuesta */
-  .poll-title-section {
-    padding: 20px;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
-    border-bottom: 4px solid transparent;
-    min-height: 80px;
-    max-height: 120px;
-    display: flex;
-    align-items: center;
-    overflow-y: hidden;
-    transition: border-color 0.2s ease;
-  }
-
-  .poll-title-section.voted {
-    border-bottom-color: var(--vote-color);
-  }
-
-  /* Meta información de la encuesta */
-  .poll-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 8px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  .poll-type {
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .poll-time {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  /* Botón añadir opción en showAllOptions */
-  .add-option-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    margin: 12px 0;
-    padding: 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px dashed rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .add-option-button:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.3);
-    color: rgba(255, 255, 255, 0.8);
-    transform: scale(1.02);
-  }
-
-  .add-option-button svg {
-    opacity: 0.6;
-  }
-
-  /* Botones de acción - posicionados encima de la barra de color */
-  .vote-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 20px;
-    margin: 0;
-    gap: 8px;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 2;
-    padding-bottom: 12px;
-  }
-  
-  .action-group-left,
-  .action-group-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  /* Botones de acción - estilo sutil sin bordes */
-  .action-badge {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 6px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-  
-  .action-badge:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.8);
-    transform: translateY(-1px);
-  }
-  
-  .action-badge:active {
-    transform: translateY(0);
-  }
-  
-  .action-badge svg {
-    flex-shrink: 0;
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-  }
-  
-  .action-badge:hover svg {
-    opacity: 1;
-  }
-  
-  .action-badge span {
-    font-weight: 500;
-    font-size: 12px;
-  }
-  
-  .action-globe {
-    color: rgba(59, 130, 246, 0.8);
-  }
-  
-  .action-globe:hover {
-    color: rgb(59, 130, 246);
-  }
-  
-  .action-share:hover {
-    color: rgba(16, 185, 129, 0.9);
-  }
-  
-  /* Botón de votos con estados */
-  .action-vote.has-voted {
-    color: var(--vote-color, #10b981);
-  }
-  
-  .action-vote.has-voted svg {
-    opacity: 1;
-  }
-  
-  .action-vote.no-vote {
-    color: rgba(255, 255, 255, 0.7);
-  }
-  
-  .action-vote.no-vote span {
-    color: rgba(255, 255, 255, 0.9);
-  }
-  
-  .action-vote:hover {
-    color: rgba(16, 185, 129, 0.9);
-  }
-
-  .poll-title-input {
-    width: 100%;
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 20px;
-    font-weight: 600;
-    padding: 16px 20px;
-    resize: none;
-    outline: none;
-    font-family: inherit;
-    line-height: 1.4;
-    transition: all 0.2s;
-  }
-
-  .poll-title-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  /* Contenedor principal de la opción */
-  .option-content-container {
-    flex: 1; /* Ocupa el espacio disponible */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 0;
-    gap: 0;
-    position: relative;
-    box-sizing: border-box;
-    will-change: transform, opacity;
-    width: 100%;
-    max-height: 55%; /* Permite que funcione el overflow */
-  }
-
-  /* Capa de borde de voto que cubre toda la pantalla (sin incluir título) */
-  .vote-border-overlay {
-    position: fixed;
-    top: 120px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border: 4px solid var(--vote-color);
-    border-top: none;
-    border-radius: 0;
-    pointer-events: none;
-    z-index: 5;
-    transition: border-color 0.2s ease;
-  }
-
-  /* Media preview - centrado vertical, todo el ancho */
-  .media-preview {
-    width: 100%;
-    flex: 1; /* Ocupa el espacio disponible */
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: #000;
-    border-radius: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center; /* Centrado vertical */
-    position: relative;
-    min-height: 0; /* Permite que funcione el overflow */
-  }
-
-  .media-preview :global(.media-embed) {
-    width: 100% !important;
-    flex: 1;
-    max-height: 100%;
-    position: relative;
-    border-radius: 0 !important;
-    background: transparent !important;
-    display: flex;
-    align-items: flex-start;
-    overflow: hidden !important;
-    justify-content: center;
-  }
-
-  .media-preview :global(.media-embed.full-mode) {
-    width: 100% !important;
-    height: 100% !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-  }
-
-  .media-preview :global(.media-embed iframe) {
-    width: 100% !important;
-    min-width: 100% !important;
-    height: 100% !important;
-    min-height: 100% !important;
-    border-radius: 0 !important;
-    opacity: 0;
-    animation: showMedia 0s linear 0.39s forwards;
-  }
-
-  .media-preview :global(.media-embed video),
-  .media-preview :global(.media-embed img) {
-    width: 100% !important;
-    height: 100% !important;
-    min-width: 100% !important;
-    max-width: 100% !important;
-    min-height: 100% !important;
-    max-height: 100% !important;
-    object-fit: contain !important;
-    object-position: center !important;
-    border-radius: 0 !important;
-    opacity: 0;
-    animation: showMedia 0s linear 0.39s forwards;
-  }
-
-  @keyframes showMedia {
-    to {
-      opacity: 1;
-    }
-  }
-
-  /* Contenedor para opciones sin media - texto centrado */
-  .text-only-container {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    min-height: 75vh;
-  }
-
-  .text-with-arrows-centered {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 100%;
-    max-width: 600px;
-    min-height: 180px;
-  }
-
-  .option-label-input-centered {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    padding: 20px;
-    color: white;
-    font-size: 32px;
-    font-weight: 500;
-    resize: none;
-    outline: none;
-    font-family: inherit;
-    line-height: 1.5;
-    text-align: center;
-    transition: all 0.2s;
-    min-height: 96px;
-  }
-
-  .option-label-input-centered:focus {
-    background: transparent;
-  }
-
-  .option-label-input-centered::placeholder {
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  /* Contenedor principal de texto y botones - horizontal */
-  .option-text-container {
-    display: flex;
-    flex-direction: row;
-    gap: 12px;
-    align-items: flex-end;
-  }
-
-  /* Texto con flechas arriba - vertical, por encima del preview */
-  .text-with-arrows {
-    bottom: 0;
-    margin:4px;
-    left: 0;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 12px;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
-    z-index: 10;
-    opacity: 0;
-    animation: showMedia 0s linear 0.39s forwards;
-  }
-
-  /* Flechas debajo a los lados */
-  .arrows-below {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    min-height: 32px;
-  }
-
-  /* Porcentaje abajo a la izquierda, por encima de dots */
-  .percentage-bottom-left {
-    position: absolute;
-    bottom: 145px;
-    left: 20px;
-    z-index: 10;
-    pointer-events: none;
-  }
-
-  .percentage-text {
-    font-size: 64px;
-    font-weight: 700;
-    color: white;
-    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
-  }
-
-  /* Avatares de amigos encima de la barra de progreso */
-  .friend-avatars-above-progress {
-    position: absolute;
-    bottom: 90px;
-    left: 20px;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-  }
-
-  .friend-avatars-above-progress:hover {
-    transform: scale(1.05);
-  }
-
-  /* Botones de acción casi en el bottom derecho - horizontal */
-  .action-buttons-bottom {
-    position: absolute;
-    bottom: 50px;
-    right: 20px;
-    display: flex;
-    flex-direction: row;
-    gap: 12px;
-    z-index: 1000;
-  }
-
-  .option-label-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    padding: 0;
-    color: white;
-    font-size: 16px;
-    font-weight: 500;
-    resize: none;
-    outline: none;
-    font-family: inherit;
-    line-height: 1.5;
-    transition: all 0.2s;
-  }
-
-  .option-label-input:focus {
-    background: transparent;
-  }
-
-  .option-label-input::placeholder {
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  /* Flechas laterales discretas - solo en desktop */
-  .nav-arrow-side {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.5);
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
     display: none;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    flex-shrink: 0;
   }
-
-  /* Mostrar flechas solo en desktop (>768px) */
-  @media (min-width: 768px) {
-    .nav-arrow-side {
-      display: flex;
-    }
-  }
-
-  .nav-arrow-side:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-
-  .nav-arrow-side:active {
-    transform: scale(0.95);
-  }
-
-  /* Botón de cambiar color */
-  .color-button {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    flex-shrink: 0;
-    color: white;
-    pointer-events: auto;
-  }
-
-  .color-button:hover {
-    transform: scale(1.1);
-    border-color: rgba(255, 255, 255, 0.4);
-  }
-
-  .color-button:active {
-    transform: scale(0.95);
-  }
-
-  /* Botón de minimizar */
-  .minimize-button {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    flex-shrink: 0;
-    color: white;
-    pointer-events: auto;
-  }
-
-  .minimize-button:hover {
-    transform: scale(1.1);
-    background: rgba(0, 0, 0, 0.7);
-    border-color: rgba(255, 255, 255, 0.4);
-  }
-
-  .minimize-button:active {
-    transform: scale(0.95);
-  }
-
-  .percentage-display {
-    display: flex;
-    justify-content: center;
-  }
-
-  .percentage-text {
-    font-size: 48px;
-    font-weight: 700;
-    color: white;
-    text-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
-    letter-spacing: -0.02em;
-  }
-
-  /* Barra inferior */
-  .bottom-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 50px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  .bottom-bar .color-stripe {
-    z-index: 1;
-  }
-
-  .navigation-dots {
-    position: absolute;
-    bottom: 145px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    padding: 8px 20px;
-    justify-content: center;
-    background: transparent;
-    z-index: 10;
-    pointer-events: auto;
-  }
-
-  .color-stripe {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    border-radius: 0;
-    transition: height 0.3s ease;
-    opacity: 0.8;
-    z-index: 3;
-    min-height: 50px;
-    max-height: 150px;
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    padding: 0;
-    pointer-events: auto;
-  }
-
-  .dot.active {
-    width: 24px;
-    border-radius: 4px;
-  }
-
-  .option-counter {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: white;
-    font-size: 14px;
-    font-weight: 600;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(10px);
-    padding: 8px 16px;
-    border-radius: 12px;
-    z-index: 999;
-    pointer-events: none;
-  }
-
-  /* Flechas de navegación */
-  .nav-arrow {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    z-index: 1001;
-    pointer-events: auto;
-  }
-
-  .nav-arrow.left {
-    left: 20px;
-  }
-
-  .nav-arrow.right {
-    right: 20px;
-  }
-
-  .nav-arrow:hover {
-    background: rgba(0, 0, 0, 0.8);
-    transform: translateY(-50%) scale(1.1);
-  }
-
-  .nav-arrow:active {
-    transform: translateY(-50%) scale(0.95);
-  }
-
-  /* Responsive */
-  @media (max-width: 640px) {
-    .poll-title h2 {
-      font-size: 14px;
-    }
-
-    .option-label {
-      font-size: 18px;
-    }
-
-    .percentage-text {
-      font-size: 20px;
-    }
-  }
-
-  /* Botón de minimizar abajo a la derecha (modo readonly) */
-  .minimize-button-bottom {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .minimize-button-bottom:hover {
-    background: rgba(0, 0, 0, 0.85);
-    transform: scale(1.1);
-    border-color: rgba(255, 255, 255, 0.4);
-  }
-
-  .minimize-button-bottom:active {
-    transform: scale(0.95);
-  }
-
-  /* Estilos para modo readonly */
-  .poll-title-readonly {
-    color: white;
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.4;
-    margin: 0;
-    padding: 0;
-    text-align: left;
-    flex: 1;
-    overflow-wrap: break-word;
-    word-break: break-word;
-  }
-
-  .option-label-readonly {
-    color: white;
-    font-size: 20px;
-    font-weight: 600;
-    line-height: 1.4;
-    text-align: center;
-    padding: 0;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-  }
-
-  .option-label-readonly-centered {
-    color: white;
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1.3;
-    text-align: center;
-    padding: 20px;
-    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
-    min-height: 96px;
-  }
-
-  /* Header con avatar */
-  .poll-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-  }
-
-  .creator-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    object-fit: cover;
-    flex-shrink: 0;
-  }
-
-  /* Contenedor de botones abajo a la derecha */
-  .bottom-right-buttons {
-    position: fixed;
-    bottom: 80px;
-    right: 20px;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column-reverse;
-    gap: 12px;
-    pointer-events: auto;
-  }
-
-  /* Botón de opciones (3 puntos) */
-  .options-button {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .options-button:hover {
-    background: rgba(0, 0, 0, 0.85);
-    transform: scale(1.1);
-    border-color: rgba(255, 255, 255, 0.4);
-  }
-
-  .options-button:active {
-    transform: scale(0.95);
-  }
-
-  /* Modal de opciones (bottom sheet) */
-  .options-modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 99999;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-  }
-
-  .options-modal-content {
-    width: 100%;
-    max-width: 500px;
-    background: #1a1a1a;
-    border-radius: 24px 24px 0 0;
-    padding: 0 0 20px 0;
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
-    transition: transform 0.2s ease-out;
-    touch-action: pan-y;
-  }
-
-  .options-modal-header {
-    padding: 12px 0;
-    display: flex;
-    justify-content: center;
-  }
-
-  .modal-handle {
-    width: 40px;
-    height: 5px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-  }
-
-  .options-modal-actions {
-    padding: 0 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  /* Fila de estadísticas */
-  .stats-row {
-    display: flex;
-    gap: 12px;
-    padding: 16px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    margin-bottom: 8px;
-  }
-
-  .stat-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-  }
-
-  .stat-item svg {
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .stat-label {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .stat-value {
-    color: white;
-    font-size: 20px;
-    font-weight: 700;
-  }
-
-  /* Botón de acción del modal */
-  .action-item {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 18px 16px;
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    border-radius: 12px;
-  }
-
-  .action-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .action-item:active {
-    background: rgba(255, 255, 255, 0.1);
-    transform: scale(0.98);
-  }
-
-  .action-item svg {
-    color: rgba(255, 255, 255, 0.8);
-    flex-shrink: 0;
-  }
-
-  .action-item span {
-    flex: 1;
-    text-align: left;
-  }
-
-  /* Botón de cancelar */
-  .cancel-button {
-    width: calc(100% - 40px);
-    margin: 16px 20px 0 20px;
-    padding: 16px;
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 12px;
-    color: white;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .cancel-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  .cancel-button:active {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(0.98);
-  }
-
-  /* Responsive para modal */
-  @media (max-width: 640px) {
-    .stat-item {
-      padding: 8px;
-    }
-
-    .stat-value {
-      font-size: 16px;
-    }
-
-    .action-item {
-      padding: 14px 12px;
-      font-size: 15px;
-    }
-  }
-
-  /* Tooltip de confirmación de voto */
-  .vote-confirmation-tooltip {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--vote-color, #10b981);
-    color: white;
-    padding: 12px;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 1000;
-    animation: voteConfirmFlyUp 0.8s ease-out forwards;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-  }
-  
-  .vote-confirmation-tooltip svg {
-    flex-shrink: 0;
-  }
-  
-  @keyframes voteConfirmFlyUp {
-    0% {
-      opacity: 0;
-      transform: translate(-50%, -50%) scale(0.8);
-    }
-    20% {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1.1);
-    }
-    100% {
-      opacity: 0;
-      transform: translate(-50%, -150%) scale(0.8);
-    }
-  }
-  
-  /* Tooltip de eliminación de voto */
-  .vote-removal-tooltip {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--vote-color, #ef4444);
-    color: white;
-    padding: 12px;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 1000;
-    animation: voteRemovalFlyUp 0.8s ease-out forwards;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-  }
-  
-  .vote-removal-tooltip svg {
-    flex-shrink: 0;
-  }
-  
-  @keyframes voteRemovalFlyUp {
-    0% {
-      opacity: 0;
-      transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
-    }
-    20% {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1.1) rotate(90deg);
-    }
-    100% {
-      opacity: 0;
-      transform: translate(-50%, -150%) scale(0.8) rotate(180deg);
-    }
-  }
-
-  /* Avatares de amigos */
-  .friend-avatars-container {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 8px;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-  }
-
-  .friend-avatars-container:hover {
-    transform: scale(1.05);
-  }
-
-  .friend-avatar {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 2px solid #000;
-    object-fit: cover;
-    margin-left: -8px;
-  }
-
-  .friend-avatar:first-child {
-    margin-left: 0;
-  }
-
-  .more-avatars {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    font-size: 10px;
-    font-weight: 600;
-    border: 2px solid #000;
-    margin-left: -8px;
-  }
-
-  /* Modal de votantes */
-  .voters-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 100000;
-    backdrop-filter: blur(4px);
-  }
-
-  .voters-modal-sheet {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-    border-radius: 24px 24px 0 0;
-    padding: 0 0 20px 0;
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
-    max-height: 80vh;
-    overflow-y: auto;
-    z-index: 100001;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-  }
-
-  .voters-handle-bar {
-    width: 40px;
-    height: 5px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-    margin: 12px auto;
-  }
-
-  .voters-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .voters-modal-header h3 {
-    color: white;
-    font-size: 18px;
-    font-weight: 700;
-    margin: 0;
-  }
-
-  .voters-close-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: white;
-    font-size: 20px;
-    transition: all 0.2s ease;
-  }
-
-  .voters-close-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
-  }
-
-  .voters-modal-content {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .voters-option-group {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .voters-option-header {
-    padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border-left: 4px solid;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .voters-option-label {
-    color: white;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  .voters-option-count {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 14px;
-    font-weight: 500;
-  }
-
-  .voters-list {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .voter-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    transition: background 0.2s ease;
-  }
-
-  .voter-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .voter-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
   }
-
-  .voter-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .voter-name {
-    color: white;
-    font-size: 15px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .verified-icon {
-    flex-shrink: 0;
-  }
-
-  .voter-username {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
-    margin-top: 2px;
-  }
-
-  @media (max-width: 640px) {
-    .voters-modal-header h3 {
-      font-size: 16px;
-    }
-
-    .voter-avatar {
-      width: 36px;
-      height: 36px;
-    }
-
-    .voter-name {
-      font-size: 14px;
-    }
 
-    .voter-username {
-      font-size: 13px;
-    }
+  .text-shadow-xl {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
   }
 </style>

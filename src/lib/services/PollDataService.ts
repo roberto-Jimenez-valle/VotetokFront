@@ -28,7 +28,7 @@ export class PollDataService {
   async loadVotesByCountry(pollId: number | string): Promise<VotesBySubdivision> {
     try {
       const response = await apiCall(`/api/polls/${pollId}/votes-by-country`);
-      
+
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando votos por país`);
         return {};
@@ -36,7 +36,7 @@ export class PollDataService {
 
       const { data } = await response.json();
       console.log(`[PollDataService] ✅ Votos por país cargados:`, Object.keys(data || {}).length, 'países');
-      
+
       return data || {};
     } catch (error) {
       console.error('[PollDataService] ❌ Error loading votes by country:', error);
@@ -55,14 +55,14 @@ export class PollDataService {
       const response = await apiCall(
         `/api/polls/${pollId}/votes-by-subdivisions?country=${countryIso}`
       );
-      
+
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando votos por subdivisiones`);
         return {};
       }
 
       const { data } = await response.json();
-      
+
       // Filtrar solo nivel 1 exacto (ESP.1, ESP.2) - NO agregar de niveles inferiores
       const level1Data: VotesBySubdivision = {};
       for (const [subdivisionId, votes] of Object.entries(data || {})) {
@@ -71,9 +71,9 @@ export class PollDataService {
           level1Data[subdivisionId] = votes as Record<string, number>;
         }
       }
-      
+
       console.log(`[PollDataService] ✅ Votos nivel 1 cargados:`, Object.keys(level1Data).length, 'subdivisiones');
-      
+
       return level1Data;
     } catch (error) {
       console.error('[PollDataService] ❌ Error loading votes by subdivisions:', error);
@@ -90,21 +90,21 @@ export class PollDataService {
     subdivisionId: string
   ): Promise<VotesBySubdivision> {
     try {
-      const cleanSubdivisionId = subdivisionId.includes('.') 
-        ? subdivisionId.split('.').pop() 
+      const cleanSubdivisionId = subdivisionId.includes('.')
+        ? subdivisionId.split('.').pop()
         : subdivisionId;
-      
+
       const response = await apiCall(
         `/api/polls/${pollId}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`
       );
-      
+
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando votos por sub-subdivisiones`);
         return {};
       }
 
       const { data } = await response.json();
-      
+
       // Filtrar solo nivel 2 exacto (ESP.1.1) - NO agregar de niveles inferiores
       const level2Data: VotesBySubdivision = {};
       for (const [subdivisionId, votes] of Object.entries(data || {})) {
@@ -113,9 +113,9 @@ export class PollDataService {
           level2Data[subdivisionId] = votes as Record<string, number>;
         }
       }
-      
+
       console.log(`[PollDataService] ✅ Votos nivel 2 cargados:`, Object.keys(level2Data).length, 'sub-subdivisiones');
-      
+
       return level2Data;
     } catch (error) {
       console.error('[PollDataService] ❌ Error loading votes by sub-subdivisions:', error);
@@ -129,7 +129,7 @@ export class PollDataService {
   async loadTrendingPolls(limit: number = 20): Promise<Poll[]> {
     try {
       const response = await apiCall(`/api/polls/trending?limit=${limit}`);
-      
+
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando trending polls`);
         return [];
@@ -137,7 +137,7 @@ export class PollDataService {
 
       const { data } = await response.json();
       console.log(`[PollDataService] ✅ Trending polls cargados:`, data?.length || 0);
-      
+
       return data || [];
     } catch (error) {
       console.error('[PollDataService] ❌ Error loading trending polls:', error);
@@ -156,7 +156,7 @@ export class PollDataService {
       const response = await apiCall(
         `/api/polls/trending-by-region?region=${encodeURIComponent(region)}&limit=${limit}`
       );
-      
+
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando trending por región`);
         return [];
@@ -164,7 +164,7 @@ export class PollDataService {
 
       const { data } = await response.json();
       console.log(`[PollDataService] ✅ Trending por región cargados:`, data?.length || 0);
-      
+
       return data || [];
     } catch (error) {
       console.error('[PollDataService] ❌ Error loading trending polls by region:', error);
@@ -188,7 +188,7 @@ export class PollDataService {
       const response = await apiCall(
         `/api/polls/trending-aggregated-data?region=${encodeURIComponent(region)}&country=${countryIso}&limit=${limit}`
       );
-      
+
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando trending agregado`);
         return { polls: [], aggregatedVotes: {} };
@@ -196,7 +196,7 @@ export class PollDataService {
 
       const { data } = await response.json();
       console.log(`[PollDataService] ✅ Trending agregado cargado:`, data?.polls?.length || 0, 'encuestas');
-      
+
       return {
         polls: data?.polls || [],
         aggregatedVotes: data?.aggregatedVotes || {}
@@ -213,7 +213,7 @@ export class PollDataService {
   async loadPoll(pollId: number | string): Promise<Poll | null> {
     try {
       const response = await apiCall(`/api/polls/${pollId}`);
-      
+
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando encuesta ${pollId}`);
         return null;
@@ -221,9 +221,9 @@ export class PollDataService {
 
       const result = await response.json();
       const poll = result.data || result;
-      
+
       console.log(`[PollDataService] ✅ Encuesta cargada:`, poll.id);
-      
+
       return poll;
     } catch (error) {
       console.error('[PollDataService] ❌ Error loading poll:', error);
@@ -244,7 +244,7 @@ export class PollDataService {
     const aggregatedData: VotesBySubdivision = {};
     const aggregatedColors: Record<string, string> = {};
     const pollOptions: PollOption[] = [];
-    
+
     const pollColors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4',
       '#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'
@@ -272,6 +272,9 @@ export class PollDataService {
       try {
         const pollData = await this.loadVotesByCountry(poll.id);
 
+        console.log(`[PollDataService] 📊 Poll ${poll.id}: ${Object.keys(pollData).length} países con datos`);
+        console.log(`[PollDataService] 📊 Países:`, Object.keys(pollData));
+
         // Sumar TODOS los votos de esta encuesta por país
         for (const [countryIso, votes] of Object.entries(pollData)) {
           if (!aggregatedData[countryIso]) {
@@ -281,6 +284,8 @@ export class PollDataService {
           const totalVotes = Object.values(votes).reduce((sum, count) => sum + (count as number), 0);
           aggregatedData[countryIso][pollKey] = totalVotes;
         }
+
+        console.log(`[PollDataService] 📊 Agregado acumulado hasta ahora: ${Object.keys(aggregatedData).length} países`);
       } catch (error) {
         console.warn(`[PollDataService] ⚠️ Error agregando datos de encuesta ${poll.id}:`, error);
       }

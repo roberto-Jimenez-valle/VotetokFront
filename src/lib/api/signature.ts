@@ -20,12 +20,12 @@ async function simpleHmacSha256(secret: string, message: string): Promise<string
   // En producción SIEMPRE usar HTTPS con Web Crypto
   const keyBytes = new TextEncoder().encode(secret)
   const messageBytes = new TextEncoder().encode(message)
-  
+
   // XOR simple para desarrollo (NO SEGURO, solo para testing)
   const combined = new Uint8Array(messageBytes.length + keyBytes.length)
   combined.set(messageBytes)
   combined.set(keyBytes, messageBytes.length)
-  
+
   const hashBuffer = await crypto.subtle.digest('SHA-256', combined)
   const hashArray = Array.from(new Uint8Array(hashBuffer))
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
@@ -42,7 +42,7 @@ async function createHmacSignature(
     // Intentar usar Web Crypto API (HTTPS requerido en móviles)
     const encoder = new TextEncoder()
     const keyData = encoder.encode(secret)
-    
+
     // Importar key
     const key = await crypto.subtle.importKey(
       'raw',
@@ -51,11 +51,11 @@ async function createHmacSignature(
       false,
       ['sign']
     )
-    
+
     // Crear signature
     const messageData = encoder.encode(message)
     const signature = await crypto.subtle.sign('HMAC', key, messageData)
-    
+
     // Convertir a hex
     const hashArray = Array.from(new Uint8Array(signature))
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
@@ -74,7 +74,7 @@ console.log('[signature.ts] APP_ID:', APP_ID)
 console.log('[signature.ts] APP_SECRET loaded:', APP_SECRET ? APP_SECRET.substring(0, 30) + '...' : 'NOT LOADED')
 console.log('[signature.ts] Build timestamp:', Date.now())
 
-export interface SignatureHeaders {
+export interface SignatureHeaders extends Record<string, string> {
   'X-App-ID': string
   'X-Timestamp': string
   'X-Signature': string
@@ -89,13 +89,13 @@ export async function createAppSignatureHeaders(
   body?: string
 ): Promise<SignatureHeaders> {
   const timestamp = Date.now()
-  
+
   // Crear mensaje para firmar
   const message = `${method}:${path}:${timestamp}:${body || ''}`
-  
+
   // Generar HMAC signature
   const signature = await createHmacSignature(APP_SECRET, message)
-  
+
   return {
     'X-App-ID': APP_ID,
     'X-Timestamp': timestamp.toString(),
