@@ -4411,6 +4411,7 @@
     readOnly={true}
     showAllOptions={previewModalShowAllOptions}
     hasVoted={!!userVotes[previewModalPoll.id]}
+    isAuthenticated={!!$currentUser}
     onClose={closePreviewModal}
     onOptionChange={(optionId) => {
       previewModalOptionIndex = optionId;
