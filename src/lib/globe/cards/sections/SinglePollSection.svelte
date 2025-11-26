@@ -1342,6 +1342,8 @@
             </button>
           {:else}
             <!-- Layout estilo PollMaximizedView (reducido) -->
+            {@const textLength = option.label.length}
+            {@const fontSize = textLength > 60 ? 'text-base' : textLength > 40 ? 'text-lg' : 'text-xl'}
             
             <!-- Fondo de color + overlay de gradiente -->
             <div class="option-background-maximized" style="--option-color: {option.color};">
@@ -1364,8 +1366,8 @@
             
             <!-- Contenido centrado (label + percentage) -->
             <div class="option-content-maximized">
-              <!-- Label grande en uppercase -->
-              <h2 class="option-label-maximized">
+              <!-- Label grande en uppercase con tamaño dinámico y truncamiento -->
+              <h2 class="option-label-maximized {fontSize}" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; word-break: break-word;">
                 {option.label}
               </h2>
               
@@ -3269,7 +3271,7 @@
 
   /* Label grande en uppercase */
   .option-label-maximized {
-    font-size: 36px;
+    /* font-size controlado por clases Tailwind dinámicas */
     font-weight: 900;
     color: white;
     text-transform: uppercase;
@@ -3525,9 +3527,6 @@
       height: 26px;
     }
 
-    .option-label-maximized {
-      font-size: 28px;
-    }
 
     .percentage-value-large {
       font-size: 36px;

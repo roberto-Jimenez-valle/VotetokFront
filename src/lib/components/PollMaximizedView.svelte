@@ -388,6 +388,8 @@
   }
 
   let interactingOptionId = $state<string | null>(null);
+  let isTitleExpanded = $state(false);
+  let expandedOptions = $state<Record<string, boolean>>({});
 
   $effect(() => {
     // Reset interaction when changing slides
@@ -447,37 +449,43 @@
 
         <!-- QuestionHeader -->
         <div
-          class="w-full px-4 py-6 z-40 relative pointer-events-none bg-gradient-to-b from-black/80 to-transparent"
+          class="w-full px-4 py-4 z-40 relative pointer-events-none bg-gradient-to-b from-black/90 to-transparent"
         >
-          <div class="flex flex-col items-start gap-2">
-            <div class="flex items-center gap-2 opacity-80">
-              <div
-                class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-2 ring-white/20"
-              >
-                {#if creator?.avatar}
-                  <img
-                    src={creator.avatar}
-                    alt={creator.username}
-                    class="w-full h-full rounded-full object-cover"
-                  />
-                {:else}
-                  <User size={14} class="text-white" />
-                {/if}
-              </div>
+          <div class="flex items-start gap-3">
+            <!-- Avatar -->
+            <div
+              class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-2 ring-white/20 flex-shrink-0"
+            >
+              {#if creator?.avatar}
+                <img
+                  src={creator.avatar}
+                  alt={creator.username}
+                  class="w-full h-full rounded-full object-cover"
+                />
+              {:else}
+                <User size={18} class="text-white" />
+              {/if}
             </div>
+            
+            <!-- Título de la pregunta (mismo nivel que avatar) -->
             {#if readOnly}
-              <h2
-                class="font-serif italic text-3xl leading-tight max-w-[95%] text-white drop-shadow-xl"
+              <button
+                class="font-serif italic text-xl md:text-2xl leading-tight text-white drop-shadow-xl text-left flex-1 pointer-events-auto cursor-pointer transition-all hover:opacity-80"
+                style={!isTitleExpanded ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word;" : "word-break: break-word;"}
+                onclick={() => isTitleExpanded = !isTitleExpanded}
+                type="button"
+                aria-label={isTitleExpanded ? "Contraer título" : "Expandir título"}
               >
                 {pollTitle}
-              </h2>
+              </button>
             {:else}
               <textarea
-                class="font-serif italic text-3xl leading-tight w-full bg-transparent border-none outline-none text-white placeholder-white/50 resize-none drop-shadow-xl"
+                class="font-serif italic text-xl md:text-2xl leading-tight flex-1 bg-transparent border-none outline-none text-white placeholder-white/50 resize-none drop-shadow-xl"
                 placeholder="Escribe tu pregunta..."
                 value={pollTitle}
                 oninput={(e) => onTitleChange(e.currentTarget.value)}
                 rows="2"
+                maxlength="200"
                 style="pointer-events: auto;"
               ></textarea>
             {/if}
@@ -509,14 +517,15 @@
             <div class="w-full h-full relative overflow-hidden">
               {#if type === "text"}
                 <div
-                  class="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-zinc-950 relative overflow-hidden"
+                  class="w-full h-full flex flex-col items-center justify-center px-8 py-16 text-center bg-zinc-950 relative overflow-hidden"
                 >
+                  <!-- Fondo con blur de color -->
                   <div
-                    class="absolute inset-0 opacity-30"
-                    style:background-color={opt.color}
+                    class="absolute inset-0 opacity-40"
+                    style="background-color: {opt.color}; filter: blur(60px); transform: scale(1.2);"
                   ></div>
                   <div
-                    class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-40 mix-blend-overlay"
+                    class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay"
                   ></div>
                   <span
                     class="text-[20rem] font-black leading-none absolute opacity-10 select-none pointer-events-none"
@@ -525,17 +534,17 @@
                     {opt.label.charAt(0)}
                   </span>
                   <div
-                    class="relative z-10 flex flex-col items-center gap-6 max-w-lg"
+                    class="relative z-10 flex flex-col items-center gap-6 max-w-2xl w-full"
                   >
                     {#if !readOnly}
                       <textarea
-                        class="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words bg-transparent border-none outline-none w-full text-center resize-none overflow-hidden placeholder-white/50"
+                        class="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words bg-transparent border-none outline-none w-full text-center resize-none overflow-auto placeholder-white/50"
                         placeholder="Opción {i + 1}"
                         value={opt.label}
                         oninput={(e) =>
                           onLabelChange(opt.id, e.currentTarget.value)}
                         onclick={(e) => e.stopPropagation()}
-                        rows="2"
+                        rows="4"
                       ></textarea>
                       <button
                         class="absolute top-8 right-8 w-10 h-10 rounded-full border-2 border-white/50 shadow-lg z-50 hover:scale-110 transition-transform"
@@ -547,11 +556,23 @@
                         title="Cambiar color"
                       ></button>
                     {:else}
-                      <h1
-                        class="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words"
+                      {@const textLength = opt.label.length}
+                      {@const fontSize = textLength > 60 ? 'text-4xl md:text-5xl' : textLength > 40 ? 'text-5xl md:text-6xl' : 'text-5xl md:text-7xl'}
+                      {@const shouldTruncate = textLength > 100}
+                      <button
+                        class="{fontSize} font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words text-center cursor-pointer hover:opacity-90 transition-opacity w-full"
+                        style={!expandedOptions[opt.id] && shouldTruncate ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden;" : ""}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          if (shouldTruncate) {
+                            expandedOptions[opt.id] = !expandedOptions[opt.id];
+                          }
+                        }}
+                        type="button"
+                        aria-label={expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto"}
                       >
                         {opt.label}
-                      </h1>
+                      </button>
                     {/if}
                     {#if opt.artist}
                       <span
@@ -572,20 +593,23 @@
               {:else}
                 <!-- Media Content -->
                 {#if opt.imageUrl}
+                  <!-- Fondo borroso de la imagen -->
                   <img
                     src={opt.imageUrl}
-                    alt={opt.label}
-                    class="absolute inset-0 w-full h-full object-cover -z-10 opacity-50 blur-xl"
+                    alt=""
+                    class="absolute inset-0 w-full h-full object-cover -z-10"
+                    style="filter: blur(40px); opacity: 0.6; transform: scale(1.1);"
                   />
                 {/if}
                 <div
-                  class="absolute inset-0 z-0 bg-black flex items-center justify-center"
+                  class="absolute inset-0 z-0 bg-black flex justify-center"
+                  style="align-items: flex-start; padding-top: 21%;"
                 >
                   <MediaEmbed
                     url={opt.imageUrl || ""}
                     mode="full"
                     width="100%"
-                    height="350px"
+                    height="420px"
                     autoplay={i === activeIndex}
                   />
                 </div>
@@ -624,20 +648,32 @@
                       title="Cambiar color"
                     ></button>
                     <textarea
-                      class="text-5xl md:text-6xl font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words bg-transparent border-none outline-none w-full resize-none overflow-hidden placeholder-white/50"
+                      class="text-5xl md:text-6xl font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words bg-transparent border-none outline-none w-full resize-none overflow-auto placeholder-white/50"
                       placeholder="Opción {i + 1}"
                       value={opt.label}
                       oninput={(e) =>
                         onLabelChange(opt.id, e.currentTarget.value)}
                       onclick={(e) => e.stopPropagation()}
-                      rows="2"
+                      rows="3"
                     ></textarea>
                   {:else}
-                    <h1
-                      class="text-5xl md:text-6xl font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words"
+                    {@const textLength = opt.label.length}
+                    {@const fontSize = textLength > 80 ? 'text-3xl md:text-4xl' : textLength > 50 ? 'text-4xl md:text-5xl' : 'text-5xl md:text-6xl'}
+                    {@const shouldTruncate = textLength > 120}
+                    <button
+                      class="{fontSize} font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words text-left cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
+                      style={!expandedOptions[opt.id] && shouldTruncate ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;" : ""}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        if (shouldTruncate) {
+                          expandedOptions[opt.id] = !expandedOptions[opt.id];
+                        }
+                      }}
+                      type="button"
+                      aria-label={expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto"}
                     >
                       {opt.label}
-                    </h1>
+                    </button>
                   {/if}
 
                   {#if hasVoted}
