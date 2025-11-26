@@ -190,8 +190,8 @@
     const diffY = touchStartY - touchEndY;
     const diffX = touchStartX - touchEndX;
 
-    // Si el movimiento vertical es mayor que el horizontal y supera un umbral
-    if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 50) {
+    // Si el movimiento vertical es mayor que el horizontal y supera un umbral (reducido a 25px para más sensibilidad)
+    if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 25) {
       if (diffY > 0) {
         transitionY = window.innerHeight;
         onSwipeVertical("down"); // Deslizar hacia arriba -> Siguiente
@@ -497,7 +497,7 @@
       <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions a11y_click_events_have_key_events -->
       <div
         bind:this={scrollContainer}
-        class="absolute inset-0 w-full h-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar focus:outline-none"
+        class="absolute inset-0 w-full h-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar focus:outline-none scroll-smooth"
         onscroll={handleScroll}
         ontouchstart={handleTouchStart}
         ontouchend={handleTouchEnd}
@@ -559,20 +559,20 @@
                       {@const textLength = opt.label.length}
                       {@const fontSize = textLength > 60 ? 'text-4xl md:text-5xl' : textLength > 40 ? 'text-5xl md:text-6xl' : 'text-5xl md:text-7xl'}
                       {@const shouldTruncate = textLength > 100}
-                      <button
-                        class="{fontSize} font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words text-center cursor-pointer hover:opacity-90 transition-opacity w-full"
-                        style={!expandedOptions[opt.id] && shouldTruncate ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden;" : ""}
-                        onclick={(e) => {
-                          e.stopPropagation();
+                      <h1 
+                        class="{fontSize} font-black text-white uppercase tracking-tighter leading-none text-shadow-xl break-words text-center w-full"
+                        style={shouldTruncate && !expandedOptions[opt.id] ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden; cursor: pointer;" : shouldTruncate ? "cursor: pointer;" : ""}
+                        onclick={() => {
                           if (shouldTruncate) {
                             expandedOptions[opt.id] = !expandedOptions[opt.id];
                           }
                         }}
-                        type="button"
-                        aria-label={expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto"}
+                        role={shouldTruncate ? "button" : undefined}
+                        tabindex={shouldTruncate ? 0 : undefined}
+                        aria-label={shouldTruncate ? (expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto") : undefined}
                       >
                         {opt.label}
-                      </button>
+                      </h1>
                     {/if}
                     {#if opt.artist}
                       <span
@@ -603,13 +603,13 @@
                 {/if}
                 <div
                   class="absolute inset-0 z-0 bg-black flex justify-center"
-                  style="align-items: flex-start; padding-top: 21%;"
+                  style="align-items: flex-start; padding-top: {type === 'spotify' ? '35%' : type === 'youtube' ? '27%' : '21%'};"
                 >
                   <MediaEmbed
                     url={opt.imageUrl || ""}
                     mode="full"
                     width="100%"
-                    height="420px"
+                    height={type === "youtube" || type === "spotify" ? "320px" : "420px"}
                     autoplay={i === activeIndex}
                   />
                 </div>
@@ -660,20 +660,20 @@
                     {@const textLength = opt.label.length}
                     {@const fontSize = textLength > 80 ? 'text-3xl md:text-4xl' : textLength > 50 ? 'text-4xl md:text-5xl' : 'text-5xl md:text-6xl'}
                     {@const shouldTruncate = textLength > 120}
-                    <button
-                      class="{fontSize} font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words text-left cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
-                      style={!expandedOptions[opt.id] && shouldTruncate ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;" : ""}
-                      onclick={(e) => {
-                        e.stopPropagation();
+                    <h1
+                      class="{fontSize} font-black text-white uppercase tracking-tighter leading-[0.9] drop-shadow-2xl break-words text-left pointer-events-auto"
+                      style={shouldTruncate && !expandedOptions[opt.id] ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; cursor: pointer;" : shouldTruncate ? "cursor: pointer;" : ""}
+                      onclick={() => {
                         if (shouldTruncate) {
                           expandedOptions[opt.id] = !expandedOptions[opt.id];
                         }
                       }}
-                      type="button"
-                      aria-label={expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto"}
+                      role={shouldTruncate ? "button" : undefined}
+                      tabindex={shouldTruncate ? 0 : undefined}
+                      aria-label={shouldTruncate ? (expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto") : undefined}
                     >
                       {opt.label}
-                    </button>
+                    </h1>
                   {/if}
 
                   {#if hasVoted}
@@ -1012,6 +1012,29 @@
   .no-scrollbar {
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
+  }
+
+  /* Scroll horizontal más sensible (threshold reducido) */
+  .snap-x {
+    scroll-snap-type: x mandatory;
+    scroll-padding: 0;
+    /* Propiedades adicionales para mayor sensibilidad */
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  
+  .snap-center {
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
+  
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+  
+  /* Aumentar sensibilidad táctil */
+  .overflow-x-scroll {
+    touch-action: pan-x;
   }
 
   .text-shadow-xl {
