@@ -63,7 +63,7 @@
   }>>([]);
   let isSearching = $state(false);
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let searchInput: HTMLInputElement | null = null;
+  let searchInput = $state<HTMLInputElement | null>(null);
   
   // Estado para pantalla completa
   let fullscreenActive = $state(false);
@@ -1229,15 +1229,16 @@
 		<div class="top-avatars-bar">
 			<div 
 				class="modal-avatars-scroll"
-				onmousedown={handleAvatarScrollStart}
-				onmousemove={handleAvatarScrollMove}
-				onmouseup={handleAvatarScrollEnd}
-				onmouseleave={handleAvatarScrollEnd}
+				role="region"
+				aria-label="Usuarios con actividad"
+				onpointerdown={handleAvatarScrollStart}
+				onpointermove={handleAvatarScrollMove}
+				onpointerup={handleAvatarScrollEnd}
+				onpointerleave={handleAvatarScrollEnd}
 				ontouchstart={handleAvatarScrollStart}
 				ontouchmove={handleAvatarScrollMove}
 				ontouchend={handleAvatarScrollEnd}
-				role="region"
-				aria-label="Usuarios con actividad"
+				tabindex="0"
 			>
 				<div class="modal-avatars-inner">
 					{#each users.filter(u => u?.id) as user (user.id)}
@@ -1366,13 +1367,14 @@
 				class="nav-area-bottom"
 				role="navigation"
 				aria-label="Controles de navegación"
-				onmousedown={handleSwipeStart}
-				onmousemove={handleSwipeMove}
-				onmouseup={handleSwipeEnd}
-				onmouseleave={handleSwipeEnd}
+				onpointerdown={handleSwipeStart}
+				onpointermove={handleSwipeMove}
+				onpointerup={handleSwipeEnd}
+				onpointerleave={handleSwipeEnd}
 				ontouchstart={handleSwipeStart}
 				ontouchmove={handleSwipeMove}
 				ontouchend={handleSwipeEnd}
+				tabindex="0"
 			>
 				<button 
 					class="nav-btn-bottom nav-prev" 
