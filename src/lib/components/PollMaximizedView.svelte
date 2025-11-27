@@ -1177,7 +1177,7 @@
             <span class="text-xs font-mono font-bold text-white text-shadow-sm">{formatCount(stats?.totalVotes)}</span>
           {/if}
         </button>
-
+ 
         <!-- Mensajes -->
         <button 
           class="flex items-center gap-1.5 btn-press bg-transparent px-2 py-1.5 rounded-full hover:bg-white/10 transition-all select-none"
