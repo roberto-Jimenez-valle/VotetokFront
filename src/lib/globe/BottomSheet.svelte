@@ -4183,7 +4183,7 @@
 {/if}
 
 <!-- User Profile Modal -->
-{#if isProfileModalOpen && selectedProfileUserId}
+{#if UserProfileModal && isProfileModalOpen && selectedProfileUserId}
   <UserProfileModal bind:isOpen={isProfileModalOpen} userId={selectedProfileUserId} />
 {/if}
 
@@ -4422,7 +4422,9 @@
 {/if}
 
 <!-- Modal de Autenticación -->
-<AuthModal bind:isOpen={showAuthModal} />
+{#if AuthModal}
+  <AuthModal bind:isOpen={showAuthModal} />
+{/if}
 
 <style>
   /* Los estilos ya están importados globalmente en el <script> */
