@@ -13,7 +13,8 @@
   import AdCard from "./cards/sections/AdCard.svelte";
   // Lazy load para romper dependencia circular y evitar stack overflow en build
   import AuthModal from "$lib/AuthModal.svelte";
-  
+  import UserProfileModal from "$lib/UserProfileModal.svelte";
+
   // Componente dinámico para PollMaximizedView
   let PollMaximizedView: any = null;
 
