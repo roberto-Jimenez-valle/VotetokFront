@@ -3,12 +3,18 @@
   import { X } from "lucide-svelte";
   import { createEventDispatcher } from "svelte";
 
+    interface AuthEventDetail {
+    provider: string;
+  }
+
   interface AuthEvents {
-    login: { provider: string };
+    login: AuthEventDetail;
   }
 
   // Expose events to parent components (Svelte inspects $$Events)
-  interface $$Events extends AuthEvents {}
+  interface $$Events {
+    login: CustomEvent<AuthEventDetail>;
+  }
 
   const dispatch = createEventDispatcher<AuthEvents>();
 
