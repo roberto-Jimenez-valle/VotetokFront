@@ -130,6 +130,8 @@
   let totalVotes = $derived(options.reduce((a, b) => a + (b.votes || 0), 0));
   let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
+  let activeOption = $derived(options[activeIndex]);
+  let voteColor = $derived(activeOption?.color || '#10b981');
 
   let scrollContainer: HTMLElement | null = null;
   let showLikeAnim = $state(false);
@@ -503,6 +505,7 @@
               style:transform={hasVoted && isActive
                 ? "scaleY(1.5)"
                 : "scaleY(1)"}
+              style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);"
             >
               <div
                 class="h-full transition-all duration-300"
@@ -539,7 +542,7 @@
               {#if creator?.avatar}
                 <img
                   src={creator.avatar}
-                  alt={creator.username}
+                  alt={creator?.username}
                   class="w-full h-full rounded-full object-cover"
                 />
               {:else}
@@ -995,9 +998,9 @@
               }
             }}
           >
-            <div class="w-10 h-10 rounded-full {hasVoted ? 'bg-emerald-500/20' : 'bg-white/10'} flex items-center justify-center">
+            <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background-color: {hasVoted ? `${voteColor}33` : 'rgba(255, 255, 255, 0.1)'}">
               {#if hasVoted}
-                <SquareCheck size={20} class="text-emerald-400" />
+                <SquareCheck size={20} style="color: {voteColor}" />
               {:else}
                 <Square size={20} class="text-white" />
               {/if}
@@ -1167,8 +1170,8 @@
           aria-label="Votar"
         >
           {#if hasVoted}
-            <SquareCheck size={20} class="text-emerald-400 icon-shadow vote-icon-beat" />
-            <span class="text-xs font-mono font-bold text-emerald-400 text-shadow-sm">{formatCount(stats?.totalVotes)}</span>
+            <SquareCheck size={20} class="icon-shadow vote-icon-beat" style="color: {voteColor}" />
+            <span class="text-xs font-mono font-bold text-shadow-sm" style="color: {voteColor}">{formatCount(stats?.totalVotes)}</span>
           {:else}
             <Square size={20} class="text-white icon-shadow" />
             <span class="text-xs font-mono font-bold text-white text-shadow-sm">{formatCount(stats?.totalVotes)}</span>
@@ -1188,7 +1191,7 @@
 
       <!-- B. ZONA SCROLLABLE (Acciones Secundarias) -->
       <div class="overflow-x-auto hide-scrollbar scroll-mask-right">
-        <div class="flex items-center gap-3 pr-4">
+        <div class="flex items-center gap-3 pr-24">
           
           <!-- Menú (3 puntos) -->
           <button 
@@ -1618,8 +1621,8 @@
 
   /* Máscara de desvanecimiento para el scroll derecho */
   .scroll-mask-right {
-    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
-    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 95%, transparent 100%);
+    mask-image: linear-gradient(to right, black 95%, transparent 100%);
   }
 
   /* Sombras para legibilidad sobre cualquier fondo */
@@ -1681,5 +1684,14 @@
 
   .maximized-view :global(.border-white) {
     border-color: #ffffff !important;
+  }
+
+  .maximized-view img {
+    display: block !important;
+    opacity: 1 !important;
+  }
+
+  .maximized-view :global(.ring-white) {
+    --tw-ring-color: rgba(255, 255, 255, 0.2) !important;
   }
 </style>

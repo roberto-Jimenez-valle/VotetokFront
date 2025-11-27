@@ -2095,6 +2095,7 @@
 		display: flex;
 		gap: 12px;
 		width: max-content;
+		padding-right: 60px;
 	}
 	
 	.avatar-small-btn {

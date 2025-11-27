@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import { X, MapPin, Calendar, Check, UserPlus, UserMinus, Loader2, TrendingUp, BarChart } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   import SinglePollSection from '$lib/globe/cards/sections/SinglePollSection.svelte';
@@ -297,7 +298,7 @@
   <!-- Modal -->
   <div
     class="modal-container"
-    transition:fly={{ y: '100%', duration: 300 }}
+    transition:fly={{ y: '100%', duration: 450, easing: cubicOut }}
     role="dialog"
     aria-modal="true"
     aria-labelledby="user-profile-modal-title"

@@ -13,6 +13,7 @@
   import AdCard from "./cards/sections/AdCard.svelte";
   import PollMaximizedView from "$lib/components/PollMaximizedView.svelte";
   import AuthModal from "$lib/AuthModal.svelte";
+  import UserProfileModal from "$lib/UserProfileModal.svelte";
 
   // Helper para reemplazar setTimeout con Promesas
   const delay = (ms: number) =>
@@ -1108,9 +1109,6 @@
   // Dropdown toggle function
   export let onToggleDropdown: () => void = () => {};
 
-  // Estado del botón "volver al inicio"
-  let showScrollToTop = false;
-
   // Modal de preview fullscreen usando PollMaximizedView
   let showPreviewModal = false;
   let previewModalOption: any = null; // Array de opciones transformadas
@@ -1170,31 +1168,8 @@
     selectedCountryName ||
     "Global";
 
-  // Referencia al input de búsqueda
-  let searchInput: HTMLInputElement;
-  let previousShowSearch = false;
-
   // Debounce timer for search
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Scroll al final cuando se cierra la búsqueda
-  $: if (previousShowSearch && !showSearch && navContainer) {
-    (async () => {
-      await nextTick();
-      navContainer.scrollLeft = navContainer.scrollWidth;
-    })();
-    previousShowSearch = showSearch;
-  } else if (showSearch !== previousShowSearch) {
-    previousShowSearch = showSearch;
-  }
-
-  // Focus en el input cuando se abre la búsqueda, sin hacer scroll
-  $: if (showSearch && searchInput) {
-    (async () => {
-      await nextTick();
-      searchInput?.focus({ preventScroll: true });
-    })();
-  }
 
   // Search for countries and subdivisions when query changes
   $: if (tagQuery && showSearch) {
@@ -2720,9 +2695,6 @@
       const scrollBottom =
         target.scrollHeight - target.scrollTop - target.clientHeight;
 
-      // Mostrar el botón si ha scrolleado más de 200px
-      showScrollToTop = scrollTop > 200;
-
       // Auto-hide navigation bar logic
       // Solo aplicar esta lógica si el desplegable NO está abierto
       if (!showPollOptionsExpanded) {
@@ -2858,18 +2830,7 @@
     }
   }
 
-  // Función para volver al inicio
-  function scrollToTop() {
-    if (scrollContainer) {
-      scrollContainer.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-    }
-  }
-
-
-  // Handler para abrir modal de preview fullscreen
+  // Función para abrir modal de preview fullscreen
   function handleOpenPreviewModal(event: CustomEvent) {
     const { option, pollId } = event.detail;
     console.log("[BottomSheet] 🎬 Abriendo modal preview:", { option, pollId });
@@ -3095,25 +3056,6 @@
   $: if (worldChartSegments) {
   }
 
-  // Auto-scroll to active button when navigation changes
-  let navContainer: HTMLElement;
-
-  $: if (selectedCountryName || selectedSubdivisionName || selectedCityName) {
-    // Wait for DOM update then scroll to active button
-    (async () => {
-      await nextTick();
-      if (navContainer) {
-        const activeButton = navContainer.querySelector(".nav-chip.active");
-        if (activeButton) {
-          activeButton.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest",
-            inline: "center",
-          });
-        }
-      }
-    })();
-  }
 </script>
 
 <div
@@ -3589,6 +3531,8 @@
               handleOpenPreviewModal(customEvent as any);
             }
           }}
+          bind:isProfileModalOpen
+          bind:selectedProfileUserId
         />
 
         <!-- Separador después de encuesta activa -->
@@ -3750,6 +3694,8 @@
               handleOpenPreviewModal(customEvent as any);
             }
           }}
+          bind:isProfileModalOpen
+          bind:selectedProfileUserId
         />
       {/each}
 
@@ -3817,27 +3763,6 @@
         <span class="floating-hint-text">Ver más de {hintTarget}</span>
       </div>
     </div>
-  {/if}
-
-  <!-- BotÃ³n flotante "volver al inicio" -->
-  {#if showScrollToTop && state === "expanded"}
-    <button
-      class="scroll-to-top-btn"
-      onclick={scrollToTop}
-      aria-label="Volver al inicio"
-      title="Volver al inicio"
-    >
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path d="M18 15l-6-6-6 6" />
-      </svg>
-    </button>
   {/if}
 
   <!-- Modal de opciones de encuesta -->
@@ -4104,11 +4029,12 @@
       previewModalPoll.title ||
       "Encuesta"}
     creator={{
+      id: previewModalPoll.creator?.id || previewModalPoll.user?.id,
       username:
         previewModalPoll.creator?.username ||
         previewModalPoll.user?.username ||
         "Usuario",
-      avatar: previewModalPoll.creator?.avatar || previewModalPoll.user?.avatar,
+      avatar: previewModalPoll.creator?.avatar || previewModalPoll.creator?.avatarUrl || previewModalPoll.user?.avatar || previewModalPoll.user?.avatarUrl,
     }}
     stats={{
       totalVotes:
@@ -4231,7 +4157,20 @@
       console.log("[BottomSheet] 🔄 Republicar desde modal");
       // TODO: Implementar republicar
     }}
+    onOpenProfile={(userId) => {
+      console.log("[BottomSheet] 👤 Abrir perfil de usuario:", userId);
+      closePreviewModal(); // Cerrar maximized primero
+      setTimeout(() => {
+        selectedProfileUserId = userId;
+        isProfileModalOpen = true;
+      }, 100);
+    }}
   />
+{/if}
+
+<!-- User Profile Modal -->
+{#if isProfileModalOpen && selectedProfileUserId}
+  <UserProfileModal bind:isOpen={isProfileModalOpen} userId={selectedProfileUserId} />
 {/if}
 
 <!-- Modal del selector de color para opciones colaborativas -->

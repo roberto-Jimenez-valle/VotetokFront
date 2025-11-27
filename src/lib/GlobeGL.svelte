@@ -8892,7 +8892,7 @@
 
     headerLocateMeHandler = () => {
       console.log("[GlobeGL] 📍 Evento headerLocateMe recibido");
-      locateUser();
+      locateMe();
     };
     window.addEventListener("headerLocateMe", headerLocateMeHandler);
 

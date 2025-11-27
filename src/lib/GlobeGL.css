@@ -708,7 +708,7 @@ header {
   -ms-user-select: none;
   user-select: none; /* Evitar selección de texto al arrastrar */
   /* Padding inferior para el menú de navegación */
-  padding-bottom: 60px;
+  padding-bottom: 20px;
 }
 
 /* Comportamiento tipo YouTube en móvil: BottomSheet debajo del globo comprimido */

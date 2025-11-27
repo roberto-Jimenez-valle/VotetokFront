@@ -859,7 +859,7 @@
                  (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(opt.key))
               : (displayVotes[poll.id] || userVotes[poll.id]) === opt.key}
             {@const hasVotedAny = !!(displayVotes[poll.id] || userVotes[poll.id])}
-            {@const totalVotes = sortedPollOptions.reduce((sum, o) => sum + (o.votes || 0), 0)}
+            {@const totalVotes = sortedPollOptions.reduce((sum: number, o: any) => sum + (o.votes || 0), 0)}
             {@const flexWeight = hasVotedAny 
               ? Math.max(opt.votes || 0, totalVotes * 0.02) 
               : 1}
@@ -887,7 +887,7 @@
             >
               <div
                 class="indicator-fill"
-                style="width: {hasVotedAny ? '100%' : (idx < activeAccordionIndex ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {hasVotedAny ? opt.color : (isCurrentOption ? '#fff' : 'rgba(255, 255, 255, 0.2)')};"
+                style="width: {hasVotedAny ? '100%' : (activeAccordionIndex !== null && idx < activeAccordionIndex ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {hasVotedAny ? opt.color : (isCurrentOption ? '#fff' : 'rgba(255, 255, 255, 0.2)')};"
               ></div>
             </button>
           {/each}
@@ -4033,8 +4033,8 @@
   .mini-scroll-actions {
     flex: 1;
     overflow-x: auto;
-    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
-    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 95%, transparent 100%);
+    mask-image: linear-gradient(to right, black 95%, transparent 100%);
   }
 
   .mini-scroll-actions::-webkit-scrollbar {
@@ -4050,7 +4050,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding-right: 12px;
+    padding-right: 60px;
     padding-left: 0;
   }
 
