@@ -5018,58 +5018,6 @@
     max-width: 600px !important;
   }
   
-  /* Navegación para card maximizada */
-  .maximized-navigation {
-    position: fixed;
-    bottom: 50px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    z-index: 100000 !important;
-    pointer-events: auto !important;
-    padding: 12px 20px;
-    backdrop-filter: blur(10px);
-    border-radius: 30px;
-  }
-  
-  .maximized-dots {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-  
-  .maximized-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--dot-color, white);
-    opacity: 1 !important;
-    filter: brightness(1.2) saturate(1.3) !important;
-    border: none;
-    cursor: pointer;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                transform 0.2s ease;
-    padding: 0;
-    pointer-events: auto;
-    position: relative;
-    z-index: 99999;
-  }
-  
-  .maximized-dot:hover {
-    transform: scale(1.2);
-  }
-  
-  .maximized-dot.active {
-    width: 24px;
-    height: 8px;
-    border-radius: 4px;
-    background: var(--dot-color, white);
-  }
-  
   @media (max-width: 768px) {
     .vote-card.is-maximized {
       width: calc(100vw - 20px) !important;

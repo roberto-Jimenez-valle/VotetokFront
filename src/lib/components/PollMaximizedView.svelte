@@ -588,8 +588,7 @@
 
       <!-- SCROLL CONTAINER (MAIN CONTENT) -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-      <div
-        bind:this={scrollContainer}
+      <div bind:this={scrollContainer}
         class="absolute inset-0 w-full h-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar focus:outline-none scroll-smooth"
         onscroll={handleScroll}
         ontouchstart={handleTouchStart}
