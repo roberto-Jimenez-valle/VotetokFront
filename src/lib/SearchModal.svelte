@@ -1254,16 +1254,6 @@
     font-weight: bold;
   }
 
-  /* Place specific */
-  .place-item {
-    align-items: center;
-  }
-
-  .place-icon {
-    color: rgba(59, 130, 246, 0.8);
-    flex-shrink: 0;
-  }
-
   /* No results */
   .no-results {
     display: flex;

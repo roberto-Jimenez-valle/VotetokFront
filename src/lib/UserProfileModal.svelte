@@ -69,9 +69,7 @@
   
   // Cargar datos del usuario cuando se abre el modal o cambia el userId
   $effect(() => {
-    console.log('[UserProfileModal] Effect triggered:', { isOpen, userId });
     if (isOpen && userId) {
-      console.log('[UserProfileModal] Loading user data for:', userId);
       loadUserData();
     }
   });
@@ -117,7 +115,6 @@
           }
         }));
         
-        console.log('[UserProfileModal] Votos cargados:', userVotes.length, userVotes);
       } else {
         console.error('[UserProfileModal] Error al cargar votos:', votesRes.status);
         userVotes = [];
@@ -161,21 +158,17 @@
   
   function handleSetActive(e: CustomEvent) {
     const { pollId, index } = e.detail;
-    console.log('[UserProfileModal] Set active:', pollId, index);
     activeAccordions = { ...activeAccordions, [pollId]: index };
   }
   
   function handlePageChange(e: CustomEvent) {
     const { pollId, page } = e.detail;
-    console.log('[UserProfileModal] ✅ Cambio de página recibido:', { pollId, page });
     pollPages = { ...pollPages, [pollId]: page };
-    console.log('[UserProfileModal] Nueva página establecida:', pollPages[pollId]);
   }
   
   // Manejar arrastre horizontal para cambiar entre opciones
   function handleDragStart(e: CustomEvent) {
     const { event, pollId } = e.detail;
-    console.log('[UserProfileModal] ✅ Drag start:', pollId);
     
     const target = event.target as HTMLElement;
     currentDragGrid = target.closest('.vote-cards-grid');
