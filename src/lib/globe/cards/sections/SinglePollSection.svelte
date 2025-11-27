@@ -1737,6 +1737,7 @@
           <button 
             class="mini-bottom-sheet-item"
             onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            style="padding-right: 10px;"
           >
             <div class="mini-bottom-sheet-icon bg-red-500/20">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
@@ -1936,6 +1937,7 @@
             type="button"
             title="Reportar"
             aria-label="Reportar"
+            style="padding-right: 10px;"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>

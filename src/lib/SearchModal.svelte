@@ -26,7 +26,7 @@
   
   // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
-  let scrollContainer: HTMLElement | null = null;
+  let scrollContainer: HTMLElement | null = $state(null);
   
   function handleModalSwipeStart(e: TouchEvent) {
     modalTouchStartY = e.touches[0].clientY;

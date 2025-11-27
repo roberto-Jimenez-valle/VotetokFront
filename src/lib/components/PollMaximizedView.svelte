@@ -963,8 +963,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div 
     class="absolute bottom-0 left-0 right-0 z-50 pointer-events-auto more-menu-container"
-    onclick={handleClickOutside}
-  >
+    onclick={handleClickOutside} >
     <!-- Modal Bottom Sheet -->
     {#if isMoreMenuOpen}
       <!-- Overlay -->
@@ -1290,6 +1289,7 @@
           <button 
             class="flex items-center shrink-0 opacity-60 hover:opacity-100 transition btn-press"
             aria-label="Reportar"
+            style="padding-right: 10px;"
           >
             <Flag size={18} class="text-red-400 icon-shadow" />
           </button>
