@@ -131,11 +131,16 @@
   let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
   
-  // Combinar derivaciones para evitar cadenas que causan stack overflow
-  let voteColor = $derived.by(() => {
+  // Usar $state con $effect para evitar problemas con análisis estático
+  let voteColor = $state('#10b981');
+  
+  $effect(() => {
     const index = options.findIndex((o) => o.id === activeOptionId);
-    if (index === -1 || !options[index]) return '#10b981';
-    return options[index].color || '#10b981';
+    if (index !== -1 && options[index]) {
+      voteColor = options[index].color || '#10b981';
+    } else {
+      voteColor = '#10b981';
+    }
   });
 
   let scrollContainer: HTMLElement | null = null;
