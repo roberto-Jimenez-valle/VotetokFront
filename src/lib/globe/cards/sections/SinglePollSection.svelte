@@ -99,7 +99,7 @@
   
   // Props
   export let poll: any;
-  export let state: string = 'collapsed';
+  export const state: string = 'collapsed';
   export let activeAccordionIndex: number | null = null;
   export let currentPage: number = 0;
   export let userVotes: Record<string, string> = {};
@@ -728,9 +728,18 @@
             <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
           </button>
         {:else}
-          <div class="avatar-mini-default">
-            <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
-          </div>
+          <button 
+            class="avatar-button-mini" 
+            onclick={(e) => {
+              e.stopPropagation();
+              // Aquí puedes agregar la lógica para abrir el perfil si es necesario
+            }}
+            aria-label="Ver perfil de usuario"
+          >
+            <div class="avatar-mini-default">
+              <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
+            </div>
+          </button>
         {/if}
       </div>
       <div class="header-content-compact">
@@ -949,6 +958,8 @@
                 ontouchstart={handleChartInteraction}
                 ontouchmove={handleChartInteraction}
                 ontouchend={clearChartHover}
+                role="img"
+                aria-label="Histórico de votos"
               >
                 
                 <!-- Línea por cada opción -->
@@ -1072,9 +1083,12 @@
         {@const isNewOption = poll.type === 'collaborative' && option.isEditing === true}
         {@const displayPct = isNewOption ? 25 : option.pct}
         
-        <div
-          class="option-slide {index === activeAccordionIndex ? 'is-active' : ''} {isPollVoted ? 'voted' : ''}"
+        <button
+          class={`option-slide ${index === activeAccordionIndex ? 'is-active' : ''} ${isPollVoted ? 'voted' : ''}`}
           style="scroll-snap-stop: always;" 
+          type="button"
+          aria-pressed={isPollVoted}
+          aria-label={`Opción ${index + 1}: ${option.label}`}
           ontouchstart={(e: TouchEvent) => {
             if (isNewOption) return;
             // Guardar posición inicial del touch
@@ -1456,9 +1470,9 @@
               {/if}
             {/if}
           {/if}
-        </div>
+        </button>
       {/each}
-    </div>
+      </div>
     {/if}
   </div>
   
@@ -1962,8 +1976,15 @@
 
 <!-- Tooltip del título truncado (fuera de todo para máxima visibilidad) -->
 {#if showTitleTooltip}
-  <div class="title-tooltip-overlay" onclick={hideTitleTooltip}>
-    <div class="title-tooltip-content" onclick={(e) => e.stopPropagation()}>
+  <div
+    class="title-tooltip-overlay"
+    role="dialog"
+    aria-label="Título completo"
+    tabindex="0"
+    onclick={hideTitleTooltip}
+    onkeydown={(e) => e.key === 'Enter' && hideTitleTooltip()}
+  >
+    <div class="title-tooltip-content" role="document" onclick={(e) => e.stopPropagation()}>
       {titleTooltipText}
     </div>
   </div>

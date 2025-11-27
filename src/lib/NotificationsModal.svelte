@@ -232,7 +232,8 @@
               <img src={notification.user.avatar} alt={notification.user.name} />
               <div class="notification-icon" class:vote={notification.type === 'vote'} class:like={notification.type === 'like'} class:follow={notification.type === 'follow'} class:comment={notification.type === 'comment'}>
                 {#if notification.icon}
-                  <svelte:element this={notification.icon} size={14} />
+                  {@const Icon = notification.icon}
+                  <Icon size={14} />
                 {/if}
               </div>
             </div>

@@ -11,11 +11,9 @@
   import SinglePollSection from "./cards/sections/SinglePollSection.svelte";
   import WhoToFollowSection from "./cards/sections/WhoToFollowSection.svelte";
   import AdCard from "./cards/sections/AdCard.svelte";
-  // Lazy load para romper dependencia circular y evitar stack overflow en build
-  import AuthModal from "$lib/AuthModal.svelte";
-  import UserProfileModal from "$lib/UserProfileModal.svelte";
-
-  // Componente dinámico para PollMaximizedView
+  // Componentes dinámicos para lazy load y evitar dependencia circular
+  let AuthModal: any = null;
+  let UserProfileModal: any = null;
   let PollMaximizedView: any = null;
 
   // Helper para reemplazar setTimeout con Promesas
@@ -1429,10 +1427,16 @@
   }
 
   onMount(() => {
-    // Lazy load PollMaximizedView para evitar dependencia circular
+    // Lazy load de componentes para evitar dependencia circular
     (async () => {
-      const module = await import("$lib/components/PollMaximizedView.svelte");
-      PollMaximizedView = module.default;
+      const [pollMaxModule, authModule, profileModule] = await Promise.all([
+        import("$lib/components/PollMaximizedView.svelte"),
+        import("$lib/AuthModal.svelte"),
+        import("$lib/UserProfileModal.svelte")
+      ]);
+      PollMaximizedView = pollMaxModule.default;
+      AuthModal = authModule.default;
+      UserProfileModal = profileModule.default;
     })();
     
     // Cargar datos iniciales desde la API
