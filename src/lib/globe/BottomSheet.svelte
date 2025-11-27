@@ -72,7 +72,6 @@
 
   // Estado del modal de autenticación
   let showAuthModal = false;
-  let pendingVoteData: { optionKey: string; pollId?: string } | null = null;
 
   // Función para verificar si un elemento está truncado
   function checkTruncation(element: HTMLElement | undefined): boolean {
@@ -1864,7 +1863,6 @@
       console.log(
         "[BottomSheet] ⚠️ Usuario no autenticado - mostrando AuthModal",
       );
-      pendingVoteData = { optionKey, pollId };
       showAuthModal = true;
       return;
     }
@@ -2870,17 +2868,6 @@
     }
   }
 
-  // Handler para cuando el usuario se autentica exitosamente
-  function handleAuthComplete() {
-    console.log("[BottomSheet] ✅ Usuario autenticado, reintentando voto");
-    showAuthModal = false;
-
-    // Reintentar el voto pendiente
-    if (pendingVoteData) {
-      handleVote(pendingVoteData.optionKey, pendingVoteData.pollId);
-      pendingVoteData = null;
-    }
-  }
 
   // Handler para abrir modal de preview fullscreen
   function handleOpenPreviewModal(event: CustomEvent) {
@@ -4802,7 +4789,7 @@
 {/if}
 
 <!-- Modal de Autenticación -->
-<AuthModal bind:isOpen={showAuthModal} on:login={handleAuthComplete} />
+<AuthModal bind:isOpen={showAuthModal} />
 
 <style>
   /* Los estilos ya están importados globalmente en el <script> */

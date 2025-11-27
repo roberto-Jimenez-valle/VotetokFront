@@ -425,7 +425,7 @@
               ? Math.max(opt.votes || 0, totalVotes * 0.02)
               : 1}
             <div
-              class="h-full transition-all duration-700 ease-out overflow-hidden relative bg-white/20 backdrop-blur-sm rounded-sm"
+              class="h-full transition-all duration-700 ease-out overflow-hidden relative bg-white/20 rounded-sm"
               style:flex="{flexWeight} 1 0%"
               style:opacity={hasVoted ? (isActive ? 1 : 0.3) : 1}
               style:transform={hasVoted && isActive
@@ -519,10 +519,10 @@
                 <div
                   class="w-full h-full flex flex-col items-center justify-center px-8 py-16 text-center bg-zinc-950 relative overflow-hidden"
                 >
-                  <!-- Fondo con blur de color -->
+                  <!-- Fondo con blur de color (optimizado para iOS) -->
                   <div
                     class="absolute inset-0 opacity-40"
-                    style="background-color: {opt.color}; filter: blur(60px); transform: scale(1.2);"
+                    style="background-color: {opt.color}; filter: blur(40px); will-change: transform;"
                   ></div>
                   <div
                     class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay"
@@ -605,13 +605,13 @@
                                 class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg hover:scale-110 hover:z-50 transition-transform"
                               />
                             {:else}
-                              <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 backdrop-blur-md shadow-lg"></div>
+                              <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 shadow-lg"></div>
                             {/if}
                           </div>
                         {/each}
                         {#if friendsByOption[opt.id].length > 5}
                           <div 
-                            class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/70 backdrop-blur-md flex items-center justify-center shadow-lg"
+                            class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
                             style="margin-left: -8px; z-index: 0;"
                           >
                             <span class="text-white text-xs font-bold">+{friendsByOption[opt.id].length - 5}</span>
@@ -627,25 +627,36 @@
               {:else}
                 <!-- Media Content -->
                 {#if opt.imageUrl}
-                  <!-- Fondo borroso de la imagen -->
-                  <img
-                    src={opt.imageUrl}
-                    alt=""
-                    class="absolute inset-0 w-full h-full object-cover -z-10"
-                    style="filter: blur(40px); opacity: 0.6; transform: scale(1.1);"
-                  />
+                  <!-- Fondo borroso de la imagen (optimizado) -->
+                  {#if Math.abs(i - activeIndex) <= 1}
+                    <img
+                      src={opt.imageUrl}
+                      alt=""
+                      class="absolute inset-0 w-full h-full object-cover -z-10"
+                      style="filter: blur(30px); opacity: 0.5; will-change: transform;"
+                    />
+                  {/if}
                 {/if}
                 <div
-                  class="absolute inset-0 z-0 bg-black flex justify-center"
-                  style="align-items: flex-start; padding-top: {type === 'spotify' ? '35%' : type === 'youtube' ? '27%' : '21%'};"
+                  class="absolute inset-0 z-0 bg-black flex justify-center media-container"
+                  style="align-items: flex-start;"
                 >
-                  <MediaEmbed
-                    url={opt.imageUrl || ""}
-                    mode="full"
-                    width="100%"
-                    height={type === "youtube" || type === "spotify" ? "320px" : "420px"}
-                    autoplay={i === activeIndex}
-                  />
+                  {#if Math.abs(i - activeIndex) <= 1}
+                    <div class="media-wrapper">
+                      <MediaEmbed
+                        url={opt.imageUrl || ""}
+                        mode="full"
+                        width="100%"
+                        height="100%"
+                        autoplay={i === activeIndex}
+                      />
+                    </div>
+                  {:else}
+                    <!-- Placeholder para opciones lejanas -->
+                    <div class="w-full h-full flex items-center justify-center text-white/50">
+                      <span>Cargando...</span>
+                    </div>
+                  {/if}
                 </div>
                 <div
                   class="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 pointer-events-none"
@@ -745,7 +756,7 @@
                             class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg hover:scale-110 hover:z-50 transition-transform"
                           />
                         {:else}
-                          <div class="w-8 h-8 rounded-full border-2 border-white/40 bg-white/10 backdrop-blur-md flex items-center justify-center shadow-lg hover:scale-110 hover:z-50 transition-transform cursor-help">
+                          <div class="w-8 h-8 rounded-full border-2 border-white/40 bg-white/10 flex items-center justify-center shadow-lg hover:scale-110 hover:z-50 transition-transform cursor-help">
                             <span class="text-white text-sm font-bold drop-shadow-md">?</span>
                           </div>
                         {/if}
@@ -753,7 +764,7 @@
                     {/each}
                     {#if friendsByOption[opt.id].length > 5}
                       <div 
-                        class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/70 backdrop-blur-md flex items-center justify-center shadow-lg"
+                        class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
                         style="margin-left: -8px; z-index: 0;"
                       >
                         <span class="text-white text-xs font-bold">+{friendsByOption[opt.id].length - 5}</span>
@@ -1073,5 +1084,93 @@
 
   .text-shadow-xl {
     text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Optimizaciones para iOS/Safari */
+  @supports (-webkit-touch-callout: none) {
+    /* Solo para iOS */
+    .snap-x {
+      /* Reducir aceleración de hardware en scroll */
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
+    }
+    
+    /* Optimizar renders */
+    img, video, iframe {
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
+    }
+    
+    /* Reducir blur en iOS para mejor rendimiento */
+    [style*="blur"] {
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+    }
+  }
+
+  /* Contenedor de medios - sistema flexible */
+  .media-container {
+    padding-top: 12vh; /* Espacio para el título */
+    padding-bottom: 20vh; /* Espacio para el texto de la opción */
+  }
+
+  /* Wrapper interno con tamaño controlado */
+  .media-wrapper {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 55vh; /* Máximo 55% de la altura de la pantalla */
+    aspect-ratio: 16 / 9; /* Mantener proporción de video */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Landscape (horizontal) - videos más grandes */
+  @media (orientation: landscape) {
+    .media-container {
+      padding-top: 8vh;
+      padding-bottom: 15vh;
+    }
+    
+    .media-wrapper {
+      max-height: 65vh;
+    }
+  }
+
+  /* Portrait (vertical) - balance entre título y texto */
+  @media (orientation: portrait) {
+    .media-container {
+      padding-top: 15vh;
+      padding-bottom: 25vh;
+    }
+    
+    .media-wrapper {
+      max-height: 45vh;
+    }
+  }
+
+  /* Pantallas pequeñas (móviles) */
+  @media (max-height: 700px) {
+    .media-container {
+      padding-top: 10vh;
+      padding-bottom: 15vh;
+    }
+    
+    .media-wrapper {
+      max-height: 50vh;
+    }
+  }
+
+  /* Pantallas muy pequeñas */
+  @media (max-height: 600px) {
+    .media-container {
+      padding-top: 8vh;
+      padding-bottom: 12vh;
+    }
+    
+    .media-wrapper {
+      max-height: 55vh;
+    }
   }
 </style>

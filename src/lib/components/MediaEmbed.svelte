@@ -39,16 +39,25 @@
     ) {
       processed = processed.replace(/src="([^"]+)"/, (match, url) => {
         const separator = url.includes("?") ? "&" : "?";
-        // Parámetros para controles y API
+        // Parámetros para controles y API - mute=1 es crítico para iOS autoplay
+        // disableCastApi=1 elimina errores de consola de chrome-extension://invalid/
         let params =
-          "controls=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&fs=0&disablekb=1&playsinline=1&enablejsapi=1";
+          "controls=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&fs=0&disablekb=1&playsinline=1&enablejsapi=1&disableCastApi=1";
 
         if (autoplay) {
-          params += "&autoplay=1";
+          params += "&autoplay=1&mute=1"; // mute=1 necesario para iOS
         }
 
         return `src="${url}${separator}${params}"`;
       });
+      
+      // Agregar atributos allow y loading lazy al iframe para iOS y rendimiento
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay; encrypted-media; fullscreen; picture-in-picture"');
+      }
+      if (!processed.includes('loading="')) {
+        processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
     }
 
     // Para iframes de Vimeo
@@ -58,11 +67,19 @@
         let params = "controls=1&byline=0&portrait=0&title=0";
 
         if (autoplay) {
-          params += "&autoplay=1";
+          params += "&autoplay=1&muted=1"; // muted=1 necesario para iOS
         }
 
         return `src="${url}${separator}${params}"`;
       });
+      
+      // Agregar atributos allow y loading lazy al iframe
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay; encrypted-media; fullscreen; picture-in-picture"');
+      }
+      if (!processed.includes('loading="')) {
+        processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
     }
 
     // Para iframes de Spotify
@@ -75,12 +92,21 @@
         }
         return match;
       });
+      
+      // Agregar loading lazy al iframe
+      if (!processed.includes('loading="')) {
+        processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
     }
 
     // Para videos HTML5
     if (processed.includes("<video")) {
       if (autoplay && !processed.includes("autoplay")) {
         processed = processed.replace("<video", "<video autoplay");
+      }
+      // muted es crítico para autoplay en iOS
+      if (autoplay && !processed.includes("muted")) {
+        processed = processed.replace("<video", "<video muted");
       }
       if (!processed.includes("playsinline")) {
         processed = processed.replace("<video", "<video playsinline");
@@ -89,6 +115,11 @@
       if (mode === "full" && processed.includes("controls")) {
         processed = processed.replace("controls", "");
       }
+    }
+
+    // Agregar loading="lazy" a cualquier iframe restante (ej: otros embeds)
+    if (processed.includes("<iframe") && !processed.includes('loading="')) {
+      processed = processed.replace(/<iframe/g, '<iframe loading="lazy"');
     }
 
     return processed;
@@ -373,8 +404,41 @@
     }
   });
 
-  // Pausar medios cuando autoplay cambia a false
+  // Cleanup cuando el componente se desmonte - destruir iframes completamente
   let containerRef: HTMLDivElement;
+  
+  // Cleanup: destruir iframes cuando el componente se desmonte
+  $effect(() => {
+    return () => {
+      if (containerRef) {
+        const iframes = containerRef.querySelectorAll("iframe");
+        iframes.forEach((iframe) => {
+          // Detener reproducción antes de destruir
+          try {
+            const src = iframe.src || "";
+            if (src.includes("youtube.com") || src.includes("youtu.be")) {
+              iframe.contentWindow?.postMessage(
+                '{"event":"command","func":"stopVideo","args":""}',
+                "*"
+              );
+            } else if (src.includes("vimeo.com")) {
+              iframe.contentWindow?.postMessage('{"method":"pause"}', "*");
+            }
+          } catch (e) {
+            // Ignorar errores de cross-origin
+          }
+          
+          // Vaciar src para liberar recursos
+          iframe.src = "about:blank";
+          // Remover del DOM
+          iframe.remove();
+        });
+        console.log("[MediaEmbed] 🧹 Iframes destruidos en cleanup");
+      }
+    };
+  });
+
+  // Pausar medios cuando autoplay cambia a false
   $effect(() => {
     if (!autoplay && containerRef) {
       // Buscar iframes dentro de este componente específico
@@ -586,6 +650,11 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+  
+  /* Optimización para iOS */
+  .embed-container :global(iframe) {
+    -webkit-overflow-scrolling: touch;
   }
 
   .mini-card {
