@@ -16,6 +16,7 @@
 	let hideNav = $state(false);
 	let currentAltitude = $state(0);
 	let bottomSheetVisible = $state(false);
+	let sheetExpanded = $state(false); // Track if sheet is expanded
 	let dropdownOpen = $state(false); // Track dropdown state
 	let forceHideNav = $state(false); // Forzar ocultación del nav
 	
@@ -59,6 +60,10 @@
 	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {
 		const state = event.detail.state;
 		console.log(`[+page] BottomSheet estado: ${state}, dropdownOpen: ${dropdownOpen}, forceHideNav: ${forceHideNav}`);
+		
+		// Actualizar si el sheet está expandido (para el Header)
+		sheetExpanded = state === 'expanded';
+		
 		// Si forceHideNav está activo, no cambiar nada
 		if (forceHideNav) {
 			console.log(`[+page] forceHideNav activo, ignorando cambio de BottomSheet`);
@@ -154,6 +159,7 @@
 			on:openPollInGlobe={handleOpenPollInGlobeFromHeader}
 			bind:isProfileModalOpen={isProfileModalOpen}
 			bind:selectedProfileUserId={selectedProfileUserId}
+			{sheetExpanded}
 		/>
 		<div class="w-full flex flex-col">
 			

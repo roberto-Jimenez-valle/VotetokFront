@@ -110,6 +110,68 @@
   let paginationDirection: 'forward' | 'backward' = 'forward';
   let lastPage: number = currentPage;
   
+  // Estado para menú desplegable
+  let isMoreMenuOpen: boolean = false;
+  
+  // Formatear números grandes
+  function formatCount(num: number | undefined): string {
+    if (!num) return "0";
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+    if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+    return num.toString();
+  }
+  
+  // Copiar enlace al portapapeles
+  async function copyPollLink() {
+    try {
+      const url = `${window.location.origin}/?poll=${poll.id}`;
+      await navigator.clipboard.writeText(url);
+      isMoreMenuOpen = false;
+    } catch (err) {
+      console.error('Error copiando enlace:', err);
+    }
+  }
+  
+  // Cerrar menú al hacer clic fuera
+  function handleMenuClickOutside(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.more-menu-container')) {
+      isMoreMenuOpen = false;
+    }
+  }
+  
+  // Swipe para cerrar bottom sheet
+  let sheetTouchStartY = 0;
+  let sheetCurrentY = 0;
+  let sheetTranslateY = 0;
+  let sheetElement: HTMLDivElement | null = null;
+  let canSwipeClose = false;
+  
+  function handleSheetTouchStart(e: TouchEvent) {
+    sheetTouchStartY = e.touches[0].clientY;
+    sheetCurrentY = sheetTouchStartY;
+    // Solo permitir swipe si el scroll está en la parte superior
+    canSwipeClose = sheetElement ? sheetElement.scrollTop <= 0 : true;
+  }
+  
+  function handleSheetTouchMove(e: TouchEvent) {
+    if (!canSwipeClose) return;
+    sheetCurrentY = e.touches[0].clientY;
+    const diff = sheetCurrentY - sheetTouchStartY;
+    if (diff > 0) {
+      sheetTranslateY = diff;
+      e.preventDefault(); // Prevenir scroll mientras arrastramos
+    }
+  }
+  
+  function handleSheetTouchEnd() {
+    if (sheetTranslateY > 80) {
+      isMoreMenuOpen = false;
+    }
+    sheetTranslateY = 0;
+    canSwipeClose = false;
+  }
+  
   // Detectar cambio de página y actualizar dirección ANTES del render
   $: if (currentPage !== lastPage) {
     paginationDirection = currentPage > lastPage ? 'forward' : 'backward';
@@ -706,17 +768,6 @@
                   <span class="collapse-indicator-poll"> [−]</span>
                 {/if}
               </h3>
-              
-              <!-- Botón de tooltip para título truncado -->
-              {#if pollTitleTruncated[poll.id] || poll.question.length > 50}
-                <button 
-                  class="title-tooltip-btn"
-                  onclick={(e) => showTitleTooltipHandler(`#${poll.question}`, e)}
-                  title="Ver título completo"
-                >
-                  ⋯
-                </button>
-              {/if}
               {#if poll.closedAt}
                 {@const timeColor = getTimeRemainingColor(poll.closedAt)}
                 {@const timeText = getTimeRemaining(poll.closedAt)}
@@ -769,17 +820,6 @@
                   <span class="collapse-indicator-poll"> [−]</span>
                 {/if}
               </h3>
-              
-              <!-- Botón de tooltip para título truncado -->
-              {#if pollTitleTruncated[poll.id] || (poll.question || poll.title || '').length > 50}
-                <button 
-                  class="title-tooltip-btn"
-                  onclick={(e) => showTitleTooltipHandler(poll.question || poll.title, e)}
-                  title="Ver título completo"
-                >
-                  ⋯
-                </button>
-              {/if}
               {#if poll.closedAt}
                 {@const timeColor = getTimeRemainingColor(poll.closedAt)}
                 {@const timeText = getTimeRemaining(poll.closedAt)}
@@ -1493,147 +1533,420 @@
     </div>
   </div>
   
-  <!-- Botones de acción -->
-  <div class="vote-summary-info">
-    <div class="vote-actions">
-      <!-- Lado izquierdo: Votos, Vistas y Globo -->
-      <div class="action-group-left">
+  <!-- BARRA DE CONTROL PRINCIPAL - Nuevo Diseño -->
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="mini-action-bar more-menu-container" onclick={handleMenuClickOutside}>
+    
+    <!-- Modal Bottom Sheet -->
+    {#if isMoreMenuOpen}
+      <!-- Overlay -->
+      <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+      <div 
+        class="mini-bottom-sheet-overlay"
+        onclick={() => isMoreMenuOpen = false}
+      ></div>
+      <!-- Bottom Sheet -->
+      <div 
+        bind:this={sheetElement}
+        class="mini-bottom-sheet" 
+        style="transform: translateY({sheetTranslateY}px)"
+        transition:fly={{ y: 200, duration: 250 }}
+        ontouchstart={handleSheetTouchStart}
+        ontouchmove={handleSheetTouchMove}
+        ontouchend={handleSheetTouchEnd}
+      >
+        <div class="mini-bottom-sheet-handle"></div>
+        <div class="mini-bottom-sheet-items">
+          
+          <!-- Votar -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+              const activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
+              if (pollVotedOption) {
+                dispatch('clearVote', { pollId: poll.id });
+              } else if (activeOption) {
+                dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
+              }
+            }}
+          >
+            <div class="mini-bottom-sheet-icon {pollVotedOption ? 'bg-emerald-500/20' : 'bg-white/10'}">
+              {#if pollVotedOption}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#10b981" stroke="#10b981" stroke-width="2">
+                  <path d="M9 11l3 3L22 4"/>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+              {:else}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                </svg>
+              {/if}
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>{pollVotedOption ? 'Votado' : 'Votar'}</span>
+              <p>{formatCount(poll.stats?.totalVotes || poll.totalVotes)} votos</p>
+            </div>
+          </button>
+
+          <!-- Comentarios -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+          >
+            <div class="mini-bottom-sheet-icon bg-white/10">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Comentarios</span>
+              <p>0 comentarios</p>
+            </div>
+          </button>
+
+          <!-- Ver en globo -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleOpenInGlobe(); }}
+          >
+            <div class="mini-bottom-sheet-icon bg-cyan-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Ver en el globo</span>
+              <p>Explorar ubicación</p>
+            </div>
+          </button>
+
+          <!-- Estadísticas -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; dispatch('goToChart', { pollId: poll.id.toString() }); }}
+          >
+            <div class="mini-bottom-sheet-icon bg-purple-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Estadísticas</span>
+              <p>Ver gráficos y datos</p>
+            </div>
+          </button>
+
+          <div class="mini-bottom-sheet-divider"></div>
+
+          <!-- Compartir -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; sharePoll(e); }}
+          >
+            <div class="mini-bottom-sheet-icon bg-blue-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
+                <circle cx="18" cy="5" r="3"/>
+                <circle cx="6" cy="12" r="3"/>
+                <circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Compartir</span>
+              <p>0 compartidos</p>
+            </div>
+          </button>
+
+          <!-- Repostear -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+          >
+            <div class="mini-bottom-sheet-icon bg-green-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                <path d="M17 1l4 4-4 4"/>
+                <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                <path d="M7 23l-4-4 4-4"/>
+                <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Repostear</span>
+              <p>0 reposts</p>
+            </div>
+          </button>
+
+          <!-- Guardar -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+          >
+            <div class="mini-bottom-sheet-icon bg-yellow-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Guardar</span>
+              <p>Añadir a guardados</p>
+            </div>
+          </button>
+
+          <!-- Copiar enlace -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); copyPollLink(); }}
+          >
+            <div class="mini-bottom-sheet-icon bg-white/10">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Copiar enlace</span>
+              <p>Compartir URL</p>
+            </div>
+          </button>
+
+          <div class="mini-bottom-sheet-divider"></div>
+
+          <!-- No me interesa -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+          >
+            <div class="mini-bottom-sheet-icon bg-gray-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>No me interesa</span>
+              <p>Ver menos como esto</p>
+            </div>
+          </button>
+
+          <!-- Reportar -->
+          <button 
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+          >
+            <div class="mini-bottom-sheet-icon bg-red-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="mini-bottom-sheet-text">
+              <span>Reportar</span>
+              <p>Denunciar contenido</p>
+            </div>
+          </button>
+
+        </div>
+      </div>
+    {/if}
+
+    <!-- Barra de control -->
+    <div class="mini-control-bar">
+      
+      <!-- A. ZONA FIJA (Acciones Principales) -->
+      <div class="mini-fixed-actions">
+        
+        <!-- Votar -->
         <button 
           bind:this={voteIconElement}
-          class="action-badge action-vote {pollVotedOption ? 'has-voted' : 'no-vote'}" 
-          type="button" 
-          title={pollVotedOption ? `Tu voto: ${votedOptionData?.label || pollVotedOption} (Click para quitar)` : activeAccordionIndex !== null && paginatedPoll.items[activeAccordionIndex] ? `Votar: ${paginatedPoll.items[activeAccordionIndex].label}` : "Selecciona una opción"}
+          class="mini-action-btn {pollVotedOption ? 'voted' : ''}"
+          type="button"
+          title={pollVotedOption ? 'Quitar voto' : 'Votar'}
+          aria-label="Votar"
           style="{pollVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''}"
-          ontouchend={(e) => {
-            e.stopPropagation();
-            const activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
-            console.log('[SinglePoll] 🗑️ Touch en botón de voto');
-            console.log('[SinglePoll] pollVotedOption:', pollVotedOption);
-            console.log('[SinglePoll] activeOption:', activeOption);
-            
-            if (pollVotedOption) {
-              // Quitar voto
-              console.log('[SinglePoll] Despachando clearVote para:', poll.id);
-              voteRemovalColor = votedOptionData?.color || '#ef4444';
-              showVoteRemoval = true;
-              if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-              voteRemovalTimeout = setTimeout(() => {
-                showVoteRemoval = false;
-              }, 800);
-              dispatch('clearVote', { pollId: poll.id });
-            } else if (activeOption) {
-              // Votar opción activa
-              console.log('[SinglePoll] Votando opción activa:', activeOption.key);
-              voteConfirmationColor = activeOption.color;
-              showVoteConfirmation = true;
-              if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-              voteConfirmationTimeout = setTimeout(() => {
-                showVoteConfirmation = false;
-              }, 800);
-              dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
-            }
-          }}
           onclick={(e) => {
             e.stopPropagation();
             const activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
-            console.log('[SinglePoll] 👁️ Click en botón de voto');
-            console.log('[SinglePoll] pollVotedOption:', pollVotedOption);
-            console.log('[SinglePoll] activeOption:', activeOption);
-            
             if (pollVotedOption) {
-              // Quitar voto
-              console.log('[SinglePoll] Despachando clearVote para:', poll.id);
               voteRemovalColor = votedOptionData?.color || '#ef4444';
               showVoteRemoval = true;
               if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-              voteRemovalTimeout = setTimeout(() => {
-                showVoteRemoval = false;
-              }, 800);
+              voteRemovalTimeout = setTimeout(() => showVoteRemoval = false, 800);
               dispatch('clearVote', { pollId: poll.id });
             } else if (activeOption) {
-              // Votar opción activa
-              console.log('[SinglePoll] Votando opción activa:', activeOption.key);
               voteConfirmationColor = activeOption.color;
               showVoteConfirmation = true;
               if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-              voteConfirmationTimeout = setTimeout(() => {
-                showVoteConfirmation = false;
-              }, 800);
+              voteConfirmationTimeout = setTimeout(() => showVoteConfirmation = false, 800);
               dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
             }
           }}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill={pollVotedOption ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 11l3 3L22 4"></path>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-          </svg>
-          <span>{formatNumber(poll.stats?.totalVotes || poll.totalVotes || 0)}</span>
+          {#if pollVotedOption}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" class="mini-icon-voted">
+              <path d="M9 11l3 3L22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+          {:else}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+            </svg>
+          {/if}
+          <span class="mini-action-count {pollVotedOption ? 'voted' : ''}">{formatCount(poll.stats?.totalVotes || poll.totalVotes)}</span>
         </button>
-        <button class="action-badge" type="button" title="Vistas">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
+
+        <!-- Comentarios -->
+        <button class="mini-action-btn" type="button" title="Comentarios" aria-label="Comentarios">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
           </svg>
-          <span>{formatNumber(poll.stats?.totalViews || poll.totalViews || 0)}</span>
+          <span class="mini-action-count">0</span>
         </button>
-        <button 
-          class="action-badge action-globe" 
-          type="button" 
-          title="Ver en el globo"
-          aria-label="Ver en el globo"
-          onclick={handleOpenInGlobe}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="2" y1="12" x2="22" y2="12"/>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-        </button>
-        <button 
-          class="action-badge action-chart" 
-          type="button" 
-          title="Ver estadísticas"
-          aria-label="Ver estadísticas"
-          onclick={(e) => {
-            e.stopPropagation();
-            dispatch('goToChart', { pollId: poll.id.toString() });
-          }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-        </button>
+
       </div>
-      
-      <!-- Lado derecho: Guardar, Republicar, Compartir -->
-      <div class="action-group-right">
-        
-        <button class="action-badge" type="button" title="Guardar">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span>{formatNumber(0)}</span>
-        </button>
-        <button class="action-badge" type="button" title="Republicar">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M17 1l4 4-4 4"/>
-            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-            <path d="M7 23l-4-4 4-4"/>
-            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-          </svg>
-          <span>{formatNumber(0)}</span>
-        </button>
-        <button class="action-badge action-share" type="button" title="Compartir" onclick={(e) => sharePoll(e)}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="18" cy="5" r="3"/>
-            <circle cx="6" cy="12" r="3"/>
-            <circle cx="18" cy="19" r="3"/>
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-          </svg>
-          <span>{formatNumber(0)}</span>
-        </button>
+
+      <!-- B. ZONA SCROLLABLE (Acciones Secundarias) -->
+      <div class="mini-scroll-actions">
+        <div class="mini-scroll-inner">
+          
+          <!-- Menú (3 puntos) -->
+          <button 
+            class="mini-action-btn-secondary mini-more-btn-scroll" 
+            type="button" 
+            title="Más opciones"
+            aria-label="Más opciones"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = !isMoreMenuOpen; }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="12" cy="19" r="2"/>
+            </svg>
+          </button>
+
+          <!-- Globo -->
+          <button 
+            class="mini-action-btn-secondary"
+            type="button"
+            title="Ver en el globo"
+            aria-label="Ver en el globo"
+            onclick={(e) => { e.stopPropagation(); handleOpenInGlobe(); }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </button>
+
+          <!-- Gráfico -->
+          <button 
+            class="mini-action-btn-secondary"
+            type="button"
+            title="Ver estadísticas"
+            aria-label="Ver estadísticas"
+            onclick={(e) => { e.stopPropagation(); dispatch('goToChart', { pollId: poll.id.toString() }); }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </button>
+
+          <!-- Compartir -->
+          <button 
+            class="mini-action-btn-secondary"
+            type="button"
+            title="Compartir"
+            aria-label="Compartir"
+            onclick={(e) => { e.stopPropagation(); sharePoll(e); }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="18" cy="5" r="3"/>
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            <span class="mini-action-count-secondary">0</span>
+          </button>
+
+          <!-- Repostear -->
+          <button class="mini-action-btn-secondary" type="button" title="Repostear" aria-label="Repostear">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 1l4 4-4 4"/>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <path d="M7 23l-4-4 4-4"/>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+            <span class="mini-action-count-secondary">0</span>
+          </button>
+
+          <!-- Vistas -->
+          <button class="mini-action-btn-secondary" type="button" title="Vistas" aria-label="Vistas">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span class="mini-action-count-secondary">{formatCount(poll.stats?.totalViews || poll.totalViews)}</span>
+          </button>
+
+          <!-- Guardar -->
+          <button class="mini-action-btn-secondary" type="button" title="Guardar" aria-label="Guardar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span class="mini-action-count-secondary">0</span>
+          </button>
+
+          <!-- Copiar enlace -->
+          <button 
+            class="mini-action-btn-secondary mini-action-subtle"
+            type="button"
+            title="Copiar enlace"
+            aria-label="Copiar enlace"
+            onclick={(e) => { e.stopPropagation(); copyPollLink(); }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </button>
+
+          <!-- No me interesa -->
+          <button 
+            class="mini-action-btn-secondary mini-action-subtle"
+            type="button"
+            title="No me interesa"
+            aria-label="No me interesa"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+
+          <!-- Reportar -->
+          <button 
+            class="mini-action-btn-secondary mini-action-subtle"
+            type="button"
+            title="Reportar"
+            aria-label="Reportar"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </button>
+
+        </div>
       </div>
+
     </div>
   </div>
 </div>
@@ -2728,17 +3041,9 @@
   .poll-item {
     margin-bottom: 0;
     padding-bottom: 0;
-    background: linear-gradient(
-      180deg,
-      rgba(26, 26, 31, 0.95) 0%,
-      rgba(30, 30, 35, 0.98) 100%
-    );
+    background: transparent;
     border-radius: 0;
     overflow: visible;
-    box-shadow: 
-      0 8px 32px rgba(0, 0, 0, 0.3),
-      0 4px 16px rgba(0, 0, 0, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
   
   /* Reducir padding de botones individuales */
@@ -3095,13 +3400,7 @@
   .poll-header-compact {
     padding: 12px 16px 8px 16px;
     margin-bottom: 0;
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.4) 0%,
-      rgba(0, 0, 0, 0.2) 50%,
-      transparent 100%
-    );
-    backdrop-filter: blur(8px);
+    background: transparent;
   }
 
   .header-compact-inner {
@@ -3452,13 +3751,7 @@
     width: 100%;
     margin: 0;
     padding: 0;
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.1) 0%,
-      transparent 20%,
-      transparent 80%,
-      rgba(0, 0, 0, 0.1) 100%
-    );
+    background: transparent;
   }
 
   /* Scroll horizontal estilo PollMaximizedView */
@@ -3555,6 +3848,303 @@
     .option-indicator {
       height: 5px;
     }
+  }
+
+  /* ========================================
+     MINI ACTION BAR - Nuevo Diseño
+     ======================================== */
+  
+  .mini-action-bar {
+    position: relative;
+    padding: 8px 12px;
+    background: transparent;
+  }
+
+  .mini-control-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+  }
+
+  .mini-fixed-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+  }
+
+  .mini-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 20px;
+    background: transparent;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mini-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .mini-action-btn:active {
+    transform: scale(0.95);
+  }
+
+  .mini-action-btn.voted {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+  }
+
+  .mini-action-btn svg {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  }
+
+  .mini-icon-voted {
+    animation: miniBeat 0.8s ease-out;
+  }
+
+  @keyframes miniBeat {
+    0% { transform: scale(1); }
+    15% { transform: scale(1.25); }
+    30% { transform: scale(1); }
+    45% { transform: scale(1.15); }
+    60% { transform: scale(1); }
+  }
+
+  .mini-action-count {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: monospace;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  .mini-action-count.voted {
+    color: #10b981;
+  }
+
+  .mini-more-btn-scroll {
+    opacity: 0.6;
+  }
+
+  .mini-more-btn-scroll:hover {
+    opacity: 1;
+  }
+
+  .mini-action-subtle {
+    opacity: 0.5;
+  }
+
+  .mini-action-subtle:hover {
+    opacity: 1;
+  }
+
+  /* Bottom Sheet Modal */
+  .mini-bottom-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+  }
+
+  .mini-bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1001;
+    background: #1a1a1a;
+    border-radius: 24px 24px 0 0;
+    padding: 16px 16px 24px;
+    box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.5);
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .mini-bottom-sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+
+  .mini-bottom-sheet-items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .mini-bottom-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: white;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .mini-bottom-sheet-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .mini-bottom-sheet-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .mini-bottom-sheet-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mini-bottom-sheet-text span {
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .mini-bottom-sheet-text p {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
+  }
+
+  .mini-bottom-sheet-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 8px 0;
+  }
+
+  .mini-scroll-actions {
+    flex: 1;
+    overflow-x: auto;
+    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  }
+
+  .mini-scroll-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mini-scroll-actions {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .mini-scroll-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+    padding-left: 0;
+  }
+
+  .mini-action-btn-secondary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .mini-action-btn-secondary:hover {
+    color: white;
+  }
+
+  .mini-action-btn-secondary:active {
+    transform: scale(0.95);
+  }
+
+  .mini-action-btn-secondary svg {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  }
+
+  .mini-action-count-secondary {
+    font-size: 10px;
+    font-weight: 500;
+    font-family: monospace;
+    color: rgba(255, 255, 255, 0.6);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Menú desplegable glassmorphism */
+  .mini-glass-menu {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    width: 180px;
+    background: rgba(20, 20, 20, 0.95);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .mini-menu-items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .mini-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: white;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .mini-menu-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .mini-menu-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 0;
+  }
+
+  .mini-menu-arrow {
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 12px;
+    height: 12px;
+    background: rgba(20, 20, 20, 0.95);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
   
 </style>

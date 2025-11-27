@@ -3762,11 +3762,12 @@
 
   // Function to toggle dropdown and load options
   async function toggleDropdown(event?: Event) {
-    console.log("[toggleDropdown] INICIO - showDropdown:", showDropdown);
+    console.log("[toggleDropdown] INICIO - showDropdown:", showDropdown, "navigationManager:", !!navigationManager);
     if (event) {
       event.stopPropagation();
     }
     if (!navigationManager) {
+      console.error("[toggleDropdown] ❌ navigationManager es null!");
       return;
     }
 
@@ -3826,7 +3827,12 @@
     if (showDropdown) {
       const target = event.target as HTMLElement;
       const dropdown = target.closest(".breadcrumb-dropdown-wrapper");
-      if (!dropdown) {
+      const headerNav = target.closest(".header-nav-wrapper");
+      const globalDropdown = target.closest(".global-dropdown-overlay");
+      const headerNavMinimal = target.closest(".header-nav-minimal");
+      // No cerrar si el click viene del header de navegación o del dropdown global
+      if (!dropdown && !headerNav && !globalDropdown && !headerNavMinimal) {
+        console.log("[handleClickOutside] Cerrando dropdown por click fuera");
         showDropdown = false;
         dropdownOptions = [];
         dropdownSearchQuery = "";
@@ -5434,14 +5440,26 @@
     return true;
   })();
 
-  // Sincronizar estado local con store
+  // Sincronizar estado local CON el store (bidireccional)
+  // Cuando las variables locales cambian, actualizar el store para que el Header se entere
   $: {
-    const nav = $globalNavigationState;
-    selectedCountryIso = nav.countryIso;
-    selectedCountryName = nav.countryName;
-    selectedSubdivisionId = nav.subdivisionId;
-    selectedSubdivisionName = nav.subdivisionName;
-    selectedCityName = nav.cityName;
+    // Determinar el nivel actual basado en las variables
+    let level: 'world' | 'country' | 'subdivision' | 'city' = 'world';
+    if (selectedCityName) level = 'city';
+    else if (selectedSubdivisionName) level = 'subdivision';
+    else if (selectedCountryName) level = 'country';
+    
+    // Actualizar el store global
+    globalNavigationState.update(state => ({
+      ...state,
+      level,
+      countryIso: selectedCountryIso,
+      countryName: selectedCountryName,
+      subdivisionId: selectedSubdivisionId,
+      subdivisionName: selectedSubdivisionName,
+      cityId: selectedCityId,
+      cityName: selectedCityName
+    }));
   }
 
   // Sistema de detección de polígono centrado al arrastrar
@@ -8855,6 +8873,29 @@
     };
     window.addEventListener("searchSelect", searchSelectHandler);
 
+    // Listen for header navigation events
+    headerToggleDropdownHandler = () => {
+      console.log("[GlobeGL] 🎯 Evento headerToggleDropdown recibido");
+      toggleDropdown();
+    };
+    window.addEventListener("headerToggleDropdown", headerToggleDropdownHandler);
+
+    headerNavigateToViewHandler = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const level = customEvent.detail?.level;
+      console.log("[GlobeGL] 🧭 Evento headerNavigateToView recibido:", level);
+      if (level) {
+        await navigateToView(level);
+      }
+    };
+    window.addEventListener("headerNavigateToView", headerNavigateToViewHandler);
+
+    headerLocateMeHandler = () => {
+      console.log("[GlobeGL] 📍 Evento headerLocateMe recibido");
+      locateUser();
+    };
+    window.addEventListener("headerLocateMe", headerLocateMeHandler);
+
     // Verificar si hay tema guardado antes de inicializar colores
     const hasSavedTheme = localStorage.getItem("voutop-theme");
     if (!hasSavedTheme) {
@@ -9203,6 +9244,9 @@
   // Store handler reference for cleanup
   let searchSelectHandler: ((event: Event) => Promise<void>) | null = null;
   let paletteChangeHandler: ((event: Event) => void) | null = null;
+  let headerToggleDropdownHandler: (() => void) | null = null;
+  let headerNavigateToViewHandler: ((event: Event) => Promise<void>) | null = null;
+  let headerLocateMeHandler: (() => void) | null = null;
 
   // CRÍTICO: Forzar actualización de polígonos cuando cambia isDarkTheme
   $: if (globe && isDarkTheme !== undefined) {
@@ -9250,6 +9294,16 @@
     // Remove popstate listener
     if (popstateHandler) {
       window.removeEventListener("popstate", popstateHandler as any);
+    }
+    // Remove header event listeners
+    if (headerToggleDropdownHandler) {
+      window.removeEventListener("headerToggleDropdown", headerToggleDropdownHandler);
+    }
+    if (headerNavigateToViewHandler) {
+      window.removeEventListener("headerNavigateToView", headerNavigateToViewHandler);
+    }
+    if (headerLocateMeHandler) {
+      window.removeEventListener("headerLocateMe", headerLocateMeHandler);
     }
   });
 </script>

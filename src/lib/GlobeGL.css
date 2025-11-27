@@ -213,7 +213,6 @@ header {
   body:has(.bottom-sheet.solid) .avatars-scroll-container {
     display: flex;
     justify-content: center;
-    width: 100%;
   }
 }
 
@@ -2787,11 +2786,12 @@ header {
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   transition: all 0.3s ease;
   position: relative;
+  cursor: pointer;
 }
 
 .poll-question.truncated {
@@ -2799,19 +2799,21 @@ header {
 }
 
 .poll-question.truncated::after {
-  content: ' [···]';
-  color: #9ca3af !important;
-  font-weight: 500;
+  content: ' ···';
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-weight: 400;
+  font-size: 14px;
 }
 
 .poll-question.expanded {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+  text-overflow: unset;
   cursor: pointer;
+  white-space: normal;
 }
 
 .collapse-indicator-poll {
@@ -3948,15 +3950,9 @@ header {
 }
 
 /* Contenedor de indicadores flotantes en sheet-content */
+/* Ahora vacío porque la navegación se movió al Header */
 .floating-indicators-content {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-  padding: 5px 10px;
-  pointer-events: none; /* El contenedor no intercepta clicks */
-  min-height: 52px; /* altura coherente con botones flotantes */
+  display: none; /* Ocultar - navegación ahora en Header */
 }
 
 /* Contenedor de indicadores flotantes (legacy) */
@@ -4229,7 +4225,7 @@ header {
   justify-content: center; /* centrar horizontal */
   gap: 8px;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 0; /* Reducido - navegación ahora en Header */
   pointer-events: auto; /* permitir click */
   /* Chip-like background for readability */
   background: rgba(255, 255, 255, 0.06);
