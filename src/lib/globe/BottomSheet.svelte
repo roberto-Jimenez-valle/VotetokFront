@@ -13,7 +13,6 @@
   import AdCard from "./cards/sections/AdCard.svelte";
   // Lazy load para romper dependencia circular y evitar stack overflow en build
   import AuthModal from "$lib/AuthModal.svelte";
-  import UserProfileModal from "$lib/UserProfileModal.svelte";
   
   // Componente dinámico para PollMaximizedView
   let PollMaximizedView: any = null;
@@ -1148,7 +1147,7 @@
   export let tagQuery: string = "";
   export let onToggleSearch: () => void = () => {};
 
-  // Profile modal props
+  // Perfil: controlado por el padre (GlobeGL / +page)
   export let isProfileModalOpen: boolean = false;
   export let selectedProfileUserId: number | null = null;
 
@@ -1320,6 +1319,7 @@
         votes: number;
       }>;
     };
+    openprofile: { userId: number };
     vote: { option: string; pollId?: string };
     requestExpand: void;
     polldropdownstatechange: { open: boolean };
@@ -3530,7 +3530,8 @@
             const poll = activePoll?.id.toString() === pollId ? activePoll : null;
             if (poll && poll.options && poll.options[optionIndex]) {
               // Abrir el modal maximized con la opción específica
-              const option = poll.options[optionIndex];
+              const safeIndex = Math.min(Math.max(optionIndex, 0), poll.options.length - 1);
+              const option = poll.options[safeIndex];
               const customEvent = new CustomEvent('openPreviewModal', {
                 detail: { 
                   option: { key: option.key, label: option.label },
@@ -3540,8 +3541,7 @@
               handleOpenPreviewModal(customEvent as any);
             }
           }}
-          bind:isProfileModalOpen
-          bind:selectedProfileUserId
+          on:openprofile={(event) => dispatch("openprofile", event.detail)}
         />
 
         <!-- Separador después de encuesta activa -->
