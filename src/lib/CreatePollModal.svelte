@@ -7,8 +7,11 @@
   import AuthModal from '$lib/AuthModal.svelte';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import LinkPreview from '$lib/components/LinkPreview.svelte';
-  import PollMaximizedView from '$lib/components/PollMaximizedView.svelte';
+  // Lazy load para romper dependencia circular y evitar stack overflow en build
   import GiphyPicker from '$lib/components/GiphyPicker.svelte';
+  
+  // Componente dinámico para PollMaximizedView
+  let PollMaximizedView: any = null;
   import { giphyGifUrl } from '$lib/services/giphy';
   import { 
     extractUrls, 
@@ -35,7 +38,9 @@
     HASHTAG_MAX_LENGTH
   } from '$lib/validation/pollValidation';
   
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    created: any;
+  }>();
   
   interface Props {
     isOpen?: boolean;
@@ -1239,6 +1244,11 @@
   
   // Detectar si es dispositivo táctil al montar el componente
   onMount(() => {
+    // Lazy load PollMaximizedView para evitar dependencia circular (async)
+    import("$lib/components/PollMaximizedView.svelte").then((module) => {
+      PollMaximizedView = module.default;
+    });
+    
     isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     
     // Agregar listeners globales para AMBOS modos
@@ -2689,7 +2699,7 @@
 {/if}
 
 <!-- Vista Maximizada (Componente Separado) -->
-{#if maximizedOption && isOpen}
+{#if maximizedOption && isOpen && PollMaximizedView}
   <PollMaximizedView
     options={options}
     bind:activeOptionId={maximizedOption}
@@ -2697,20 +2707,20 @@
     onClose={() => {
       maximizedOption = null;
     }}
-    onOptionChange={(optionId) => {
+    onOptionChange={(optionId: string) => {
       maximizedOption = optionId;
     }}
-    onTitleChange={(newTitle) => {
+    onTitleChange={(newTitle: string) => {
       title = newTitle;
     }}
-    onLabelChange={(optionId, newLabel) => {
+    onLabelChange={(optionId: string, newLabel: string) => {
       const option = options.find(opt => opt.id === optionId);
       if (option) {
         option.label = newLabel;
         options = options;
       }
     }}
-    onOpenColorPicker={(optionId) => {
+    onOpenColorPicker={(optionId: string) => {
       colorPickerOpenFor = optionId;
     }}
   />

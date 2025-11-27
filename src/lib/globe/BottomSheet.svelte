@@ -11,9 +11,12 @@
   import SinglePollSection from "./cards/sections/SinglePollSection.svelte";
   import WhoToFollowSection from "./cards/sections/WhoToFollowSection.svelte";
   import AdCard from "./cards/sections/AdCard.svelte";
-  import PollMaximizedView from "$lib/components/PollMaximizedView.svelte";
+  // Lazy load para romper dependencia circular y evitar stack overflow en build
   import AuthModal from "$lib/AuthModal.svelte";
   import UserProfileModal from "$lib/UserProfileModal.svelte";
+  
+  // Componente dinámico para PollMaximizedView
+  let PollMaximizedView: any = null;
 
   // Helper para reemplazar setTimeout con Promesas
   const delay = (ms: number) =>
@@ -1425,6 +1428,12 @@
   }
 
   onMount(() => {
+    // Lazy load PollMaximizedView para evitar dependencia circular
+    (async () => {
+      const module = await import("$lib/components/PollMaximizedView.svelte");
+      PollMaximizedView = module.default;
+    })();
+    
     // Cargar datos iniciales desde la API
     loadMainPoll(); // Cargar trending topic como encuesta principal
     loadUserSuggestions();
@@ -4021,7 +4030,7 @@
 </div>
 
 <!-- Modal fullscreen de preview FUERA del BottomSheet -->
-{#if showPreviewModal && previewModalOption && previewModalPoll}
+{#if showPreviewModal && previewModalOption && previewModalPoll && PollMaximizedView}
   <PollMaximizedView
     options={previewModalOption}
     bind:activeOptionId={previewModalOptionIndex}
@@ -4048,11 +4057,11 @@
     hasVoted={!!userVotes[previewModalPoll.id]}
     isAuthenticated={!!$currentUser}
     onClose={closePreviewModal}
-    onOptionChange={(optionId) => {
+    onOptionChange={(optionId: string) => {
       previewModalOptionIndex = optionId;
       console.log("[BottomSheet] Opción cambiada a:", optionId);
     }}
-    onSwipeVertical={(direction) => {
+    onSwipeVertical={(direction: string) => {
       console.log("[BottomSheet] Swipe vertical:", direction);
       if (direction === "down") {
         // Siguiente encuesta
@@ -4062,7 +4071,7 @@
         navigateToPreviousPollWithPreview();
       }
     }}
-    onVote={async (optionId) => {
+    onVote={async (optionId: string) => {
       console.log("[BottomSheet] 🗳️ Votando desde modal preview:", optionId);
       if (!previewModalPoll) return;
 
@@ -4157,7 +4166,7 @@
       console.log("[BottomSheet] 🔄 Republicar desde modal");
       // TODO: Implementar republicar
     }}
-    onOpenProfile={(userId) => {
+    onOpenProfile={(userId: number) => {
       console.log("[BottomSheet] 👤 Abrir perfil de usuario:", userId);
       closePreviewModal(); // Cerrar maximized primero
       setTimeout(() => {

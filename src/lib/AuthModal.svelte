@@ -3,7 +3,14 @@
   import { X } from "lucide-svelte";
   import { createEventDispatcher } from "svelte";
 
-  const dispatch = createEventDispatcher();
+  interface AuthEvents {
+    login: { provider: string };
+  }
+
+  // Expose events to parent components (Svelte inspects $$Events)
+  interface $$Events extends AuthEvents {}
+
+  const dispatch = createEventDispatcher<AuthEvents>();
 
   interface Props {
     isOpen?: boolean;
