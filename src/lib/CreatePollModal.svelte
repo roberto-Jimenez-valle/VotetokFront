@@ -11,7 +11,7 @@
   import GiphyPicker from '$lib/components/GiphyPicker.svelte';
   
   // Componente dinámico para PollMaximizedView
-  let PollMaximizedView: any = null;
+  let PollMaximizedView = $state<any>(null);
   import { giphyGifUrl } from '$lib/services/giphy';
   import { 
     extractUrls, 
@@ -3524,51 +3524,6 @@
     margin: 0;
   }
   
-  .preview-loading p.text-sm {
-    font-size: 12px;
-  }
-  
-  /* Placeholder cuando no hay preview en maximizado */
-  .preview-placeholder {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 16px;
-  }
-  
-  .placeholder-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    opacity: 0.6;
-  }
-  
-  .placeholder-content p {
-    font-size: 14px;
-    font-weight: 500;
-    margin: 0;
-  }
-  
-  /* Preview multimedia del título principal */
-  .main-media-preview {
-    width: 100%;
-    max-width: 100%;
-    height: 140px;
-    margin: 12px 0;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    background: #2c2c2e;
-    position: relative;
-    z-index: 1;
-  }
-  
   .remove-preview-btn {
     position: absolute;
     top: 8px;
@@ -3747,24 +3702,6 @@
     display: none !important;
   }
   
-  /* Wrapper para LinkPreview en opciones */
-  .option-link-preview-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px;
-    overflow: hidden;
-  }
-  
-  .option-link-preview-wrapper :global(.link-preview) {
-    max-width: 100%;
-    width: 100%;
-    height: auto;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-  
   /* LinkPreview en título principal */
   .main-media-preview :global(.link-preview) {
     width: 100%;
@@ -3819,66 +3756,6 @@
     right: 0;
   }
   
-  /* Botón de minimizar dentro de card maximizada */
-  .minimize-badge {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    width: 44px;
-    height: 36px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: rgba(255, 255, 255, 0.9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    z-index: 10 !important;
-    pointer-events: auto !important;
-  }
-  
-  .minimize-badge:hover {
-    background: rgba(0, 0, 0, 0.8);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: scale(1.05);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  }
-  
-  .minimize-badge:active {
-    transform: scale(1);
-  }
-  
-  /* Botón de maximizar flotante */
-  .maximize-floating-button {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    background: rgba(30, 30, 35, 0.95);
-    backdrop-filter: blur(10px);
-    border: none;
-    border-bottom: 3px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    z-index: 10;
-  }
-  
-  .maximize-floating-button:hover {
-    background: rgba(40, 40, 45, 1);
-    border-bottom-color: rgba(255, 255, 255, 0.4);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  }
-  
-  .maximize-floating-button:active {
-    transform: translateY(0);
-  }
   
   /* Botón de maximizar */
   .maximize-button {
@@ -4002,16 +3879,7 @@
     align-items: center;
     gap: 8px;
   }
-  
-  /* Contenedor de dots de paginación (legacy, por si se usa) */
-  .pagination-dots {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 0;
-  }
-  
+
   .pagination-dot {
     width: 8px;
     height: 8px;
@@ -4022,12 +3890,12 @@
     transition: all 0.3s ease;
     padding: 0;
   }
-  
+
   .pagination-dot:hover {
     background: rgba(255, 255, 255, 0.5);
     transform: scale(1.2);
   }
-  
+
   .pagination-dot.active {
     background: #3b82f6;
     width: 24px;
@@ -5239,29 +5107,6 @@
       right: 70px !important;
       width: 44px !important;
       height: 44px !important;
-    }
-    
-    .minimize-badge {
-      bottom: 15px !important;
-      right: 15px !important;
-      width: 44px !important;
-      height: 44px !important;
-    }
-    
-    .maximized-navigation {
-      bottom: 50px;
-      gap: 15px;
-      padding: 16px 16px;
-    }
-    
-    .maximized-dot {
-      width: 8px;
-      height: 8px;
-    }
-    
-    .maximized-dot.active {
-      width: 24px;
-      height: 8px;
     }
   }
 
