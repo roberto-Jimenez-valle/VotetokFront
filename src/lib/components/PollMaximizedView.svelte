@@ -130,8 +130,13 @@
   let totalVotes = $derived(options.reduce((a, b) => a + (b.votes || 0), 0));
   let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
-  let activeOption = $derived(options[activeIndex]);
-  let voteColor = $derived(activeOption?.color || '#10b981');
+  
+  // Combinar derivaciones para evitar cadenas que causan stack overflow
+  let voteColor = $derived.by(() => {
+    const index = options.findIndex((o) => o.id === activeOptionId);
+    if (index === -1 || !options[index]) return '#10b981';
+    return options[index].color || '#10b981';
+  });
 
   let scrollContainer: HTMLElement | null = null;
   let showLikeAnim = $state(false);
