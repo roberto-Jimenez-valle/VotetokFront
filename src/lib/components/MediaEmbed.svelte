@@ -184,13 +184,11 @@
    */
   async function detectAndGenerateEmbed(url: string) {
     if (!url || url.trim() === "") {
-      console.log("[MediaEmbed] URL vacía, no se procesará");
       loading = false;
       error = true;
       return;
     }
 
-    console.log("[MediaEmbed] Procesando URL:", url);
     loading = true;
     error = false;
 
@@ -205,14 +203,10 @@
           url: url,
         };
         loading = false;
-        console.log("[MediaEmbed] Detectada imagen directa");
         return;
       }
 
       // TODOS los enlaces pasan por el sistema oEmbed/link-preview centralizado
-      console.log(
-        "[MediaEmbed] Usando sistema oEmbed/link-preview centralizado",
-      );
       await fetchMetadata(url);
     } catch (err) {
       console.error("[MediaEmbed] Error generating embed:", err);
@@ -224,8 +218,6 @@
   // Obtener metadatos con validación del backend
   async function fetchMetadata(url: string) {
     try {
-      console.log("[MediaEmbed] Obteniendo preview con oEmbed/Open Graph...");
-
       // Usar nuestro API de link-preview (oEmbed + Open Graph)
       try {
         const response = await fetch(
@@ -234,7 +226,6 @@
 
         if (response.ok) {
           const result = await response.json();
-          console.log("[MediaEmbed] Respuesta del API:", result);
 
           // Los datos están en result.data
           const data = result.data || result;
@@ -244,10 +235,6 @@
             if (data.embedHtml || data.html) {
               embedType = data.providerName || data.provider || "oembed";
               embedHTML = data.embedHtml || data.html;
-              console.log(
-                "[MediaEmbed] ✅ oEmbed HTML recibido para:",
-                embedType,
-              );
             }
             // Si no, usar metadatos para preview
             else {
@@ -264,11 +251,6 @@
                 url: data.url || url,
               };
               embedType = data.type || "opengraph";
-              console.log("[MediaEmbed] ✅ Metadata establecida:", {
-                embedType,
-                metadata,
-                hasRealImage: !!imageUrl,
-              });
             }
             loading = false;
             return;
@@ -305,7 +287,6 @@
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    console.log("[MediaEmbed] Llamando a Microlink API...");
     const response = await fetch(
       `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
       { signal: controller.signal },
@@ -313,7 +294,6 @@
     clearTimeout(timeoutId);
 
     const data = await response.json();
-    console.log("[MediaEmbed] Respuesta de Microlink:", data);
 
     if (data.status === "success" && data.data) {
       let imageUrl = data.data.image?.url || "";
@@ -354,10 +334,9 @@
         image: imageUrl,
         url: url,
       };
-      console.log("[MediaEmbed] Metadata creada:", metadata);
+      embedType = "generic"; // Asegurar que se muestre como card
     } else {
       // Fallback si Microlink falla
-      console.log("[MediaEmbed] Microlink falló, usando fallback");
       createFallbackMetadata(url);
     }
   }
@@ -390,7 +369,6 @@
         url: url,
       };
       embedType = "generic"; // Asegurar que se muestre como card
-      console.log("[MediaEmbed] Fallback metadata creada:", metadata);
     } catch (err) {
       console.error("[MediaEmbed] Error creando fallback:", err);
       error = true;
@@ -547,10 +525,6 @@
                 const urlParam = proxyUrl.searchParams.get("url");
                 if (urlParam) {
                   originalImageUrl = decodeURIComponent(urlParam);
-                  console.log(
-                    "[MediaEmbed] URL original extraída del proxy:",
-                    originalImageUrl,
-                  );
                 }
               } catch (err) {
                 console.warn(
@@ -561,8 +535,6 @@
 
             // Emitir evento antes de aplicar fallback
             if (img.src !== fallbackUrl && !img.src.includes(fallbackUrl)) {
-              console.log("[MediaEmbed] 🚨 Imagen falló:", originalImageUrl);
-              console.log("[MediaEmbed] 📤 Emitiendo evento imageerror");
               dispatch("imageerror", {
                 url: originalImageUrl, // URL original, no la del proxy
                 originalUrl: url,
