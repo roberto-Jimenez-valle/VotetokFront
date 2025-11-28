@@ -104,16 +104,39 @@ export const handle: Handle = async ({ event, resolve }) => {
   const startTime = Date.now()
 
   try {
-    const response = await resolve(event)
+    const response = await resolve(event, {
+      transformPageChunk: ({ html }) => html
+    })
     const duration = Date.now() - startTime
 
     // Log de request exitoso
     console.log(`[${new Date().toISOString()}] ${event.request.method} ${pathname} - ${response.status} (${duration}ms)${user ? ` - User ${user.userId}` : ' - Anonymous'}`)
 
-    // Agregar headers de rate limit a la response
+    // Agregar headers de seguridad y CSP permisivo para embeds
     if (user) {
       response.headers.set('X-User-Role', user.role)
     }
+
+    // CSP permisivo para YouTube, Spotify y otros embeds de medios
+    response.headers.set(
+      'Content-Security-Policy-Report-Only',
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:",
+        "style-src 'self' 'unsafe-inline' https:",
+        "img-src 'self' data: https: http:",
+        "font-src 'self' data: https:",
+        "connect-src 'self' https: http: ws: wss:",
+        "media-src 'self' https: http: blob: data:",
+        "frame-src 'self' https://www.youtube.com https://open.spotify.com https://player.vimeo.com https://soundcloud.com https://www.tiktok.com",
+        "worker-src 'self' blob:",
+        "child-src 'self' blob: https:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'"
+      ].join('; ')
+    )
 
     return response
   } catch (err: any) {
