@@ -16,7 +16,7 @@
     mode = "preview",
     width = "100%",
     height = "100%",
-    autoplay = false,
+    autoplay = false, // Por defecto SIEMPRE false para ahorrar GPU
   }: Props = $props();
 
   let embedType: string = $state("");
@@ -53,10 +53,10 @@
       
       // Agregar atributos allow y loading lazy al iframe para iOS y rendimiento
       if (!processed.includes('allow="')) {
-        processed = processed.replace('<iframe', '<iframe allow="autoplay; encrypted-media; fullscreen; picture-in-picture"');
+        processed = processed.replace('<iframe', '<iframe allow="encrypted-media; fullscreen; picture-in-picture"');
       }
       if (!processed.includes('loading="')) {
-        processed = processed.replace('<iframe', '<iframe loading="lazy"');
+        processed = processed.replace('<iframe', '<iframe loading="lazy" importance="low"');
       }
     }
 
@@ -407,13 +407,13 @@
   // Cleanup cuando el componente se desmonte - destruir iframes completamente
   let containerRef: HTMLDivElement;
   
-  // Cleanup: destruir iframes cuando el componente se desmonte
+  // Cleanup: destruir iframes INMEDIATAMENTE cuando el componente se desmonte
   $effect(() => {
     return () => {
       if (containerRef) {
         const iframes = containerRef.querySelectorAll("iframe");
         iframes.forEach((iframe) => {
-          // Detener reproducción antes de destruir
+          // Detener reproducción ANTES de destruir
           try {
             const src = iframe.src || "";
             if (src.includes("youtube.com") || src.includes("youtu.be")) {
@@ -428,12 +428,20 @@
             // Ignorar errores de cross-origin
           }
           
-          // Vaciar src para liberar recursos
+          // Vaciar src INMEDIATAMENTE para liberar memoria/GPU
           iframe.src = "about:blank";
-          // Remover del DOM
+          // Remover del DOM completamente
           iframe.remove();
         });
-        console.log("[MediaEmbed] 🧹 Iframes destruidos en cleanup");
+        
+        // También limpiar videos HTML5
+        const videos = containerRef.querySelectorAll("video");
+        videos.forEach((video) => {
+          video.pause();
+          video.src = "";
+          video.load(); // Forzar descarga de recursos
+          video.remove();
+        });
       }
     };
   });

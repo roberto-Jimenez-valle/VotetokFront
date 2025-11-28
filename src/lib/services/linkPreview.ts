@@ -77,13 +77,6 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreviewData | n
     const response = await apiGet(`/api/link-preview?url=${encodeURIComponent(url)}`);
     
     if (response.success && response.data) {
-      console.log('[LinkPreview] ✅ Preview fetched successfully:', {
-        title: response.data.title,
-        type: response.data.type,
-        hasImage: !!response.data.image,
-        imageUrl: response.data.image,
-        imageProxied: response.data.imageProxied
-      });
       return response.data;
     }
     

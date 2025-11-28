@@ -218,6 +218,28 @@
   let scrollStartX = 0;
   let scrollLeft = 0;
   
+  // Estados para virtualización de avatares
+  let avatarScrollPosition = $state(0);
+  let avatarContainerWidth = $state(0);
+  const AVATAR_WIDTH = 60; // px
+  const AVATAR_GAP = 12; // px
+  const AVATAR_BUFFER = 3; // Avatares extra a cada lado
+  
+  // Calcular avatares visibles (virtualización)
+  let visibleUsers = $derived((() => {
+    if (!avatarContainerWidth || users.length === 0) return users;
+    
+    const totalItemWidth = AVATAR_WIDTH + AVATAR_GAP;
+    const startIndex = Math.max(0, Math.floor(avatarScrollPosition / totalItemWidth) - AVATAR_BUFFER);
+    const visibleCount = Math.ceil(avatarContainerWidth / totalItemWidth) + (AVATAR_BUFFER * 2);
+    const endIndex = Math.min(users.length, startIndex + visibleCount);
+    
+    return users.slice(startIndex, endIndex).map((user, i) => ({
+      ...user,
+      virtualIndex: startIndex + i
+    }));
+  })());
+  
   // Estados para transición de encuestas
   let transitionDirection = $state<'next' | 'prev' | null>(null);
   
@@ -301,43 +323,55 @@
     console.log('[Header] Loading polls for user:', user.id, user.name);
     
     try {
-      // Cargar encuestas con interacciones del usuario (guardadas o reposteadas)
-      const response = await apiCall(`/api/polls/user-interactions?userId=${user.id}&types=save,repost&limit=20`);
-      console.log('[Header] Response status:', response.status, response.ok);
+      // OPTIMIZACIÓN: Reducir de 20 a 10 encuestas para menos procesamiento
+      const response = await apiCall(`/api/polls/user-interactions?userId=${user.id}&types=save,repost&limit=10`);
       
       if (response.ok) {
         const result = await response.json();
-        console.log('[Header] Polls loaded:', result.data?.length || 0, 'polls');
         
-        // Transformar datos para compatibilidad con SinglePollSection
-        const transformedPolls = (result.data || []).map((poll: any) => ({
-          ...poll,
-          // Asegurar que tiene las propiedades necesarias
-          id: poll.id?.toString() || poll.id,
-          question: poll.title || poll.question,
-          region: 'Global',
-          type: poll.type || 'single', // Preservar tipo de encuesta
-          options: (poll.options || []).map((opt: any) => ({
-            ...opt,
-            key: opt.optionKey || opt.key,
-            label: opt.optionLabel || opt.label,
-            votes: opt._count?.votes || opt.voteCount || opt.votes || 0,
-            color: opt.color || '#10b981'
-          })),
-          totalVotes: poll._count?.votes || poll.totalVotes || 0,
-          totalViews: poll._count?.interactions || poll.totalViews || 0
-        }));
+        // OPTIMIZACIÓN: Transformar datos de forma más eficiente
+        const transformedPolls = (result.data || []).map((poll: any) => {
+          const pollId = poll.id?.toString() || poll.id;
+          return {
+            ...poll,
+            id: pollId,
+            question: poll.title || poll.question,
+            region: 'Global',
+            type: poll.type || 'single',
+            options: (poll.options || []).map((opt: any) => ({
+              ...opt,
+              key: opt.optionKey || opt.key,
+              label: opt.optionLabel || opt.label,
+              votes: opt._count?.votes || opt.voteCount || opt.votes || 0,
+              color: opt.color || '#10b981'
+            })),
+            totalVotes: poll._count?.votes || poll.totalVotes || 0,
+            totalViews: poll._count?.interactions || poll.totalViews || 0
+          };
+        });
         
-        console.log('[Header] Transformed polls:', transformedPolls);
-        console.log('[Header] Poll types:', transformedPolls.map((p: any) => ({ id: p.id, type: p.type, question: p.question })));
         userPolls = transformedPolls;
         
-        // Inicializar todos los polls como expandidos para permitir votación directa
-        transformedPolls.forEach((poll: any) => {
-          pollStates[poll.id] = 'expanded';
-          activeAccordions[poll.id] = 0; // Primera opción activa
-          currentPages[poll.id] = 0;
-        });
+        // OPTIMIZACIÓN: Solo inicializar estados para la PRIMERA encuesta
+        // Las demás se inicializarán bajo demanda con requestIdleCallback
+        if (transformedPolls.length > 0) {
+          const firstPoll = transformedPolls[0];
+          pollStates[firstPoll.id] = 'expanded';
+          activeAccordions[firstPoll.id] = 0;
+          currentPages[firstPoll.id] = 0;
+          
+          // Inicializar estados restantes en idle time para no bloquear UI
+          if (typeof requestIdleCallback !== 'undefined' && transformedPolls.length > 1) {
+            requestIdleCallback(() => {
+              for (let i = 1; i < transformedPolls.length; i++) {
+                const poll = transformedPolls[i];
+                pollStates[poll.id] = 'expanded';
+                activeAccordions[poll.id] = 0;
+                currentPages[poll.id] = 0;
+              }
+            }, { timeout: 1000 });
+          }
+        }
       } else {
         console.warn('[Header] Failed to load polls, status:', response.status);
         const errorData = await response.text();
@@ -581,6 +615,12 @@
   function handleAvatarScrollEnd() {
     isScrollingAvatars = false;
     avatarScrollRef = null;
+  }
+  
+  // Handler de scroll para virtualización
+  function handleAvatarScroll(e: Event) {
+    const target = e.target as HTMLElement;
+    avatarScrollPosition = target.scrollLeft;
   }
   
   // Handlers para swipe en barra de navegación
@@ -1225,12 +1265,14 @@
 <!-- Contenedor de encuestas sin modal -->
 {#if selectedUser}
 	<div class="polls-fullscreen-container">
-		<!-- Barra de avatares superior con scroll horizontal -->
+		<!-- Barra de avatares superior con scroll horizontal VIRTUALIZADO -->
 		<div class="top-avatars-bar">
 			<div 
 				class="modal-avatars-scroll"
 				role="region"
 				aria-label="Usuarios con actividad"
+				bind:clientWidth={avatarContainerWidth}
+				onscroll={handleAvatarScroll}
 				onpointerdown={handleAvatarScrollStart}
 				onpointermove={handleAvatarScrollMove}
 				onpointerup={handleAvatarScrollEnd}
@@ -1239,10 +1281,16 @@
 				ontouchmove={handleAvatarScrollMove}
 				ontouchend={handleAvatarScrollEnd}
 			>
-				<div class="modal-avatars-inner">
-					{#each users.filter(u => u?.id) as user (user.id)}
+				<!-- Contenedor con ancho total calculado para scroll -->
+				<div 
+					class="modal-avatars-inner virtualized"
+					style="width: {users.length * (AVATAR_WIDTH + AVATAR_GAP)}px; position: relative;"
+				>
+					<!-- Solo renderizar avatares visibles -->
+					{#each visibleUsers as user (user.id)}
 						<button
 							class="avatar-small-btn {selectedUser?.id === user.id ? 'active' : ''}"
+							style="position: absolute; left: {(user.virtualIndex ?? 0) * (AVATAR_WIDTH + AVATAR_GAP)}px;"
 							onclick={() => handleAvatarClick(user)}
 							aria-label={user.name || 'Usuario'}
 						>
@@ -1280,10 +1328,11 @@
 				{/each}
 			</div>
 			
-			<!-- Contenedor con la encuesta actual -->
+			<!-- Contenedor con la encuesta actual (SOLO renderizar la visible) -->
 			<div class="polls-carousel">
 				{#if userPolls[currentPollIndex]}
 					{@const currentPoll = userPolls[currentPollIndex]}
+					{#key currentPoll.id}
 					<div class="poll-card-wrapper active {transitionDirection === 'next' ? 'slide-next' : transitionDirection === 'prev' ? 'slide-prev' : ''}">
 						<!-- Indicador de usuario (rell o publicación normal) -->
 						{#if currentPoll.isRell && currentPoll.originalPoll}
@@ -1358,6 +1407,7 @@
 							on:dragStart={handleCardDragStart}
 						/>
 					</div>
+					{/key}
 				{/if}
 			</div>
 			
@@ -1828,7 +1878,7 @@
 		color: var(--neo-text);
 	}
 	
-	/* Contenedor fullscreen para encuestas */
+	/* Contenedor fullscreen para encuestas - OPTIMIZADO PARA GPU */
 	.polls-fullscreen-container {
 		position: fixed;
 		top: 0;
@@ -1845,9 +1895,14 @@
 		align-items: flex-start;
 		justify-content: center;
 		pointer-events: auto;
+		
+		/* Optimizaciones GPU críticas */
+		contain: layout style paint; /* Aislar repaints */
+		will-change: scroll-position; /* Solo cambiar scroll */
+		-webkit-overflow-scrolling: touch; /* Scroll suave iOS */
 	}
 	
-	/* Barra de avatares superior */
+	/* Barra de avatares superior - BACKDROP-FILTER REDUCIDO */
 	.top-avatars-bar {
 		position: fixed;
 		top: 0;
@@ -1855,16 +1910,19 @@
 		right: 53px;
 		height: 70px;
 		background: linear-gradient(280deg, rgba(10, 10, 15, 0.98) 0%, rgba(10, 10, 15, 0) 100%);
-		backdrop-filter: blur(10px);
+		backdrop-filter: blur(4px); /* REDUCIDO de 10px a 4px para GPU */
 		z-index: 1000002;
-		display: flex
-	;
+		display: flex;
 		align-items: center;
 		justify-content: flex-end;
 		padding: 0px 6px 1px 4px;
 		pointer-events: auto;
 		padding-right: 11px;
 		touch-action: pan-x pan-y;
+		
+		/* Optimización GPU */
+		contain: layout style;
+		will-change: transform; /* Solo para scroll */
 	}
 	
 	/* Gradiente de difuminado izquierdo */
@@ -1890,18 +1948,68 @@
 		height: 100%;
 		background: linear-gradient(90deg, transparent 0%, rgba(10, 10, 15, 0.98) 100%);
 		pointer-events: none;
-		z-index: 1;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		z-index: 1000003;
+	}
+	
+	/* Contenedor de scroll de avatares con virtualización */
+	.modal-avatars-scroll {
+		overflow-x: auto;
+		overflow-y: hidden;
+		flex: 1;
+		scrollbar-width: none;
+		-ms-overflow-style: none;
+		-webkit-overflow-scrolling: touch;
+	}
+	
+	.modal-avatars-scroll::-webkit-scrollbar {
+		display: none;
+	}
+	
+	/* Contenedor interno con ancho calculado para virtualización */
+	.modal-avatars-inner.virtualized {
+		height: 60px;
+		min-height: 60px;
+	}
+	
+	/* Botones de avatar con posicionamiento absoluto para virtualización */
+	.avatar-small-btn {
+		width: 60px;
+		height: 60px;
+		border-radius: 50%;
+		border: 3px solid transparent;
+		background: transparent;
+		padding: 0;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		flex-shrink: 0;
+		overflow: hidden;
+	}
+	
+	.avatar-small-btn.active {
+		border-color: white;
+		box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+	}
+	
+	.avatar-small-btn:hover {
+		transform: scale(1.05);
+		border-color: rgba(255, 255, 255, 0.5);
+	}
+	
+	.avatar-small-btn:active {
+		transform: scale(0.95);
 	}
 
 	.close-polls-btn {
 		position: fixed;
-		top: 18px;
-		right: 16px;
+		top: 14px;
+		right: 8px;
 		width: 42px;
 		height: 42px;
 		border-radius: 50%;
-		background: rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(10px);
+		background: rgba(0, 0, 0, 0.6); /* Más opaco para evitar blur */
+		backdrop-filter: blur(4px); /* REDUCIDO de 10px a 4px */
 		border: 1px solid rgba(255, 255, 255, 0.2);
 		color: white;
 		display: flex;
@@ -1910,6 +2018,7 @@
 		cursor: pointer;
 		transition: all 0.2s ease;
 		z-index: 1000003;
+		contain: layout style; /* Aislar repaints */
 	}
 
 	.close-polls-btn:hover {
@@ -1967,7 +2076,7 @@
 		touch-action: auto;
 	}
 	
-	/* Área de navegación inferior con swipe */
+	/* Área de navegación inferior con swipe - BACKDROP-FILTER REDUCIDO */
 	.nav-area-bottom {
 		position: fixed;
 		bottom: 20px;
@@ -1980,8 +2089,8 @@
 		justify-content: space-between;
 		gap: 20px;
 		padding: 16px 24px;
-		background: rgba(20, 20, 30, 0.95);
-		backdrop-filter: blur(20px);
+		background: rgba(20, 20, 30, 0.98); /* Más opaco */
+		backdrop-filter: blur(6px); /* REDUCIDO de 20px a 6px para GPU */
 		border-radius: 50px;
 		border: 1px solid rgba(255, 255, 255, 0.15);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -1990,6 +2099,7 @@
 		user-select: none;
 		touch-action: pan-x;
 		pointer-events: auto;
+		contain: layout style; /* Aislar repaints */
 	}
 	
 	.nav-area-bottom:active {
