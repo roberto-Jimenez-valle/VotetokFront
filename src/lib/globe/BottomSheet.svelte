@@ -205,42 +205,6 @@
     };
   });
 
-  // Helper para cargar datos históricos desde API
-  async function loadHistoricalData(pollId: number, days: number) {
-    try {
-      const { data } = await apiGet(
-        "/api/polls/" + pollId + "/history?days=" + days,
-      );
-      return data.map((item: any) => ({
-        x: new Date(item.recordedAt).getTime(),
-        y: item.percentage,
-        votes: item.voteCount,
-      }));
-    } catch (error) {
-      return [];
-    }
-  }
-
-  // Generar datos históricos simulados para visualización
-  function generateHistoricalData(
-    days: number,
-    currentPct?: number,
-  ): Array<{ x: number; y: number; votes: number }> {
-    const dataPoints = Math.min(days, 100); // Máximo 100 puntos
-    const now = Date.now();
-    const interval = (days * 24 * 60 * 60 * 1000) / dataPoints;
-    const basePct = currentPct || 50;
-
-    return Array.from({ length: dataPoints }, (_, i) => {
-      const variation = (Math.random() - 0.5) * 10; // Variación de ±5%
-      const trend = (i / dataPoints) * 5; // Tendencia suave
-      return {
-        x: now - (dataPoints - i) * interval,
-        y: Math.max(0, Math.min(100, basePct + variation + trend)),
-        votes: Math.floor(Math.random() * 1000) + 100,
-      };
-    });
-  }
 
   // Cargar sugerencias de usuarios desde la API
   let userSuggestions: Array<{
@@ -456,20 +420,6 @@
     }
   }
 
-  // Estado para el rango temporal seleccionado
-  let selectedTimeRange = "1m";
-  const timeRanges = [
-    { id: "1d", label: "1D", days: 1 },
-    { id: "5d", label: "5D", days: 5 },
-    { id: "1m", label: "1M", days: 30 },
-    { id: "6m", label: "6M", days: 180 },
-    { id: "1y", label: "1A", days: 365 },
-    { id: "5y", label: "5A", days: 1825 },
-  ];
-
-  $: historicalData = generateHistoricalData(
-    timeRanges.find((r) => r.id === selectedTimeRange)?.days || 30,
-  );
 
   // Navegar a vista de gráfico (página -1)
   function goToChartView(pollId: string) {
@@ -483,62 +433,6 @@
     transitionDirectionByPoll[pollId] = "next";
     currentPageByPoll[pollId] = 0;
     activeAccordionByPoll[pollId] = null;
-  }
-
-  // Helper para formatear fecha según rango
-  function formatChartDate(date: Date, rangeId: string): string {
-    if (rangeId === "1d") {
-      // 1D: mostrar hora
-      return date.toLocaleTimeString("es-ES", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } else if (rangeId === "5d") {
-      // 5D: mostrar día y mes
-      return date.toLocaleDateString("es-ES", {
-        day: "numeric",
-        month: "short",
-      });
-    } else if (rangeId === "1m") {
-      // 1M: mostrar día y mes
-      return date.toLocaleDateString("es-ES", {
-        day: "numeric",
-        month: "short",
-      });
-    } else if (rangeId === "6m") {
-      // 6M: mostrar mes
-      return date.toLocaleDateString("es-ES", { month: "short" });
-    } else if (rangeId === "1y") {
-      // 1A: mostrar mes y año
-      return date.toLocaleDateString("es-ES", {
-        month: "short",
-        year: "numeric",
-      });
-    } else {
-      // 5A: mostrar año
-      return date.toLocaleDateString("es-ES", { year: "numeric" });
-    }
-  }
-
-  // Helper para crear path del gráfico SVG
-  function createChartPath(
-    data: { x: number; y: number }[],
-    width: number,
-    height: number,
-  ): string {
-    if (data.length === 0) return "";
-
-    const minY = Math.min(...data.map((d) => d.y));
-    const maxY = Math.max(...data.map((d) => d.y));
-    const rangeY = maxY - minY || 1;
-
-    const points = data.map((d, i) => {
-      const x = (i / (data.length - 1)) * width;
-      const y = height - ((d.y - minY) / rangeY) * height;
-      return `${x},${y}`;
-    });
-
-    return `M ${points.join(" L ")}`;
   }
 
   async function setActiveMain(i: number) {
@@ -1165,18 +1059,6 @@
     polldropdownstatechange: { open: boolean };
   }>();
 
-  // Función para abrir la encuesta principal en el globo
-  function openMainPollInGlobe() {
-    dispatch("openPollInGlobe", {
-      poll: null, // null indica encuesta principal
-      options: displayOptions.map((opt) => ({
-        key: opt.key,
-        label: opt.label || opt.key,
-        color: opt.color,
-        votes: Number(opt.pct) || 0, // Usar el porcentaje como votos
-      })),
-    });
-  }
 
   // Función para abrir una encuesta adicional en el globo
   function openAdditionalPollInGlobe(poll: Poll) {
