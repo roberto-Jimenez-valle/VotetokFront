@@ -125,10 +125,7 @@
   let showFormatTooltip = $state(false);
   
   // DEBUG: Monitorear el estado de currentUser
-  $effect(() => {
-    console.log('[CreatePollModal] currentUser cambió:', $currentUser);
-    console.log('[CreatePollModal] showAuthModal:', showAuthModal);
-  });
+ 
   
   // Opciones específicas por tipo
   let ratingCount = $state(5); // Para tipo 'rating'
@@ -215,8 +212,7 @@
     });
     
     if (pausedCount > 0) {
-      console.log(`[CreatePoll Video] ⏸️ ${pausedCount} video(s) pausado(s)`);
-    }
+          }
   }
   
   // EFECTO DE SLIDER HORIZONTAL ELIMINADO - Ver MAXIMIZED_MODE_BACKUP.md
@@ -264,13 +260,11 @@
   // Variable derivada: cuando está maximizado, renderizar TODAS las opciones
   let optionsToRender = $derived.by(() => {
     if (!maximizedOption) {
-      console.log('[optionsToRender] Modo normal, items:', paginatedOptions.items.length);
-      return paginatedOptions.items;
+            return paginatedOptions.items;
     }
     
     // En modo maximizado: renderizar TODAS las opciones para el slider horizontal
-    console.log('[optionsToRender] Modo maximizado, renderizando todas:', options.length, 'cards');
-    return options;
+        return options;
   });
   
   // Función para cambiar acordeón activo
@@ -411,26 +405,22 @@
     isAnimatingCards = true;
     
     try {
-      console.log('[AnimateCards] 🎬 Iniciando búsqueda de GIFs...');
-      
+            
       // Filtrar opciones que tienen texto pero no tienen imagen
       const optionsToAnimate = options.filter(opt => opt.label.trim() && !opt.imageUrl);
       
       if (optionsToAnimate.length === 0) {
-        console.log('[AnimateCards] ⚠️ No hay opciones para animar');
-        isAnimatingCards = false;
+                isAnimatingCards = false;
         return;
       }
       
-      console.log(`[AnimateCards] 📝 ${optionsToAnimate.length} opciones para animar`);
-      
+            
       // Buscar GIFs para cada opción
       for (const option of optionsToAnimate) {
         try {
           // Usar el label sin URL como término de búsqueda
           const searchTerm = getLabelWithoutUrl(option.label);
-          console.log(`[AnimateCards] 🔍 Buscando GIF para: "${searchTerm}"`);
-          
+                    
           const gifUrl = await giphyGifUrl(searchTerm);
           
           if (gifUrl) {
@@ -438,23 +428,18 @@
             const optionToUpdate = options.find(opt => opt.id === option.id);
             if (optionToUpdate) {
               optionToUpdate.imageUrl = gifUrl;
-              console.log(`[AnimateCards] ✅ GIF agregado a "${searchTerm}"`);
-            }
+                          }
           } else {
-            console.log(`[AnimateCards] ❌ No se encontró GIF para "${searchTerm}"`);
-          }
+                      }
           
           // Delay entre requests para no saturar la API
           await new Promise(resolve => setTimeout(resolve, 300));
         } catch (error) {
-          console.error(`[AnimateCards] Error buscando GIF para "${option.label}":`, error);
-        }
+                  }
       }
       
-      console.log('[AnimateCards] ✨ Animación completada');
-    } catch (error) {
-      console.error('[AnimateCards] Error general:', error);
-    } finally {
+          } catch (error) {
+          } finally {
       isAnimatingCards = false;
     }
   }
@@ -491,42 +476,30 @@
       return { isValid: false, error: 'URL no válida o no accesible' };
       
     } catch (err) {
-      console.error('[Validate URL] Error:', err);
-      return { isValid: false, error: 'Error al validar la URL' };
+            return { isValid: false, error: 'Error al validar la URL' };
     }
   }
   
   // Detectar y cargar preview automáticamente cuando se detecta URL en título
   async function detectAndLoadTitlePreview(text: string) {
     const urls = extractUrls(text);
-    console.log('🔍 [CreatePollModal] URLs detectadas en título:', urls);
-    
+        
     if (urls.length > 0) {
       const url = urls[0];
-      console.log('🎯 [CreatePollModal] Cargando preview para:', url);
-      
+            
       // Solo cargar si es una URL nueva
       if (detectedTitlePreview?.url !== url) {
         loadingPreviews.add('title');
         loadingPreviews = loadingPreviews;
         
         const preview = await fetchLinkPreviewCached(url);
-        console.log('📦 [CreatePollModal] Preview recibido:', {
-          hasPreview: !!preview,
-          title: preview?.title,
-          hasImage: !!preview?.image,
-          image: preview?.image,
-          type: preview?.type
-        });
-        
+                
         if (preview) {
           detectedTitlePreview = preview;
           linkPreviews.set(url, preview);
           linkPreviews = linkPreviews;
-          console.log('✅ [CreatePollModal] detectedTitlePreview seteado:', detectedTitlePreview);
-        } else {
-          console.warn('❌ [CreatePollModal] Preview es null');
-        }
+                  } else {
+                  }
         
         loadingPreviews.delete('title');
         loadingPreviews = loadingPreviews;
@@ -558,8 +531,7 @@
           // 🆕 También actualizar el Map persistente
           optionUrls.set(optionId, url);
           optionUrls = optionUrls;
-          console.log('[detectAndLoadOptionPreview] ✅ URL guardada en Map:', optionId, '→', url);
-        }
+                  }
         
         loadingPreviews.delete(optionId);
         loadingPreviews = loadingPreviews;
@@ -579,27 +551,23 @@
   async function replaceWithGiphyFallback(optionId: string, optionLabel: string, failedUrl: string) {
     // Evitar loops infinitos: si ya intentamos reemplazar esta URL, no hacerlo de nuevo
     if (failedUrls.has(failedUrl)) {
-      console.log('[Giphy Fallback] Ya se intentó reemplazar:', failedUrl);
-      return;
+            return;
     }
     
     // Extraer texto limpio sin URL para usar como término de búsqueda
     const searchTerm = getLabelWithoutUrl(optionLabel).trim();
     
     if (!searchTerm) {
-      console.warn('[Giphy Fallback] No hay texto para buscar GIF');
-      return;
+            return;
     }
     
-    console.log(`[Giphy Fallback] 🎬 Buscando GIF para: "${searchTerm}"`);
-    
+        
     try {
       // Buscar GIF en Giphy usando el texto de la opción
       const gifUrl = await giphyGifUrl(searchTerm);
       
       if (gifUrl) {
-        console.log(`[Giphy Fallback] ✅ GIF encontrado:`, gifUrl);
-        
+                
         // Marcar URL como fallida para evitar intentarlo de nuevo
         failedUrls.set(failedUrl, gifUrl);
         
@@ -609,23 +577,18 @@
           // Reemplazar la URL en el label si está ahí
           if (option.label.includes(failedUrl)) {
             option.label = option.label.replace(failedUrl, gifUrl);
-            console.log(`[Giphy Fallback] ✅ URL reemplazada en label`);
-          }
+                      }
           
           // Reemplazar la URL en imageUrl si está ahí
           if (option.imageUrl === failedUrl) {
             option.imageUrl = gifUrl;
-            console.log(`[Giphy Fallback] ✅ URL reemplazada en imageUrl`);
-          }
+                      }
           
-          console.log(`[Giphy Fallback] ✅ Opción "${searchTerm}" actualizada con GIF de Giphy`);
-        }
+                  }
       } else {
-        console.warn(`[Giphy Fallback] ❌ No se encontró GIF para: "${searchTerm}"`);
-      }
+              }
     } catch (error) {
-      console.error('[Giphy Fallback] Error buscando GIF:', error);
-    }
+          }
   }
   
   /**
@@ -633,9 +596,7 @@
    * Se llama desde el evento onerror del MediaEmbed
    */
   function handleImageLoadError(optionId: string, optionLabel: string, failedImageUrl: string) {
-    console.log(`[Image Error] 🚨 Imagen falló para opción: "${getLabelWithoutUrl(optionLabel)}"`);
-    console.log(`[Image Error] URL fallida:`, failedImageUrl);
-    
+            
     // Reemplazar automáticamente con Giphy
     replaceWithGiphyFallback(optionId, optionLabel, failedImageUrl);
   }
@@ -644,52 +605,42 @@
    * Handler para cuando la imagen principal de la encuesta falla
    */
   async function handleMainImageLoadError(failedImageUrl: string) {
-    console.log(`[Image Error] 🚨 Imagen principal falló:`, failedImageUrl);
-    
+        
     // Evitar loops infinitos
     if (failedUrls.has(failedImageUrl)) {
-      console.log('[Giphy Fallback] Ya se intentó reemplazar la imagen principal');
-      return;
+            return;
     }
     
     // Usar el título sin URL como término de búsqueda
     const searchTerm = titleWithoutUrl.trim();
     
     if (!searchTerm) {
-      console.warn('[Giphy Fallback] No hay título para buscar GIF de imagen principal');
-      return;
+            return;
     }
     
-    console.log(`[Giphy Fallback] 🎬 Buscando GIF para imagen principal: "${searchTerm}"`);
-    
+        
     try {
       const gifUrl = await giphyGifUrl(searchTerm);
       
       if (gifUrl) {
-        console.log(`[Giphy Fallback] ✅ GIF encontrado para imagen principal:`, gifUrl);
-        
+                
         // Marcar como fallida
         failedUrls.set(failedImageUrl, gifUrl);
         
         // Reemplazar la URL en el título si está ahí
         if (title.includes(failedImageUrl)) {
           title = title.replace(failedImageUrl, gifUrl);
-          console.log(`[Giphy Fallback] ✅ URL reemplazada en título`);
-        }
+                  }
         
         // Reemplazar en imageUrl si está ahí
         if (imageUrl === failedImageUrl) {
           imageUrl = gifUrl;
-          console.log(`[Giphy Fallback] ✅ URL reemplazada en imageUrl principal`);
-        }
+                  }
         
-        console.log(`[Giphy Fallback] ✅ Imagen principal actualizada con GIF de Giphy`);
-      } else {
-        console.warn(`[Giphy Fallback] ❌ No se encontró GIF para imagen principal`);
-      }
+              } else {
+              }
     } catch (error) {
-      console.error('[Giphy Fallback] Error buscando GIF para imagen principal:', error);
-    }
+          }
   }
   
   // Abrir el buscador de GIFs de Giphy
@@ -700,19 +651,16 @@
   
   // Manejar la selección de un GIF del picker
   function handleGifSelect(gifUrl: string) {
-    console.log('[GiphyPicker] GIF seleccionado:', gifUrl, 'para:', giphyTarget);
-    
+        
     if (giphyTarget === 'main') {
       // Asignar a la imagen principal
       imageUrl = gifUrl;
-      console.log('[GiphyPicker] ✅ GIF asignado a imagen principal');
-    } else if (giphyTarget) {
+          } else if (giphyTarget) {
       // Asignar a una opción específica
       const optionIndex = options.findIndex(opt => opt.id === giphyTarget);
       if (optionIndex !== -1) {
         options[optionIndex].imageUrl = gifUrl;
-        console.log('[GiphyPicker] ✅ GIF asignado a opción:', options[optionIndex].label);
-      }
+              }
     }
     
     // Cerrar el picker
@@ -838,8 +786,7 @@
         const tagValidation = validateHashtag(tag);
         if (!tagValidation.valid) {
           errors.hashtags = `${tagValidation.error} (en: "${tag}")`;
-          console.error('❌ Hashtag inválido:', tag, 'Error:', tagValidation.error);
-          break;
+                    break;
         }
       }
     }
@@ -849,31 +796,21 @@
   
   // Submit del formulario
   async function handleSubmit() {
-    console.log('🚀 Intentando crear encuesta...');
-    console.log('Título:', title);
-    console.log('Opciones:', options);
-    console.log('👤 CurrentUser:', $currentUser);
-    console.log('🔒 showAuthModal actual:', showAuthModal);
-    
+                        
     // Verificar si el usuario está autenticado
     if (!$currentUser) {
-      console.log('⚠️ Usuario no autenticado, mostrando modal de autenticación');
-      showAuthModal = true;
-      console.log('🔒 showAuthModal después de setear:', showAuthModal);
-      return;
+            showAuthModal = true;
+            return;
     }
     
-    console.log('✅ Usuario autenticado, continuando con publicación');
-    
+        
     // Validar formulario (ahora es async)
     const isValid = await validate();
     if (!isValid) {
-      console.error('❌ Validación fallida:', errors);
-      return;
+            return;
     }
     
-    console.log('✅ Validación pasada');
-    isSubmitting = true;
+        isSubmitting = true;
     
     try {
       // Filtrar opciones vacías (sin texto Y sin URL)
@@ -923,12 +860,10 @@
       }
       
       // Crear la encuesta
-      console.log('📤 Enviando datos al servidor:', pollData);
-      
+            
       const result = await apiPost('/api/polls', pollData);
       
-      console.log('✅ Encuesta creada exitosamente:', result);
-      
+            
       // Emitir evento de éxito
       dispatch('created', result.data);
       
@@ -937,8 +872,7 @@
       close();
       
     } catch (error: any) {
-      console.error('Error creating poll:', error);
-      errors.submit = error.message || 'Error al crear la encuesta. Inténtalo de nuevo.';
+            errors.submit = error.message || 'Error al crear la encuesta. Inténtalo de nuevo.';
     } finally {
       isSubmitting = false;
     }
@@ -956,8 +890,7 @@
   // Handler cuando el usuario se autentica
   function handleAuthComplete(event: CustomEvent) {
     const { provider } = event.detail;
-    console.log('✅ Usuario autenticado con:', provider);
-    showAuthModal = false;
+        showAuthModal = false;
     // Después de autenticar, intentar publicar nuevamente
     handleSubmit();
   }
@@ -1215,8 +1148,7 @@
         alert('✅ Formato copiado al portapapeles. Pégalo en cualquier IA para generar tu encuesta.');
       }, 100);
     } catch (err) {
-      console.error('Error al copiar:', err);
-    }
+          }
   }
   
   // Detectar y parsear automáticamente al pegar en el título
@@ -1268,16 +1200,14 @@
     document.addEventListener('touchmove', handleGlobalMove, { passive: false });
     document.addEventListener('touchend', handleGlobalEnd);
     
-    console.log('[CreatePoll] ✅ Listeners globales agregados (normal + maximizado)');
-    
+        
     // Cleanup
     return () => {
       document.removeEventListener('pointermove', handleGlobalMove);
       document.removeEventListener('pointerup', handleGlobalEnd);
       document.removeEventListener('touchmove', handleGlobalMove);
       document.removeEventListener('touchend', handleGlobalEnd);
-      console.log('[CreatePoll] 🧹 Listeners globales removidos');
-    };
+          };
   });
   
   // Sistema de gestión de reproducción de videos: solo uno a la vez
@@ -1295,16 +1225,14 @@
         
         // Handler para cuando este video empieza a reproducirse
         const playHandler = () => {
-          console.log('[CreatePoll Video] ▶️ Video reproduciendo, pausando otros...');
-          pauseAllVideos(htmlVideo);
+                    pauseAllVideos(htmlVideo);
         };
         
         htmlVideo.addEventListener('play', playHandler);
         videoPlayHandlers.set(htmlVideo, playHandler);
       });
       
-      console.log(`[CreatePoll Video] ✅ ${allVideos.length} video(s) monitorizados`);
-    }, 100);
+          }, 100);
     
     // Cleanup
     return () => {
@@ -1312,8 +1240,7 @@
         video.removeEventListener('play', handler);
       });
       videoPlayHandlers.clear();
-      console.log('[CreatePoll Video] 🧹 Listeners de video removidos');
-    };
+          };
   });
   
   // Sistema de pausa de videos al cambiar de card
@@ -1323,31 +1250,25 @@
     // Crear un identificador único para este efecto
     const effectId = `${maximizedOption}-${activeAccordionIndex}-${currentPage}`;
     
-    console.log('[CreatePoll VideoPause] 🔄 Cambio detectado:', effectId);
-    
+        
     // Pausar TODOS los videos cuando cambia la card activa
     setTimeout(() => {
       pauseAllVideos();
-      console.log('[CreatePoll VideoPause] ⏸️ Todos los videos pausados');
-    }, 100);
+          }, 100);
   });
   
   // Efecto reactivo: detectar URLs en título y cargar preview automáticamente
   $effect(() => {
-    console.log('🔎 [$effect] EJECUTADO - Título:', title, 'isOpen:', isOpen);
-    
+        
     if (!title || !isOpen) {
-      console.log('❌ [$effect] Condición no cumplida - title:', !!title, 'isOpen:', isOpen);
-      return;
+            return;
     }
     
     const urls = extractUrls(title);
-    console.log('🔍 [$effect] URLs extraídas con extractUrls:', urls);
-    
+        
     // También probar con la función vieja
     const urlVieja = extractUrlFromText(title);
-    console.log('🔍 [$effect] URL con extractUrlFromText:', urlVieja);
-    
+        
     if (urls.length > 0) {
       // Debounce: esperar 500ms después de que el usuario deje de escribir
       const timeoutId = setTimeout(() => {
@@ -1365,13 +1286,10 @@
   // Se ejecuta cuando cambia: isOpen, options, o optionPreviews
   $effect(() => {
     if (isOpen && options.length > 0) {
-      console.log('[URL Saver] 🔄 Guardando URLs para', options.length, 'opciones');
-      console.log('[URL Saver] 📦 optionPreviews actual tiene:', optionPreviews.size, 'previews');
-      
+                  
       // Para cada opción, detectar y GUARDAR URL (sin debounce)
       for (const option of options) {
-        console.log('[URL Saver] 🔍 Procesando opción:', option.id, 'label:', option.label.substring(0, 30) + '...', 'imageUrl:', option.imageUrl);
-        
+                
         // Buscar URL en múltiples fuentes
         const urlsInLabel = option.label ? extractUrls(option.label) : [];
         const urlInImageUrl = option.imageUrl ? option.imageUrl : null;
@@ -1379,27 +1297,18 @@
         const existingPreview = optionPreviews.get(option.id);
         const urlInPreview = existingPreview?.url || null;
         
-        console.log('[URL Saver] 🔎 URLs encontradas:', {
-          enLabel: urlsInLabel,
-          enImageUrl: urlInImageUrl,
-          enPreview: urlInPreview
-        });
-        
+                
         // Prioridad: preview cacheado > imageUrl > label
         // Cambio de prioridad para que use el preview si existe
         let urlToSave = null;
         if (urlInPreview) {
           urlToSave = urlInPreview;
-          console.log('[URL Saver] ✅ Guardada URL de preview cacheado:', option.id, '→', urlInPreview);
-        } else if (urlInImageUrl) {
+                  } else if (urlInImageUrl) {
           urlToSave = urlInImageUrl;
-          console.log('[URL Saver] ✅ Guardada URL de imageUrl:', option.id, '→', urlToSave);
-        } else if (urlsInLabel.length > 0) {
+                  } else if (urlsInLabel.length > 0) {
           urlToSave = urlsInLabel[0];
-          console.log('[URL Saver] ✅ Guardada URL de label:', option.id, '→', urlToSave);
-        } else {
-          console.log('[URL Saver] ⚠️ No se encontró URL para opción:', option.id);
-        }
+                  } else {
+                  }
         
         // Guardar URL en el Map persistente
         if (urlToSave) {
@@ -1408,69 +1317,49 @@
           // Si no hay URL, eliminar del Map
           if (optionUrls.has(option.id)) {
             optionUrls.delete(option.id);
-            console.log('[URL Saver] 🗑️ Eliminada URL:', option.id);
-          }
+                      }
         }
       }
       
       // Trigger reactivity del Map
       optionUrls = optionUrls;
-      console.log('[URL Saver] 📊 Total URLs guardadas:', optionUrls.size);
-      console.log('[URL Saver] 🗺️ Contenido del Map:', Array.from(optionUrls.entries()));
-    }
+                }
   });
   
   // Efecto: Cargar preview cuando se maximiza una opción (SIEMPRE intenta cargar)
   $effect(() => {
     if (maximizedOption) {
-      console.log('[Preview Effect] 🔍 Opción maximizada:', maximizedOption);
-      
+            
       // 🆕 PRIMERO: Poblar el Map con URLs de TODAS las opciones si está vacío
       if (optionUrls.size === 0) {
-        console.log('[Preview Effect] 🚨 Map vacío, poblando con todas las opciones...');
-        for (const opt of options) {
+                for (const opt of options) {
           const preview = optionPreviews.get(opt.id);
           if (preview?.url) {
             optionUrls.set(opt.id, preview.url);
-            console.log('[Preview Effect] ➕ Agregada URL al Map:', opt.id, '→', preview.url);
-          } else if (opt.imageUrl) {
+                      } else if (opt.imageUrl) {
             optionUrls.set(opt.id, opt.imageUrl);
-            console.log('[Preview Effect] ➕ Agregada imageUrl al Map:', opt.id, '→', opt.imageUrl);
-          }
+                      }
         }
         optionUrls = optionUrls;
-        console.log('[Preview Effect] ✅ Map poblado con', optionUrls.size, 'URLs');
-      }
+              }
       
       // Obtener URL del Map persistente
       const savedUrl = optionUrls.get(maximizedOption);
-      console.log('[Preview Effect] 📦 URL guardada en Map:', savedUrl);
-      
+            
       const option = options.find(opt => opt.id === maximizedOption);
       if (option) {
-        console.log('[Preview Effect] ✅ Opción encontrada:', { 
-          id: option.id, 
-          label: option.label, 
-          imageUrl: option.imageUrl,
-          savedUrl 
-        });
-        
+                
         const hasPreview = optionPreviews.has(option.id);
         const isLoading = loadingPreviews.has(option.id);
-        console.log('[Preview Effect] 📊 Estado:', { hasPreview, isLoading });
-        
+                
         // Si hay URL guardada, SIEMPRE cargar (aunque ya exista en cache)
         if (savedUrl && !isLoading) {
-          console.log('[Preview Effect] 🚀 Cargando preview desde URL guardada:', savedUrl);
-          detectAndLoadOptionPreview(option.id, savedUrl);
+                    detectAndLoadOptionPreview(option.id, savedUrl);
         } else if (!savedUrl) {
-          console.log('[Preview Effect] ⚠️ No hay URL guardada para esta opción');
-        } else {
-          console.log('[Preview Effect] ⏭️ Skip - Está cargando');
-        }
+                  } else {
+                  }
       } else {
-        console.log('[Preview Effect] ❌ Opción NO encontrada');
-      }
+              }
     }
   });
   
@@ -1534,8 +1423,7 @@
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
     isDragging = false;
-    console.log('[CreatePoll Normal] 👇 handlePointerDown:', { x: touchStartX, y: touchStartY });
-  }
+      }
   
   function handlePointerMove(e: PointerEvent | TouchEvent) {
     if (!gridRef) return;
@@ -1549,13 +1437,11 @@
     const hasMoved = Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10;
     
     if (hasMoved) {
-      console.log('[CreatePoll Normal] ➡️ Movimiento detectado:', { deltaX, deltaY, hasMoved });
-    }
+          }
     
     // Detectar si es movimiento horizontal (más horizontal que vertical) - threshold reducido a 50
     if (hasMoved && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-      console.log('[CreatePoll Normal] ✅ Swipe horizontal válido:', deltaX);
-      const target = e.target as HTMLElement;
+            const target = e.target as HTMLElement;
       
       // Si el textarea/input tiene el foco activo, NO permitir swipe (dejar escribir)
       if ((target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') && 
@@ -1578,47 +1464,39 @@
       
       if (deltaX > 50) {
         isDragging = true;
-        console.log('[CreatePoll Normal] ➡️ Swipe DERECHA detectado');
-        // Swipe derecha
+                // Swipe derecha
         if (currentIndex !== null && currentIndex > 0) {
           // Card anterior en la misma página
-          console.log('[CreatePoll Normal] Cambiando a card anterior:', currentIndex - 1);
-          activeAccordionIndex = currentIndex - 1;
+                    activeAccordionIndex = currentIndex - 1;
           touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else if (currentIndex === 0 && currentPage > 0) {
           // Página anterior
-          console.log('[CreatePoll Normal] Cambiando a página anterior:', currentPage - 1);
-          pageTransitionDirection = 'right';
+                    pageTransitionDirection = 'right';
           currentPage -= 1;
           activeAccordionIndex = ITEMS_PER_PAGE - 1;
           touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else {
-          console.log('[CreatePoll Normal] No hay más opciones a la derecha');
-          isDragging = false;
+                    isDragging = false;
         }
       } else if (deltaX < -50) {
         isDragging = true;
-        console.log('[CreatePoll Normal] ⬅️ Swipe IZQUIERDA detectado');
-        // Swipe izquierda
+                // Swipe izquierda
         if (currentIndex !== null && currentIndex < totalCards - 1) {
           // Card siguiente en la misma página
-          console.log('[CreatePoll Normal] Cambiando a card siguiente:', currentIndex + 1);
-          activeAccordionIndex = currentIndex + 1;
+                    activeAccordionIndex = currentIndex + 1;
           touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else if (currentIndex === totalCards - 1 && currentPage < totalPages - 1) {
           // Swipe izquierdo desde última card -> página siguiente
-          console.log('[CreatePoll Normal] Cambiando a página siguiente:', currentPage + 1);
-          pageTransitionDirection = 'left';
+                    pageTransitionDirection = 'left';
           currentPage += 1;
           activeAccordionIndex = 0;
           touchStartX = touch.clientX;
           setTimeout(() => isDragging = false, 100);
         } else {
-          console.log('[CreatePoll Normal] No hay más opciones a la izquierda');
-          isDragging = false;
+                    isDragging = false;
         }
       }
     }
@@ -1832,62 +1710,39 @@
           {#if detectedTitlePreview || extractUrlFromText(title) || imageUrl}
             {@const detectedMainUrl = extractUrlFromText(title)}
             {@const isLoading = loadingPreviews.has('title')}
-            {#if typeof console !== 'undefined'}
-              {console.log('🖼️ [Template] Preview conditions:', {
-                hasDetectedPreview: !!detectedTitlePreview,
-                detectedMainUrl,
-                isDirectImage: isDirectImage(detectedMainUrl || ''),
-                isLoading
-              })}
-            {/if}
-            <div class="main-media-preview">
+            <div class="media-preview-container">
               {#if isLoading}
                 <div class="preview-loading">
-                  <Loader2 class="w-8 h-8 animate-spin" />
-                  <p>Cargando preview...</p>
+                  <div class="loading-spinner-small"></div>
                 </div>
-              {:else if detectedTitlePreview && !isDirectImage(detectedMainUrl || '')}
-                <!-- Link Preview con metadatos -->
-                <LinkPreview 
-                  preview={detectedTitlePreview}
-                  onRemove={() => {
-                    const urlInTitle = extractUrlFromText(title);
-                    if (urlInTitle) {
-                      title = title.replace(urlInTitle, ' ').replace(/\s+/g, ' ').trim();
-                    }
-                    detectedTitlePreview = null;
-                    loadingPreviews.delete('title');
-                    loadingPreviews = loadingPreviews;
-                  }}
-                />
-              {:else}
-                <!-- Fallback: MediaEmbed para imágenes directas -->
-                <button
-                  type="button"
-                  class="remove-preview-btn"
-                  onclick={() => {
-                    const urlInTitle = extractUrlFromText(title);
-                    if (urlInTitle) {
-                      title = title.replace(urlInTitle, ' ').replace(/\s+/g, ' ').trim();
-                    } else if (imageUrl) {
-                      imageUrl = '';
-                    }
-                    loadingPreviews.delete('title');
-                    loadingPreviews = loadingPreviews;
-                  }}
-                  title="Eliminar preview"
-                  aria-label="Eliminar preview"
-                >
-                  <X class="w-5 h-5" />
-                </button>
-                <MediaEmbed 
-                  url={detectedMainUrl || imageUrl || ''} 
-                  mode="full" 
-                  width="100%" 
-                  height="100%"
-                  on:imageerror={(e) => handleMainImageLoadError(e.detail.url)}
-                />
               {/if}
+              
+              <!-- Botón para eliminar preview -->
+              <button
+                type="button"
+                class="remove-preview-btn"
+                onclick={() => {
+                  const urlInTitle = extractUrlFromText(title);
+                  if (urlInTitle) {
+                    title = title.replace(urlInTitle, ' ').replace(/\s+/g, ' ').trim();
+                  } else if (imageUrl) {
+                    imageUrl = '';
+                  }
+                  loadingPreviews.delete('title');
+                  loadingPreviews = loadingPreviews;
+                }}
+                title="Eliminar preview"
+                aria-label="Eliminar preview"
+              >
+                <X class="w-5 h-5" />
+              </button>
+              <MediaEmbed 
+                url={detectedMainUrl || imageUrl || ''} 
+                mode="full" 
+                width="100%" 
+                height="100%"
+                on:imageerror={(e) => handleMainImageLoadError(e.detail.url)}
+              />
             </div>
           {/if}
         
@@ -1898,9 +1753,6 @@
               style="--items: {optionsToRender.length}"
               bind:this={gridRef}
             >
-              {#if maximizedOption}
-                {@const _ = console.log('[Each Loop] 🔄 Iterando sobre', optionsToRender.length, 'opciones:', optionsToRender.map(o => o.id))}
-              {/if}
               {#each optionsToRender as option, index (option.id)}
                 {@const globalIndex = maximizedOption ? options.findIndex(opt => opt.id === option.id) : (currentPage * ITEMS_PER_PAGE + index)}
                 {@const pct = Math.round(100 / options.length)}
@@ -1928,52 +1780,41 @@
                   {@const isLoading = loadingPreviews.has(option.id)}
                   {@const optionPreview = optionPreviews.get(option.id)}
                   {@const savedUrl = optionUrls.get(option.id)}
-                  {@const _ = console.log('[Render Check] 🎨 media-background para:', option.id, {
-                    isMaximized: option.id === maximizedOption,
-                    hasPreview: !!optionPreview,
-                    hasSavedUrl: !!savedUrl,
-                    hasDetectedUrl: !!detectedUrl
-                  })}
-                {:else if optionPreviews.has(option.id) || loadingPreviews.has(option.id) || optionUrls.has(option.id) || (detectedUrl && detectedUrl.trim() !== '') || (option.imageUrl && option.imageUrl.trim() !== '')}
-                  <!-- Modo normal: solo si tiene preview/URL -->
-                  {@const isLoading = loadingPreviews.has(option.id)}
-                  {@const optionPreview = optionPreviews.get(option.id)}
-                  {@const savedUrl = optionUrls.get(option.id)}
-                  {@const _ = console.log('[Render Check] 🎨 media-background para:', option.id, {
-                    isMaximized: false,
-                    hasPreview: !!optionPreview,
-                    hasSavedUrl: !!savedUrl,
-                    hasDetectedUrl: !!detectedUrl
-                  })}
-                  <!-- Botón X FUERA del media-background para que siempre sea clickeable -->
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="remove-option-preview-btn"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        
-                        // Limpiar cachés
-                        loadingPreviews.delete(option.id);
-                        optionPreviews.delete(option.id);
-                        
-                        // Limpiar URL del label
-                        const urlInLabel = extractUrlFromText(option.label);
-                        if (urlInLabel) {
-                          option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
-                        }
-                        
-                        // Limpiar imageUrl
-                        option.imageUrl = '';
-                        
-                        // 🆕 Limpiar URL del Map persistente
-                        optionUrls.delete(option.id);
-                        optionUrls = optionUrls;
-                        
-                        // Trigger reactivity
-                        options = [...options];
-                      }}
-                      onkeydown={(e) => {
+                  
+                  <div class="media-background" style="background-color: {option.color}20;">
+                    {#if isLoading}
+                      <div class="preview-loading">
+                        <div class="loading-spinner-small"></div>
+                      </div>
+                    {:else if optionPreview || savedUrl}
+                      <div
+                        role="button"
+                        tabindex="0"
+                        class="remove-preview-btn-maximized"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          
+                          // Limpiar cachés
+                          loadingPreviews.delete(option.id);
+                          optionPreviews.delete(option.id);
+                          
+                          // Limpiar URL del label
+                          const urlInLabel = extractUrlFromText(option.label);
+                          if (urlInLabel) {
+                            option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
+                          }
+                          
+                          // Limpiar imageUrl
+                          option.imageUrl = '';
+                          
+                          // Limpiar URL del Map persistente
+                          optionUrls.delete(option.id);
+                          optionUrls = optionUrls;
+                          
+                          // Trigger reactivity
+                          options = [...options];
+                        }}
+                        onkeydown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           e.stopPropagation();
@@ -2043,23 +1884,13 @@
                       </div>
                     {:else if optionPreview}
                       <!-- Usar MediaEmbed para todos los previews, maneja tanto embeds como metadatos -->
-                      {#if maximizedOption}
-                        <div style="position: absolute; top: 10px; left: 10px; z-index: 9999; background: black; color: lime; padding: 5px; font-size: 10px;">
-                          Preview: {optionPreview.url.substring(0, 40)}... (Option {option.id === maximizedOption ? 'ACTIVE' : 'INACTIVE'})
-                        </div>
-                      {/if}
                       <MediaEmbed 
                         url={optionPreview.url} 
                         mode="full"
                         on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
                       />
                     {:else if savedUrl}
-                      <!-- 🆕 Usar URL del Map persistente -->
-                      {#if maximizedOption}
-                        <div style="position: absolute; top: 10px; left: 10px; z-index: 9999; background: black; color: cyan; padding: 5px; font-size: 10px;">
-                          SavedURL: {savedUrl.substring(0, 40)}... (Option {option.id === maximizedOption ? 'ACTIVE' : 'INACTIVE'})
-                        </div>
-                      {/if}
+                      <!-- Usar URL del Map persistente -->
                       <MediaEmbed 
                         url={savedUrl} 
                         mode="full"
@@ -2082,6 +1913,8 @@
                       </div>
                     {/if}
                     <div class="media-overlay {activePreviewOption === option.id || maximizedOption === option.id ? 'hidden' : ''}"></div>
+                  </div>
+                  {/if}
                   </div>
                 {/if}
                 
@@ -2230,7 +2063,8 @@
                 </div>
                 
                 <!-- Botón de minimizar ELIMINADO - Ver MAXIMIZED_MODE_BACKUP.md -->
-              </button>
+             
+            </button>
               {/each}
             </div>
         </div>
