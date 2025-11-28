@@ -257,8 +257,7 @@
       const { data } = await apiGet("/api/users/suggestions?limit=8");
       userSuggestions = data;
     } catch (error) {
-      console.error("Error loading user suggestions:", error);
-      userSuggestions = [];
+            userSuggestions = [];
     }
   }
 
@@ -336,11 +335,7 @@
               }
             } catch (e) {
               // Silenciar error - no es crítico si falla
-              console.debug(
-                "Friends votes not available for trending poll",
-                poll.id,
-              );
-            }
+                          }
 
             return {
               ...poll,
@@ -354,8 +349,7 @@
         trendingPollsData = [];
       }
     } catch (error) {
-      console.error("[BottomSheet] Error loading trending polls:", error);
-      trendingPollsData = [];
+            trendingPollsData = [];
     }
   }
 
@@ -392,8 +386,7 @@
             }
           } catch (e) {
             // Silenciar error - no es crítico si falla
-            console.debug("Friends votes not available for poll", poll.id);
-          }
+                      }
 
           const transformed = {
             id: poll.id.toString(),
@@ -458,8 +451,7 @@
       additionalPolls = uniquePolls;
       currentPollsPage = page;
     } catch (error) {
-      console.error("Error loading additional polls:", error);
-    } finally {
+          } finally {
       isLoadingPolls = false;
     }
   }
@@ -479,23 +471,6 @@
     timeRanges.find((r) => r.id === selectedTimeRange)?.days || 30,
   );
 
-  // Estado para interactividad del gráfico
-  let chartHoverData: {
-    x: number;
-    y: number;
-    votes: number;
-    date: Date;
-  } | null = null;
-  let isHoveringChart = false;
-
-  // Estado para selección brush del gráfico
-  let chartBrushStart: number | null = null;
-  let chartBrushCurrent: number | null = null;
-  let isBrushing = false;
-
-  // Estado para vista de gráfico por encuesta (como página -1)
-  let chartViewByPoll: Record<string, boolean> = {};
-
   // Navegar a vista de gráfico (página -1)
   function goToChartView(pollId: string) {
     transitionDirectionByPoll[pollId] = "prev";
@@ -507,109 +482,7 @@
   function exitChartView(pollId: string) {
     transitionDirectionByPoll[pollId] = "next";
     currentPageByPoll[pollId] = 0;
-    activeAccordionByPoll[pollId] = null; // Empezar plegadas
-  }
-
-  // Helper para manejar hover en el gráfico
-  function handleChartMouseMove(event: MouseEvent, chartElement: SVGElement) {
-    const rect = chartElement.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const relativeX = x / rect.width;
-
-    if (relativeX < 0 || relativeX > 1) {
-      chartHoverData = null;
-      return;
-    }
-
-    const dataIndex = Math.round(relativeX * (historicalData.length - 1));
-    const dataPoint = historicalData[dataIndex];
-
-    if (dataPoint) {
-      chartHoverData = {
-        x: relativeX * 300,
-        y: dataPoint.y,
-        votes: dataPoint.votes,
-        date: new Date(dataPoint.x),
-      };
-      isHoveringChart = true;
-    }
-  }
-
-  function handleChartMouseLeave() {
-    if (!isBrushing) {
-      chartHoverData = null;
-      isHoveringChart = false;
-    }
-  }
-
-  // Helper para manejar inicio de brush (touch/mouse)
-  function handleChartBrushStart(
-    event: MouseEvent | TouchEvent,
-    chartElement: SVGElement,
-  ) {
-    event.preventDefault();
-    const rect = chartElement.getBoundingClientRect();
-    const clientX =
-      "touches" in event ? event.touches[0].clientX : event.clientX;
-    const x = clientX - rect.left;
-    const relativeX = x / rect.width;
-
-    if (relativeX >= 0 && relativeX <= 1) {
-      isBrushing = true;
-      chartBrushStart = relativeX * 300;
-      chartBrushCurrent = relativeX * 300;
-
-      // Actualizar datos del hover
-      const dataIndex = Math.round(relativeX * (historicalData.length - 1));
-      const dataPoint = historicalData[dataIndex];
-      if (dataPoint) {
-        chartHoverData = {
-          x: relativeX * 300,
-          y: dataPoint.y,
-          votes: dataPoint.votes,
-          date: new Date(dataPoint.x),
-        };
-      }
-    }
-  }
-
-  // Helper para manejar movimiento de brush
-  function handleChartBrushMove(
-    event: MouseEvent | TouchEvent,
-    chartElement: SVGElement,
-  ) {
-    if (!isBrushing) return;
-
-    event.preventDefault();
-    const rect = chartElement.getBoundingClientRect();
-    const clientX =
-      "touches" in event ? event.touches[0].clientX : event.clientX;
-    const x = clientX - rect.left;
-    const relativeX = x / rect.width;
-
-    if (relativeX >= 0 && relativeX <= 1) {
-      chartBrushCurrent = relativeX * 300;
-
-      // Actualizar datos del hover
-      const dataIndex = Math.round(relativeX * (historicalData.length - 1));
-      const dataPoint = historicalData[dataIndex];
-      if (dataPoint) {
-        chartHoverData = {
-          x: relativeX * 300,
-          y: dataPoint.y,
-          votes: dataPoint.votes,
-          date: new Date(dataPoint.x),
-        };
-      }
-    }
-  }
-
-  // Helper para manejar fin de brush
-  function handleChartBrushEnd() {
-    isBrushing = false;
-    chartBrushStart = null;
-    chartBrushCurrent = null;
-    chartHoverData = null;
+    activeAccordionByPoll[pollId] = null;
   }
 
   // Helper para formatear fecha según rango
@@ -1131,12 +1004,10 @@
       // No forzar ningún valor aquí
     } else if (showPollOptionsExpanded) {
       // Si el desplegable de poll options está abierto y NO está expandido, ocultar nav
-      console.log("[BottomSheet] Ocultando nav - desplegable de poll abierto");
-      showNavBar = false;
+            showNavBar = false;
     } else {
       // Si el desplegable está cerrado y NO está expandido, mostrar nav
-      console.log("[BottomSheet] Mostrando nav - desplegable cerrado");
-      showNavBar = true;
+            showNavBar = true;
       lastScrollTop = 0;
     }
   }
@@ -1181,13 +1052,8 @@
 
   // Function to search countries and subdivisions
   async function handleSearch(query: string) {
-    console.log("[BottomSheet Search] handleSearch llamado con query:", query);
-
-    if (!query || query.trim().length < 2) {
-      console.log(
-        "[BottomSheet Search] Query demasiado corta, limpiando resultados",
-      );
-      searchResults = [];
+        if (!query || query.trim().length < 2) {
+            searchResults = [];
       return;
     }
 
@@ -1196,14 +1062,9 @@
       clearTimeout(searchDebounceTimer);
     }
 
-    console.log("[BottomSheet Search] Iniciando debounce de 300ms...");
-
-    // Debounce search usando Promise
+        // Debounce search usando Promise
     searchDebounceTimer = setTimeout(async () => {
-      console.log(
-        "[BottomSheet Search] Debounce completado, ejecutando búsqueda...",
-      );
-      isSearching = true;
+            isSearching = true;
       const results = [] as Array<{
         id: string;
         name: string;
@@ -1217,25 +1078,14 @@
 
       try {
         const url = `/api/search?q=${encodeURIComponent(query)}&filter=places&limit=20`;
-        console.log("[BottomSheet Search] Llamando API:", url);
-
-        // Buscar en TODOS los niveles usando la API
+                // Buscar en TODOS los niveles usando la API
         const response = await fetch(url);
 
-        console.log("[BottomSheet Search] Response status:", response.status);
-
-        if (response.ok) {
+                if (response.ok) {
           const data = await response.json();
-          console.log("[BottomSheet Search] Data recibida:", data);
-
-          // La API retorna { success, data: { places: [] } }
+                    // La API retorna { success, data: { places: [] } }
           const places = data.data?.places || [];
-          console.log(
-            "[BottomSheet Search] Places encontrados:",
-            places.length,
-          );
-
-          for (const place of places) {
+                    for (const place of places) {
             // Determinar el tipo basado en el nivel
             const type = place.level === 1 ? "country" : "subdivision";
 
@@ -1261,11 +1111,9 @@
           return a.name.localeCompare(b.name);
         });
 
-        console.log("[BottomSheet Search] Resultados finales:", results.length);
-        searchResults = results;
+                searchResults = results;
       } catch (error) {
-        console.error("[BottomSheet Search] Error searching:", error);
-        searchResults = [];
+                searchResults = [];
       } finally {
         isSearching = false;
       }
@@ -1299,14 +1147,7 @@
     const event = new CustomEvent("searchSelect", { detail: option });
     window.dispatchEvent(event);
 
-    console.log(
-      "[BottomSheet] 🔍 Búsqueda directa seleccionada:",
-      result.name,
-      "ID:",
-      result.id,
-      "fromDirectSearch: true",
-    );
-  }
+      }
 
   const dispatch = createEventDispatcher<{
     openPollInGlobe: {
@@ -1802,12 +1643,10 @@
       navigator.clipboard
         .writeText(url)
         .then(() => {
-          console.log("[BottomSheet] ✅ Enlace copiado al portapapeles:", url);
-          // TODO: Mostrar toast de confirmación
+                    // TODO: Mostrar toast de confirmación
         })
         .catch((err) => {
-          console.error("[BottomSheet] Error copiando al portapapeles:", err);
-          fallbackCopyToClipboard(url);
+                    fallbackCopyToClipboard(url);
         });
     } else {
       fallbackCopyToClipboard(url);
@@ -1824,35 +1663,16 @@
     textarea.select();
     try {
       document.execCommand("copy");
-      console.log("[BottomSheet] ✅ Enlace copiado (fallback):", text);
-    } catch (error) {
-      console.error("[BottomSheet] Error copiando (fallback):", error);
-    }
+          } catch (error) {
+          }
     document.body.removeChild(textarea);
   }
 
   // Función para manejar el voto
   async function handleVote(optionKey: string, pollId?: string) {
-    console.log("=".repeat(50));
-    console.log("[BottomSheet handleVote] 🗳️ INICIO DE VOTO");
-    console.log("[BottomSheet handleVote] optionKey:", optionKey);
-    console.log("[BottomSheet handleVote] pollId:", pollId);
-    console.log(
-      "[BottomSheet handleVote] activePoll:",
-      activePoll ? activePoll.id : "null",
-    );
-    console.log(
-      "[BottomSheet handleVote] additionalPolls.length:",
-      additionalPolls.length,
-    );
-    console.log("=".repeat(50));
-
-    // Verificar autenticación ANTES de votar
+                                // Verificar autenticación ANTES de votar
     if (!$currentUser) {
-      console.log(
-        "[BottomSheet] ⚠️ Usuario no autenticado - mostrando AuthModal",
-      );
-      showAuthModal = true;
+            showAuthModal = true;
       return;
     }
 
@@ -1872,14 +1692,7 @@
 
     // Si ya votó por esta misma opción, desmarcar el voto
     if (userVotes[votePollId] === optionKey) {
-      console.log(
-        "[BottomSheet handleVote] 🗑️ Desvotando - mismo voto detectado",
-      );
-      console.log(
-        "[BottomSheet handleVote] Llamando a clearUserVote para:",
-        votePollId,
-      );
-      // Llamar a clearUserVote que elimina del servidor Y del estado
+                  // Llamar a clearUserVote que elimina del servidor Y del estado
       await clearUserVote(votePollId);
       return;
     }
@@ -1909,49 +1722,26 @@
     await sendVoteToBackend(optionKey, pollId);
 
     // Voto completamente manejado por BottomSheet, no notifica al padre
-    console.log(
-      "[BottomSheet] Voto registrado y enviado:",
-      optionKey,
-      "en encuesta:",
-      votePollId,
-    );
-  }
+      }
 
   // Nueva función para enviar voto directamente desde BottomSheet
   async function sendVoteToBackend(optionKey: string, pollId?: string) {
-    console.log("[BottomSheet sendVote] 🎯 Iniciando envío de voto");
-    console.log("[BottomSheet sendVote] optionKey:", optionKey);
-    console.log("[BottomSheet sendVote] pollId:", pollId);
-
-    // Determinar qué encuesta - buscar por ID (string o number)
+                // Determinar qué encuesta - buscar por ID (string o number)
     let poll;
     if (pollId) {
       // Buscar en additionalPolls (comparación flexible)
       poll = additionalPolls.find(
         (p) => p.id == pollId || p.id === pollId.toString(),
       );
-      console.log(
-        "[BottomSheet sendVote] Buscando en additionalPolls:",
-        poll ? "Encontrada" : "No encontrada",
-      );
-    } else {
+          } else {
       poll = activePoll;
-      console.log("[BottomSheet sendVote] Usando activePoll");
-    }
+          }
 
     if (!poll) {
-      console.error("[BottomSheet sendVote] ❌ No se encontró la encuesta");
-      console.error("[BottomSheet sendVote] additionalPolls:", additionalPolls);
-      return;
+                  return;
     }
 
-    console.log("[BottomSheet sendVote] ✅ Encuesta encontrada:", {
-      id: poll.id,
-      title: poll.question,
-      totalOptions: poll.options?.length,
-    });
-
-    // Buscar la opción - puede estar como 'key', 'optionKey', etc.
+        // Buscar la opción - puede estar como 'key', 'optionKey', etc.
     const option = poll.options?.find(
       (opt: any) =>
         opt.key === optionKey ||
@@ -1961,36 +1751,13 @@
     );
 
     if (!option) {
-      console.error(
-        "[BottomSheet sendVote] ❌ Opción no encontrada:",
-        optionKey,
-      );
-      console.error(
-        "[BottomSheet sendVote] Opciones disponibles:",
-        poll.options,
-      );
-      console.error(
-        "[BottomSheet sendVote] Primera opción completa:",
-        JSON.stringify(poll.options?.[0], null, 2),
-      );
-      return;
+                        return;
     }
 
-    console.log("[BottomSheet sendVote] ✅ Opción encontrada:", option);
-    console.log(
-      "[BottomSheet sendVote] Opción completa:",
-      JSON.stringify(option, null, 2),
-    );
-
-    // Obtener optionId - puede estar en diferentes formatos
+            // Obtener optionId - puede estar en diferentes formatos
     const rawOptionId = option.id || option.optionId;
     if (!rawOptionId && rawOptionId !== 0) {
-      console.error("[BottomSheet sendVote] ❌ La opción no tiene ID:", option);
-      console.error(
-        "[BottomSheet sendVote] Campos disponibles:",
-        Object.keys(option),
-      );
-      return;
+                  return;
     }
 
     // Convertir a número - CRÍTICO para el backend
@@ -1999,21 +1766,7 @@
     const numericPollId =
       typeof poll.id === "string" ? parseInt(poll.id) : poll.id;
 
-    console.log("[BottomSheet sendVote] 🔢 IDs convertidos:", {
-      optionId: optionId,
-      optionIdType: typeof optionId,
-      pollId: numericPollId,
-      pollIdType: typeof numericPollId,
-    });
-
-    console.log("[BottomSheet sendVote] 📤 Enviando al servidor:", {
-      url: `/api/polls/${numericPollId}/vote`,
-      pollId: numericPollId,
-      optionId,
-      optionKey,
-    });
-
-    try {
+            try {
       // Obtener ubicación real del usuario (con fallback)
       let latitude = 40.4168; // Madrid por defecto
       let longitude = -3.7038;
@@ -2037,22 +1790,11 @@
           latitude = position.coords.latitude;
           longitude = position.coords.longitude;
           locationMethod = "gps";
-          console.log("[BottomSheet] 📍 GPS obtenido:", {
-            latitude,
-            longitude,
-            accuracy: position.coords.accuracy + "m",
-          });
-        }
+                  }
       } catch (gpsError) {
-        console.warn("[BottomSheet] ⚠️ GPS no disponible:", gpsError);
-        console.log(
-          "[BottomSheet] 💡 Razón común en móvil: requiere HTTPS, no HTTP",
-        );
-
-        // PASO 2: Fallback a IP Geolocation (aproximado, sin permiso)
+                        // PASO 2: Fallback a IP Geolocation (aproximado, sin permiso)
         try {
-          console.log("[BottomSheet] 🔄 Intentando geolocalización por IP...");
-          const ipResponse = await fetch("https://ipapi.co/json/", {
+                    const ipResponse = await fetch("https://ipapi.co/json/", {
             signal: AbortSignal.timeout(5000),
           });
 
@@ -2062,22 +1804,10 @@
               latitude = ipData.latitude;
               longitude = ipData.longitude;
               locationMethod = "ip";
-              console.log("[BottomSheet] ✅ IP Geolocation obtenida:", {
-                latitude,
-                longitude,
-                city: ipData.city,
-                region: ipData.region,
-                country: ipData.country_name,
-                ip: ipData.ip,
-              });
-            }
+                          }
           }
         } catch (ipError) {
-          console.error("[BottomSheet] ❌ IP Geolocation falló:", ipError);
-          console.log(
-            "[BottomSheet] 📍 Usando coordenadas por defecto (Madrid)",
-          );
-        }
+                            }
       }
 
       // PASO 3: Geocodificar a subdivisión con point-in-polygon
@@ -2089,36 +1819,17 @@
           const geocodeData = await geocodeResponse.json();
           if (geocodeData.found && geocodeData.subdivisionId) {
             subdivisionId = geocodeData.subdivisionId;
-            console.log("[BottomSheet] 🌍 Subdivisión encontrada:", {
-              subdivisionId,
-              name: geocodeData.subdivisionName,
-              level: geocodeData.subdivisionLevel,
-              method: geocodeData.method,
-              locationSource: locationMethod,
-            });
-          }
+                      }
         }
       } catch (geocodeError) {
-        console.warn("[BottomSheet] ⚠️ Error en geocoding:", geocodeError);
-      }
+              }
 
       // Validar que tenemos subdivisionId
       if (!subdivisionId) {
-        console.error("[BottomSheet] ❌ No se pudo obtener subdivisionId");
-        console.error(
-          "[BottomSheet] 💡 El voto NO se puede registrar sin ubicación",
-        );
-        return;
+                        return;
       }
 
-      console.log("[BottomSheet] 📤 Enviando al servidor:", {
-        optionId,
-        latitude,
-        longitude,
-        subdivisionId,
-      });
-
-      const result = await apiPost(`/api/polls/${numericPollId}/vote`, {
+            const result = await apiPost(`/api/polls/${numericPollId}/vote`, {
         optionId,
         userId: $currentUser?.id || null,
         latitude,
@@ -2126,32 +1837,16 @@
         subdivisionId,
       });
 
-      console.log(
-        "[BottomSheet sendVote] ✅ Voto guardado exitosamente:",
-        result,
-      );
-
-      // Solo incrementar contador si es un voto NUEVO, no si es actualización
+            // Solo incrementar contador si es un voto NUEVO, no si es actualización
       if (!result.isUpdate) {
         if (poll.totalVotes !== undefined) {
           poll.totalVotes++;
-          console.log(
-            "[BottomSheet sendVote] Contador incrementado (voto nuevo):",
-            poll.totalVotes,
-          );
-        }
+                  }
         if (option.votes !== undefined) {
           option.votes++;
-          console.log(
-            "[BottomSheet sendVote] Votos de opción incrementados:",
-            option.votes,
-          );
-        }
+                  }
       } else {
-        console.log(
-          "[BottomSheet sendVote] ℹ️ Actualización de voto - contador no cambia",
-        );
-      }
+              }
 
       // Forzar reactividad para encuesta activa vs. adicionales
       if (poll === activePoll) {
@@ -2164,8 +1859,7 @@
       userVotes[poll.id.toString()] = optionKey;
       userVotes = { ...userVotes }; // Forzar reactividad
     } catch (error) {
-      console.error("[BottomSheet sendVote] ❌ Error de red:", error);
-    }
+          }
   }
 
   // Función para manejar votación múltiple
@@ -2175,21 +1869,15 @@
       (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
 
     if (!poll || poll.type !== "multiple") {
-      console.warn("[BottomSheet] No es encuesta múltiple o no encontrada");
-      return;
+            return;
     }
 
-    console.log("[BottomSheet] 🗳️ handleMultipleVote:", { pollId, optionKey });
-
-    // Verificar si ya se confirmaron votos anteriormente
+        // Verificar si ya se confirmaron votos anteriormente
     const hasConfirmedVotes = userVotes[pollId];
 
     if (hasConfirmedVotes) {
       // Si ya hay votos confirmados, desvotar del servidor
-      console.log(
-        "[BottomSheet] Ya hay votos confirmados, desvotando del servidor...",
-      );
-      await clearUserVote(pollId);
+            await clearUserVote(pollId);
 
       // Limpiar también las selecciones pendientes
       multipleVotes = { ...multipleVotes, [pollId]: [] };
@@ -2201,8 +1889,7 @@
         additionalPolls = [...additionalPolls];
       }
 
-      console.log("[BottomSheet] ✅ Votos múltiples eliminados");
-      return;
+            return;
     }
 
     // Si no hay votos confirmados, alternar selección local
@@ -2216,27 +1903,22 @@
     if (index > -1) {
       // Quitar de selección pendiente
       multipleVotes[pollId] = currentVotes.filter((k) => k !== optionKey);
-      console.log("[BottomSheet] ➖ Opción removida de selección");
-    } else {
+          } else {
       // Añadir a selección pendiente
       multipleVotes[pollId] = [...currentVotes, optionKey];
-      console.log("[BottomSheet] ➕ Opción añadida a selección");
-    }
+          }
 
     // Forzar reactividad
     multipleVotes = { ...multipleVotes };
 
-    console.log("[BottomSheet] Selecciones actuales:", multipleVotes[pollId]);
-  }
+      }
 
   // Función para confirmar votos múltiples
   async function confirmMultipleVotes(pollId: string) {
     const votes = multipleVotes[pollId];
     if (!votes || votes.length === 0) return;
 
-    console.log("[BottomSheet] 📊 Confirmando votos múltiples:", votes);
-
-    // Enviar cada voto al backend
+        // Enviar cada voto al backend
     for (const optionKey of votes) {
       await sendVoteToBackend(optionKey, pollId);
     }
@@ -2253,32 +1935,21 @@
     if (poll) {
       // Encontrada en additionalPolls
       additionalPolls = [...additionalPolls];
-      console.log("[BottomSheet] ✅ Encuesta actualizada (additionalPolls)");
-    } else if (activePoll && activePoll.id.toString() === pollId) {
+          } else if (activePoll && activePoll.id.toString() === pollId) {
       // Es la encuesta activa
       activePoll = { ...activePoll };
-      console.log("[BottomSheet] ✅ Encuesta actualizada (activePoll)");
-    }
+          }
 
-    console.log("[BottomSheet] ✅ Votos múltiples confirmados y UI refrescada");
-  }
+      }
 
   // Función para añadir nueva opción directamente (como CreatePollModal)
   async function addNewCollaborativeOption(
     pollId: string,
     previewColor?: string,
   ) {
-    console.log("[BottomSheet] addNewCollaborativeOption called:", {
-      pollId,
-      previewColor,
-    });
-
-    // Verificar si ya hay una opción pendiente de confirmar
+        // Verificar si ya hay una opción pendiente de confirmar
     if (pendingCollaborativeOption[pollId]) {
-      console.log(
-        "[BottomSheet] Ya hay una opción pendiente. Confírmala primero.",
-      );
-      return;
+            return;
     }
 
     const poll =
@@ -2286,26 +1957,18 @@
       (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
 
     if (!poll) {
-      console.error("[BottomSheet] Poll not found:", pollId);
-      return;
+            return;
     }
 
     if (poll.type !== "collaborative") {
-      console.error("[BottomSheet] Poll is not collaborative:", poll.type);
-      return;
+            return;
     }
 
     if (poll.options.length >= 10) {
-      console.error(
-        "[BottomSheet] Poll already has max options:",
-        poll.options.length,
-      );
-      return;
+            return;
     }
 
-    console.log("[BottomSheet] All checks passed, creating new option...");
-
-    // Generar un ID temporal único
+        // Generar un ID temporal único
     const tempId = `temp-${Date.now()}`;
 
     // Usar el color del preview si se pasa, si no generar uno aleatorio
@@ -2375,19 +2038,7 @@
     );
     const indexInPage = (totalOptions - 1) % OPTIONS_PER_PAGE;
 
-    console.log("[BottomSheet] Navegando a nueva opción:", {
-      totalOptions,
-      lastPage,
-      indexInPage,
-      pollId,
-      isActivePoll: poll.id === activePoll?.id,
-      currentOptions: poll.options.map((o: any) => ({
-        key: o.key,
-        isEditing: o.isEditing,
-      })),
-    });
-
-    if (poll.id === activePoll?.id) {
+        if (poll.id === activePoll?.id) {
       // Para encuesta activa
       activeAccordionMainIndex = null;
       transitionDirectionMain = "next";
@@ -2420,13 +2071,7 @@
       };
     }
 
-    console.log("[BottomSheet] Nueva opción colaborativa creada (pendiente):", {
-      newOption,
-      pollId,
-      tempId,
-      pendingState: pendingCollaborativeOption,
-    });
-  }
+      }
 
   // Función para publicar una nueva opción colaborativa desde SinglePollSection
   async function handlePublishOption(
@@ -2435,36 +2080,20 @@
     label: string,
     color: string,
   ) {
-    console.log("[BottomSheet] handlePublishOption called:", {
-      pollId,
-      optionKey,
-      label,
-      color,
-    });
-
-    const poll =
+        const poll =
       additionalPolls.find((p) => p.id.toString() === pollId) ||
       (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
 
     if (!poll) {
-      console.error("[BottomSheet] Poll not found:", pollId);
-      return;
+            return;
     }
 
     const option = poll.options.find((o: any) => o.key === optionKey);
     if (!option) {
-      console.error(
-        "[BottomSheet] Option not found:",
-        optionKey,
-        "in poll:",
-        pollId,
-      );
-      return;
+            return;
     }
 
-    console.log("[BottomSheet] Found poll and option, proceeding to save...");
-
-    try {
+        try {
       const numericPollId =
         typeof poll.id === "string" ? parseInt(poll.id) : poll.id;
 
@@ -2494,10 +2123,8 @@
       pendingCollaborativeOption = { ...pendingCollaborativeOption };
       editingOptionColors = { ...editingOptionColors };
 
-      console.log("[BottomSheet] Opción publicada exitosamente:", result.data);
-    } catch (error) {
-      console.error("[BottomSheet] Error de red:", error);
-      alert("Error de conexión. Inténtalo de nuevo.");
+          } catch (error) {
+            alert("Error de conexión. Inténtalo de nuevo.");
     }
   }
 
@@ -2545,10 +2172,8 @@
       pendingCollaborativeOption = { ...pendingCollaborativeOption };
       editingOptionColors = { ...editingOptionColors };
 
-      console.log("[BottomSheet] Opción colaborativa confirmada:", result.data);
-    } catch (error) {
-      console.error("[BottomSheet] Error de red:", error);
-      alert("Error de conexión. Inténtalo de nuevo.");
+          } catch (error) {
+            alert("Error de conexión. Inténtalo de nuevo.");
     }
   }
 
@@ -2578,8 +2203,7 @@
     pendingCollaborativeOption = { ...pendingCollaborativeOption };
     editingOptionColors = { ...editingOptionColors };
 
-    console.log("[BottomSheet] Opción colaborativa cancelada");
-  }
+      }
 
   // Función para añadir nueva opción (colaborativa)
   async function addNewOption(pollId: string) {
@@ -2597,9 +2221,7 @@
         label: newOptionLabel[pollId],
         userId: $currentUser?.id || null,
       });
-      console.log("[BottomSheet] Nueva opción añadida:", result);
-
-      // Actualizar la encuesta localmente
+            // Actualizar la encuesta localmente
       const newOption = {
         id: result.data.id,
         key: result.data.optionKey,
@@ -2622,15 +2244,13 @@
       showAddOptionModal[pollId] = false;
       showAddOptionModal = { ...showAddOptionModal };
     } catch (error) {
-      console.error("[BottomSheet] Error de red:", error);
-    }
+          }
   }
 
   // Función para abrir una encuesta trending específica
   function openTrendingPoll(pollData: any) {
     if (!pollData) {
-      console.error("[openTrendingPoll] pollData is undefined");
-      return;
+            return;
     }
 
     // Generar ID Ãºnico si no existe
@@ -2700,8 +2320,7 @@
       showPollOptionsExpanded = false;
       // Notificar al padre
       dispatch("polldropdownstatechange", { open: false });
-      console.log("[BottomSheet] Poll dropdown cerrado por scroll");
-    }
+          }
 
     const target = e.target as HTMLElement;
     if (target) {
@@ -2732,21 +2351,14 @@
         hasMorePolls &&
         !activePoll
       ) {
-        console.log("[BottomSheet] 📥 Cargando más encuestas trending...");
-        loadAdditionalPolls(currentPollsPage + 1);
+                loadAdditionalPolls(currentPollsPage + 1);
       }
     }
   }
 
   // Función para quitar voto (actualiza en BD)
   async function clearUserVote(pollId: string) {
-    console.log("[BottomSheet clearUserVote] 🗑️ ELIMINANDO VOTO");
-    console.log("[BottomSheet clearUserVote] pollId recibido:", pollId);
-    console.log("[BottomSheet clearUserVote] userVotes antes:", {
-      ...userVotes,
-    });
-
-    try {
+                try {
       const numericPollId =
         typeof pollId === "string" ? parseInt(pollId) : pollId;
 
@@ -2757,12 +2369,7 @@
 
       // Guardar las opciones votadas antes de borrar (para encuestas múltiples)
       const votedOptions = userVotes[pollId];
-      console.log(
-        "[BottomSheet clearUserVote] Opciones a desvotar:",
-        votedOptions,
-      );
-
-      // DELETE no debe enviar body (el servidor usa currentUser del contexto)
+            // DELETE no debe enviar body (el servidor usa currentUser del contexto)
       await apiCall(`/api/polls/${numericPollId}/vote`, {
         method: "DELETE",
       });
@@ -2773,40 +2380,22 @@
       userVotes = { ...restUserVotes };
       displayVotes = { ...restDisplayVotes };
 
-      console.log("[BottomSheet clearUserVote] ✅ Estados limpiados:");
-      console.log("[BottomSheet clearUserVote] userVotes:", { ...userVotes });
-      console.log("[BottomSheet clearUserVote] displayVotes:", {
-        ...displayVotes,
-      });
-
-      // Para encuestas múltiples, decrementar contadores de cada opción votada
+                        // Para encuestas múltiples, decrementar contadores de cada opción votada
       if (poll && poll.type === "multiple" && votedOptions) {
         const optionKeys = votedOptions.split(",");
-        console.log(
-          "[BottomSheet clearUserVote] Decrementando contadores de opciones múltiples:",
-          optionKeys,
-        );
-
-        optionKeys.forEach((optionKey) => {
+                optionKeys.forEach((optionKey) => {
           const option = poll.options?.find(
             (opt: any) => opt.key === optionKey || opt.optionKey === optionKey,
           );
           if (option && option.votes !== undefined) {
             option.votes = Math.max(0, option.votes - 1);
-            console.log(
-              `[BottomSheet clearUserVote] Opción ${optionKey}: ${option.votes} votos`,
-            );
-          }
+                      }
         });
 
         // Decrementar total de votos de la encuesta (por cada opción)
         if (poll.totalVotes !== undefined) {
           poll.totalVotes = Math.max(0, poll.totalVotes - optionKeys.length);
-          console.log(
-            "[BottomSheet clearUserVote] Total de votos:",
-            poll.totalVotes,
-          );
-        }
+                  }
       } else {
         // Para encuestas simples, decrementar solo 1 voto total
         if (poll && poll.totalVotes !== undefined) {
@@ -2817,39 +2406,23 @@
       // Forzar reactividad según dónde esté la encuesta
       if (activePoll && activePoll.id.toString() === pollId) {
         activePoll = { ...activePoll };
-        console.log("[BottomSheet clearUserVote] ✅ activePoll actualizada");
-      }
+              }
 
       const pollToUpdate = additionalPolls.find(
         (p) => p.id.toString() === pollId,
       );
       if (pollToUpdate) {
         additionalPolls = [...additionalPolls];
-        console.log(
-          "[BottomSheet clearUserVote] ✅ additionalPolls actualizada",
-        );
-      }
+              }
 
-      console.log(
-        "[BottomSheet clearUserVote] ✅ Voto eliminado correctamente del servidor",
-      );
-      console.log("[BottomSheet clearUserVote] Estado final - userVotes:", {
-        ...userVotes,
-      });
-      console.log("[BottomSheet clearUserVote] Estado final - displayVotes:", {
-        ...displayVotes,
-      });
-    } catch (error) {
-      console.error("[BottomSheet] Error de red al eliminar voto:", error);
-    }
+                      } catch (error) {
+          }
   }
 
   // Función para abrir modal de preview fullscreen
   function handleOpenPreviewModal(event: CustomEvent) {
     const { option, pollId } = event.detail;
-    console.log("[BottomSheet] 🎬 Abriendo modal preview:", { option, pollId });
-
-    // Encontrar la encuesta
+        // Encontrar la encuesta
     let poll = null;
 
     if (activePoll && activePoll.id.toString() === pollId.toString()) {
@@ -2859,8 +2432,7 @@
     }
 
     if (!poll) {
-      console.error("[BottomSheet] No se encontró la encuesta:", pollId);
-      return;
+            return;
     }
 
     // Transformar opciones al formato que espera PollMaximizedView
@@ -2907,19 +2479,11 @@
         voted: hasVoted,
       };
 
-      console.log("[BottomSheet] Opción transformada:", {
-        key: optionKey,
-        label: transformedOption.label,
-        hasImage: !!transformedOption.imageUrl,
-        imageUrl: transformedOption.imageUrl
-      });
-
-      return transformedOption;
+            return transformedOption;
     });
 
     if (transformedOptions.length === 0) {
-      console.error("[BottomSheet] No hay opciones");
-      return;
+            return;
     }
 
     // Si NO hay imágenes, mostrar todas las opciones en vertical
@@ -2947,21 +2511,11 @@
     previewModalShowAllOptions = showAllOptions; // Nuevo estado
     showPreviewModal = true;
 
-    console.log("[BottomSheet] 📊 Modal data:", {
-      activeId,
-      totalOptions: transformedOptions.length,
-      pollTitle: poll.question || poll.title,
-      pollIndex: previewModalPollIndex,
-      totalPolls: allPolls.length,
-      showAllOptions,
-      hasAnyImages,
-    });
-  }
+      }
 
   // Función para cerrar modal de preview
   function closePreviewModal() {
-    console.log("[BottomSheet] ❌ Cerrando modal preview");
-    showPreviewModal = false;
+        showPreviewModal = false;
     previewModalOption = null;
     previewModalPoll = null;
     previewModalOptionIndex = "";
@@ -2975,14 +2529,7 @@
       : additionalPolls;
     const currentIndex = previewModalPollIndex >= 0 ? previewModalPollIndex : 0;
 
-    console.log(
-      "[BottomSheet] 🔍 Buscando siguiente desde índice:",
-      currentIndex,
-      "de",
-      allPolls.length,
-    );
-
-    // Buscar siguiente encuesta (con o sin imágenes)
+        // Buscar siguiente encuesta (con o sin imágenes)
     for (let i = currentIndex + 1; i < allPolls.length; i++) {
       const poll = allPolls[i];
       if ((poll.options || []).length > 0) {
@@ -2991,20 +2538,13 @@
         handleOpenPreviewModal({
           detail: { option: firstOption, pollId: poll.id.toString() },
         } as CustomEvent);
-        console.log(
-          "[BottomSheet] ⬇️ Siguiente encuesta:",
-          i,
-          "/",
-          allPolls.length,
-        );
-        return;
+                return;
       }
     }
 
     // Si llegamos al final y hay más encuestas por cargar, cargarlas
     if (hasMorePolls && !isLoadingPolls && !activePoll) {
-      console.log("[BottomSheet] 📥 Cargando más encuestas para navegación...");
-      await loadAdditionalPolls(currentPollsPage + 1);
+            await loadAdditionalPolls(currentPollsPage + 1);
 
       // Intentar de nuevo después de cargar
       const newAllPolls = activePoll
@@ -3017,19 +2557,12 @@
           handleOpenPreviewModal({
             detail: { option: firstOption, pollId: poll.id.toString() },
           } as CustomEvent);
-          console.log(
-            "[BottomSheet] ⬇️ Siguiente encuesta (después de cargar):",
-            i,
-            "/",
-            newAllPolls.length,
-          );
-          return;
+                    return;
         }
       }
     }
 
-    console.log("[BottomSheet] No hay más encuestas con preview");
-  }
+      }
 
   // Navegar a la encuesta anterior con opciones de preview
   function navigateToPreviousPollWithPreview() {
@@ -3038,14 +2571,7 @@
       : additionalPolls;
     const currentIndex = previewModalPollIndex >= 0 ? previewModalPollIndex : 0;
 
-    console.log(
-      "[BottomSheet] 🔍 Buscando anterior desde índice:",
-      currentIndex,
-      "de",
-      allPolls.length,
-    );
-
-    // Buscar encuesta anterior (con o sin imágenes)
+        // Buscar encuesta anterior (con o sin imágenes)
     for (let i = currentIndex - 1; i >= 0; i--) {
       const poll = allPolls[i];
       if ((poll.options || []).length > 0) {
@@ -3054,17 +2580,10 @@
         handleOpenPreviewModal({
           detail: { option: firstOption, pollId: poll.id.toString() },
         } as CustomEvent);
-        console.log(
-          "[BottomSheet] ⬆️ Encuesta anterior:",
-          i,
-          "/",
-          allPolls.length,
-        );
-        return;
+                return;
       }
     }
-    console.log("[BottomSheet] No hay encuestas anteriores");
-  }
+      }
 
   // Debug: log when world chart segments change
   $: if (worldChartSegments) {
@@ -3107,15 +2626,7 @@
           votes: item.count,
           pct: totalCount > 0 ? (item.count / totalCount) * 100 : 0,
         }));
-        console.log(
-          "[BottomSheet] 📊 barSegments recalculado - trigger:",
-          _trigger,
-          "total:",
-          totalCount,
-          "segmentos:",
-          segments.length,
-        );
-        return segments;
+                return segments;
       })()}
 
       <!-- Para las OPCIONES EXPANDIDAS: mostrar TODAS las opciones de la encuesta -->
@@ -3195,10 +2706,7 @@
             dispatch("polldropdownstatechange", {
               open: showPollOptionsExpanded,
             });
-            console.log(
-              `[BottomSheet] Poll dropdown ${showPollOptionsExpanded ? "abierto" : "cerrado"}`,
-            );
-          }}
+                      }}
           aria-expanded={showPollOptionsExpanded}
           aria-label="Ver opciones de la encuesta"
         >
@@ -3254,8 +2762,7 @@
                 showPollOptionsExpanded = false;
                 // Notificar al padre
                 dispatch("polldropdownstatechange", { open: false });
-                console.log("[BottomSheet] Poll dropdown cerrado con swipe");
-              }
+                              }
 
               // SIEMPRE detener propagación completamente - NO permitir arrastrar BottomSheet
               e.stopPropagation();
@@ -3298,10 +2805,7 @@
 
                   if (optionClickCount === 2) {
                     // Doble click detectado - expandir BottomSheet
-                    console.log(
-                      "[BottomSheet] Doble click en opción del desplegable - expandiendo BottomSheet",
-                    );
-                    dispatch("requestExpand");
+                                        dispatch("requestExpand");
                     optionClickCount = 0;
                     lastClickedOption = null;
                   } else {
@@ -3891,13 +3395,9 @@
                     text: shareText,
                     url: shareUrl,
                   });
-                  console.log(
-                    "[BottomSheet] ✅ Compartido exitosamente via Web Share API",
-                  );
-                } catch (error) {
+                                  } catch (error) {
                   if ((error as Error).name !== "AbortError") {
-                    console.error("[BottomSheet] Error al compartir:", error);
-                    copyShareUrlToClipboard(shareUrl);
+                                        copyShareUrlToClipboard(shareUrl);
                   }
                 }
               } else {
@@ -4064,11 +3564,9 @@
     onClose={closePreviewModal}
     onOptionChange={(optionId: string) => {
       previewModalOptionIndex = optionId;
-      console.log("[BottomSheet] Opción cambiada a:", optionId);
-    }}
+          }}
     onSwipeVertical={(direction: string) => {
-      console.log("[BottomSheet] Swipe vertical:", direction);
-      if (direction === "down") {
+            if (direction === "down") {
         // Siguiente encuesta
         navigateToNextPollWithPreview();
       } else {
@@ -4077,8 +3575,7 @@
       }
     }}
     onVote={async (optionId: string) => {
-      console.log("[BottomSheet] 🗳️ Votando desde modal preview:", optionId);
-      if (!previewModalPoll) return;
+            if (!previewModalPoll) return;
 
       // Usar el handler de voto existente
       const option = previewModalOption.find((opt: any) => opt.id === optionId);
@@ -4112,28 +3609,24 @@
               } as CustomEvent);
             }
           } catch (error) {
-            console.error("[BottomSheet] Error recargando encuesta:", error);
-          }
+                      }
         }, 300);
       }
     }}
     onOpenInGlobe={() => {
-      console.log("[BottomSheet] 🌍 Abrir en mapa desde modal");
-      if (previewModalPoll) {
+            if (previewModalPoll) {
         openAdditionalPollInGlobe(previewModalPoll);
         closePreviewModal();
       }
     }}
     onGoToChart={() => {
-      console.log("[BottomSheet] 📊 Abrir gráfico desde modal");
-      if (previewModalPoll) {
+            if (previewModalPoll) {
         goToChartView(previewModalPoll.id.toString());
         closePreviewModal();
       }
     }}
     onShare={async () => {
-      console.log("[BottomSheet] 📤 Compartir desde modal");
-      if (!previewModalPoll) return;
+            if (!previewModalPoll) return;
 
       const shareUrl = `${window.location.origin}/poll/${previewModalPoll.id}`;
       const shareTitle = previewModalPoll.question || previewModalPoll.title;
@@ -4148,13 +3641,9 @@
             text: shareText,
             url: shareUrl,
           });
-          console.log(
-            "[BottomSheet] ✅ Compartido exitosamente via Web Share API",
-          );
-        } catch (error) {
+                  } catch (error) {
           if ((error as Error).name !== "AbortError") {
-            console.error("[BottomSheet] Error al compartir:", error);
-            // Fallback: copiar al portapapeles
+                        // Fallback: copiar al portapapeles
             copyShareUrlToClipboard(shareUrl);
           }
         }
@@ -4164,16 +3653,13 @@
       }
     }}
     onBookmark={() => {
-      console.log("[BottomSheet] 🔖 Guardar desde modal");
-      // TODO: Implementar guardar
+            // TODO: Implementar guardar
     }}
     onRepost={() => {
-      console.log("[BottomSheet] 🔄 Republicar desde modal");
-      // TODO: Implementar republicar
+            // TODO: Implementar republicar
     }}
     onOpenProfile={(userId: number) => {
-      console.log("[BottomSheet] 👤 Abrir perfil de usuario:", userId);
-      closePreviewModal(); // Cerrar maximized primero
+            closePreviewModal(); // Cerrar maximized primero
       setTimeout(() => {
         selectedProfileUserId = userId;
         isProfileModalOpen = true;

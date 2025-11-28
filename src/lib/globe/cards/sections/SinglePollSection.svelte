@@ -36,8 +36,7 @@
   
   function addDebugLog(message: string) {
     debugLogs = [...debugLogs.slice(-50), `${new Date().toLocaleTimeString()}: ${message}`];
-    console.log(message);
-  }
+      }
   
   function copyDebugLogs() {
     const text = debugLogs.join('\n');
@@ -128,8 +127,7 @@
       await navigator.clipboard.writeText(url);
       isMoreMenuOpen = false;
     } catch (err) {
-      console.error('Error copiando enlace:', err);
-    }
+          }
   }
   
   // Cerrar menú al hacer clic fuera
@@ -175,8 +173,7 @@
   // Detectar cambio de página y actualizar dirección ANTES del render
   $: if (currentPage !== lastPage) {
     paginationDirection = currentPage > lastPage ? 'forward' : 'backward';
-    console.log('[Pagination] Dirección:', paginationDirection, 'cambio:', lastPage, '→', currentPage);
-    lastPage = currentPage;
+        lastPage = currentPage;
   }
   
   // Estado para gráfico histórico
@@ -198,12 +195,8 @@
   
   // Cargar datos históricos cuando entramos en la vista de gráfico
   $: if (currentPage === -1 && poll?.id) {
-    console.log('[Chart] Entrando en vista de gráfico, currentPage:', currentPage, 'pollId:', poll.id);
-    loadHistoricalData();
+        loadHistoricalData();
   }
-  
-  // Debug: mostrar cuando cambia currentPage
-  $: console.log('[Chart] currentPage cambió a:', currentPage);
   
   async function loadHistoricalData() {
     if (isLoadingHistory) return;
@@ -222,23 +215,11 @@
       const pollData = result.poll || {};
       const meta = result.meta || {};
       
-      console.log('[Chart] Datos recibidos:', {
-        puntos: timeSeriesData.length,
-        votosEnDB: meta.totalVotesFromDB,
-        votosEnSeries: meta.totalVotesInSeries,
-        coinciden: meta.totalVotesFromDB === meta.totalVotesInSeries
-      });
-      
+            
       // DEBUG: Ver primeros 3 puntos
-      console.log('[Chart] Primeros 3 puntos:', timeSeriesData.slice(0, 3).map((p: any) => ({
-        fecha: new Date(p.timestamp).toISOString(),
-        totalVotes: p.totalVotes,
-        opciones: p.optionsData?.length
-      })));
-      
+            
       if (timeSeriesData.length === 0) {
-        console.warn('[Chart] No hay votos en este rango de tiempo');
-        historicalData = [];
+                historicalData = [];
         historicalDataByOption.clear();
         return;
       }
@@ -285,11 +266,9 @@
         date: new Date(point.timestamp)
       }));
       
-      console.log('[Chart] Procesadas', seriesByOption.size, 'series con', historicalData.length, 'puntos cada una');
-      
+            
     } catch (error) {
-      console.error('[Chart] Error cargando datos históricos:', error);
-      historicalData = [];
+            historicalData = [];
     } finally {
       isLoadingHistory = false;
     }
@@ -316,8 +295,7 @@
     );
     
     if (validData.length === 0) {
-      console.warn('[Chart Path] Sin datos válidos después de filtrar');
-      return '';
+            return '';
     }
     
     const minY = Math.min(...validData.map(d => d.y));
@@ -365,8 +343,7 @@
         date: dataPoint.date
       };
       
-      console.log('[Chart Hover] Índice:', dataIndex, 'Votos:', dataPoint.votes, 'Fecha:', dataPoint.date.toLocaleString());
-    }
+          }
   }
   
   function clearChartHover() {
@@ -536,11 +513,9 @@
           text: shareText,
           url: shareUrl
         });
-        console.log('[Share] Compartido exitosamente via Web Share API');
-      } catch (error) {
+              } catch (error) {
         if ((error as Error).name !== 'AbortError') {
-          console.error('[Share] Error al compartir:', error);
-          // Fallback: copiar al portapapeles
+                    // Fallback: copiar al portapapeles
           copyToClipboard(shareUrl);
         }
       }
@@ -575,8 +550,7 @@
       document.execCommand('copy');
       showShareToast();
     } catch (error) {
-      console.error('[Share] Error copiando al portapapeles:', error);
-    }
+          }
     document.body.removeChild(textarea);
   }
 
@@ -614,8 +588,7 @@
       pendingOptionKey = null;
       showDoubleClickTooltip = false;
       
-      console.log('[LongPress] Mostrando tooltip:', optionText);
-    }, LONG_PRESS_DELAY);
+          }, LONG_PRESS_DELAY);
   }
   
   function cancelLongPress() {
@@ -637,8 +610,7 @@
     // Abrir automáticamente la primera opción de la nueva página
     setTimeout(() => {
       dispatch('setActive', { pollId: poll.id, index: 0 });
-      console.log('[SinglePoll] Abriendo primera opción de página:', pageIndex);
-    }, 50);
+          }, 50);
   }
   
   function handleConfirmMultiple() {
@@ -649,27 +621,21 @@
   function showTitleTooltipHandler(text: string, event: MouseEvent) {
     event.stopPropagation();
     event.preventDefault();
-    console.log('[TitleTooltip] Intentando mostrar:', text);
-    console.log('[TitleTooltip] showTitleTooltip antes:', showTitleTooltip);
-    
+            
     showTitleTooltip = true;
     titleTooltipText = text;
     
-    console.log('[TitleTooltip] showTitleTooltip después:', showTitleTooltip);
-    console.log('[TitleTooltip] titleTooltipText:', titleTooltipText);
-    
+            
     // Agregar listener global con delay para evitar que cierre inmediatamente
     setTimeout(() => {
       if (showTitleTooltip && typeof document !== 'undefined') {
         document.addEventListener('click', handleClickOutside, { once: false });
-        console.log('[TitleTooltip] Listener global agregado');
-      }
+              }
     }, 100);
   }
   
   function hideTitleTooltip() {
-    console.log('[TitleTooltip] Ocultando tooltip');
-    showTitleTooltip = false;
+        showTitleTooltip = false;
     titleTooltipText = '';
     
     if (typeof document !== 'undefined') {
@@ -679,15 +645,13 @@
   
   // Listener global para cerrar tooltip al hacer click fuera
   function handleClickOutside(event: MouseEvent) {
-    console.log('[TitleTooltip] Click fuera detectado');
-    if (showTitleTooltip) {
+        if (showTitleTooltip) {
       hideTitleTooltip();
     }
   }
   
   function handleAddOption() {
-    console.log('[SinglePollSection] handleAddOption called:', { pollId: poll.id, previewColor });
-    dispatch('addOption', { pollId: poll.id, previewColor });
+        dispatch('addOption', { pollId: poll.id, previewColor });
   }
   
   function handleOpenInGlobe() {
@@ -919,8 +883,7 @@
                 class="time-button {selectedTimeRange === range.id ? 'selected' : ''}"
                 onclick={(e) => {
                   e.stopPropagation();
-                  console.log('[Chart] Cambiando rango a:', range.id);
-                  changeTimeRange(range.id);
+                                    changeTimeRange(range.id);
                 }}
                 type="button"
               >
@@ -1110,8 +1073,7 @@
               
               // Si hubo movimiento > threshold, es un swipe, no un tap
               if (deltaX > TOUCH_MOVE_THRESHOLD || deltaY > TOUCH_MOVE_THRESHOLD) {
-                console.log('[SinglePoll] 👉 Swipe detectado, ignorando tap. Delta:', { deltaX, deltaY });
-                touchStartPosition = null;
+                                touchStartPosition = null;
                 clickCount = 0;
                 pendingOptionKey = null;
                 return;
@@ -1131,8 +1093,7 @@
             clickTimeout = setTimeout(() => {
               if (clickCount >= 2) {
                 // Doble touch → votar / desvotar
-                console.log('[SinglePoll] ✅ DOBLE TOUCH confirmado - Votando:', pendingOptionKey);
-                
+                                
                 const isUnvoting = isPollVoted;
                 
                 if (isUnvoting) {
@@ -1177,9 +1138,7 @@
 
             // Si el navegador ya detecta doble click (detail >= 2), procesar directamente como voto
             if (e.detail >= 2) {
-              console.log('[SinglePoll] 🖱️ detail>=2 → tratar como doble click inmediato');
-
-              showDoubleClickTooltip = false;
+                            showDoubleClickTooltip = false;
               if (tooltipTimeout) clearTimeout(tooltipTimeout);
 
               const isUnvoting = isPollVoted;
@@ -1225,9 +1184,7 @@
             clickTimeout = setTimeout(() => {
               if (clickCount >= 2) {
                 // Doble click → votar / desvotar
-                console.log('[SinglePoll] ✅ DOBLE CLICK confirmado - Votando:', pendingOptionKey);
-
-                const isUnvoting = isPollVoted;
+                                const isUnvoting = isPollVoted;
 
                 if (isUnvoting) {
                   voteRemovalColor = option.color;
@@ -1253,8 +1210,7 @@
                 });
               } else if (clickCount === 1) {
                 // Single click → abrir maximized con esta opción
-                console.log('[SinglePoll] 👆 SINGLE CLICK - Abriendo maximized:', pendingOptionKey);
-                dispatch('openMaximized', { 
+                                dispatch('openMaximized', { 
                   pollId: poll.id, 
                   optionIndex: index 
                 });
@@ -1361,13 +1317,7 @@
                 const currentLabel = editingOptionLabels[option.key] || option.label || '';
                 if (currentLabel && currentLabel.trim()) {
                   const pollIdStr = poll.id.toString();
-                  console.log('[SinglePollSection] Dispatching publishOption:', { 
-                    pollId: pollIdStr, 
-                    optionKey: option.key, 
-                    label: currentLabel.trim(), 
-                    color: option.color 
-                  });
-                  dispatch('publishOption', { pollId: pollIdStr, optionKey: option.key, label: currentLabel.trim(), color: option.color });
+                                    dispatch('publishOption', { pollId: pollIdStr, optionKey: option.key, label: currentLabel.trim(), color: option.color });
                 }
               }}
               ontouchend={(e) => {
@@ -1376,13 +1326,7 @@
                 const currentLabel = editingOptionLabels[option.key] || option.label || '';
                 if (currentLabel && currentLabel.trim()) {
                   const pollIdStr = poll.id.toString();
-                  console.log('[SinglePollSection] Touch - Dispatching publishOption:', { 
-                    pollId: pollIdStr, 
-                    optionKey: option.key, 
-                    label: currentLabel.trim(), 
-                    color: option.color 
-                  });
-                  dispatch('publishOption', { pollId: pollIdStr, optionKey: option.key, label: currentLabel.trim(), color: option.color });
+                                    dispatch('publishOption', { pollId: pollIdStr, optionKey: option.key, label: currentLabel.trim(), color: option.color });
                 }
               }}
               title="Publicar opción"
