@@ -11179,21 +11179,20 @@
     top: 100%;
     left: 0;
     margin-top: 4px;
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.95) 0%,
-      rgba(0, 0, 0, 0.98) 100%
-    );
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 14px;
+    background: var(--neo-bg, rgba(0, 0, 0, 0.95));
+    border: none;
+    border-radius: 16px;
     padding: 6px;
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 80px;
-    backdrop-filter: blur(20px) saturate(120%);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     z-index: 1001;
+    
+    /* Estilos neomórficos */
+    box-shadow: 
+      3px 3px 8px var(--neo-shadow-dark, rgba(0, 0, 0, 0.5)),
+      -3px -3px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.05));
   }
 
   .time-option {

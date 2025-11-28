@@ -50,39 +50,43 @@
     background: transparent;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-    color: #e5e7eb;
+    color: var(--neo-text, #e5e7eb);
     cursor: pointer;
     font: 700 13px/1 system-ui, sans-serif;
+    transition: all 0.2s ease;
   }
-  .tabs-trigger:hover { opacity: .9; }
-  .caret { opacity: .8; }
+  .tabs-trigger:hover { 
+    color: var(--neo-text-light, #9ca3af);
+  }
+  .caret { 
+    color: var(--neo-text-light, #9ca3af);
+    opacity: 0.8;
+  }
   .menu {
     position: fixed;
     top: 50px;
     right: 10px;
     min-width: 160px;
     max-width: 200px;
-    border: 1px solid rgba(255,255,255,0.2);
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.95) 0%,
-      rgba(0, 0, 0, 0.98) 100%
-    );
-    backdrop-filter: blur(20px) saturate(120%);
-    -webkit-backdrop-filter: blur(20px) saturate(120%);
-    border-radius: 14px;
+    border: none;
+    background: var(--neo-bg, rgba(0, 0, 0, 0.95));
+    border-radius: 16px;
     padding: 8px;
     display: grid;
     gap: 4px;
     z-index: 999999;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     isolation: isolate;
+    
+    /* Estilos neomórficos */
+    box-shadow: 
+      3px 3px 8px var(--neo-shadow-dark, rgba(0, 0, 0, 0.5)),
+      -3px -3px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.05));
   }
   .menu button {
     text-align: left;
     padding: 12px 16px;
     border-radius: 10px;
-    color: #e5e7eb;
+    color: var(--neo-text, #e5e7eb);
     background: transparent;
     border: none;
     cursor: pointer;
@@ -92,11 +96,15 @@
   }
   .menu button[aria-checked="true"] {
     font-weight: 600;
-    background: rgba(255,255,255,0.15);
-    color: #ffffff;
+    color: var(--neo-text, #ffffff);
+    box-shadow: 
+      inset 2px 2px 4px var(--neo-shadow-dark, rgba(0, 0, 0, 0.3)),
+      inset -2px -2px 4px var(--neo-shadow-light, rgba(255, 255, 255, 0.05));
   }
   .menu button:hover { 
-    background: rgba(255,255,255,0.2);
+    box-shadow: 
+      inset 1px 1px 3px var(--neo-shadow-dark, rgba(0, 0, 0, 0.2)),
+      inset -1px -1px 3px var(--neo-shadow-light, rgba(255, 255, 255, 0.03));
     transform: translateX(-2px);
   }
   .menu button:active {

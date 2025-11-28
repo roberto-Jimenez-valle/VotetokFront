@@ -1023,7 +1023,7 @@
 			<div class="flex items-center justify-between h-8 sm:h-10 w-full">
 				<h1 
 					class="logo-text text-xl sm:text-3xl font-extrabold tracking-tight"
-					style="color: var(--logo-color, white);"
+					style="color: var(--neo-text, white);"
 				>VouTop</h1>
 				<div id="theme-toggle-slot"></div>
 			</div>
@@ -1420,7 +1420,7 @@
 	.avatars-scroll-wrapper {
 		width: 100%;
 		padding: 4px 0;
-		margin-top:40px;
+		margin-top:15px;
 		position: relative;
 		display: flex;
 		justify-content: center;
@@ -1434,75 +1434,92 @@
 		padding: 0 12px;
 	}
 	
+	/* Solo en móvil ajustar al 100% del ancho */
+	@media (max-width: 768px) {
+		.avatars-scroll-container {
+			padding: 0 8px;
+			width: 100%;
+			max-width: 100vw;
+			box-sizing: border-box;
+		}
+	}
+	
 	/* Navegación minimalista */
 	.header-nav-minimal {
 		display: flex;
 		align-items: center;
 		justify-content: flex-start;
-		gap: 4px;
+		gap: 8px;
 		overflow-x: auto;
 		overflow-y: hidden;
 		scrollbar-width: none;
 		-ms-overflow-style: none;
 		flex: 1;
 		min-width: 0;
-		padding: 4px 8px;
+		padding: 12px 12px;
 		-webkit-overflow-scrolling: touch;
 		scroll-behavior: smooth;
 		touch-action: pan-x;
+	}
+	
+	/* Solo en móvil limitar ancho al 100% */
+	@media (max-width: 768px) {
+		.header-nav-minimal {
+			max-width: 100%;
+		}
 	}
 	
 	.header-nav-minimal::-webkit-scrollbar {
 		display: none;
 	}
 	
-	/* Chips de navegación */
+	/* Chips de navegación con estilos neomórficos */
 	.nav-chip {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 8px 14px;
-		background: rgba(255, 255, 255, 0.1);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		border-radius: 18px;
-		color: rgba(255, 255, 255, 0.8);
+		padding: 8px 16px;
 		font-size: 13px;
 		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
 		white-space: nowrap;
 		flex-shrink: 0;
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+		height: 38px;
+		border-radius: 19px;
+		
+		/* Estilos neomórficos sutiles */
+		background: var(--neo-bg);
+		color: var(--neo-text);
+		border: none;
+		box-shadow: 
+			3px 3px 8px var(--neo-shadow-dark),
+			-3px -3px 8px var(--neo-shadow-light);
+		cursor: pointer;
 		outline: none;
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		user-select: none;
+		position: relative;
 	}
 	
 	.nav-chip:hover {
-		background: rgba(255, 255, 255, 0.18);
-		border-color: rgba(255, 255, 255, 0.35);
-		color: white;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+		box-shadow: 
+			4px 4px 10px var(--neo-shadow-dark),
+			-4px -4px 10px var(--neo-shadow-light);
 		transform: translateY(-1px);
 	}
 	
-	.nav-chip:focus {
-		box-shadow: none;
-		outline: none;
-	}
-	
 	.nav-chip:active {
-		transform: scale(0.95);
-		background: rgba(50, 50, 65, 0.98);
+		box-shadow: 
+			inset 3px 3px 6px var(--neo-shadow-dark),
+			inset -3px -3px 6px var(--neo-shadow-light);
+		transform: translateY(0);
 	}
 	
 	.nav-chip.active {
-		color: white;
 		font-weight: 600;
-	}
-	
-	.nav-chip.active:hover {
-		background: rgba(40, 40, 55, 0.98);
+		box-shadow: 
+			inset 2px 2px 5px var(--neo-shadow-dark),
+			inset -2px -2px 5px var(--neo-shadow-light),
+			1px 1px 3px var(--neo-shadow-dark);
 	}
 	
 	.nav-chip.dropdown-trigger {
@@ -1511,12 +1528,14 @@
 	
 	.nav-chip.dropdown-trigger span {
 		font-size: 9px;
-		opacity: 0.5;
+		color: var(--neo-text-light);
+		opacity: 0.7;
 		margin-left: 2px;
 	}
 	
 	.nav-divider {
-		color: rgba(255, 255, 255, 0.2);
+		color: var(--neo-text-light);
+		opacity: 0.4;
 		font-size: 12px;
 		flex-shrink: 0;
 		margin: 0 2px;
@@ -1526,42 +1545,62 @@
 	.nav-buttons-group {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 8px;
 		flex-shrink: 0;
 	}
 	
-	/* Botones de icono */
+	/* Ajustes para móvil */
+	@media (max-width: 768px) {
+		.nav-buttons-group {
+			gap: 6px;
+			margin-left: 4px;
+		}
+		
+		.header-nav-minimal {
+			gap: 6px;
+			padding: 12px 8px;
+		}
+	}
+	
+	/* Botones de icono con estilos neomórficos */
 	.nav-icon-btn {
-		width: 36px;
-		height: 36px;
-		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.1);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		color: rgba(255, 255, 255, 0.8);
+		width: 38px;
+		height: 38px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		border-radius: 50%;
+		flex-shrink: 0;
+		
+		/* Estilos neomórficos sutiles */
+		background: var(--neo-bg);
+		color: var(--neo-text);
+		border: none;
+		box-shadow: 
+			3px 3px 8px var(--neo-shadow-dark),
+			-3px -3px 8px var(--neo-shadow-light);
 		cursor: pointer;
-		transition: all 0.2s ease;
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+		outline: none;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		user-select: none;
+		position: relative;
 	}
 	
 	.nav-icon-btn:hover {
-		background: rgba(255, 255, 255, 0.18);
-		border-color: rgba(255, 255, 255, 0.35);
-		color: white;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+		box-shadow: 
+			4px 4px 10px var(--neo-shadow-dark),
+			-4px -4px 10px var(--neo-shadow-light);
 		transform: translateY(-1px);
 	}
 	
 	.nav-icon-btn:active {
-		transform: scale(0.95);
-		background: rgba(255, 255, 255, 0.2);
+		box-shadow: 
+			inset 3px 3px 6px var(--neo-shadow-dark),
+			inset -3px -3px 6px var(--neo-shadow-light);
+		transform: translateY(0);
 	}
 	
-	/* Overlay de búsqueda */
+	/* Overlay de búsqueda con estilo neomórfico */
 	.nav-search-overlay {
 		position: absolute;
 		left: 16px;
@@ -1570,15 +1609,19 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 8px 14px;
-		background: rgba(255, 255, 255, 0.1);
-		border-radius: 20px;
-		border: 1px solid rgba(255, 255, 255, 0.2);
+		max-height:47px;
+		padding: 10px 16px;
+		background: var(--neo-bg);
+		border-radius: 19px;
+		border: none;
 		z-index: 10;
 		animation: searchExpandMobile 0.25s ease-out forwards;
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+		
+		/* Estilos neomórficos sutiles */
+		box-shadow: 
+			inset 2px 2px 3px var(--neo-shadow-dark),
+			inset -2px -2px 3px var(--neo-shadow-light),
+			1px 1px 4px var(--neo-shadow-dark);
 	}
 	
 	@keyframes searchExpandMobile {
@@ -1618,7 +1661,7 @@
 	}
 	
 	.nav-search-icon {
-		color: rgba(255, 255, 255, 0.5);
+		color: var(--neo-text-light);
 		flex-shrink: 0;
 	}
 	
@@ -1627,29 +1670,34 @@
 		background: transparent;
 		border: none;
 		outline: none;
-		color: white;
+		color: var(--neo-text);
 		font-size: 14px;
 		min-width: 0;
+		font-weight: 500;
 	}
 	
 	.nav-search-input-full::placeholder {
-		color: rgba(255, 255, 255, 0.4);
+		color: var(--neo-text-light);
+		opacity: 0.7;
 	}
 	
 	.nav-search-clear-btn {
-		background: rgba(255, 255, 255, 0.1);
+		background: transparent;
 		border: none;
 		padding: 4px 10px;
 		border-radius: 12px;
-		color: rgba(255, 255, 255, 0.7);
+		color: var(--neo-text-light);
 		font-size: 12px;
 		cursor: pointer;
-		transition: all 0.15s ease;
+		transition: all 0.2s ease;
+		font-weight: 500;
 	}
 	
 	.nav-search-clear-btn:hover {
-		background: rgba(255, 255, 255, 0.2);
-		color: white;
+		color: var(--neo-text);
+		box-shadow: 
+			inset 2px 2px 4px var(--neo-shadow-dark),
+			inset -2px -2px 4px var(--neo-shadow-light);
 	}
 	
 	.nav-search-close-btn {
@@ -1657,31 +1705,52 @@
 		border: none;
 		padding: 4px;
 		cursor: pointer;
-		color: rgba(255, 255, 255, 0.5);
+		color: var(--neo-text-light);
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		transition: all 0.2s ease;
 	}
 	
 	.nav-search-close-btn:hover {
-		color: white;
+		color: var(--neo-text);
 	}
 	
-	/* Resultados de búsqueda */
+	/* Resultados de búsqueda con estilo neomórfico */
 	.nav-search-results {
 		position: absolute;
 		left: 16px;
 		right: 16px;
-		top: 52px;
-		background: rgba(255, 255, 255, 0.1);
-		border-radius: 12px;
-		border: 1px solid rgba(255, 255, 255, 0.2);
+		top: 60px;
+		background: var(--neo-bg);
+		border-radius: 16px;
+		border: none;
 		max-height: 250px;
 		overflow-y: auto;
 		z-index: 10;
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+		
+		/* Sombras neomórficas sutiles */
+		box-shadow: 
+			3px 3px 8px var(--neo-shadow-dark),
+			-3px -3px 8px var(--neo-shadow-light);
+	}
+	
+	/* Scrollbar del dropdown */
+	.nav-search-results::-webkit-scrollbar {
+		width: 6px;
+	}
+	
+	.nav-search-results::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	
+	.nav-search-results::-webkit-scrollbar-thumb {
+		background: var(--neo-shadow-dark);
+		border-radius: 3px;
+	}
+	
+	.nav-search-results::-webkit-scrollbar-thumb:hover {
+		background: var(--neo-text-light);
 	}
 	
 	/* Desktop: mismo ancho que el input */
@@ -1698,7 +1767,8 @@
 	.search-loading {
 		padding: 16px;
 		text-align: center;
-		color: rgba(255, 255, 255, 0.5);
+		color: var(--neo-text-light);
+		opacity: 0.7;
 		font-size: 13px;
 	}
 	
@@ -1710,19 +1780,22 @@
 		padding: 12px 16px;
 		background: transparent;
 		border: none;
-		color: white;
+		color: var(--neo-text);
 		font-size: 14px;
 		text-align: left;
 		cursor: pointer;
-		transition: background 0.15s ease;
+		transition: all 0.2s ease;
 	}
 	
 	.search-result-item:hover {
-		background: rgba(255, 255, 255, 0.1);
+		box-shadow: 
+			inset 2px 2px 4px var(--neo-shadow-dark),
+			inset -2px -2px 4px var(--neo-shadow-light);
 	}
 	
 	.search-result-item:not(:last-child) {
-		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+		border-bottom: 1px solid var(--neo-shadow-dark);
+		border-bottom-width: 0.5px;
 	}
 	
 	.result-icon {
@@ -1740,17 +1813,19 @@
 	}
 	
 	.hierarchy-separator {
-		color: rgba(255, 255, 255, 0.3);
+		color: var(--neo-text-light);
+		opacity: 0.5;
 		font-size: 11px;
 	}
 	
 	.hierarchy-subdivision {
-		color: rgba(255, 255, 255, 0.6);
+		color: var(--neo-text-light);
+		opacity: 0.8;
 		font-size: 12px;
 	}
 	
 	.hierarchy-city {
-		color: white;
+		color: var(--neo-text);
 	}
 	
 	/* Contenedor fullscreen para encuestas */

@@ -122,47 +122,53 @@
 
 /* CRÍTICO: Estilos para modo claro - deben estar FUERA de @layer para tener máxima prioridad */
 :root {
-  --logo-color: white;
   --color-white: white; /* Variable de Tailwind para modo oscuro */
+  
+  /* Variables neomórficas - Modo Claro */
+  --neo-hue: 220;
+  --neo-bg: hsl(var(--neo-hue), 15%, 90%);
+  --neo-text: hsl(var(--neo-hue), 40%, 35%);
+  --neo-text-light: hsl(var(--neo-hue), 20%, 60%);
+  --neo-shadow-dark: hsla(var(--neo-hue), 20%, 60%, 0.15);
+  --neo-shadow-light: hsla(0, 0%, 100%, 0.3);
+  --neo-bevel-highlight: rgba(255, 255, 255, 0.3);
+  --neo-border: hsla(var(--neo-hue), 100%, 100%, 0.2);
+  --neo-panel-bg: rgba(255, 255, 255, 0.6);
+  --neo-input-bg: rgba(255, 255, 255, 0.5);
 }
 
 html:not(.dark) {
-  --logo-color: #1a1a1a;
   --color-white: #1a1a1a; /* Sobrescribir variable de Tailwind en modo claro */
+  
+  /* Variables neomórficas actualizadas para modo claro */
+  --neo-bg: hsl(var(--neo-hue), 15%, 90%);
+  --neo-text: hsl(var(--neo-hue), 40%, 35%);
+  --neo-text-light: hsl(var(--neo-hue), 20%, 60%);
+  --neo-shadow-dark: hsla(var(--neo-hue), 20%, 60%, 0.15);
+  --neo-shadow-light: hsla(0, 0%, 100%, 0.3);
+  --neo-bevel-highlight: rgba(255, 255, 255, 0.3);
+  --neo-border: hsla(var(--neo-hue), 100%, 100%, 0.2);
+  --neo-panel-bg: rgba(255, 255, 255, 0.6);
+  --neo-input-bg: rgba(255, 255, 255, 0.5);
 }
 
-html:not(.dark) header h1 {
-  color: #1a1a1a !important;
+.dark {
+  /* Variables neomórficas - Modo Oscuro */
+  --neo-bg: hsl(var(--neo-hue), 15%, 20%);
+  --neo-text: hsl(var(--neo-hue), 10%, 85%);
+  --neo-text-light: hsl(var(--neo-hue), 10%, 55%);
+  --neo-shadow-dark: hsla(0, 0%, 0%, 0.3);
+  --neo-shadow-light: hsla(var(--neo-hue), 10%, 35%, 0.4);
+  --neo-bevel-highlight: hsla(var(--neo-hue), 10%, 80%, 0.08);
+  --neo-border: hsla(var(--neo-hue), 10%, 50%, 0.05);
+  --neo-panel-bg: rgba(0, 0, 0, 0.4);
+  --neo-input-bg: rgba(255, 255, 255, 0.1);
 }
 
-html:not(.dark) .tabs-trigger {
-  color: #1a1a1a !important;
-}
-
-html:not(.dark) .tabs-trigger svg {
-  color: #1a1a1a !important;
-  fill: #1a1a1a !important;
-}
-
+/* Logo y tabs usan var(--neo-text) automáticamente */
 
 header h1{
   margin-top: 0.05em;
-}
-
-html.dark .logo-text {
-  color: #ffffff !important;
-}
-
-html:not(.dark) .logo-text {
-  color: #1a1a1a !important;
-}
-
-html.dark .tabs-trigger {
-  color: #ffffff !important;
-}
-
-html:not(.dark) .tabs-trigger {
-  color: #1a1a1a !important;
 }
 
 /* Ocultar scrollbars en escritorio (>768px) manteniendo funcionalidad de scroll */
@@ -191,5 +197,120 @@ html:not(.dark) .tabs-trigger {
   * {
     -ms-overflow-style: none;
   }
+}
+
+/* ========================================
+   Estilos Neomórficos (Soft Chisel)
+   ======================================== */
+
+/* Botón base neomórfico */
+.neo-btn {
+  background-color: var(--neo-bg);
+  color: var(--neo-text);
+  border: 1px solid var(--neo-border);
+  box-shadow: 
+    8px 8px 16px var(--neo-shadow-dark),
+    -8px -8px 16px var(--neo-shadow-light),
+    inset 1px 1px 4px var(--neo-bevel-highlight);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease-out;
+  user-select: none;
+}
+
+/* Botón neomórfico circular */
+.neo-btn-circle {
+  background-color: var(--neo-bg);
+  color: var(--neo-text);
+  border: 1px solid var(--neo-border);
+  box-shadow: 
+    8px 8px 16px var(--neo-shadow-dark),
+    -8px -8px 16px var(--neo-shadow-light),
+    inset 1px 1px 4px var(--neo-bevel-highlight);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease-out;
+  user-select: none;
+  border-radius: 50%;
+}
+
+/* Botón neomórfico redondeado (pill) */
+.neo-btn-pill {
+  background-color: var(--neo-bg);
+  color: var(--neo-text);
+  border: 1px solid var(--neo-border);
+  box-shadow: 
+    8px 8px 16px var(--neo-shadow-dark),
+    -8px -8px 16px var(--neo-shadow-light),
+    inset 1px 1px 4px var(--neo-bevel-highlight);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease-out;
+  user-select: none;
+  border-radius: 9999px;
+}
+
+/* Estado activo/presionado - Efecto hundido */
+.neo-btn:active,
+.neo-btn-circle:active,
+.neo-btn-pill:active {
+  box-shadow: 
+    inset 3px 3px 6px var(--neo-shadow-dark),
+    inset -3px -3px 6px var(--neo-shadow-light);
+  transform: scale(0.98);
+}
+
+/* Hover sutil */
+.neo-btn:hover,
+.neo-btn-circle:hover,
+.neo-btn-pill:hover {
+  box-shadow: 
+    10px 10px 20px var(--neo-shadow-dark),
+    -10px -10px 20px var(--neo-shadow-light),
+    inset 1px 1px 4px var(--neo-bevel-highlight);
+  transform: translateY(-1px);
+}
+
+/* Deshabilitado */
+.neo-btn:disabled,
+.neo-btn-circle:disabled,
+.neo-btn-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: 
+    4px 4px 8px var(--neo-shadow-dark),
+    -4px -4px 8px var(--neo-shadow-light);
+}
+
+/* Panel neomórfico */
+.neo-panel {
+  background-color: var(--neo-panel-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--neo-border);
+  box-shadow: 
+    8px 8px 16px var(--neo-shadow-dark),
+    -8px -8px 16px var(--neo-shadow-light);
+  border-radius: 1rem;
+}
+
+/* Input neomórfico */
+.neo-input {
+  background-color: var(--neo-input-bg);
+  color: var(--neo-text);
+  border: 1px solid var(--neo-border);
+  box-shadow: 
+    inset 2px 2px 5px var(--neo-shadow-dark),
+    inset -2px -2px 5px var(--neo-shadow-light);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: all 0.2s ease-out;
+}
+
+.neo-input:focus {
+  box-shadow: 
+    inset 3px 3px 6px var(--neo-shadow-dark),
+    inset -3px -3px 6px var(--neo-shadow-light),
+    0 0 0 2px var(--neo-bevel-highlight);
 }
 
