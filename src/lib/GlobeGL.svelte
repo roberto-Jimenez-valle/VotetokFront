@@ -361,7 +361,6 @@
 
       return Math.abs(totalArea);
     } catch (e) {
-      console.warn("[Area] Error calculating polygon area:", e);
       return 0;
     }
   }
@@ -419,7 +418,6 @@
         lng: sumLng / allPoints.length,
       };
     } catch (e) {
-      console.warn("[Centroid] Error calculating centroid:", e);
       return null;
     }
   }
@@ -567,7 +565,6 @@
   ) {
     if (!voteData || !activePollOptions.length) return;
 
-    console.log(`[updateVoteData] Actualizando ${levelName}:`, voteData);
 
     // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen horizontal
     legendItems = activePollOptions.map((opt) => ({
@@ -587,13 +584,11 @@
     voteOptionsUpdateTrigger++;
 
     tick().then(() => {
-      console.log(`[updateVoteData] ✅ ${levelName} actualizado`);
     });
   }
 
   // Generar datos específicos para una ciudad desde answersData
   function generateCityChartSegments(cityName: string, cityId?: string) {
-    console.log("[CityChart] 🔍 Generando datos para:", { cityName, cityId });
 
     // Intentar obtener datos desde answersData usando el cityId
     if (cityId && answersData) {
@@ -612,47 +607,22 @@
         }
       }
 
-      console.log("[CityChart] 🔍 IDs posibles:", possibleIds);
-      console.log(
-        "[CityChart] 🔍 Claves disponibles en answersData (nivel 3-4):",
-        Object.keys(answersData)
-          .filter((k) => k.split(".").length >= 3)
-          .slice(0, 20),
-      );
-
-      // Buscar datos con cualquier ID posible
+            // Buscar datos con cualquier ID posible
       for (const id of possibleIds) {
         const cityData = answersData[id];
         if (cityData) {
-          console.log(
-            "[CityChart] ✅ Generando barra con datos de:",
-            id,
-            cityData,
-          );
-          cityChartSegments = generateCountryChartSegments([cityData]);
-          console.log(
-            "[CityChart] ✅ cityChartSegments generado:",
-            cityChartSegments,
-          );
-          return;
+                    cityChartSegments = generateCountryChartSegments([cityData]);
+                    return;
         }
       }
 
-      console.log(
-        "[CityChart] ⚠️ No se encontraron datos en answersData para ninguno de los IDs posibles",
-      );
-    }
+          }
 
     // Fallback: intentar con citiesData (datos estáticos)
     const cityData = citiesData[cityName];
     if (cityData) {
-      console.log(
-        "[CityChart] ⚠️ Usando datos estáticos de citiesData para:",
-        cityName,
-      );
-      cityChartSegments = generateCountryChartSegments([cityData]);
+            cityChartSegments = generateCountryChartSegments([cityData]);
     } else {
-      console.log("[CityChart] ❌ No se encontraron datos para:", cityName);
       cityChartSegments = [];
     }
   }
@@ -1109,11 +1079,7 @@
           };
           labels.push(label);
         } catch (e) {
-          console.warn(
-            "[Labels] Failed to generate label for polygon:",
-            poly.properties,
-          );
-        }
+                  }
       }
     }
 
@@ -1195,7 +1161,6 @@
         globe.setTextLabels?.([]);
       }
     } catch (e) {
-      console.warn("Error updating labels:", e);
     }
   }
 
@@ -1416,38 +1381,24 @@
       try {
         // Verificar si la navegación sigue siendo válida
         if (navToken !== currentNavigationToken) {
-          console.log(
-            `[DataRetry] ❌ Intento ${attempt}: Navegación cancelada (token: ${navToken} vs actual: ${currentNavigationToken})`,
-          );
-          throw new Error("Navigation cancelled");
+                    throw new Error("Navigation cancelled");
         }
 
-        console.log(`[DataRetry] 🔄 Intento ${attempt}/${maxRetries}: ${url}`);
         const response = await apiCall(url);
 
         // Verificar token nuevamente después de la petición
         if (navToken !== currentNavigationToken) {
-          console.log(
-            `[DataRetry] ❌ Intento ${attempt}: Navegación cancelada después de respuesta`,
-          );
-          throw new Error("Navigation cancelled");
+                    throw new Error("Navigation cancelled");
         }
 
         if (response.ok) {
           const jsonData = await response.json();
-          console.log(
-            `[DataRetry] ✅ Intento ${attempt}: Datos cargados exitosamente`,
-          );
-          return jsonData;
+                    return jsonData;
         } else {
           lastError = new Error(`HTTP ${response.status}`);
-          console.warn(
-            `[DataRetry] ⚠️ Intento ${attempt}: Error HTTP ${response.status}`,
-          );
-        }
+                  }
       } catch (error) {
         lastError = error;
-        console.warn(`[DataRetry] ⚠️ Intento ${attempt}: Error:`, error);
       }
 
       // Esperar antes de reintentar (excepto en el último intento)
@@ -1457,7 +1408,6 @@
     }
 
     // Si llegamos aquí, todos los intentos fallaron
-    console.error(`[DataRetry] ❌ Todos los intentos fallaron para: ${url}`);
     throw lastError || new Error("All retry attempts failed");
   }
 
@@ -1502,15 +1452,7 @@
     ) {
       // Generar nuevo token para esta navegación
       const navToken = getNewNavigationToken();
-      console.log(
-        "[Navigation] 🔑 Token de navegación:",
-        navToken,
-        "para país:",
-        iso,
-        skipPolygonLoad ? "(solo estado)" : "",
-      );
-
-      try {
+            try {
         // Load country data (solo si NO viene de búsqueda directa con polígonos ya cargados)
         let countryPolygons: any[] = [];
         let isSpecialTerritory = false;
@@ -1520,35 +1462,19 @@
 
           // Verificar si esta navegación sigue siendo válida
           if (navToken !== currentNavigationToken) {
-            console.log(
-              "[Navigation] ❌ Navegación cancelada (token:",
-              navToken,
-              "vs actual:",
-              currentNavigationToken,
-              ")",
-            );
-            return;
+                        return;
           }
 
           // Si es un territorio especial sin polígonos, está permitido
           if (!countryPolygons?.length) {
             if (SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(iso)) {
-              console.log(
-                `[Navigation] 🏝️ Territorio especial sin subdivisiones: ${iso}`,
-              );
-              console.log(
-                `[Navigation] ✅ Navegación permitida en nivel país (sin subdivisiones)`,
-              );
-              isSpecialTerritory = true;
+                                          isSpecialTerritory = true;
             } else {
               throw new Error(`No polygons found for country ${iso}`);
             }
           }
         } else {
-          console.log(
-            "[navigateToCountry] 🔍 Saltando carga de polígonos (ya cargados desde búsqueda directa)",
-          );
-        }
+                  }
 
         // Update state
         this.state = {
@@ -1593,44 +1519,26 @@
           const url = activePoll
             ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(iso)}`
             : `/?country=${encodeURIComponent(iso)}`;
-          console.log(
-            "[History] 📍 Navegando a país con goto():",
-            countryName,
-            url,
-          );
-          await goto(url, {
+                    await goto(url, {
             replaceState: false,
             noScroll: true,
             keepFocus: true,
           });
         } else {
-          console.log(
-            "[History] 🔄 Restaurando país desde historial:",
-            countryName,
-          );
-        }
+                  }
 
         // LIMPIAR answersData Y CACHE ANTES de renderizar para evitar datos obsoletos
         if (!skipPolygonLoad) {
           answersData = {};
           isoDominantKey = {}; // También limpiar el mapa de colores dominantes
-          console.log(
-            "[Navigation] 🧹 answersData e isoDominantKey limpiados antes de renderizar país",
-          );
-        }
+                  }
 
         // Render country view PRIMERO (solo si cargamos polígonos)
         if (!skipPolygonLoad && countryPolygons.length > 0) {
           await this.renderCountryView(iso, countryPolygons);
         } else if (skipPolygonLoad) {
-          console.log(
-            "[navigateToCountry] 🔍 Saltando renderizado (polígonos ya renderizados desde búsqueda directa)",
-          );
-        } else if (isSpecialTerritory) {
-          console.log(
-            "[navigateToCountry] 🏝️ Territorio especial - mantener vista mundial sin subdivisiones",
-          );
-          // Para territorios especiales: mantener los polígonos mundiales pero cambiar el estado de navegación
+                  } else if (isSpecialTerritory) {
+                    // Para territorios especiales: mantener los polígonos mundiales pero cambiar el estado de navegación
           // Los datos del país se mostrarán en el breadcrumb pero no se cargarán subdivisiones
         }
 
@@ -1643,11 +1551,7 @@
         if (activePoll && activePoll.id) {
           // MODO ENCUESTA ESPECÍFICA: Cargar datos de esa encuesta CON REINTENTOS
           try {
-            console.log(
-              "[Navigation] 📡 Cargando datos de encuesta para país:",
-              iso,
-            );
-            const { data } = await loadDataWithRetry(
+                        const { data } = await loadDataWithRetry(
               `/api/polls/${activePoll.id}/votes-by-subdivisions?country=${iso}`,
               navToken,
               3, // 3 intentos
@@ -1656,7 +1560,6 @@
 
             // Verificar que realmente tenemos datos
             if (!data || Object.keys(data).length === 0) {
-              console.warn("[Navigation] ⚠️ No se recibieron datos de la API");
               throw new Error("No data received");
             }
 
@@ -1706,11 +1609,7 @@
               isoIntensity = vm.isoIntensity;
 
               // FORZAR MÚLTIPLES REFRESH DE COLORES para garantizar actualización
-              console.log(
-                "[Navigation] 🎨 Actualizando colores de polígonos con datos recién cargados",
-              );
-
-              // Refresh inmediato
+                            // Refresh inmediato
               this.globe?.refreshPolyColors?.();
 
               // Refresh adicional después de 2 frames para asegurar
@@ -1721,35 +1620,14 @@
               // Refresh final después de un delay corto
               setTimeout(() => {
                 this.globe?.refreshPolyColors?.();
-                console.log(
-                  "[Navigation] ✅ Colores actualizados completamente",
-                );
-              }, 100);
+                              }, 100);
             }
 
             // MOSTRAR ETIQUETA después de cargar datos (NIVEL 2 - Encuesta específica)
-            console.log(
-              "[Navigation] 🎯 Nivel 2 (Encuesta): Mostrando etiqueta después de cargar datos",
-            );
-            console.log(
-              "[Navigation] 📊 answersData tiene",
-              Object.keys(answersData || {}).length,
-              "claves",
-            );
-            console.log(
-              "[Navigation] 📊 Primeras claves:",
-              Object.keys(answersData || {}).slice(0, 5),
-            );
-
-            const filteredPolygons = countryPolygons.filter(
+                                                const filteredPolygons = countryPolygons.filter(
               (p: any) => !p.properties?._isParent,
             );
-            console.log(
-              "[Navigation] 📦 Polígonos filtrados:",
-              filteredPolygons.length,
-            );
-
-            // Esperar a que el globo renderice Y a que answersData esté disponible
+                        // Esperar a que el globo renderice Y a que answersData esté disponible
             await new Promise((resolve) => requestAnimationFrame(resolve));
             await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -1757,31 +1635,17 @@
             showFirstLabelWithData(filteredPolygons);
 
             // Verificar si se mostró
-            console.log(
-              "[Navigation] 🏷️ Etiquetas después de showFirstLabelWithData:",
-              subdivisionLabels.length,
-            );
-          } catch (error) {
-            console.error(
-              "[Navigation] ❌ Error crítico cargando datos de subdivisión:",
-              error,
-            );
-
-            // Intentar forzar un refresh de colores incluso sin datos nuevos
+                      } catch (error) {
+                        // Intentar forzar un refresh de colores incluso sin datos nuevos
             // Esto puede ayudar si hay datos cacheados
             try {
               if (answersData && Object.keys(answersData).length > 0) {
-                console.log("[Navigation] 🔄 Intentando usar datos cacheados");
                 this.globe?.refreshPolyColors?.();
                 await new Promise((resolve) => setTimeout(resolve, 100));
                 this.globe?.refreshPolyColors?.();
               }
             } catch (refreshError) {
-              console.warn(
-                "[Navigation] ⚠️ Error en refresh de emergencia:",
-                refreshError,
-              );
-            }
+                          }
           }
         } else if (!activePoll) {
           // MODO TRENDING: Cargar datos de trending para este país
@@ -1793,14 +1657,7 @@
 
             // Verificar si la navegación sigue siendo válida
             if (navToken !== currentNavigationToken) {
-              console.log(
-                "[Navigation] ❌ Carga de trending cancelada (token:",
-                navToken,
-                "vs actual:",
-                currentNavigationToken,
-                ")",
-              );
-              return;
+                            return;
             }
 
             if (response.ok) {
@@ -1834,26 +1691,16 @@
                 cachedData && now - cachedData.timestamp < CACHE_TTL;
 
               if (isCacheValid) {
-                console.log("[Trending] ♻️ Usando datos cacheados para", iso);
                 aggregatedData = cachedData.data;
               } else {
-                console.log(
-                  "[Trending] 📡 Cargando datos frescos para",
-                  iso,
-                  `(${trendingPolls.length} encuestas)`,
-                );
-              }
+                              }
 
               // *** CARGA PARALELA con límite de concurrencia y pintado progresivo ***
               let completedCount = 0;
 
               // Solo cargar datos si NO están en cache
               if (!isCacheValid) {
-                console.log(
-                  `[Trending] 🚀 Iniciando carga con límite de 5 requests simultáneos (${trendingPolls.length} encuestas)`,
-                );
-
-                await limitConcurrency(
+                                await limitConcurrency(
                   trendingPolls,
                   async (poll: any, i: number) => {
                     const pollKey = `poll_${poll.id}`;
@@ -1879,14 +1726,7 @@
 
                       // Verificar si la navegación sigue siendo válida después de cada poll
                       if (navToken !== currentNavigationToken) {
-                        console.log(
-                          "[Navigation] ❌ Carga de poll trending cancelada (token:",
-                          navToken,
-                          "vs actual:",
-                          currentNavigationToken,
-                          ")",
-                        );
-                        return;
+                                                return;
                       }
 
                       if (pollResponse.ok) {
@@ -1951,16 +1791,9 @@
                           this.globe?.refreshPolyColors?.();
                         }
 
-                        console.log(
-                          `[Trending] 🎨 Pintado progresivo nivel 2: ${completedCount}/${trendingPolls.length} encuestas completadas`,
-                        );
-                      }
+                                              }
                     } catch (error) {
-                      console.warn(
-                        `[Trending] ⚠️ Error loading data for poll ${poll.id}:`,
-                        error,
-                      );
-                    }
+                                          }
                   },
                   5,
                 ); // Límite de 5 requests simultáneos
@@ -1988,7 +1821,6 @@
                   timestamp: now,
                   pollIds: pollIds,
                 };
-                console.log("[Trending] 💾 Datos guardados en cache para", iso);
               }
 
               // Actualizar votos totales en activePollOptions
@@ -2033,35 +1865,14 @@
                 isoIntensity = vm.isoIntensity;
 
                 // FORZAR REFRESH DE COLORES - Los polígonos ya están renderizados, actualizar sus colores
-                console.log(
-                  "[Navigation] 🎨 Actualizando colores de polígonos con datos trending recién cargados",
-                );
-                this.globe?.refreshPolyColors?.();
+                                this.globe?.refreshPolyColors?.();
               }
 
               // MOSTRAR ETIQUETA después de cargar datos (NIVEL 2 - Trending)
-              console.log(
-                "[Navigation] 🎯 Nivel 2 (Trending): Mostrando etiqueta después de cargar datos",
-              );
-              console.log(
-                "[Navigation] 📊 answersData tiene",
-                Object.keys(answersData || {}).length,
-                "claves",
-              );
-              console.log(
-                "[Navigation] 📊 Primeras claves:",
-                Object.keys(answersData || {}).slice(0, 5),
-              );
-
-              const filteredPolygonsTrending = countryPolygons.filter(
+                                                        const filteredPolygonsTrending = countryPolygons.filter(
                 (p: any) => !p.properties?._isParent,
               );
-              console.log(
-                "[Navigation] 📦 Polígonos filtrados:",
-                filteredPolygonsTrending.length,
-              );
-
-              // Esperar a que el globo renderice Y a que answersData esté disponible
+                            // Esperar a que el globo renderice Y a que answersData esté disponible
               await new Promise((resolve) => requestAnimationFrame(resolve));
               await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -2069,13 +1880,8 @@
               showFirstLabelWithData(filteredPolygonsTrending);
 
               // Verificar si se mostró
-              console.log(
-                "[Navigation] 🏷️ Etiquetas después de showFirstLabelWithData:",
-                subdivisionLabels.length,
-              );
-            }
+                          }
           } catch (error) {
-            console.warn("[Navigation] ⚠️ Error loading trending data:", error);
             // NO MOSTRAR ETIQUETA AÚN - esperar al fallback final
           }
         }
@@ -2088,74 +1894,28 @@
 
         // FALLBACK FINAL: SIEMPRE mostrar una etiqueta (NIVEL 2)
         // Verificar si ya se mostró alguna etiqueta
-        console.log(
-          "[Navigation] 🔍 Verificando etiquetas antes del fallback final:",
-          subdivisionLabels.length,
-        );
-        const hasLabel = subdivisionLabels.length > 0;
+                const hasLabel = subdivisionLabels.length > 0;
 
         if (!hasLabel) {
-          console.log(
-            "[Navigation] 🔄 Nivel 2 (Fallback Final): Forzando etiqueta de subdivisión",
-          );
-          console.log(
-            "[Navigation] 📊 answersData disponible:",
-            Object.keys(answersData || {}).length,
-            "claves",
-          );
-
-          // SOLO mostrar etiquetas de polígonos con datos
+                              // SOLO mostrar etiquetas de polígonos con datos
           const filteredPolygonsFallback = countryPolygons.filter(
             (p: any) => !p.properties?._isParent,
           );
-          console.log(
-            "[Navigation] 📦 Polígonos para fallback:",
-            filteredPolygonsFallback.length,
-          );
-
-          if (filteredPolygonsFallback.length > 0) {
+                    if (filteredPolygonsFallback.length > 0) {
             // Primer intento
             await new Promise((resolve) => setTimeout(resolve, 400));
             showFirstLabelWithData(filteredPolygonsFallback);
-            console.log(
-              "[Navigation] 🏷️ Después del 1er intento:",
-              subdivisionLabels.length,
-              "etiquetas",
-            );
-
-            // Si no encontró datos, esperar más (los datos pueden estar cargando)
+                        // Si no encontró datos, esperar más (los datos pueden estar cargando)
             if (subdivisionLabels.length === 0) {
-              console.log(
-                "[Navigation] ⌛ Reintentando después de esperar datos...",
-              );
-              await new Promise((resolve) => setTimeout(resolve, 600));
+                            await new Promise((resolve) => setTimeout(resolve, 600));
               showFirstLabelWithData(filteredPolygonsFallback);
-              console.log(
-                "[Navigation] 🏷️ Después del 2do intento:",
-                subdivisionLabels.length,
-                "etiquetas",
-              );
-            }
+                          }
           } else {
-            console.log(
-              "[Navigation] ⚠️ No hay polígonos de subdivisión cargados",
-            );
-          }
+                      }
         } else {
-          console.log(
-            "[Navigation] ✅ Nivel 2: Etiqueta ya mostrada (" +
-              subdivisionLabels.length +
-              ")",
-          );
-        }
+                  }
       } catch (error) {
-        console.error(
-          "[Navigation] ❌ Error crítico navegando al país:",
-          error,
-        );
-        console.error("[Navigation] 🔙 Volviendo al mundo...");
-
-        // Limpiar estado completamente antes de volver
+                // Limpiar estado completamente antes de volver
         subdivisionLabels = [];
         updateSubdivisionLabels(false);
         selectedCountryName = null;
@@ -2184,24 +1944,7 @@
     ) {
       // Generar nuevo token para esta navegación
       const navToken = getNewNavigationToken();
-      console.log(
-        "[Navigation] 🔑 Token de navegación:",
-        navToken,
-        "para subdivisión:",
-        subdivisionId,
-        skipPolygonLoad ? "(solo estado)" : "",
-      );
-      console.log(
-        "[Navigation] 🔍 answersData al entrar (antes de cargar):",
-        Object.keys(answersData || {}).length,
-        "claves",
-      );
-      console.log(
-        "[Navigation] 🔑 Primeras claves de answersData:",
-        Object.keys(answersData || {}).slice(0, 5),
-      );
-
-      try {
+                        try {
         // Ensure we're in country context
         if (this.state.countryIso !== countryIso) {
           throw new Error(
@@ -2218,25 +1961,12 @@
             countryIso,
             subdivisionId,
           );
-          console.log(
-            `[Navigation] 📦 subdivisionPolygons cargados: ${subdivisionPolygons.length} polígonos`,
-          );
-
-          if (!subdivisionPolygons?.length) {
-            console.log(
-              `[Navigation] 🏝️ Subdivisión sin archivos TopoJSON - solo actualizar estado`,
-            );
-            hasNoSubdivisions = true;
+                    if (!subdivisionPolygons?.length) {
+                        hasNoSubdivisions = true;
           } else {
-            console.log(
-              `[Navigation] ✅ Polígonos válidos, continuando con renderizado`,
-            );
-          }
+                      }
         } else {
-          console.log(
-            "[navigateToSubdivision] 🔍 Saltando carga de polígonos (ya cargados desde búsqueda directa)",
-          );
-        }
+                  }
 
         // Update state
         this.state = {
@@ -2291,69 +2021,37 @@
           const url = activePoll
             ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`
             : `/?country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`;
-          console.log(
-            "[History] 📍 Navegando a subdivisión con goto():",
-            subdivisionName,
-            url,
-          );
-          await goto(url, {
+                    await goto(url, {
             replaceState: false,
             noScroll: true,
             keepFocus: true,
           });
         } else {
-          console.log(
-            "[History] 🔄 Restaurando subdivisión desde historial:",
-            subdivisionName,
-          );
-        }
+                  }
 
         // Si es una subdivisión sin polígonos, NO cambiar nivel de navegación
         if (hasNoSubdivisions) {
-          console.log(
-            "[Navigation] 🏝️ Subdivisión sin TopoJSON - nivel permanece en COUNTRY",
-          );
-          // NO cambiar el nivel de navegación - debe permanecer en 'country'
+                    // NO cambiar el nivel de navegación - debe permanecer en 'country'
           // NO actualizar navigationState ni navigationHistory
-          console.log(
-            "[Navigation] ✅ Nivel permanece en COUNTRY - Mapa actual permanece visible",
-          );
-          return; // ❌ NO continuar con renderizado ni carga de datos
+                    return; // ❌ NO continuar con renderizado ni carga de datos
         }
 
         // Render subdivision view PRIMERO (solo si cargamos polígonos)
         // NO limpiar answersData todavía en modo trending - lo haremos justo antes de cargar datos
-        console.log(
-          `[Navigation] 🎨 Verificando condición para renderizar: skipPolygonLoad=${skipPolygonLoad}, subdivisionPolygons.length=${subdivisionPolygons.length}`,
-        );
-
-        if (!skipPolygonLoad && subdivisionPolygons.length > 0) {
+                if (!skipPolygonLoad && subdivisionPolygons.length > 0) {
           // Si hay encuesta activa, limpiar antes de renderizar
           if (activePoll) {
             answersData = {};
-            console.log(
-              "[Navigation] 🧹 answersData limpiado (modo encuesta específica)",
-            );
-          }
+                      }
 
-          console.log(
-            `[Navigation] 🚀 Llamando a renderSubdivisionView con ${subdivisionPolygons.length} polígonos`,
-          );
-          await this.renderSubdivisionView(
+                    await this.renderSubdivisionView(
             countryIso,
             subdivisionId,
             subdivisionPolygons,
           );
-          console.log(`[Navigation] ✅ renderSubdivisionView completado`);
         } else if (skipPolygonLoad) {
-          console.log(
-            "[navigateToSubdivision] 🔍 Saltando renderizado (polígonos ya renderizados desde búsqueda directa)",
-          );
-        } else {
-          console.error(
-            `[Navigation] ❌ NO se llamará a renderSubdivisionView porque subdivisionPolygons.length=${subdivisionPolygons.length}`,
-          );
-        }
+                  } else {
+                  }
 
         // Cargar datos de sub-subdivisiones y actualizar answersData DESPUÉS de renderizar
         // IMPORTANTE: Cargar datos SIEMPRE, incluso si skipPolygonLoad=true
@@ -2362,26 +2060,10 @@
         const polygonsToUse = skipPolygonLoad
           ? localPolygons
           : subdivisionPolygons;
-        console.log(
-          "[Navigation] 🗺️ Polígonos disponibles:",
-          polygonsToUse.length,
-          skipPolygonLoad
-            ? "(desde localPolygons - búsqueda directa)"
-            : "(desde subdivisionPolygons)",
-        );
-        console.log(
-          "[Navigation] 🔍 IDs de los primeros 5 polígonos:",
-          polygonsToUse.slice(0, 5).map((p: any) => getFeatureId(p)),
-        );
-
-        if (activePoll && activePoll.id) {
+                        if (activePoll && activePoll.id) {
           // MODO ENCUESTA ESPECÍFICA: Cargar datos de esa encuesta CON REINTENTOS
           try {
-            console.log(
-              "[Navigation] 📡 Cargando datos de encuesta para subdivisión:",
-              subdivisionId,
-            );
-            const cleanSubdivisionId = subdivisionId.includes(".")
+                        const cleanSubdivisionId = subdivisionId.includes(".")
               ? subdivisionId.split(".").pop()
               : subdivisionId;
             const { data } = await loadDataWithRetry(
@@ -2393,10 +2075,7 @@
 
             // Verificar que realmente tenemos datos
             if (!data || Object.keys(data).length === 0) {
-              console.warn(
-                "[Navigation] ⚠️ No se recibieron datos de la API para subdivisión",
-              );
-              throw new Error("No data received");
+                            throw new Error("No data received");
             }
 
             // *** INCLUIR TODOS LOS NIVELES para conteo agregado correcto ***
@@ -2422,12 +2101,7 @@
             answersData = allLevelsData;
 
             // 🔍 DEBUG: Mostrar qué IDs tenemos en answersData
-            console.log(
-              "[Navigation] 🔍 IDs disponibles en answersData para nivel 3/4:",
-            );
-            console.log(Object.keys(allLevelsData));
-
-            // Solo calcular si hay polígonos
+                                    // Solo calcular si hay polígonos
             if (polygonsToUse.length > 0) {
               // Recalcular isoDominantKey y legendItems con los polígonos de subdivisión
               const geoData = {
@@ -2451,25 +2125,10 @@
 
               // *** FORZAR REPINTADO: Actualizar colores después de cargar datos de la API ***
               globe?.refreshPolyColors?.();
-              console.log(
-                "[Navigation] 🎨 Colores actualizados después de cargar datos de encuesta específica",
-              );
-            }
+                          }
 
             // MOSTRAR ETIQUETA después de cargar datos (NIVEL 3/4 - Encuesta específica)
-            console.log(
-              "[Navigation] 🎯 Nivel 3/4 (Encuesta): Mostrando etiqueta después de cargar datos",
-            );
-            console.log(
-              "[Navigation] 📊 answersData keys:",
-              Object.keys(answersData || {}).length,
-            );
-            console.log(
-              "[Navigation] 📦 Polígonos para mostrar:",
-              polygonsToUse.length,
-            );
-
-            // Esperar a que el globo renderice antes de mostrar etiqueta
+                                                // Esperar a que el globo renderice antes de mostrar etiqueta
             await new Promise((resolve) => requestAnimationFrame(resolve));
             await new Promise((resolve) => requestAnimationFrame(resolve));
             showFirstLabelWithData(polygonsToUse);
@@ -2511,15 +2170,7 @@
 
               // LIMPIAR answersData AHORA, justo antes de cargar trending
               answersData = {};
-              console.log(
-                "[Trending] 🧹 answersData limpiado antes de cargar datos trending",
-              );
-
-              console.log(
-                `[Trending] 🚀 Iniciando carga subdivisión con límite de 5 requests simultáneos (${trendingPolls.length} encuestas)`,
-              );
-
-              await limitConcurrency(
+                                          await limitConcurrency(
                 trendingPolls,
                 async (poll: any, i: number) => {
                   const pollKey = `poll_${poll.id}`;
@@ -2539,25 +2190,12 @@
 
                   // Cargar datos de votos por sub-subdivisión para cada encuesta trending
                   try {
-                    console.log(
-                      `[Trending] 📡 Cargando datos para encuesta ${poll.id}, subdivisión: ${cleanSubdivisionId}`,
-                    );
-                    const pollResponse = await apiCall(
+                                        const pollResponse = await apiCall(
                       `/api/polls/${poll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`,
                     );
                     if (pollResponse.ok) {
                       const { data: pollData } = await pollResponse.json();
-                      console.log(
-                        `[Trending] ✅ Datos recibidos para poll ${poll.id}:`,
-                        Object.keys(pollData || {}).length,
-                        "claves",
-                      );
-                      console.log(
-                        `[Trending] 🔑 Primeras claves:`,
-                        Object.keys(pollData || {}).slice(0, 5),
-                      );
-
-                      // *** INCLUIR TODOS LOS NIVELES: nivel 2, 3, 4, etc. para conteo correcto ***
+                                                                  // *** INCLUIR TODOS LOS NIVELES: nivel 2, 3, 4, etc. para conteo correcto ***
                       // En trending, queremos sumar TODOS los votos de esta subdivisión y subniveles
                       const fullSubdivisionId = subdivisionId.includes(".")
                         ? subdivisionId
@@ -2619,17 +2257,10 @@
 
                         // Forzar repintado inmediato
                         globe?.refreshPolyColors?.();
-                        console.log(
-                          `[Navigation] 🎨 Pintado progresivo nivel 3: ${completedCount}/${trendingPolls.length} encuestas completadas`,
-                        );
-                      }
+                                              }
                     }
                   } catch (error) {
-                    console.error(
-                      `[Trending] ❌ Error cargando datos de poll ${poll.id}:`,
-                      error,
-                    );
-                  }
+                                      }
                 },
                 5,
               ); // Límite de 5 requests simultáneos
@@ -2651,31 +2282,8 @@
               colorMap = aggregatedColors;
 
               // 🔍 DEBUG: Mostrar qué IDs tenemos en answersData (trending nivel 3/4)
-              console.log(
-                "[Trending] 🔍 IDs disponibles en answersData para nivel 3/4:",
-              );
-              console.log(
-                "[Trending] 📊 Total de claves en aggregatedData:",
-                Object.keys(aggregatedData).length,
-              );
-              console.log("[Trending] 🔑 Claves:", Object.keys(aggregatedData));
-
-              if (Object.keys(aggregatedData).length === 0) {
-                console.warn(
-                  "[Trending] ⚠️ aggregatedData está VACÍO - no hay datos de nivel 3",
-                );
-                console.warn("[Trending] 🔍 subdivisionId:", subdivisionId);
-                console.warn(
-                  "[Trending] 🔍 cleanSubdivisionId:",
-                  cleanSubdivisionId,
-                );
-                console.warn(
-                  "[Trending] 🔍 fullSubdivisionId:",
-                  subdivisionId.includes(".")
-                    ? subdivisionId
-                    : `${countryIso}.${subdivisionId}`,
-                );
-              }
+                                                        if (Object.keys(aggregatedData).length === 0) {
+                                                              }
 
               // Recalcular colores dominantes
               if (polygonsToUse.length > 0) {
@@ -2704,37 +2312,13 @@
               }
 
               // MOSTRAR ETIQUETA después de cargar datos (NIVEL 3/4 - Trending)
-              console.log(
-                "[Navigation] 🎯 Nivel 3/4 (Trending): Mostrando etiqueta después de cargar datos",
-              );
-              console.log(
-                "[Navigation] 📊 answersData keys:",
-                Object.keys(answersData || {}).length,
-              );
-              console.log(
-                "[Navigation] 🔑 Claves de answersData:",
-                Object.keys(answersData || {}).slice(0, 10),
-              );
-              console.log(
-                "[Navigation] 📦 Polígonos para mostrar:",
-                polygonsToUse.length,
-              );
-              console.log(
-                "[Navigation] 🔍 IDs polígonos:",
-                polygonsToUse.slice(0, 5).map((p: any) => getFeatureId(p)),
-              );
-
-              // Esperar a que el globo renderice antes de mostrar etiqueta
+                                                                                    // Esperar a que el globo renderice antes de mostrar etiqueta
               await new Promise((resolve) => requestAnimationFrame(resolve));
               await new Promise((resolve) => requestAnimationFrame(resolve));
               showFirstLabelWithData(polygonsToUse);
             }
           } catch (error) {
-            console.error(
-              "[Trending] ❌ Error general cargando datos de trending:",
-              error,
-            );
-          }
+                      }
         }
 
         // Forzar refresh de colores después de actualizar datos
@@ -2746,10 +2330,7 @@
         // FALLBACK: Si no se cargaron datos de API, mostrar etiqueta de la subdivisión (NIVEL 3/4)
         // Este código solo se ejecuta si ninguno de los bloques anteriores mostró etiqueta
         if (!activePoll && Object.keys(answersData || {}).length === 0) {
-          console.log(
-            "[Navigation] 🔄 Nivel 3/4 (Fallback): Mostrando nombre de la subdivisión",
-          );
-          await new Promise((resolve) => setTimeout(resolve, 300));
+                    await new Promise((resolve) => setTimeout(resolve, 300));
           await generateSubdivisionNameLabel();
         }
       } catch (error) {
@@ -2760,13 +2341,7 @@
     async navigateToWorld() {
       // Generar nuevo token para esta navegación
       const navToken = getNewNavigationToken();
-      console.log(
-        "[Navigation] 🔑 Token de navegación:",
-        navToken,
-        "para mundo",
-      );
-
-      this.state = {
+            this.state = {
         level: "world",
         countryIso: null,
         subdivisionId: null,
@@ -2795,18 +2370,13 @@
       // HISTORY API: Volver al estado mundial (solo si no viene de popstate)
       // IMPORTANTE: Si hay una encuesta activa, NO sobrescribir el estado
       if (!isNavigatingFromHistory && !activePoll) {
-        console.log("[History] 📍 Navegando al mundo (trending) con goto()");
-        await goto("/", {
+                await goto("/", {
           replaceState: false,
           noScroll: true,
           keepFocus: true,
         });
       } else if (activePoll) {
-        console.log(
-          "[History] 📊 Navegando al mundo pero manteniendo estado de encuesta activa",
-        );
-      } else {
-        console.log("[History] 🔄 Restaurando mundo desde historial");
+              } else {
       }
 
       // Restaurar datos mundiales desde cache
@@ -2815,39 +2385,20 @@
           // Si ya tenemos datos en cache, usarlos
           if (Object.keys(worldLevelAnswers).length > 0) {
             answersData = worldLevelAnswers;
-            console.log(
-              "[Navigation] 📦 Datos mundiales restaurados desde cache:",
-              Object.keys(worldLevelAnswers).length,
-            );
-          } else {
+                      } else {
             // Si no hay cache, cargar desde API usando PollDataService
-            console.log(
-              "[Navigation] 📡 Cargando votos por país con PollDataService...",
-            );
-            const data = await pollDataService.loadVotesByCountry(
+                        const data = await pollDataService.loadVotesByCountry(
               activePoll.id,
             );
 
             // Verificar si la navegación sigue siendo válida
             if (navToken !== currentNavigationToken) {
-              console.log(
-                "[Navigation] ❌ Carga de datos mundiales cancelada (token:",
-                navToken,
-                "vs actual:",
-                currentNavigationToken,
-                ")",
-              );
-              return;
+                            return;
             }
 
             worldLevelAnswers = data;
             answersData = data;
-            console.log(
-              "[Navigation] ✅ Datos mundiales cargados:",
-              Object.keys(answersData).length,
-              "países",
-            );
-          }
+                      }
 
           // Recalcular isoDominantKey y legendItems
           const geoData = {
@@ -2913,30 +2464,13 @@
 
       // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel mundial - agregado)
       // Funciona tanto en modo encuesta específica como en modo trending
-      console.log(
-        "[Navigation] 🔍 DEBUG: activePollOptions.length =",
-        activePollOptions.length,
-      );
-      console.log(
-        "[Navigation] 🔍 DEBUG: answersData keys =",
-        answersData ? Object.keys(answersData).length : 0,
-      );
-      console.log(
-        "[Navigation] 🔍 DEBUG: activePoll =",
-        activePoll?.id || "null (modo trending)",
-      );
-
-      if (
+                        if (
         activePollOptions.length > 0 &&
         answersData &&
         Object.keys(answersData).length > 0
       ) {
         const mode = activePoll ? "encuesta específica" : "trending";
-        console.log(
-          `[Navigation] ✅ Actualizando votos para nivel mundial (${mode})`,
-        );
-
-        // Agregar todos los votos de todos los países
+                // Agregar todos los votos de todos los países
         const worldTotals: Record<string, number> = {};
         Object.values(answersData).forEach((countryData) => {
           if (countryData && typeof countryData === "object") {
@@ -2946,14 +2480,10 @@
           }
         });
 
-        console.log("[Navigation] 🔍 DEBUG: worldTotals =", worldTotals);
 
         const updatedOptions = activePollOptions.map((option) => {
           const votesForOption = worldTotals[option.key] || 0;
-          console.log(
-            `[Navigation]   ${option.label}: ${votesForOption} votos (mundial)`,
-          );
-          return { ...option, votes: votesForOption };
+                    return { ...option, votes: votesForOption };
         });
 
         activePollOptions = [...updatedOptions];
@@ -2966,44 +2496,17 @@
           color: opt.color,
           count: opt.votes || 0,
         }));
-        console.log(
-          "[Navigation] ✅ legendItems actualizado para barra de progreso:",
-          legendItems.length,
-          "items",
-        );
 
-        // ✅ countryChartSegments se actualiza automáticamente por el bloque reactivo (línea 5721)
-
-        tick().then(() => {
-          console.log(
-            "[Navigation] ✅ Votos y barrita actualizados en nivel mundial - UI debería actualizarse",
-          );
-        });
-      } else {
-        console.log("[Navigation] ⚠️ NO se actualizan votos - razones:");
-        if (activePollOptions.length === 0)
-          console.log("  - activePollOptions está vacío");
-        if (!answersData) console.log("  - answersData es null/undefined");
-        if (answersData && Object.keys(answersData).length === 0)
-          console.log("  - answersData no tiene países");
+       
       }
 
       // NIVEL MUNDIAL: Las etiquetas se manejan con autoSelectCenterPolygon
       // (solo muestra el país centrado, igual que en otros niveles)
-      console.log(
-        "[Navigation] 🌍 Nivel Mundial: Etiquetas manejadas por autoSelectCenterPolygon",
-      );
-    }
+          }
 
     // Método especial para territorios sin subdivisiones: actualiza a nivel country sin renderizar
     updateToCountryWithoutSubdivisions(iso: string, countryName: string) {
-      console.log(
-        "[Navigation] 🏝️ updateToCountryWithoutSubdivisions:",
-        iso,
-        countryName,
-      );
-
-      // Update state to country level (permite navegación a otros países)
+            // Update state to country level (permite navegación a otros países)
       this.state = {
         level: "country",
         countryIso: iso,
@@ -3020,10 +2523,7 @@
         { level: "country", name: countryName, iso },
       ];
 
-      console.log(
-        "[Navigation] ✅ Estado actualizado a COUNTRY (sin subdivisiones)",
-      );
-    }
+          }
 
     async navigateBack() {
       // LIMPIAR polígono centrado antes de navegar hacia atrás
@@ -3101,7 +2601,6 @@
         // Las etiquetas en nivel mundial se manejan con autoSelectCenterPolygon
         // (solo muestra el país centrado, igual que en otros niveles)
       } catch (error) {
-        console.error("[Navigation] Error rendering world view:", error);
       }
     }
 
@@ -3112,7 +2611,6 @@
         try {
           subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(iso, iso);
         } catch (e) {
-          console.warn("[CountryView] No subdivision file for", iso, e);
         }
 
         // FILTRAR polígonos inválidos ANTES de procesarlos
@@ -3169,10 +2667,7 @@
 
               // Forzar repintado inmediato
               this.globe?.refreshPolyColors?.();
-              console.log(
-                `[Navigation] 🎨 Pintado progresivo nivel 2: ${processed}/${total} subdivisiones`,
-              );
-            },
+                          },
           );
         } else if (
           answersData &&
@@ -3181,10 +2676,7 @@
           Object.keys(colorMap).length > 0
         ) {
           // MODO TRENDING: Usar datos agregados de múltiples encuestas
-          console.log(
-            "[Navigation] 🎨 Modo trending: usando datos agregados para colorear subdivisiones",
-          );
-          subdivisionColorById = colorManager.computeColorsFromAggregatedData(
+                    subdivisionColorById = colorManager.computeColorsFromAggregatedData(
             iso,
             childMarked,
             answersData,
@@ -3246,7 +2738,6 @@
         this.globe?.refreshPolyAltitudes?.();
         // Labels se generarán automáticamente después del zoom
       } catch (error) {
-        console.error("[Navigation] Error rendering country view:", error);
       }
     }
 
@@ -3255,25 +2746,14 @@
       subdivisionId: string,
       subdivisionPolygons: any[],
     ) {
-      console.log(
-        `[renderSubdivisionView] 🎨 INICIO - country: ${countryIso}, subdivision: ${subdivisionId}, polygons: ${subdivisionPolygons.length}`,
-      );
-
-      try {
+            try {
         // Filter out null or invalid polygons first
         const validPolygons = subdivisionPolygons.filter((poly) => {
           return poly && poly.geometry && poly.geometry.type && poly.properties;
         });
 
-        console.log(
-          `[renderSubdivisionView] 📦 Polígonos válidos después de filtrar: ${validPolygons.length}/${subdivisionPolygons.length}`,
-        );
-
-        if (validPolygons.length === 0) {
-          console.error(
-            "[renderSubdivisionView] ❌ No valid polygons found for subdivision view",
-          );
-          return;
+                if (validPolygons.length === 0) {
+                    return;
         }
 
         // Show ONLY the selected subdivision (no country or world background)
@@ -3326,18 +2806,12 @@
 
               // Forzar repintado inmediato
               this.globe?.refreshPolyColors?.();
-              console.log(
-                `[Navigation] 🎨 Pintado progresivo nivel 3: ${processed}/${total} sub-subdivisiones`,
-              );
-            },
+                          },
           );
         } else {
           // MODO TRENDING: NO aplicar _forcedColor aquí
           // Los colores se aplicarán dinámicamente desde onPolyCapColor usando answersData
-          console.log(
-            "[renderSubdivisionView] 🎨 Modo trending nivel 3: NO aplicando _forcedColor, onPolyCapColor usará answersData dinámicamente",
-          );
-        }
+                  }
 
         // Aplicar _forcedColor SOLO en modo encuesta específica (cuando subSubdivisionColorById tiene datos)
         let colorsApplied = 0;
@@ -3363,29 +2837,11 @@
           }
         }
 
-        console.log(
-          `[renderSubdivisionView] ✅ ${colorsApplied} sub-subdivisiones coloreadas en nivel 3`,
-        );
-
-        // Set subdivision polygons con colores ya aplicados
-        console.log(
-          `[renderSubdivisionView] 🗺️ CRÍTICO: Llamando setPolygonsData con ${markedPolygons.length} polígonos`,
-        );
-        console.log(`[renderSubdivisionView] 🔍 Primer polígono:`, {
-          id: markedPolygons[0]?.properties?.ID_2,
-          name: markedPolygons[0]?.properties?.NAME_2,
-          elevation: markedPolygons[0]?.properties?._elevation,
-          isChild: markedPolygons[0]?.properties?._isChild,
-          hasGeometry: !!markedPolygons[0]?.geometry,
-        });
-        this.globe?.setPolygonsData(markedPolygons);
-        console.log(`[renderSubdivisionView] ✅ setPolygonsData completado`);
+                // Set subdivision polygons con colores ya aplicados
+                        this.globe?.setPolygonsData(markedPolygons);
 
         // IMPORTANTE: Hacer refresh INMEDIATO para aplicar colores de BD (igual que en nivel 2)
-        console.log(
-          `[renderSubdivisionView] 🔄 Refreshing poly colors and altitudes`,
-        );
-        this.globe?.refreshPolyColors?.();
+                this.globe?.refreshPolyColors?.();
         this.globe?.refreshPolyAltitudes?.();
 
         // REFRESH ADICIONAL: Forzar refresh completo después de un pequeño delay
@@ -3395,16 +2851,9 @@
           globe?.refreshPolyAltitudes?.();
         }, 50);
 
-        console.log(
-          `[renderSubdivisionView] ✅ FIN - Subdivisión renderizada exitosamente`,
-        );
-        // Labels se generarán automáticamente después del zoom
+                // Labels se generarán automáticamente después del zoom
       } catch (error) {
-        console.error(
-          "[renderSubdivisionView] ❌ ERROR durante renderizado:",
-          error,
-        );
-      }
+              }
     }
 
     // Private data loading methods
@@ -3421,7 +2870,6 @@
         currentLocalIso = iso;
         return polygons;
       } catch (error) {
-        console.error("[Navigation] Error loading country polygons:", error);
         return [];
       }
     }
@@ -3433,12 +2881,7 @@
           await this.loadSubdivisionPolygons(iso, firstSubdivision);
         }
       } catch (error) {
-        console.warn(
-          "[Navigation] Could not load subdivisions for",
-          iso,
-          error,
-        );
-      }
+              }
     }
 
     private async loadSubdivisionPolygons(
@@ -3446,33 +2889,20 @@
       subdivisionId: string,
     ): Promise<any[]> {
       const key = `${countryIso}/${subdivisionId}`;
-      console.log(
-        `[Navigation] 🔍 loadSubdivisionPolygons(${countryIso}, ${subdivisionId}) - key: ${key}`,
-      );
-
-      // Check cache first
+            // Check cache first
       if (this.polygonCache.has(key)) {
-        console.log(`[Navigation] ♻️ Usando polígonos desde caché para ${key}`);
         return this.polygonCache.get(key)!;
       }
 
       try {
-        console.log(`[Navigation] 📡 Cargando polígonos para ${key}...`);
         const polygons = await loadSubregionTopoAsGeoFeatures(
           countryIso,
           subdivisionId,
         );
-        console.log(
-          `[Navigation] ✅ ${polygons.length} polígonos cargados para ${key}`,
-        );
-        this.polygonCache.set(key, polygons);
+                this.polygonCache.set(key, polygons);
         return polygons;
       } catch (error) {
-        console.error(
-          `[Navigation] ❌ Error loading subdivision polygons para ${key}:`,
-          error,
-        );
-        return [];
+                return [];
       }
     }
 
@@ -3492,45 +2922,28 @@
       const currentLevel = this.state.level;
       const navState = this.getState();
 
-      console.log(
-        "[Navigation] goBack - currentLevel:",
-        currentLevel,
-        "navState:",
-        navState,
-      );
-
-      // Detectar si estamos en nivel 4 (sub-subdivisiones)
+            // Detectar si estamos en nivel 4 (sub-subdivisiones)
       // Nivel 4 es cuando tenemos más de 2 niveles en el history
       const isLevel4 =
         currentLevel === "subdivision" && this.history.length > 3;
 
       if (isLevel4) {
         // Nivel 4 -> Volver directamente a nivel 0 (world)
-        console.log(
-          "[Navigation] 🔙 Volviendo de nivel 4 directamente a mundo",
-        );
-        const currentPov = globe?.pointOfView();
+                const currentPov = globe?.pointOfView();
         const currentLat = currentPov?.lat || 0;
         const currentLng = currentPov?.lng || 0;
         await this.navigateToWorld();
         scheduleZoom(currentLat, currentLng, 2.0, 1000);
       } else if (currentLevel === "subdivision") {
         // Nivel 3 -> Volver directamente a nivel 0 (world)
-        console.log(
-          "[Navigation] 🔙 Volviendo de nivel 3 (subdivision) directamente a mundo",
-        );
-        const currentPov = globe?.pointOfView();
+                const currentPov = globe?.pointOfView();
         const currentLat = currentPov?.lat || 0;
         const currentLng = currentPov?.lng || 0;
         await this.navigateToWorld();
         scheduleZoom(currentLat, currentLng, 2.0, 1000);
       } else if (currentLevel === "country") {
         // Nivel 2 -> Volver a nivel 1 (world)
-        console.log(
-          "[Navigation] 🔙 Volviendo de nivel 2 (country) a nivel 1 (world)",
-        );
-
-        // Obtener posición actual antes de navegar
+                // Obtener posición actual antes de navegar
         const currentPov = globe?.pointOfView();
         const currentLat = currentPov?.lat || 0;
         const currentLng = currentPov?.lng || 0;
@@ -3606,13 +3019,7 @@
                   const hasData = Boolean(answersData?.[fullId]);
                   if (hasData) {
                     subdivisionMap.set(fullId, String(name1));
-                    console.log(
-                      "[getAvailableOptions] ✅ Subdivisión con datos:",
-                      name1,
-                      "=",
-                      fullId,
-                    );
-                  }
+                                      }
                 }
               }
             });
@@ -3620,11 +3027,7 @@
             options.push({ id, name });
           });
         } catch (e) {
-          console.warn(
-            "[Navigation] Could not load subdivisions for dropdown:",
-            e,
-          );
-        }
+                  }
       } else if (
         this.state.level === "subdivision" &&
         this.state.countryIso &&
@@ -3641,27 +3044,10 @@
           if (parts.length > 2 && parts[0] === parts[2]) {
             // Caso "ESP.1.ESP.1" → tomar primeras 2 partes
             cleanSubdivisionId = `${parts[0]}.${parts[1]}`;
-            console.log(
-              "[getAvailableOptions] 🔧 Limpiando ID duplicado:",
-              this.state.subdivisionId,
-              "→",
-              cleanSubdivisionId,
-            );
-          }
+                      }
 
           const numericPart = cleanSubdivisionId.split(".").pop();
-          console.log(
-            "[getAvailableOptions] 📊 Nivel 4 - subdivisionId:",
-            this.state.subdivisionId,
-            "→ numericPart:",
-            numericPart,
-          );
-          console.log(
-            "[getAvailableOptions] 📦 answersData keys disponibles:",
-            Object.keys(answersData || {}).slice(0, 15),
-          );
-
-          if (numericPart) {
+                              if (numericPart) {
             const subdivisionFile = `${this.state.countryIso}.${numericPart}`;
             const subSubPolygons = await loadSubregionTopoAsGeoFeatures(
               this.state.countryIso,
@@ -3699,48 +3085,19 @@
                   );
 
                   if (hasData) {
-                    console.log(
-                      "[getAvailableOptions]   ✅ Encontrado:",
-                      name2,
-                      fullId,
-                      "(hasData)",
-                    );
-                    subSubMap.set(String(id2), String(name2));
+                                        subSubMap.set(String(id2), String(name2));
                   } else {
-                    console.log(
-                      "[getAvailableOptions]   ❌ Sin datos:",
-                      name2,
-                      fullId,
-                    );
-                  }
+                                      }
                 }
               });
 
-            console.log(
-              "[getAvailableOptions] 📊 Opciones con datos:",
-              subSubMap.size,
-              "de",
-              subSubPolygons.length,
-              "polígonos",
-            );
-
-            subSubMap.forEach((name, id) => {
+                        subSubMap.forEach((name, id) => {
               const fullId = `${this.state.countryIso}.${numericPart}.${id}`;
-              console.log(
-                "[getAvailableOptions]   → Agregando opción:",
-                name,
-                "=",
-                fullId,
-              );
-              options.push({ id: fullId, name });
+                            options.push({ id: fullId, name });
             });
           }
         } catch (e) {
-          console.warn(
-            "[Navigation] Could not load sub-subdivisions for dropdown:",
-            e,
-          );
-        }
+                  }
       }
 
       // Sort alphabetically by name
@@ -3756,23 +3113,19 @@
 
   // Recargar trending cuando cambia el filtro de tiempo
   $: if (trendingTimeFilter && globe && !activePoll) {
-    console.log("[Reactive] 🕒 Filtro de tiempo cambió a:", trendingTimeFilter);
     loadTrendingData();
   }
 
   // Function to toggle dropdown and load options
   async function toggleDropdown(event?: Event) {
-    console.log("[toggleDropdown] INICIO - showDropdown:", showDropdown, "navigationManager:", !!navigationManager);
     if (event) {
       event.stopPropagation();
     }
     if (!navigationManager) {
-      console.error("[toggleDropdown] ❌ navigationManager es null!");
       return;
     }
 
     if (showDropdown) {
-      console.log("[toggleDropdown] Cerrando dropdown...");
       showDropdown = false;
       dropdownOptions = [];
       dropdownSearchQuery = "";
@@ -3784,23 +3137,14 @@
           SHEET_STATE = originalSheetState;
           originalSheetState = null;
           originalSheetY = null;
-          console.log(
-            `[toggleDropdown] BottomSheet restaurado a estado: ${originalSheetState}`,
-          );
-        } catch (e) {
-          console.warn(
-            "[toggleDropdown] Error restaurando estado del sheet:",
-            e,
-          );
-        }
+                  } catch (e) {
+                  }
       }
     } else {
-      console.log("[toggleDropdown] Abriendo dropdown...");
       showDropdown = true;
       dropdownSearchQuery = "";
       const options = await navigationManager!.getAvailableOptions();
       dropdownOptions = options;
-      console.log("[toggleDropdown] Opciones cargadas:", options.length);
 
       // Guardar estado actual y ocultar el BottomSheet para liberar espacio
       // Hacerlo en nextTick para que el evento del dropdown se procese primero
@@ -3811,11 +3155,7 @@
             originalSheetY = sheetY;
             sheetCtrl.setState("hidden");
             SHEET_STATE = "hidden";
-            console.log(
-              `[toggleDropdown] BottomSheet ocultado (era: ${originalSheetState})`,
-            );
-          } catch (e) {
-            console.warn("[toggleDropdown] Error ocultando sheet:", e);
+                      } catch (e) {
           }
         }
       }, 0);
@@ -3832,7 +3172,6 @@
       const headerNavMinimal = target.closest(".header-nav-minimal");
       // No cerrar si el click viene del header de navegación o del dropdown global
       if (!dropdown && !headerNav && !globalDropdown && !headerNavMinimal) {
-        console.log("[handleClickOutside] Cerrando dropdown por click fuera");
         showDropdown = false;
         dropdownOptions = [];
         dropdownSearchQuery = "";
@@ -3848,11 +3187,7 @@
             originalSheetState = null;
             originalSheetY = null;
           } catch (e) {
-            console.warn(
-              "[handleClickOutside] Error restaurando estado del sheet:",
-              e,
-            );
-          }
+                      }
         }
       }
     }
@@ -3938,15 +3273,8 @@
     parentName?: string;
   }) {
     const isDirectSearch = option.fromDirectSearch === true;
-    console.log(
-      "[selectDropdownOption] Navegando a:",
-      option,
-      isDirectSearch ? "🔍 [BÚSQUEDA DIRECTA - LIMPIEZA COMPLETA]" : "",
-    );
-
-    // BLOQUEAR durante animaciones de zoom
+        // BLOQUEAR durante animaciones de zoom
     if (isZooming) {
-      console.log("[Dropdown] Selección bloqueada durante animación de zoom");
       return;
     }
 
@@ -3967,11 +3295,7 @@
         originalSheetState = null;
         originalSheetY = null;
       } catch (e) {
-        console.warn(
-          "[selectDropdownOption] Error restaurando estado del sheet:",
-          e,
-        );
-      }
+              }
     }
 
     // Show bottom sheet
@@ -3979,11 +3303,7 @@
 
     // 🔍 SI ES BÚSQUEDA DIRECTA: Limpieza COMPLETA de polígonos
     if (isDirectSearch) {
-      console.log(
-        "[selectDropdownOption] 🧹🔥 LIMPIEZA COMPLETA - Búsqueda directa detectada",
-      );
-
-      // 1. Limpiar TODOS los polígonos del globo (incluyendo world)
+            // 1. Limpiar TODOS los polígonos del globo (incluyendo world)
       globe?.setPolygonsData?.([]);
       localPolygons = [];
 
@@ -3995,7 +3315,6 @@
       // 3. Esperar a que se limpie visualmente
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
-      console.log("[selectDropdownOption] ✅ Limpieza completa realizada");
     }
 
     // ✅ NAVEGACIÓN DIRECTA: Ir directamente al destino sin buscar en localPolygons
@@ -4003,30 +3322,16 @@
     const parts = option.id.split(".");
     const currentLevel = navigationManager.getCurrentLevel();
 
-    console.log(
-      "[selectDropdownOption] 🎯 Navegación directa a:",
-      option.id,
-      "| Nivel actual:",
-      currentLevel,
-      "| Partes:",
-      parts,
-    );
-
-    if (isCountry) {
+        if (isCountry) {
       // ===== NAVEGACIÓN DIRECTA A PAÍS =====
       const iso = option.id; // Para países, el ID es el ISO
       const featureName = option.name;
 
-      console.log("[selectDropdownOption] 🎯 Navegación directa a país:", iso);
 
       // 1. Obtener feat de worldPolygons
       const feat = worldPolygons?.find((p) => isoOf(p) === iso);
       if (!feat) {
-        console.error(
-          "[selectDropdownOption] ❌ No se encontró el país en worldPolygons:",
-          iso,
-        );
-        return;
+                return;
       }
 
       // 2. Obtener datos del país desde cache mundial (opcional)
@@ -4035,30 +3340,17 @@
       // Si estamos en otro contexto, buscar en cache mundial
       if (worldLevelAnswers && worldLevelAnswers[iso]) {
         countryRecord = worldLevelAnswers[iso];
-        console.log(
-          "[selectDropdownOption] ✅ Datos encontrados en cache mundial",
-        );
-      } else if (answersData?.[iso]) {
+              } else if (answersData?.[iso]) {
         countryRecord = answersData[iso];
-        console.log(
-          "[selectDropdownOption] ✅ Datos encontrados en answersData actual",
-        );
-      } else {
-        console.log(
-          "[selectDropdownOption] ℹ️ Sin datos, pero navegando igual:",
-          iso,
-        );
-      }
+              } else {
+              }
 
       // Limpiar etiquetas y polígonos (solo si NO viene de búsqueda directa, ya se limpió antes)
       if (!isDirectSearch) {
         subdivisionLabels = [];
         updateSubdivisionLabels(false);
 
-        console.log(
-          "[selectDropdownOption] 🧹 Limpiando polígonos actuales...",
-        );
-        globe?.setPolygonsData?.([]);
+                globe?.setPolygonsData?.([]);
       }
 
       // 3. Actualizar datos (si existen)
@@ -4091,18 +3383,10 @@
       // 5. Cargar polígonos del país destino en paralelo
       setTimeout(async () => {
         try {
-          console.log("[selectDropdownOption] 📦 Cargando polígonos de:", iso);
           const countryPolygons = await loadCountryTopoAsGeoFeatures(iso);
-          console.log(
-            "[selectDropdownOption] ✅",
-            countryPolygons.length,
-            "polígonos cargados",
-          );
-
-          // Cargar en globo
+                    // Cargar en globo
           localPolygons = countryPolygons;
           globe?.setPolygonsData?.(countryPolygons);
-          console.log("[selectDropdownOption] 🗺️ Polígonos cargados en globo");
 
           // Refresh visual
           setTimeout(() => {
@@ -4117,15 +3401,8 @@
           await new Promise((resolve) => requestAnimationFrame(resolve));
           await updateGlobeColors(true);
 
-          console.log(
-            "[selectDropdownOption] ✅ Navegación directa a país completada",
-          );
-        } catch (error) {
-          console.error(
-            "[selectDropdownOption] ❌ Error en navegación directa:",
-            error,
-          );
-        }
+                  } catch (error) {
+                  }
       }, 100);
     } else {
       // NAVEGAR A SUBDIVISIÓN (sin importar nivel actual)
@@ -4133,32 +3410,14 @@
       const countryIso = parts[0]; // "ESP"
       const isLevel3 = parts.length === 3; // "ESP.1.29" tiene 3 partes
 
-      console.log(
-        "[selectDropdownOption] Navegando a subdivisión nivel",
-        isLevel3 ? 3 : 2,
-        "ID:",
-        option.id,
-      );
-
-      if (isLevel3) {
+            if (isLevel3) {
         // NIVEL 3/4: Navegación DIRECTA sin pasos intermedios
         const parentSubdivisionId = `${parts[0]}.${parts[1]}`; // "ESP.1"
         const subdivisionFile = `${parts[0]}.${parts[1]}`; // Archivo "ESP.1"
         const countryIso = parts[0];
 
-        console.log(
-          "[selectDropdownOption] 🎯 Navegación DIRECTA a nivel 3/4:",
-          option.name,
-          "(",
-          option.id,
-          ")",
-        );
-
-        // 1. SIEMPRE limpiar polígonos actuales para evitar mezcla
-        console.log(
-          "[selectDropdownOption] 🧹 Limpiando polígonos actuales...",
-        );
-        localPolygons = [];
+                // 1. SIEMPRE limpiar polígonos actuales para evitar mezcla
+                localPolygons = [];
         globe?.setPolygonsData?.([]);
         subdivisionLabels = [];
         updateSubdivisionLabels(false);
@@ -4172,12 +3431,7 @@
             countryIso,
             subdivisionFile,
           );
-          console.log(
-            "[selectDropdownOption] 📦 Nivel 3 cargados:",
-            level3Polygons.length,
-          );
-
-          // 2. Buscar el polígono objetivo (Málaga)
+                    // 2. Buscar el polígono objetivo (Málaga)
           let targetFeature = null;
           for (const poly of level3Polygons) {
             const props = poly?.properties || {};
@@ -4197,12 +3451,7 @@
               name2 === option.name
             ) {
               targetFeature = poly;
-              console.log(
-                "[selectDropdownOption] ✅ Encontrado:",
-                name2,
-                fullId,
-              );
-              break;
+                            break;
             }
           }
 
@@ -4240,15 +3489,7 @@
           );
           const parentIdClean = parentIdRaw.split(".").pop() || parts[1];
 
-          console.log(
-            "[selectDropdownOption] 📍 Padre:",
-            parentName,
-            "(",
-            parentSubdivisionId,
-            ")",
-          );
-
-          // 4. Actualizar estado de navegación
+                    // 4. Actualizar estado de navegación
           selectedCountryIso = countryIso;
 
           // 🔧 MEJORAR NOMBRE: Buscar el nombre completo del país desde worldPolygons
@@ -4274,11 +3515,7 @@
           selectedCityId = option.id;
 
           // 5. ✅ CARGAR DATOS DE LA API para nivel 3/4 (antes del zoom)
-          console.log(
-            "[selectDropdownOption] 📡 Cargando datos de votos para nivel 3/4...",
-          );
-
-          if (activePoll && activePoll.id) {
+                    if (activePoll && activePoll.id) {
             // MODO ENCUESTA ESPECÍFICA
             try {
               const cleanSubdivisionId = parentIdClean;
@@ -4304,40 +3541,17 @@
                 }
 
                 answersData = allLevelsData;
-                console.log(
-                  "[selectDropdownOption] ✅ Datos cargados. IDs disponibles:",
-                  Object.keys(allLevelsData),
-                );
-              }
+                              }
             } catch (error) {
-              console.error(
-                "[selectDropdownOption] ❌ Error cargando datos:",
-                error,
-              );
-            }
+                          }
           } else if (!activePoll) {
             // MODO TRENDING
-            console.log(
-              "[selectDropdownOption] ⚠️ Modo trending - datos deberían estar en answersData",
-            );
-            console.log(
-              "[selectDropdownOption] 📊 answersData keys disponibles:",
-              Object.keys(answersData || {}),
-            );
-          }
+                                  }
 
           // 6. ⚡ PRIMERO: Establecer contexto de navegación (ANTES del zoom)
-          console.log(
-            "[selectDropdownOption] 🧭 Estableciendo contexto de navegación...",
-          );
-
-          // Si viene de búsqueda directa, necesitamos establecer contexto de país primero
+                    // Si viene de búsqueda directa, necesitamos establecer contexto de país primero
           if (isDirectSearch) {
-            console.log(
-              "[selectDropdownOption] 🔍 Búsqueda directa: navegando primero al país:",
-              countryIso,
-            );
-            // Solo actualizar estado interno, sin cargar polígonos (ya los tenemos)
+                        // Solo actualizar estado interno, sin cargar polígonos (ya los tenemos)
             await navigationManager!.navigateToCountry(
               countryIso,
               selectedCountryName || countryIso,
@@ -4346,11 +3560,7 @@
             );
           }
 
-          console.log(
-            "[selectDropdownOption] 🧭 Navegando a subdivisión:",
-            parentName,
-          );
-          // skipHistoryPush = true para evitar doble entrada en historial
+                    // skipHistoryPush = true para evitar doble entrada en historial
           // skipPolygonLoad = true cuando viene de búsqueda directa (ya los tenemos cargados)
           await navigationManager!.navigateToSubdivision(
             countryIso,
@@ -4366,26 +3576,14 @@
             0.08,
             calculateAdaptiveZoomSubdivision(targetFeature),
           );
-          console.log(
-            "[selectDropdownOption] 📸 Haciendo zoom a nivel 3:",
-            option.name,
-          );
-          scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
+                    scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
 
           // 8. 🗺️ DURANTE EL ZOOM: Cargar polígonos con promesas (no setTimeout)
           // Esperar 100ms para que el zoom inicie
           await new Promise((resolve) => setTimeout(resolve, 100));
 
           try {
-            console.log(
-              "[selectDropdownOption] 🗺️ Cargando polígonos nivel 3 DURANTE el zoom...",
-            );
-            console.log(
-              "[selectDropdownOption] 📦 level3Polygons a cargar:",
-              level3Polygons.length,
-            );
-
-            // Actualizar localPolygons
+                                    // Actualizar localPolygons
             localPolygons = level3Polygons;
 
             // Esperar un frame
@@ -4399,13 +3597,7 @@
 
               // Cargar nuevos polígonos
               globe.setPolygonsData(level3Polygons);
-              console.log(
-                "[selectDropdownOption] ✅ Globo actualizado con",
-                level3Polygons.length,
-                "polígonos nivel 3",
-              );
-
-              // CRÍTICO: Esperar 2 frames para que los polígonos se rendericen completamente
+                            // CRÍTICO: Esperar 2 frames para que los polígonos se rendericen completamente
               await new Promise((resolve) => requestAnimationFrame(resolve));
               await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -4414,19 +3606,7 @@
               globe?.refreshPolyAltitudes?.();
 
               // DEBUG: Verificar datos antes de colorear
-              console.log(
-                "[selectDropdownOption] 📊 DEBUG answersData:",
-                Object.keys(answersData || {}).length,
-                "claves",
-              );
-              console.log(
-                "[selectDropdownOption] 📊 ¿Tiene ESP.4.X?",
-                Object.keys(answersData || {}).filter((k) =>
-                  k.startsWith("ESP.4"),
-                ),
-              );
-
-              // ⚡ CRÍTICO: Recalcular isoDominantKey con los nuevos polígonos
+                                          // ⚡ CRÍTICO: Recalcular isoDominantKey con los nuevos polígonos
               const geoData = {
                 type: "FeatureCollection",
                 features: level3Polygons,
@@ -4436,42 +3616,21 @@
                 colors: colorMap,
               });
               isoDominantKey = vm.isoDominantKey;
-              console.log(
-                "[selectDropdownOption] 🔑 isoDominantKey recalculado:",
-                Object.keys(isoDominantKey).length,
-                "claves",
-              );
-
-              // Actualizar colores DESPUÉS de que los polígonos estén renderizados
+                            // Actualizar colores DESPUÉS de que los polígonos estén renderizados
               await updateGlobeColors(true);
 
               // Esperar otro frame antes del refresh de colores
               await new Promise((resolve) => requestAnimationFrame(resolve));
 
               globe?.refreshPolyColors?.();
-              console.log(
-                "[selectDropdownOption] 🎨 Colores aplicados para nivel 3",
-              );
-            } else {
-              console.error(
-                "[selectDropdownOption] ❌ Globe o setPolygonsData no disponible!",
-              );
-            }
+                          } else {
+                          }
           } catch (error) {
-            console.error(
-              "[selectDropdownOption] ❌ Error cargando polígonos:",
-              error,
-            );
-          }
+                      }
 
           // 10. ✅ ACTUALIZAR VOTOS Y BARRA DE SEGMENTOS para nivel 4
           const cityId = option.id; // Usar el ID completo "ESP.1.29"
-          console.log(
-            "[selectDropdownOption] 🔢 Actualizando datos para nivel 4:",
-            option.id,
-          );
-
-          // Construir posibles IDs para buscar en answersData
+                    // Construir posibles IDs para buscar en answersData
           let possibleIds: string[] = [cityId, option.id];
           if (!cityId.includes(".")) {
             possibleIds.push(`${parentSubdivisionId}.${cityId}`);
@@ -4490,27 +3649,14 @@
           }
 
           if (cityVoteData) {
-            console.log(
-              "[selectDropdownOption] ✅ Datos encontrados con ID:",
-              foundId,
-            );
-
-            // ✅ GENERAR BARRA DE SEGMENTOS con el ID correcto que funcionó
+                        // ✅ GENERAR BARRA DE SEGMENTOS con el ID correcto que funcionó
             cityChartSegments = [
               ...generateCountryChartSegments([cityVoteData]),
             ];
-            console.log(
-              "[selectDropdownOption] 📊 cityChartSegments generado:",
-              cityChartSegments,
-            );
-
-            // 🔧 USAR FUNCIÓN CENTRALIZADA
+                        // 🔧 USAR FUNCIÓN CENTRALIZADA
             updateVoteDataForLevel(cityVoteData, "Nivel 4 - Ciudad (dropdown)");
           } else {
-            console.log(
-              "[selectDropdownOption] ℹ️ Sin datos para nivel 3/4, limpiando votos",
-            );
-            // Sin datos, limpiar votos
+                        // Sin datos, limpiar votos
             cityChartSegments = [];
             if (activePollOptions.length > 0) {
               activePollOptions.forEach((opt, index) => {
@@ -4520,68 +3666,34 @@
             }
           }
 
-          console.log(
-            "[selectDropdownOption] ✅ Navegación nivel 3 completada:",
-            option.name,
-          );
-        } catch (error) {
-          console.error(
-            "[selectDropdownOption] ❌ Error en navegación nivel 3:",
-            error,
-          );
-
-          // FALLBACK: Navegar al país
+                  } catch (error) {
+                    // FALLBACK: Navegar al país
           const countryFeature = worldPolygons?.find(
             (p) => isoOf(p) === countryIso,
           );
           if (countryFeature) {
             const countryName = countryFeature.properties?.NAME || countryIso;
             await navigationManager!.navigateToCountry(countryIso, countryName);
-            console.log(
-              "[selectDropdownOption] 🔄 Fallback a país:",
-              countryName,
-            );
-          }
+                      }
         }
       } else {
         // ===== NIVEL 2: Navegación DIRECTA a subdivisión =====
         const subdivisionId = option.id; // "ESP.1"
         const subdivisionName = option.name; // "Andalucía"
 
-        console.log(
-          "[selectDropdownOption] 🎯 Navegación DIRECTA a nivel 2:",
-          option.name,
-          "(",
-          option.id,
-          ")",
-        );
-
-        // 1. Buscar datos en cache mundial o answersData actual (opcional)
+                // 1. Buscar datos en cache mundial o answersData actual (opcional)
         const subdivisionKey = subdivisionId;
         let subdivisionRecord = null;
 
         if (worldLevelAnswers && worldLevelAnswers[subdivisionKey]) {
           subdivisionRecord = worldLevelAnswers[subdivisionKey];
-          console.log(
-            "[selectDropdownOption] ✅ Datos encontrados en cache mundial",
-          );
-        } else if (answersData?.[subdivisionKey]) {
+                  } else if (answersData?.[subdivisionKey]) {
           subdivisionRecord = answersData[subdivisionKey];
-          console.log(
-            "[selectDropdownOption] ✅ Datos encontrados en answersData actual",
-          );
-        } else {
-          console.log(
-            "[selectDropdownOption] ℹ️ Sin datos, pero navegando igual:",
-            subdivisionKey,
-          );
-        }
+                  } else {
+                  }
 
         // 2. SIEMPRE limpiar polígonos actuales para evitar mezcla
-        console.log(
-          "[selectDropdownOption] 🧹 Limpiando polígonos actuales...",
-        );
-        localPolygons = [];
+                localPolygons = [];
         globe?.setPolygonsData?.([]);
         subdivisionLabels = [];
         updateSubdivisionLabels(false);
@@ -4594,30 +3706,12 @@
 
         // 4. Cargar polígonos del país directamente
         const countryIso = parts[0];
-        console.log(
-          "[selectDropdownOption] 📦 Cargando polígonos de:",
-          countryIso,
-        );
-
-        const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(
+                const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(
           countryIso,
           countryIso,
         );
-        console.log(
-          "[selectDropdownOption] ✅",
-          subdivisionPolygons.length,
-          "polígonos nivel 2 cargados",
-        );
-
-        // 5. Buscar el feature de la subdivisión
-        console.log("[selectDropdownOption] 🔍 Buscando subdivisión:", {
-          optionId: option.id,
-          parts,
-          countryIso,
-          searchingFor: parts[1],
-        });
-
-        const subdivisionFeature = subdivisionPolygons.find((poly) => {
+                // 5. Buscar el feature de la subdivisión
+                const subdivisionFeature = subdivisionPolygons.find((poly) => {
           const props = poly?.properties || {};
           let id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
           if (id1 && String(id1).includes(".")) {
@@ -4626,30 +3720,11 @@
           const fullId = `${countryIso}.${id1}`;
           const matches = option.id === fullId || String(id1) === parts[1];
           if (matches) {
-            console.log("[selectDropdownOption] ✅ Match encontrado:", {
-              id1,
-              fullId,
-              name: props.NAME_1 || props.name_1,
-            });
-          }
+                      }
           return matches;
         });
 
         if (!subdivisionFeature) {
-          console.log(
-            "[selectDropdownOption] ❌ No se encontró el feature de la subdivisión",
-          );
-          console.log(
-            "[selectDropdownOption] 📊 IDs disponibles:",
-            subdivisionPolygons.slice(0, 5).map((p) => {
-              const props = p?.properties || {};
-              let id1 = props.ID_1 || props.id_1 || props.GID_1 || props.gid_1;
-              if (id1 && String(id1).includes(".")) {
-                id1 = String(id1).split(".").pop();
-              }
-              return { id: id1, name: props.NAME_1 || props.name_1 };
-            }),
-          );
           return;
         }
 
@@ -4697,11 +3772,7 @@
         }
 
         // 7. Navegación con NavigationManager (ANTES del zoom)
-        console.log(
-          "[selectDropdownOption] 🧭 Navegando con NavigationManager...",
-        );
-
-        // Verificar si tiene subdivisiones (nivel 3)
+                // Verificar si tiene subdivisiones (nivel 3)
         const hasSubdivisions = await (async () => {
           try {
             const resp = await fetch(
@@ -4714,26 +3785,11 @@
           }
         })();
 
-        console.log(
-          "[selectDropdownOption] 📂 hasSubdivisions:",
-          hasSubdivisions,
-        );
-
-        if (hasSubdivisions) {
+                if (hasSubdivisions) {
           // Navegar a subdivisión
-          console.log(
-            "[selectDropdownOption] ➡️ Navegando a subdivisión:",
-            subdivisionName,
-          );
-
-          // SIEMPRE establecer contexto de país primero para navegación correcta
+                    // SIEMPRE establecer contexto de país primero para navegación correcta
           // selectedCountryName ya fue actualizado en el paso 6
-          console.log(
-            "[selectDropdownOption] 🌍 Navegando primero al país:",
-            countryIso,
-            selectedCountryName,
-          );
-          let countryNameFallback: string = selectedCountryName || countryIso;
+                    let countryNameFallback: string = selectedCountryName || countryIso;
           if (!countryNameFallback) {
             const cf = worldPolygons?.find((p) => isoOf(p) === countryIso);
             if (cf) {
@@ -4768,12 +3824,7 @@
         } else {
           // Solo navegar al país y activar polígono centrado
           // selectedCountryName ya fue actualizado en el paso 6
-          console.log(
-            "[selectDropdownOption] ➡️ Navegando a país (sin subdivisiones):",
-            countryIso,
-            selectedCountryName,
-          );
-          let countryNameFallback: string = selectedCountryName || countryIso;
+                    let countryNameFallback: string = selectedCountryName || countryIso;
           if (!countryNameFallback) {
             const cf = worldPolygons?.find((p) => isoOf(p) === countryIso);
             if (cf) {
@@ -4804,7 +3855,6 @@
         const adaptiveAltitude =
           calculateAdaptiveZoomSubdivision(subdivisionFeature);
         const targetAlt = Math.max(0.12, adaptiveAltitude);
-        console.log("[selectDropdownOption] 📸 Haciendo zoom a:", option.name);
         scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
 
         // 9. 🗺️ DURANTE EL ZOOM: Cargar polígonos con promesas (no setTimeout)
@@ -4818,39 +3868,21 @@
           if (hasSubdivisions) {
             // TIENE SUBDIVISIONES (ej: Andalucía tiene provincias)
             // Cargar polígonos de nivel 3
-            console.log(
-              "[selectDropdownOption] 🗺️ Cargando polígonos nivel 3 (subdivisión con subdivisiones)...",
-            );
-            try {
+                        try {
               const level3Polygons = await loadSubregionTopoAsGeoFeatures(
                 countryIso,
                 subdivisionId,
               );
               if (level3Polygons && level3Polygons.length > 0) {
                 polygonsToLoad = level3Polygons;
-                console.log(
-                  "[selectDropdownOption] ✅",
-                  level3Polygons.length,
-                  "polígonos nivel 3 cargados",
-                );
-              } else {
-                console.log(
-                  "[selectDropdownOption] ⚠️ No hay polígonos nivel 3, usando nivel 2",
-                );
-              }
+                              } else {
+                              }
             } catch (error) {
-              console.warn(
-                "[selectDropdownOption] ⚠️ Error cargando nivel 3, usando nivel 2:",
-                error,
-              );
-            }
+                          }
           } else {
             // NO TIENE SUBDIVISIONES
             // Usar solo los polígonos de nivel 2
-            console.log(
-              "[selectDropdownOption] 🗺️ Cargando polígonos nivel 2 DURANTE el zoom...",
-            );
-          }
+                      }
 
           // Actualizar localPolygons
           localPolygons = polygonsToLoad;
@@ -4866,13 +3898,7 @@
 
             // Cargar nuevos polígonos
             globe.setPolygonsData(polygonsToLoad);
-            console.log(
-              "[selectDropdownOption] ✅ Globo actualizado con",
-              polygonsToLoad.length,
-              "polígonos",
-            );
-
-            // CRÍTICO: Esperar 2 frames para que los polígonos se rendericen completamente
+                        // CRÍTICO: Esperar 2 frames para que los polígonos se rendericen completamente
             await new Promise((resolve) => requestAnimationFrame(resolve));
             await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -4890,38 +3916,21 @@
               colors: colorMap,
             });
             isoDominantKey = vm.isoDominantKey;
-            console.log(
-              "[selectDropdownOption] 🔑 isoDominantKey recalculado:",
-              Object.keys(isoDominantKey).length,
-              "claves",
-            );
-
-            // Actualizar colores DESPUÉS de que los polígonos estén renderizados
+                        // Actualizar colores DESPUÉS de que los polígonos estén renderizados
             await updateGlobeColors(true);
 
             // Esperar otro frame antes del refresh de colores
             await new Promise((resolve) => requestAnimationFrame(resolve));
 
             globe?.refreshPolyColors?.();
-            console.log(
-              "[selectDropdownOption] 🎨 Colores aplicados para nivel 2",
-            );
-
-            // Activar centro si aplica
+                        // Activar centro si aplica
             if (centerPolygonId) {
               addCenterPolygonLabel();
             }
           } else {
-            console.error(
-              "[selectDropdownOption] ❌ Globe o setPolygonsData no disponible!",
-            );
-          }
+                      }
         } catch (error) {
-          console.error(
-            "[selectDropdownOption] ❌ Error cargando polígonos nivel 2:",
-            error,
-          );
-        }
+                  }
 
         // ✅ Código simplificado - navegación DIRECTA implementada arriba
       }
@@ -4999,7 +4008,6 @@
 
   async function generateWorldCountryLabels(altitude: number) {
     // En nivel mundial NO debe haber polígono centrado activo, pero por si acaso
-    console.log("[Labels] Generando etiquetas de países mundiales...");
 
     try {
       if (!worldPolygons?.length) return;
@@ -5027,19 +4035,12 @@
         })
         .filter((label) => label.text);
 
-      console.log("[Labels] Total países con nombre:", allLabels.length);
 
       // MOSTRAR TODOS los países, no filtrar por datos
       subdivisionLabels = allLabels;
 
-      console.log(
-        "[Labels] Etiquetas mundiales asignadas:",
-        subdivisionLabels.length,
-      );
-      updateSubdivisionLabels(true);
-      console.log("[Labels] updateSubdivisionLabels(true) ejecutado");
-    } catch (e) {
-      console.warn("[Labels] Error generating world country labels:", e);
+            updateSubdivisionLabels(true);
+          } catch (e) {
     }
   }
 
@@ -5081,7 +4082,6 @@
       subdivisionLabels = labels;
       updateSubdivisionLabels(true);
     } catch (e) {
-      console.warn("[Labels] Error generating country name label:", e);
     }
   }
 
@@ -5140,7 +4140,6 @@
       subdivisionLabels = labels;
       updateSubdivisionLabels(true);
     } catch (e) {
-      console.warn("[Labels] Error generating subdivision name label:", e);
     }
   }
 
@@ -5148,12 +4147,7 @@
     iso: string,
     pov: { lat: number; lng: number; altitude: number },
   ) {
-    console.log(
-      "[Labels] Generando etiquetas de subdivisiones para país:",
-      iso,
-    );
-
-    try {
+        try {
       // Level 1 subdivisions are in ISO.topojson (e.g., RUS.topojson, ESP.topojson)
       // First try to get from NavigationManager cache
       let countryPolygons = navigationManager?.["polygonCache"]?.get(iso);
@@ -5163,12 +4157,7 @@
         try {
           countryPolygons = await loadSubregionTopoAsGeoFeatures(iso, iso);
         } catch (e) {
-          console.warn(
-            "[Labels] Could not load subdivision file:",
-            `${iso}.topojson`,
-            e,
-          );
-          return;
+                    return;
         }
       }
 
@@ -5183,15 +4172,10 @@
           subdivisionLabels = allLabels;
           updateSubdivisionLabels(true);
         } else {
-          console.log(
-            "[Labels] No hay subdivisiones con datos para mostrar etiquetas",
-          );
-        }
+                  }
       } else {
-        console.log("[Labels] No hay polígonos de subdivisión cargados");
       }
     } catch (e) {
-      console.warn("[Labels] Error generating country subdivision labels:", e);
     }
   }
 
@@ -5200,13 +4184,7 @@
     subdivisionId: string,
     pov: { lat: number; lng: number; altitude: number },
   ) {
-    console.log(
-      "[Labels] Generando etiquetas de sub-subdivisiones para:",
-      countryIso,
-      subdivisionId,
-    );
-
-    try {
+        try {
       // For sub-subdivisions, look for separate files like ESP.1.topojson, RUS.40.topojson, etc.
       // Extract the numeric part from subdivisionId (e.g., "RUS.40" -> "40", "ESP.1" -> "1")
       const numericPart = subdivisionId.split(".").pop();
@@ -5271,7 +4249,6 @@
 
       // Fallback: keep current subdivision labels (level 1)
     } catch (e) {
-      console.warn("[Labels] Error generating sub-subdivision labels:", e);
     }
   }
 
@@ -5301,7 +4278,6 @@
           await ensureSubregionPolygons(pov);
           updateMarkers(true);
         } catch (e) {
-          console.warn("[Movement] Error updating after map stop:", e);
         }
       }
     }, MAP_STOP_DELAY);
@@ -5407,13 +4383,7 @@
       // Es un territorio especial sin subdivisiones?
       const isSpecial =
         SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(selectedCountryIso);
-      console.log(
-        "[hasSubdivisions] País:",
-        selectedCountryIso,
-        "isSpecial:",
-        isSpecial,
-      );
-      return !isSpecial;
+            return !isSpecial;
     }
 
     // NIVEL SUBDIVISIÓN: Verificar si la subdivisión tiene sub-subdivisiones (nivel 3)
@@ -5423,12 +4393,7 @@
       // Esto es una aproximación - en producción podrías hacer una verificación real
       // Por ahora, asumir que las subdivisiones de primer nivel NO tienen hijos
       // (esto es cierto para la mayoría de países en el dataset actual)
-      console.log(
-        "[hasSubdivisions] Subdivisión:",
-        selectedSubdivisionId,
-        "- asumiendo sin hijos",
-      );
-      return false; // La mayoría de subdivisiones nivel 2 no tienen nivel 3
+            return false; // La mayoría de subdivisiones nivel 2 no tienen nivel 3
     }
 
     // NIVEL CIUDAD: Las ciudades nunca tienen subdivisiones
@@ -5495,22 +4460,11 @@
 
   // Función para cerrar la encuesta activa y volver a modo trending
   async function closePoll(skipTrendingLoad = false) {
-    console.log(
-      "[closePoll] 🔄 INICIO | skipTrendingLoad:",
-      skipTrendingLoad,
-      "isClosingPoll:",
-      isClosingPoll,
-      "isNavigatingFromHistory:",
-      isNavigatingFromHistory,
-    );
-
-    // Activar flag para prevenir que el watcher reaccione
+        // Activar flag para prevenir que el watcher reaccione
     isClosingPoll = true;
-    console.log("[closePoll] 🚫 Flag isClosingPoll activado");
 
     // Resetear el ID ANTES de hacer pushState para evitar que el watcher reaccione
     lastProcessedPollId = null;
-    console.log("[closePoll] 🔄 lastProcessedPollId reseteado a null");
 
     // HISTORY API: Volver a modo trending (solo si no viene de popstate y no se va a abrir otra encuesta)
     if (!isNavigatingFromHistory && !skipTrendingLoad) {
@@ -5521,16 +4475,14 @@
 
       // Solo navegar si la URL es diferente
       if (currentUrl !== "/") {
-        console.log("[History] 🔄 Volviendo a modo trending con goto()");
-        // Usar goto() en lugar de pushState para que $page se actualice
+                // Usar goto() en lugar de pushState para que $page se actualice
         await goto("/", {
           replaceState: false,
           noScroll: true,
           keepFocus: true,
         });
       } else {
-        console.log("[History] ⏭️ URL ya es /, skipping goto()");
-      }
+              }
     }
 
     // FASE 3: Limpiar contexto de encuesta usando store
@@ -5593,18 +4545,10 @@
       cachedUserCountryCentroid &&
       cachedUserCountryIso
     ) {
-      console.log(
-        "[closePoll] 💾 Usando ubicación del usuario desde cache:",
-        cachedUserCountryIso,
-      );
-      userCountryCentroid = cachedUserCountryCentroid;
+            userCountryCentroid = cachedUserCountryCentroid;
       userCountryIso = cachedUserCountryIso;
     } else {
-      console.log(
-        "[closePoll] 🔍 Detectando ubicación del usuario por IP (primera vez)...",
-      );
-
-      try {
+            try {
         // Usar geolocalización por IP (no requiere permisos)
         const response = await fetch("https://ipapi.co/json/", {
           signal: AbortSignal.timeout(3000),
@@ -5616,23 +4560,9 @@
           const longitude = data.longitude;
           const countryCode = data.country_code; // ISO2
 
-          console.log(
-            "[closePoll] 📍 Ubicación por IP:",
-            latitude,
-            longitude,
-            "País:",
-            countryCode,
-          );
-
-          // Buscar el país más cercano a estas coordenadas
+                    // Buscar el país más cercano a estas coordenadas
           if (worldPolygons && worldPolygons.length > 0) {
-            console.log(
-              "[closePoll] 🗺️ Buscando país entre",
-              worldPolygons.length,
-              "polígonos",
-            );
-
-            // Intentar buscar por código ISO primero
+                        // Intentar buscar por código ISO primero
             let closestCountry = worldPolygons.find((poly: any) => {
               const props = poly.properties || {};
               return (
@@ -5667,29 +4597,19 @@
                 closestCountry.properties?.ISO_A3 ||
                 closestCountry.properties?.iso_a3 ||
                 null;
-              console.log(
-                "[closePoll] 🌍 País encontrado:",
-                userCountryIso,
-                "en",
-                userCountryCentroid,
-              );
-
-              // GUARDAR EN CACHE
+                            // GUARDAR EN CACHE
               cachedUserCountryCentroid = userCountryCentroid;
               cachedUserCountryIso = userCountryIso;
               userLocationDetected = true;
-              console.log("[closePoll] 💾 Ubicación guardada en cache");
             }
           }
         }
       } catch (error) {
-        console.log("[closePoll] ⚠️ Error al detectar ubicación:", error);
       }
     }
 
     // Hacer zoom al país del usuario o a coordenadas por defecto
     if (userCountryCentroid && userCountryIso) {
-      console.log("[closePoll] 🎯 Enfocando país del usuario:", userCountryIso);
       setTimeout(() => {
         globe?.pointOfView(
           {
@@ -5701,7 +4621,6 @@
         );
       }, 300);
     } else {
-      console.log("[closePoll] 🌍 Usando vista mundial por defecto");
       setTimeout(() => {
         globe?.pointOfView({ lat: 0, lng: 0, altitude: 2.0 }, 1000);
       }, 300);
@@ -5711,34 +4630,19 @@
 
     // Cargar datos de trending mundial (solo si no se va a abrir otra encuesta)
     if (!skipTrendingLoad) {
-      console.log("[closePoll] 📊 Cargando trending después de cerrar");
       await loadTrendingData();
       await updateGlobeColors();
     } else {
-      console.log(
-        "[closePoll] ⏭️ Saltando carga de trending (se abrirá otra encuesta)",
-      );
-    }
+          }
 
     // Desactivar flag al finalizar - esperar un tick para que el watcher procese primero
     await new Promise((resolve) => setTimeout(resolve, 100));
-    console.log("[closePoll] ✅ Desactivando flag isClosingPoll");
     isClosingPoll = false;
-    console.log("[closePoll] ✅ FIN | isClosingPoll:", isClosingPoll);
   }
 
   // Función para cargar datos de trending (múltiples encuestas agregadas)
   async function loadTrendingData() {
-    console.log("[loadTrendingData] 🚀 Iniciando carga de datos...");
-    console.log("[loadTrendingData] Tab activo:", activeTopTab);
-    console.log(
-      "[loadTrendingData] Usuario:",
-      userData?.username,
-      "ID:",
-      userData?.id,
-    );
-
-    try {
+        try {
       // Determinar qué API usar según el tab activo
       const hours = TIME_FILTER_HOURS[trendingTimeFilter];
       let apiUrl = `/api/polls/trending-by-region?region=Global&limit=20&hours=${hours}`;
@@ -5746,42 +4650,22 @@
       if (activeTopTab === "Para ti" && userData?.id) {
         // Si está en "Para ti" y hay usuario logueado, usar API personalizada
         apiUrl = `/api/polls/for-you?userId=${userData.id}&limit=20`;
-        console.log(
-          "[loadTrendingData] 🎯 Cargando recomendaciones personalizadas para usuario:",
-          userData.username,
-        );
-      } else if (activeTopTab === "Para ti" && !userData) {
+              } else if (activeTopTab === "Para ti" && !userData) {
         // Si está en "Para ti" pero no hay usuario, mostrar mensaje
-        console.log(
-          '[loadTrendingData] ℹ️ "Para ti" requiere usuario autenticado. Mostrando trending...',
-        );
-        // Usar trending como fallback
+                // Usar trending como fallback
       } else {
-        console.log(
-          "[loadTrendingData] 🌍 Cargando encuestas trending globales (últimos",
-          trendingTimeFilter,
-          ")",
-        );
-      }
+              }
 
-      console.log("[loadTrendingData] 📡 Llamando a API:", apiUrl);
 
       // Cargar encuestas desde la API correspondiente usando cliente seguro
       try {
         const { data: trendingPolls } = await apiGet(apiUrl);
-        console.log(
-          "[loadTrendingData] ✅ Respuesta recibida:",
-          trendingPolls?.length,
-          "encuestas",
-        );
-        await processTrendingPolls(trendingPolls);
+                await processTrendingPolls(trendingPolls);
         return;
       } catch (error: any) {
-        console.error("[GlobeGL] ❌ Error en API:", error.message);
 
         // Si falla "Para ti", hacer fallback automático a trending
         if (activeTopTab === "Para ti") {
-          console.log("[GlobeGL] 🔄 Fallback automático: usando Tendencias");
           try {
             const fallbackData = await apiGet(
               "/api/polls/trending-by-region?region=Global&limit=20",
@@ -5790,28 +4674,18 @@
             await processTrendingPolls(trendingPolls);
             return;
           } catch (fallbackError) {
-            console.error(
-              "[GlobeGL] ❌ Fallback también falló:",
-              fallbackError,
-            );
-            return;
+                        return;
           }
         }
         return;
       }
     } catch (error) {
-      console.error("[GlobeGL] ❌ Error cargando datos:", error);
     }
   }
 
   // Función auxiliar para procesar las encuestas trending
   async function processTrendingPolls(trendingPolls: any[]) {
-    console.log(
-      "[processTrendingPolls] 🔄 Procesando",
-      trendingPolls?.length,
-      "encuestas",
-    );
-    try {
+        try {
       // MODO TRENDING: Cada encuesta es una "opción"
       // Los países se pintan según qué encuesta tiene más votos totales
       const aggregatedData: Record<string, Record<string, number>> = {};
@@ -5897,16 +4771,9 @@
 
             // Forzar repintado inmediato
             globe?.refreshPolyColors?.();
-            console.log(
-              `[processTrendingPolls] 🎨 Pintado progresivo nivel 1: ${completedCount}/${trendingPolls.length} encuestas completadas`,
-            );
-          }
+                      }
         } catch (error) {
-          console.warn(
-            "[processTrendingPolls] Error loading poll data:",
-            error,
-          );
-        }
+                  }
       });
 
       // Esperar a que todas las encuestas terminen
@@ -5926,25 +4793,12 @@
       // Si no hay datos reales, NO generar fallback MOCK
       // El globo debe mostrar gris cuando no hay votos
       if (Object.keys(aggregatedData).length === 0) {
-        console.log(
-          "[processTrendingPolls] ⚠️ No hay votos reales - mostrando globo sin datos",
-        );
-        // NO generar datos MOCK - dejar aggregatedData vacío
+                // NO generar datos MOCK - dejar aggregatedData vacío
         // activePollOptions ya tiene las encuestas pero sin votos
       }
 
       // Actualizar datos globales
-      console.log("[processTrendingPolls] 📊 Actualizando datos globales...");
-      console.log(
-        "[processTrendingPolls] Países con datos:",
-        Object.keys(aggregatedData).length,
-      );
-      console.log(
-        "[processTrendingPolls] Encuestas activas:",
-        activePollOptions?.length,
-      );
-
-      answersData = aggregatedData;
+                  answersData = aggregatedData;
       colorMap = aggregatedColors;
 
       // CRÍTICO: Guardar en cache mundial para poder restaurar después
@@ -5987,25 +4841,15 @@
       // Si estamos en país/subdivisión, NO sobrescribir con polígonos mundiales
       const currentLevel = navigationManager?.getCurrentLevel();
       if (currentLevel === "world" && globe?.setPolygonsData) {
-        console.log(
-          "[processTrendingPolls] 🗺️ Actualizando polígonos mundiales (nivel: world)",
-        );
-        globe.setPolygonsData(worldPolygons);
+                globe.setPolygonsData(worldPolygons);
       } else {
-        console.log(
-          "[processTrendingPolls] ⏭️ Saltando actualización de polígonos (nivel:",
-          currentLevel,
-          ")",
-        );
-      }
+              }
 
       await updateGlobeColors();
       globe?.refreshPolyColors?.();
 
-      console.log("[processTrendingPolls] ✅ Colores actualizados en el globo");
     } catch (error) {
       // Error crítico cargando trending
-      console.error("[processTrendingPolls] ❌ Error loading trending:", error);
     }
   }
 
@@ -6083,10 +4927,7 @@
         // Añadir solo 150ms extra (suficiente para evitar falsos positivos)
         programmaticZoomTimeout = setTimeout(() => {
           isProgrammaticZoom = false;
-          console.log(
-            "[Zoom] ✅ Zoom programático completado, detector de zoom out reactivado",
-          );
-        }, pendingZoom.duration + 150);
+                  }, pendingZoom.duration + 150);
       }
       zoomTimeout = null;
     }, delay);
@@ -6143,11 +4984,7 @@
       votes: number;
     }>,
   ) {
-    console.log("[GlobeGL] 🌍 openPollInGlobe llamado directamente:", {
-      poll,
-      options,
-    });
-    const formattedOptions =
+        const formattedOptions =
       options ||
       poll.options?.map((opt: any) => ({
         key: opt.key || opt.optionKey,
@@ -6164,7 +5001,6 @@
 
   // Función pública exportable para abrir el BottomSheet
   export function openBottomSheet() {
-    console.log("[GlobeGL] 📊 openBottomSheet llamado - expandiendo sheet");
     if (sheetCtrl) {
       SHEET_STATE = "expanded";
       sheetCtrl.setState("expanded");
@@ -6193,21 +5029,10 @@
     // CRÍTICO: Esperar un tick antes de procesar para que el BottomSheet termine su transición
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    console.log("[HandleOpenPoll] 🔵 Llamada recibida:", {
-      pollId: poll?.id || "null",
-      currentActivePoll: activePoll?.id || "none",
-      optionsCount: options.length,
-      modoActual: activePoll ? "ENCUESTA_ESPECÍFICA" : "TRENDING",
-      fromHistory: isNavigatingFromHistory,
-    });
-
-    // Si poll es null (trending/main poll), cerrar encuesta activa
+        // Si poll es null (trending/main poll), cerrar encuesta activa
     if (!poll || !poll.id) {
       if (activePoll) {
-        console.log(
-          "[HandleOpenPoll] 🔄 Cerrando encuesta para mostrar trending",
-        );
-        await closePoll();
+                await closePoll();
       }
       // Cargar datos de trending
       await loadTrendingData();
@@ -6216,56 +5041,30 @@
 
     // Si es la misma encuesta Y NO viene del historial, no hacer nada
     if (activePoll && activePoll.id === poll.id && !isNavigatingFromHistory) {
-      console.log("[HandleOpenPoll] ⏭️ Misma encuesta ya abierta, saltando");
       return;
     }
 
     // Si viene del historial con la misma encuesta, forzar recarga
     if (activePoll && activePoll.id === poll.id && isNavigatingFromHistory) {
-      console.log(
-        "[HandleOpenPoll] 🔄 Recargando encuesta desde historial:",
-        poll.id,
-      );
-      // Continuar con la recarga completa
+            // Continuar con la recarga completa
     }
 
     // Si hay una encuesta diferente abierta, cerrarla primero SIN cargar trending
     if (activePoll && activePoll.id !== poll.id) {
-      console.log(
-        "[HandleOpenPoll] 🔄 Cerrando encuesta anterior:",
-        activePoll.id,
-        "→ nueva:",
-        poll.id,
-      );
-      await closePoll(true); // skipTrendingLoad = true
+            await closePoll(true); // skipTrendingLoad = true
     }
 
     // GUARDAR CONTEXTO DE ENCUESTA ACTIVA (MODO EXCLUSIVO)
-    console.log("[HandleOpenPoll] 📋 MODO ENCUESTA ESPECÍFICA ACTIVADO");
-    console.log(
-      "[HandleOpenPoll] Encuesta:",
-      poll.id,
-      "| Opciones:",
-      options.length,
-    );
-
-    // CARGAR DATOS COMPLETOS DE LA ENCUESTA DESDE LA API para obtener votos reales
+        // CARGAR DATOS COMPLETOS DE LA ENCUESTA DESDE LA API para obtener votos reales
     let pollDataFromApi = poll;
     try {
       const response = await apiCall(`/api/polls/${poll.id}`);
       if (response.ok) {
         const result = await response.json();
         pollDataFromApi = result.data || result;
-        console.log(
-          "[HandleOpenPoll] ✅ Datos de encuesta cargados desde API:",
-          pollDataFromApi.id,
-        );
-      }
+              }
     } catch (error) {
-      console.warn(
-        "[HandleOpenPoll] ⚠️ No se pudieron cargar datos de la API, usando datos iniciales",
-      );
-    }
+          }
 
     // Calcular totales de votos
     const totalVotes =
@@ -6274,7 +5073,6 @@
         0,
       ) || 0;
 
-    console.log("[HandleOpenPoll] 📊 Total de votos:", totalVotes);
 
     // CARGAR AMIGOS QUE VOTARON EN ESTA ENCUESTA (opcional)
     let friendsByOption = {};
@@ -6293,18 +5091,10 @@
           "/api/polls/" + poll.id + "/friends-votes?userId=" + currentUserId,
         );
         friendsByOption = friendsData.data || {};
-        console.log(
-          "[HandleOpenPoll] 👥 Amigos cargados para opciones:",
-          Object.keys(friendsByOption).length,
-        );
-      }
+              }
     } catch (e) {
       // Silenciar error - no es crítico si falla
-      console.debug(
-        "[HandleOpenPoll] Friends votes not available for poll",
-        poll.id,
-      );
-    }
+          }
 
     // CRÍTICO: Asegurar que poll.options también está formateado correctamente
     const formattedPoll = {
@@ -6333,16 +5123,7 @@
       }),
     };
 
-    console.log(
-      "[HandleOpenPoll] 📊 Opciones formateadas:",
-      formattedPoll.options.map((o: any) => ({
-        label: o.label,
-        votes: o.votes,
-        pct: Math.round(o.pct),
-      })),
-    );
-
-    // FASE 3: Usar store para abrir encuesta
+        // FASE 3: Usar store para abrir encuesta
     globalActivePoll.open(formattedPoll);
     activePollOptions = formattedPoll.options;
 
@@ -6356,16 +5137,14 @@
 
       // Solo navegar si la URL es diferente
       if (currentUrl !== url) {
-        console.log("[History] 📊 Abriendo encuesta con goto():", poll.id, url);
-        // Usar goto() en lugar de pushState para que $page se actualice
+                // Usar goto() en lugar de pushState para que $page se actualice
         await goto(url, {
           replaceState: false,
           noScroll: true,
           keepFocus: true,
         });
       } else {
-        console.log("[History] ⏭️ URL ya es correcta, skipping goto():", url);
-      }
+              }
     }
 
     // Actualizar colorMap con los colores de las opciones DE LA ENCUESTA
@@ -6376,12 +5155,7 @@
     });
     colorMap = newColorMap;
 
-    console.log(
-      "[HandleOpenPoll] ColorMap actualizado con opciones de encuesta:",
-      Object.keys(newColorMap),
-    );
-
-    // CARGAR DATOS REALES DE LA ENCUESTA DESDE LA API
+        // CARGAR DATOS REALES DE LA ENCUESTA DESDE LA API
     const newAnswersData: Record<string, Record<string, number>> = {};
 
     try {
@@ -6426,10 +5200,7 @@
 
           // Forzar repintado inmediato
           globe?.refreshPolyColors?.();
-          console.log(
-            `[HandleOpenPoll] 🎨 Pintado progresivo nivel 1: ${Math.min(i + batchSize, countries.length)}/${countries.length} países procesados`,
-          );
-        }
+                  }
       }
     } catch (error) {
       // Si falla la carga de datos, continuar
@@ -6439,20 +5210,12 @@
     worldLevelAnswers = newAnswersData;
     answersData = newAnswersData;
 
-    console.log(
-      "[OpenPoll] 📊 Encuesta abierta:",
-      poll.id,
-      "| Países con datos:",
-      Object.keys(newAnswersData).length,
-    );
-
-    // IDENTIFICAR EL TERRITORIO CON MÁS VOTOS PRIMERO
+        // IDENTIFICAR EL TERRITORIO CON MÁS VOTOS PRIMERO
     let topCountryIso: string | null = null;
     let topCountryCentroid: { lat: number; lng: number } | null = null;
     let maxVotes = 0;
 
     try {
-      console.log("[OpenPoll] 🔍 Buscando país con más votos...");
 
       // Calcular totales de votos por país
       const countryVoteTotals: Record<string, number> = {};
@@ -6464,13 +5227,7 @@
         countryVoteTotals[iso] = total;
       });
 
-      console.log(
-        "[OpenPoll] 📊 Totales por país:",
-        Object.keys(countryVoteTotals).length,
-        "países",
-      );
-
-      // Encontrar el país con más votos
+            // Encontrar el país con más votos
       Object.entries(countryVoteTotals).forEach(([iso, total]) => {
         if (total > maxVotes) {
           maxVotes = total;
@@ -6478,15 +5235,7 @@
         }
       });
 
-      console.log(
-        "[OpenPoll] 🏆 País con más votos:",
-        topCountryIso,
-        "con",
-        maxVotes,
-        "votos",
-      );
-
-      if (topCountryIso && worldPolygons && worldPolygons.length > 0) {
+            if (topCountryIso && worldPolygons && worldPolygons.length > 0) {
         // Buscar el polígono del país
         const countryPolygon = worldPolygons.find((p: any) => {
           const props = p.properties || {};
@@ -6506,14 +5255,9 @@
 
         if (countryPolygon) {
           topCountryCentroid = calculatePolygonCentroid(countryPolygon);
-          console.log(
-            "[OpenPoll] 📍 Centroide del país con más votos:",
-            topCountryCentroid,
-          );
-        }
+                  }
       }
     } catch (error) {
-      console.error("[OpenPoll] ❌ Error al buscar país con más votos:", error);
     }
 
     // NAVEGAR A VISTA MUNDIAL con enfoque directo al país con más votos
@@ -6540,21 +5284,11 @@
     intensityMin = vm.intensityMin;
     intensityMax = vm.intensityMax;
 
-    console.log(
-      "[OpenPoll] 🎨 Colores calculados para",
-      Object.keys(isoDominantKey).length,
-      "países",
-    );
-
-    // HACER UNA SOLA TRANSICIÓN DIRECTA AL PAÍS CON MÁS VOTOS
+        // HACER UNA SOLA TRANSICIÓN DIRECTA AL PAÍS CON MÁS VOTOS
     if (topCountryCentroid && topCountryIso) {
       const focusAltitude = 1.7; // Altitud para mantener vista amplia del mundo
 
-      console.log(
-        `[OpenPoll] 🎯 Enfocando ${topCountryIso} (${maxVotes} votos) en lat:${topCountryCentroid.lat.toFixed(2)}, lng:${topCountryCentroid.lng.toFixed(2)}, alt:${focusAltitude}`,
-      );
-
-      // Hacer la transición inmediatamente
+            // Hacer la transición inmediatamente
       setTimeout(() => {
         globe?.pointOfView(
           {
@@ -6599,7 +5333,6 @@
 
     // Si viene del historial, forzar refresh completo del globo
     if (isNavigatingFromHistory) {
-      console.log("[OpenPoll] 🔄 Forzando refresh del globo desde historial");
       await tick();
 
       // Asegurar que los polígonos mundiales están cargados
@@ -6630,10 +5363,7 @@
     // CRÍTICO: Asegurar que el controlador del BottomSheet está listo después de todas las animaciones
     setTimeout(() => {
       if (sheetCtrl) {
-        console.log(
-          "[HandleOpenPoll] ✅ Reset del estado del BottomSheet controller",
-        );
-        // Limpiar cualquier estado de drag que pueda haber quedado activo
+                // Limpiar cualquier estado de drag que pueda haber quedado activo
         sheetCtrl.resetDragState();
       }
     }, 1200); // Después de que termine el zoom (1000ms) + margen
@@ -6692,7 +5422,6 @@
       const saved = localStorage.getItem("voutop-theme");
       if (saved) {
         const parsed = JSON.parse(saved);
-        console.log("[GlobeGL] Inicializando con tema guardado:", parsed);
 
         // Todas las paletas oscuras (deben coincidir con UnifiedThemeToggle)
         const darkPalettes = [
@@ -7184,12 +5913,9 @@
 
         const palettes = parsed.isDark ? darkPalettes : lightPalettes;
         const palette = palettes[parsed.paletteIndex] || darkPalettes[0];
-        console.log("[GlobeGL] Paleta inicial seleccionada:", palette.name);
-        console.log("[GlobeGL] isDark del tema guardado:", parsed.isDark);
         return { ...palette, isDark: parsed.isDark };
       }
     } catch (e) {
-      console.warn("[GlobeGL] Error al cargar tema inicial:", e);
     }
     // Default: Carbon oscuro
     return {
@@ -7230,20 +5956,13 @@
   function updateColorsForTheme() {
     // No sobrescribir si hay un tema guardado que aún no se ha aplicado
     if (hasLoadedSavedTheme) {
-      console.log(
-        "[GlobeGL] Ignorando updateColorsForTheme - tema guardado ya cargado",
-      );
-      return;
+            return;
     }
 
     const isDark = document.documentElement.classList.contains("dark");
     isDarkTheme = isDark; // Actualizar estado del tema
 
-    console.log(
-      "[GlobeGL] updateColorsForTheme ejecutado - cargando desde theme.json",
-    );
-
-    // Cargar colores desde theme.json
+        // Cargar colores desde theme.json
     const theme = themeConfig.theme.colors;
     const globeConfig = isDark ? theme.globe : theme.globeLight;
 
@@ -7342,14 +6061,7 @@
         name = props.NAME || props.name || props.ADMIN || props.admin;
       }
 
-      console.log(
-        "[CenterLabel] Nombre obtenido:",
-        name,
-        "| ID:",
-        centerPolygonId,
-      );
-
-      // Crear etiqueta destacada con estilo profesional
+            // Crear etiqueta destacada con estilo profesional
       const centerLabel: SubdivisionLabel = {
         lat: centroid.lat,
         lng: centroid.lng,
@@ -7367,7 +6079,6 @@
       // Actualizar en el globo
       updateSubdivisionLabels(true);
     } catch (error) {
-      console.warn("[CenterLabel] Error agregando etiqueta:", error);
     }
   }
 
@@ -7383,28 +6094,12 @@
       // Actualizar en el globo (ocultar todas)
       updateSubdivisionLabels(false);
     } catch (error) {
-      console.warn("[CenterLabel] Error removiendo etiqueta:", error);
     }
   }
   // Función SIMPLE: mostrar UNA etiqueta del primer polígono con datos
   function showFirstLabelWithData(polygons: any[]) {
     try {
-      console.log(
-        "[FirstLabel] 🔍 Buscando primer polígono con datos entre",
-        polygons.length,
-        "polígonos",
-      );
-      console.log(
-        "[FirstLabel] 📊 answersData tiene",
-        Object.keys(answersData || {}).length,
-        "claves",
-      );
-      console.log(
-        "[FirstLabel] 📊 Primeras 10 claves de answersData:",
-        Object.keys(answersData || {}).slice(0, 10),
-      );
-
-      let checkedCount = 0;
+                        let checkedCount = 0;
 
       for (const poly of polygons) {
         const props = poly.properties;
@@ -7421,10 +6116,7 @@
           const name2 =
             props.NAME_2 || props.name_2 || props.VARNAME_2 || props.varname_2;
           const name = props.NAME || props.name || props.ADMIN || props.admin;
-          console.log(
-            `[FirstLabel] Polígono #${checkedCount}: ID="${polyId}", tiene datos=${!!answersData?.[polyId]}, nombre="${name1 || name2 || name || "Sin nombre"}"`,
-          );
-        }
+                  }
 
         // Verificar si tiene datos
         if (!polyId || !answersData?.[polyId]) continue;
@@ -7456,9 +6148,7 @@
         if (!centroid) continue;
 
         // ENCONTRADO - Mostrar solo esta etiqueta
-        console.log("[FirstLabel] ✅ Encontrado:", name, "(ID:", polyId + ")");
-
-        subdivisionLabels = [
+                subdivisionLabels = [
           {
             lat: centroid.lat,
             lng: centroid.lng,
@@ -7475,9 +6165,7 @@
         return; // Ya terminamos
       }
 
-      console.log("[FirstLabel] ❌ No se encontró ningún polígono con datos");
     } catch (e) {
-      console.warn("[FirstLabel] ❌ Error:", e);
     }
   }
 
@@ -7495,10 +6183,7 @@
         // Si no detecta polígono (polígono pequeño o no hay en centro exacto)
         // buscar directamente el más cercano, especialmente si forceActivate=true
         if (!detected || !detected.properties) {
-          console.log(
-            "[AutoSelect] No se detectó polígono centrado, buscando el más cercano",
-          );
-          findClosestPolygonWithData(currentLevel, true); // Forzar búsqueda inmediata
+                    findClosestPolygonWithData(currentLevel, true); // Forzar búsqueda inmediata
           return;
         }
 
@@ -7518,13 +6203,7 @@
                 props.adm0_a3 ||
                 "",
             ).toUpperCase();
-            console.log(
-              "[AutoSelect] Nivel mundial - ID detectado:",
-              detectedId,
-              "de:",
-              { ISO3_CODE: props.ISO3_CODE, NAME_ENGL: props.NAME_ENGL },
-            );
-          } else if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
+                      } else if (props.ID_2 || props.id_2 || props.GID_2 || props.gid_2) {
             // Nivel 3 o 4: tiene ID_2
             detectedId = String(
               props.ID_2 || props.id_2 || props.GID_2 || props.gid_2,
@@ -7551,26 +6230,13 @@
             isCenterPolygonActive = true;
             globe?.refreshPolyAltitudes?.();
             addCenterPolygonLabel();
-            console.log(
-              "[AutoSelect] Polígono centrado activado:",
-              detectedId,
-              "en nivel:",
-              currentLevel,
-            );
-          } else {
-            console.log(
-              "[AutoSelect] Polígono sin datos, buscando el más cercano:",
-              detectedId,
-              "nivel:",
-              currentLevel,
-            );
-            // Si el centrado no tiene datos, buscar el más cercano que sí tenga (forzado)
+                      } else {
+                        // Si el centrado no tiene datos, buscar el más cercano que sí tenga (forzado)
             findClosestPolygonWithData(currentLevel, true);
           }
         }
         // Nota: El caso "no hay polígono detectado" ya se maneja arriba con return
       } catch (e) {
-        console.warn("[AutoSelect] Error auto-seleccionando polígono:", e);
       }
     });
   }
@@ -7589,17 +6255,11 @@
       const now = performance.now();
       const timeSinceLastSearch = now - lastClosestSearch;
       if (timeSinceLastSearch < CLOSEST_SEARCH_THROTTLE) {
-        console.log(
-          "[FindClosest] ⏱️ Throttle activo, esperando:",
-          (CLOSEST_SEARCH_THROTTLE - timeSinceLastSearch).toFixed(0),
-          "ms",
-        );
-        return;
+                return;
       }
       lastClosestSearch = now;
     } else {
-      console.log("[FindClosest] 🚀 Búsqueda forzada (sin throttle)");
-    }
+          }
 
     try {
       const pov = globe?.pointOfView();
@@ -7614,53 +6274,26 @@
       // Obtener los polígonos según el nivel
       if (currentLevel === "world") {
         polygonsToCheck = worldPolygons || [];
-        console.log(
-          "[FindClosest] Nivel mundial, polígonos disponibles:",
-          polygonsToCheck.length,
-        );
-      } else if (currentLevel === "country") {
+              } else if (currentLevel === "country") {
         if (state?.countryIso) {
           polygonsToCheck =
             navigationManager?.["polygonCache"]?.get(state.countryIso) || [];
-          console.log(
-            "[FindClosest] Nivel país, polígonos disponibles:",
-            polygonsToCheck.length,
-          );
-        }
+                  }
       } else if (currentLevel === "subdivision") {
         if (isLevel4) {
           // Nivel 4: subdivisiones de una subdivisión
           const cacheKey = `${state.countryIso}.${state.subdivisionId}`;
           polygonsToCheck =
             navigationManager?.["polygonCache"]?.get(cacheKey) || [];
-          console.log("[FindClosest] Nivel 4 (sub-subdivisión)", {
-            cacheKey: cacheKey,
-            countryIso: state.countryIso,
-            subdivisionId: state.subdivisionId,
-            polígonos: polygonsToCheck.length,
-            cacheKeys: Array.from(
-              navigationManager?.["polygonCache"]?.keys() || [],
-            ),
-          });
-        } else if (state?.countryIso) {
+                  } else if (state?.countryIso) {
           // Nivel 3: subdivisiones de un país
           polygonsToCheck =
             navigationManager?.["polygonCache"]?.get(state.countryIso) || [];
-          console.log("[FindClosest] Nivel 3 (subdivisión)", {
-            countryIso: state.countryIso,
-            polígonos: polygonsToCheck.length,
-          });
-        }
+                  }
       }
 
       if (!polygonsToCheck.length) {
-        console.log(
-          "[FindClosest] No hay polígonos disponibles para buscar en nivel:",
-          currentLevel,
-          "isLevel4:",
-          isLevel4,
-        );
-        return;
+                return;
       }
 
       // Calcular distancias y encontrar el más cercano con datos
@@ -7680,19 +6313,7 @@
 
         // Log de propiedades del primer polígono para debug
         if (polygonsWithId === 0 && currentLevel === "world") {
-          console.log(
-            "[FindClosest] 🔍 PRIMER POLÍGONO - Todas las claves:",
-            Object.keys(props),
-          );
-          console.log(
-            "[FindClosest] 🔍 PRIMER POLÍGONO - Objeto completo:",
-            props,
-          );
-          console.log(
-            "[FindClosest] 🔍 PRIMER POLÍGONO - Polígono completo:",
-            poly,
-          );
-        }
+                                      }
 
         // Lógica de detección de ID según el nivel
         let polyId = "";
@@ -7752,53 +6373,20 @@
 
       // Logging de estadísticas detallado
       const answersDataKeys = Object.keys(answersData || {});
-      console.log("[FindClosest] Estadísticas:", {
-        nivel: currentLevel,
-        isLevel4: isLevel4,
-        totalPolígonos: polygonsToCheck.length,
-        conID: polygonsWithId,
-        conDatos: polygonsWithData,
-        encontrado: !!closestId,
-      });
-      console.log(
-        "[FindClosest] IDs encontrados (muestra):",
-        foundIds.slice(0, 10),
-      );
-      console.log("[FindClosest] IDs con datos:", idsWithData);
-      console.log(
-        "[FindClosest] answersData keys (muestra):",
-        answersDataKeys.slice(0, 20),
-      );
-
-      // Activar el polígono más cercano si se encontró
+                        // Activar el polígono más cercano si se encontró
       if (closestPolygon && closestId) {
         centerPolygon = closestPolygon;
         centerPolygonId = closestId;
         isCenterPolygonActive = true;
         globe?.refreshPolyAltitudes?.();
         addCenterPolygonLabel();
-        console.log(
-          "[FindClosest] ✅ Polígono más cercano activado:",
-          closestId,
-          "distancia:",
-          minDistance.toFixed(3),
-          "nivel:",
-          isLevel4 ? "4" : currentLevel,
-        );
-      } else {
-        console.log(
-          "[FindClosest] ❌ No se encontró ningún polígono con datos",
-        );
-        // FALLBACK: Si no encontramos ninguno pero hay polígonos con datos, mostrar UNA etiqueta
+              } else {
+                // FALLBACK: Si no encontramos ninguno pero hay polígonos con datos, mostrar UNA etiqueta
         if (polygonsWithData > 0 && idsWithData.length > 0) {
-          console.log(
-            "[FindClosest] 🔄 FALLBACK: Mostrando etiqueta del primer polígono con datos",
-          );
-          showFirstLabelWithData(polygonsToCheck);
+                    showFirstLabelWithData(polygonsToCheck);
         }
       }
     } catch (e) {
-      console.warn("[FindClosest] Error buscando polígono más cercano:", e);
     }
   }
 
@@ -8019,25 +6607,16 @@
 
   // Handler para cambio de tab "Para ti" / "Tendencias"
   async function handleTopTabChange(event: CustomEvent<string>) {
-    console.log("[handleTopTabChange] 📥 Evento recibido:", event.detail);
     const newTab = event.detail as "Para ti" | "Tendencias" | "Live";
 
-    console.log(
-      "[handleTopTabChange] Tab actual (antes de binding):",
-      activeTopTab,
-    );
-    console.log("[handleTopTabChange] Tab nuevo:", newTab);
-
-    // IMPORTANTE: No comparar con activeTopTab porque bind:active ya lo actualizó
+        // IMPORTANTE: No comparar con activeTopTab porque bind:active ya lo actualizó
     // Solo verificar que el tab sea válido
 
-    console.log("[handleTopTabChange] 🔄 Tab cambiado a:", newTab);
     // activeTopTab ya está actualizado por bind:active, no hace falta setearlo aquí
 
     // En modo trending (nivel mundial), SIEMPRE recargar al cambiar tab
     // Esto permite cambiar entre "Para ti" y "Tendencias" dinámicamente
     if (navigationState.level === "world") {
-      console.log("[GlobeGL] 🔃 Recargando encuestas para nuevo tab...");
 
       // FASE 3: Limpiar la encuesta activa usando store para forzar modo trending
       globalActivePoll.close();
@@ -8047,10 +6626,7 @@
       await updateGlobeColors(true); // Con fade
     } else {
       // Si estás en nivel regional (país o subdivisión), mantener la vista actual
-      console.log(
-        "[GlobeGL] ℹ️ En nivel regional - el cambio de tab se aplicará al volver a nivel mundial",
-      );
-    }
+          }
   }
 
   // Activar/desactivar teselas OSM según visibilidad de polígonos
@@ -8066,21 +6642,12 @@
   // FASE 3: Refactorizado para usar GeocodeService
   async function locateMe() {
     try {
-      console.log("[GlobeGL] 📍 Obteniendo ubicación con GeocodeService...");
 
       // Usar el servicio de geolocalización con fallbacks automáticos
       const { location, geocode } =
         await geocodeService.getLocationAndGeocode();
 
-      console.log("[GlobeGL] ✅ Ubicación obtenida:", {
-        source: location.source,
-        lat: location.latitude,
-        lon: location.longitude,
-        accuracy: location.accuracy,
-        subdivision: geocode.subdivisionName,
-      });
-
-      const lat = location.latitude;
+            const lat = location.latitude;
       const lng = location.longitude;
 
       // Detener cualquier rotación automática antes de mover la cámara
@@ -8101,7 +6668,6 @@
         );
       }
     } catch (e) {
-      console.error("[GlobeGL] ❌ Error en locateMe:", e);
       alert(
         "No se pudo obtener tu ubicación. Revisa permisos de ubicación del navegador.",
       );
@@ -8219,35 +6785,24 @@
   async function loadCountryTopoAsGeoFeatures(iso: string): Promise<any[]> {
     // Verificar si es un territorio especial sin subdivisiones
     if (SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(iso)) {
-      console.log(
-        `[LoadTopo] 🏝️ Territorio especial sin subdivisiones: ${iso}`,
-      );
-      console.log(
-        `[LoadTopo] ✅ Retornando array vacío (navegación permitida sin subdivisiones)`,
-      );
-      return [];
+                  return [];
     }
 
     const path = getCountryPath(iso);
-    console.log(`[LoadTopo] Cargando ${iso}...`);
 
     const resp = await fetch(path);
     if (!resp.ok) {
-      console.error(`[LoadTopo] ❌ HTTP ${resp.status} al cargar ${path}`);
       throw new Error("HTTP " + resp.status + " al cargar " + path);
     }
 
-    console.log(`[LoadTopo] Parseando JSON...`);
     const topo = await resp.json();
 
-    console.log(`[LoadTopo] Convirtiendo a GeoJSON...`);
     // Carga dinámica de topojson-client para convertir a GeoJSON
     const mod = await import(/* @vite-ignore */ "topojson-client");
     const objects = topo.objects || {};
     const firstKey = Object.keys(objects)[0];
 
     if (!firstKey) {
-      console.warn(`[LoadTopo] ⚠️ No hay objetos en ${path}`);
       return [];
     }
 
@@ -8265,11 +6820,7 @@
         f.geometry.type !== null,
     );
 
-    console.log(
-      `[LoadTopo] ✅ ${validFeats.length} features válidas de ${feats.length} totales para ${iso}`,
-    );
-
-    // Añadir propiedades necesarias
+        // Añadir propiedades necesarias
     for (const f of validFeats) {
       if (!f.properties) f.properties = {};
       if (!f.properties.ISO_A3) f.properties.ISO_A3 = iso;
@@ -8370,10 +6921,7 @@
       answersData &&
       Object.keys(answersData).length > 0
     ) {
-      console.log(
-        "[Reactivo] 🌍 countryChartSegments - NIVEL MUNDIAL, agregando datos",
-      );
-      const worldTotals: Record<string, number> = {};
+            const worldTotals: Record<string, number> = {};
       Object.values(answersData).forEach((countryData) => {
         if (countryData && typeof countryData === "object") {
           Object.entries(countryData).forEach(([key, value]) => {
@@ -8382,12 +6930,7 @@
         }
       });
       const segments = generateCountryChartSegments([worldTotals]);
-      console.log(
-        "[Reactivo] 🌍 countryChartSegments mundial generado:",
-        segments.length,
-        "segmentos",
-      );
-      return segments;
+            return segments;
     }
 
     // NIVEL SUBDIVISIÓN: Mostrar datos de la subdivisión seleccionada
@@ -8396,43 +6939,18 @@
         ? selectedSubdivisionId
         : `${selectedCountryIso}.${selectedSubdivisionId}`;
       const rec = answersData?.[subdivisionKey];
-      console.log(
-        "[Reactivo] 🗺️ countryChartSegments - NIVEL SUBDIVISIÓN:",
-        subdivisionKey,
-        "tiene datos:",
-        !!rec,
-      );
-      const segments = generateCountryChartSegments(rec ? [rec] : []);
-      console.log(
-        "[Reactivo] 🗺️ countryChartSegments subdivisión generado:",
-        segments.length,
-        "segmentos",
-      );
-      return segments;
+            const segments = generateCountryChartSegments(rec ? [rec] : []);
+            return segments;
     }
 
     // NIVEL PAÍS: Mostrar datos del país (o vacío si no hay datos)
     if (selectedCountryIso) {
       const rec = answersData?.[selectedCountryIso];
-      console.log(
-        "[Reactivo] 🏳️ countryChartSegments - NIVEL PAÍS:",
-        selectedCountryIso,
-        "tiene datos:",
-        !!rec,
-      );
-      const segments = generateCountryChartSegments(rec ? [rec] : []);
-      console.log(
-        "[Reactivo] 🏳️ countryChartSegments país generado:",
-        segments.length,
-        "segmentos",
-      );
-      return segments;
+            const segments = generateCountryChartSegments(rec ? [rec] : []);
+            return segments;
     }
 
-    console.log(
-      "[Reactivo] ⚪ countryChartSegments - SIN NIVEL, retornando []",
-    );
-    return [];
+        return [];
   })();
 
   // Reactive statement para generar gráfico mundial
@@ -8499,7 +7017,6 @@
     // HISTORY API - Navegación SPA con botón atrás
     // ============================================
     popstateHandler = async (event: PopStateEvent) => {
-      console.log("[History] 🔙 Botón atrás presionado, state:", event.state);
 
       if (!navigationManager) return;
 
@@ -8508,7 +7025,6 @@
       // PRIORIDAD 1: Detectar si hay encuesta específica en el estado
       if (state?.pollId && state?.pollMode === "specific") {
         // Restaurar encuesta específica
-        console.log("[History] 🔄 Restaurando encuesta:", state.pollId);
 
         // CRÍTICO: Establecer el flag ANTES de cualquier verificación
         isNavigatingFromHistory = true;
@@ -8548,7 +7064,6 @@
             await handleOpenPollInGlobe(syntheticEvent);
           }
         } catch (error) {
-          console.error("[History] Error restaurando encuesta:", error);
         } finally {
           isNavigatingFromHistory = false;
         }
@@ -8559,7 +7074,6 @@
       if (state?.pollMode === "trending") {
         // Volver a modo trending
         if (activePoll) {
-          console.log("[History] 🔄 Volviendo a modo trending desde encuesta");
           isNavigatingFromHistory = true;
           await closePoll();
           isNavigatingFromHistory = false;
@@ -8596,17 +7110,7 @@
     window.addEventListener("popstate", popstateHandler as any);
 
     // DEBUG: Verificar URL al inicio del onMount
-    console.log("[Init] 🔍 URL al inicio de onMount:", {
-      windowLocationHref:
-        typeof window !== "undefined" ? window.location.href : "ssr",
-      windowLocationSearch:
-        typeof window !== "undefined" ? window.location.search : "ssr",
-      pageUrlHref: $page.url.href,
-      pageUrlSearch: $page.url.search,
-      historyState: history.state,
-    });
-
-    // Establecer estado inicial en el historial si no existe
+        // Establecer estado inicial en el historial si no existe
     if (!history.state) {
       // CRÍTICO: Capturar parámetros de URL ANTES de cualquier modificación
       // Usar window.location directamente para evitar problemas de sincronización con $page
@@ -8619,13 +7123,7 @@
       );
       const pollParam = urlParams.get("poll");
 
-      console.log("[History] 📍 Capturados:", {
-        currentUrl,
-        pollParam,
-        search: window.location.search,
-      });
-
-      const initialState: any = {
+            const initialState: any = {
         level: "world",
         pollMode: pollParam ? "specific" : "trending",
         timestamp: Date.now(),
@@ -8638,21 +7136,8 @@
 
       // Preservar la URL actual con sus parámetros
       history.replaceState(initialState, "", currentUrl);
-      console.log(
-        "[History] 🔄 Estado inicial establecido:",
-        initialState,
-        "URL:",
-        currentUrl,
-      );
-
-      // DEBUG: Verificar URL después del replaceState
-      console.log("[History] 🔍 URL después de replaceState:", {
-        windowLocationHref:
-          typeof window !== "undefined" ? window.location.href : "ssr",
-        windowLocationSearch:
-          typeof window !== "undefined" ? window.location.search : "ssr",
-      });
-    }
+            // DEBUG: Verificar URL después del replaceState
+          }
 
     // Inicializar controlador de bottom sheet
     sheetCtrl = new BottomSheetController({
@@ -8703,7 +7188,6 @@
         const centroid = calculatePolygonCentroid(countryFeature);
 
         if (!centroid) {
-          console.error("[testAdaptiveZoom] No se pudo calcular el centroide");
           return null;
         }
 
@@ -8752,10 +7236,7 @@
         const centroid = calculatePolygonCentroid(subdivisionFeature);
 
         if (!centroid) {
-          console.error(
-            "[testAdaptiveZoomSubdivision] No se pudo calcular el centroide",
-          );
-          return null;
+                    return null;
         }
 
         // Aplicar el zoom
@@ -8780,7 +7261,6 @@
         const g = getStore(worldMap$);
         const dj = getStore(worldData$);
         if (!g || !dj) {
-          console.error("No se pudo cargar datos del globo");
         } else {
           // Inicializar con datos vacíos primero para cargar polígonos
           await initFrom(g, { ANSWERS: {}, colors: {} });
@@ -8794,20 +7274,13 @@
 
           // AHORA cargar trending solo si NO hay encuesta activa Y NO hay parámetro poll en URL
           if (!activePoll && !hasPollParam) {
-            console.log(
-              "[Init] 🌍 Cargando trending inicial (no hay poll en URL)...",
-            );
-            await loadTrendingData();
+                        await loadTrendingData();
 
             // Forzar actualización de colores después de cargar trending
             await new Promise((resolve) => requestAnimationFrame(resolve));
             await updateGlobeColors();
           } else if (hasPollParam) {
-            console.log(
-              "[Init] ⏭️ Saltando trending inicial, hay poll en URL:",
-              hasPollParam,
-            );
-          }
+                      }
         }
       }
     } else {
@@ -8875,7 +7348,6 @@
 
     // Listen for header navigation events
     headerToggleDropdownHandler = () => {
-      console.log("[GlobeGL] 🎯 Evento headerToggleDropdown recibido");
       toggleDropdown();
     };
     window.addEventListener("headerToggleDropdown", headerToggleDropdownHandler);
@@ -8883,7 +7355,6 @@
     headerNavigateToViewHandler = async (event: Event) => {
       const customEvent = event as CustomEvent;
       const level = customEvent.detail?.level;
-      console.log("[GlobeGL] 🧭 Evento headerNavigateToView recibido:", level);
       if (level) {
         await navigateToView(level);
       }
@@ -8891,7 +7362,6 @@
     window.addEventListener("headerNavigateToView", headerNavigateToViewHandler);
 
     headerLocateMeHandler = () => {
-      console.log("[GlobeGL] 📍 Evento headerLocateMe recibido");
       locateMe();
     };
     window.addEventListener("headerLocateMe", headerLocateMeHandler);
@@ -8900,10 +7370,7 @@
     const hasSavedTheme = localStorage.getItem("voutop-theme");
     if (!hasSavedTheme) {
       // Solo inicializar desde theme.json si NO hay tema guardado
-      console.log(
-        "[GlobeGL] No hay tema guardado, inicializando desde theme.json",
-      );
-      updateColorsForTheme();
+            updateColorsForTheme();
     }
 
     // SIEMPRE observar cambios de clase .dark para actualizar isDarkTheme
@@ -8912,11 +7379,7 @@
       mutations.forEach((mutation) => {
         if (mutation.attributeName === "class") {
           const isDark = document.documentElement.classList.contains("dark");
-          console.log(
-            "[GlobeGL] MutationObserver: cambio de clase .dark ->",
-            isDark,
-          );
-          isDarkTheme = isDark; // SIEMPRE actualizar isDarkTheme
+                    isDarkTheme = isDark; // SIEMPRE actualizar isDarkTheme
 
           // Solo actualizar colores completos si NO hay tema guardado
           if (!hasSavedTheme) {
@@ -8932,10 +7395,7 @@
     });
 
     if (hasSavedTheme) {
-      console.log(
-        "[GlobeGL] Tema guardado detectado, esperando evento palettechange",
-      );
-      hasLoadedSavedTheme = true;
+            hasLoadedSavedTheme = true;
     }
 
     // Escuchar cambios de paleta random
@@ -8943,7 +7403,6 @@
       const customEvent = event as CustomEvent;
       const palette = customEvent.detail;
 
-      console.log("[GlobeGL] Evento palettechange recibido:", palette);
 
       // Marcar que se ha cargado un tema desde localStorage para evitar sobrescritura
       hasLoadedSavedTheme = true;
@@ -8965,26 +7424,14 @@
       // Actualizar estado de tema oscuro/claro
       if (typeof palette.isDark !== "undefined") {
         isDarkTheme = palette.isDark;
-        console.log("[GlobeGL] isDarkTheme actualizado a:", isDarkTheme);
       }
 
-      console.log(
-        "[GlobeGL] Colores aplicados - bg:",
-        bgColor,
-        "sphere:",
-        sphereColor,
-        "stroke:",
-        strokeColor,
-      );
-
-      // Actualizar colores del globo y polígonos
+            // Actualizar colores del globo y polígonos
       // La transición suave del globo (esfera y fondo) se maneja automáticamente en GlobeCanvas
       if (globe) {
         globe.refreshPolyStrokes?.();
         globe.refreshPolyColors?.();
-        console.log("[GlobeGL] Globe refresh ejecutado");
       } else {
-        console.warn("[GlobeGL] Globe aún no está inicializado");
       }
     };
 
@@ -8997,17 +7444,7 @@
     // IMPORTANTE: Usar $page.url.searchParams en lugar de window.location para sincronización con SvelteKit
     const pollIdParam = $page.url.searchParams.get("poll");
 
-    console.log("[Init] 🔍 Verificando parámetro poll en URL...", {
-      pollIdParam,
-      currentUrl: typeof window !== "undefined" ? window.location.href : "ssr",
-      pageUrl: $page.url.href,
-      hasGlobe: !!globe,
-      hasWorldPolygons: !!worldPolygons,
-      worldPolygonsLength: worldPolygons?.length || 0,
-    });
-
-    if (pollIdParam) {
-      console.log("[Init] 🔗 Detectado parámetro poll en URL:", pollIdParam);
+        if (pollIdParam) {
 
       // Marcar como procesado para evitar doble carga en el watcher
       lastProcessedPollId = pollIdParam;
@@ -9022,40 +7459,24 @@
         (!globe || !worldPolygons || worldPolygons.length === 0) &&
         retries < 10
       ) {
-        console.log("[Init] ⏳ Esperando globe y worldPolygons...", {
-          retry: retries,
-          hasGlobe: !!globe,
-          worldPolygonsLength: worldPolygons?.length || 0,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 200));
+                await new Promise((resolve) => setTimeout(resolve, 200));
         retries++;
       }
 
       if (!globe) {
-        console.error("[Init] ❌ Globe no disponible después de esperar");
         isNavigatingFromHistory = false;
         isInitialMount = false;
         return;
       }
 
-      console.log(
-        "[Init] ✅ Globe y worldPolygons disponibles, cargando encuesta...",
-      );
-
-      // Cargar y abrir la encuesta
+            // Cargar y abrir la encuesta
       try {
         const response = await apiCall(`/api/polls/${pollIdParam}`);
         if (response.ok) {
           const pollData = await response.json();
           const poll = pollData.data || pollData;
 
-          console.log(
-            "[Init] 📊 Encuesta cargada desde URL:",
-            poll.id,
-            poll.title,
-          );
-
-          // Recrear formato de opciones CON colores correctos
+                    // Recrear formato de opciones CON colores correctos
           const options =
             poll.options?.map((opt: any, idx: number) => ({
               id: opt.id,
@@ -9067,12 +7488,7 @@
               votes: opt.votes || opt._count?.votes || 0,
             })) || [];
 
-          console.log(
-            "[Init] 🎨 Opciones con colores:",
-            options.map((o: any) => ({ label: o.label, color: o.color })),
-          );
-
-          // Crear evento sintético para handleOpenPollInGlobe
+                    // Crear evento sintético para handleOpenPollInGlobe
           const syntheticEvent = new CustomEvent("openpoll", {
             detail: { poll, options },
           }) as CustomEvent<{
@@ -9089,14 +7505,9 @@
           // Abrir la encuesta - handleOpenPollInGlobe manejará todo
           await handleOpenPollInGlobe(syntheticEvent);
 
-          console.log(
-            "[Init] ✅ Encuesta abierta desde URL con colores aplicados",
-          );
-        } else {
-          console.error("[Init] ❌ Error al cargar encuesta:", response.status);
+                  } else {
         }
       } catch (error) {
-        console.error("[Init] ❌ Error cargando encuesta desde URL:", error);
       } finally {
         // Limpiar flag
         isNavigatingFromHistory = false;
@@ -9105,15 +7516,11 @@
         await new Promise((resolve) => setTimeout(resolve, 50));
         // Marcar que la carga inicial ha terminado DESPUÉS de cargar la encuesta
         isInitialMount = false;
-        console.log("[Init] ✅ Carga inicial completada, watcher habilitado");
       }
     } else {
       // Si no hay poll en URL, marcar como terminado ahora
       isInitialMount = false;
-      console.log(
-        "[Init] ✅ Carga inicial completada (sin poll), watcher habilitado",
-      );
-    }
+          }
   });
 
   // ============================================
@@ -9125,48 +7532,19 @@
   $: {
     const pollIdParam = $page.url.searchParams.get("poll");
 
-    console.log(
-      "[Watcher] 🔍 Ejecutando | pollIdParam:",
-      pollIdParam,
-      "lastProcessed:",
-      lastProcessedPollId,
-      "isInitialMount:",
-      isInitialMount,
-      "isClosingPoll:",
-      isClosingPoll,
-      "activePoll:",
-      !!activePoll,
-    );
-
-    // Ignorar durante carga inicial
+        // Ignorar durante carga inicial
     if (isInitialMount) {
-      console.log("[Watcher] ⏭️ Ignorando (carga inicial)");
-    }
+          }
     // Ignorar si ya estamos cerrando una encuesta
     else if (isClosingPoll) {
-      console.log("[Watcher] ⏸️ Ignorando (ya estamos cerrando)", {
-        pollIdParam,
-        lastProcessedPollId,
-      });
-    }
+          }
     // CASO 1: Se quitó el parámetro poll de la URL (cerrar encuesta)
     else if (!pollIdParam && lastProcessedPollId && activePoll) {
-      console.log(
-        "[Watcher] 🚪 Poll param eliminado, limpiando lastProcessedPollId",
-      );
-      lastProcessedPollId = null;
+            lastProcessedPollId = null;
     }
     // CASO 2: Cambió a otra encuesta (cerrar anterior y abrir nueva)
     else if (pollIdParam && globe && pollIdParam !== lastProcessedPollId) {
-      console.log(
-        "[Watcher] 🔗 Detectado cambio en parámetro poll:",
-        pollIdParam,
-        "(anterior:",
-        lastProcessedPollId,
-        ")",
-      );
-
-      // Marcar como procesado ANTES de cargar para evitar re-ejecuciones
+            // Marcar como procesado ANTES de cargar para evitar re-ejecuciones
       lastProcessedPollId = pollIdParam;
 
       // Si hay una encuesta activa, cerrarla primero y esperar
@@ -9176,23 +7554,18 @@
 
         try {
           if (activePoll) {
-            console.log(
-              "[Watcher] 🔄 Cerrando encuesta anterior antes de abrir nueva",
-            );
-            // Cerrar sin cargar trending, vamos a abrir otra encuesta inmediatamente
+                        // Cerrar sin cargar trending, vamos a abrir otra encuesta inmediatamente
             await closePoll(true);
             // Esperar un frame para que se complete el cierre
             await new Promise((resolve) => requestAnimationFrame(resolve));
           }
 
-          console.log("[Watcher] 📊 Cargando encuesta desde URL:", pollIdParam);
 
           // Cargar y abrir la encuesta
           const response = await apiCall(`/api/polls/${pollIdParam}`);
           const pollData = await response.json();
           const poll = pollData.data || pollData;
 
-          console.log("[Watcher] ✅ Encuesta cargada:", poll.id, poll.title);
 
           // Recrear formato de opciones con colores
           const options =
@@ -9222,11 +7595,7 @@
 
           await handleOpenPollInGlobe(syntheticEvent);
         } catch (error) {
-          console.error(
-            "[Watcher] ❌ Error cargando encuesta desde URL:",
-            error,
-          );
-        } finally {
+                  } finally {
           // Limpiar flag
           isNavigatingFromHistory = false;
         }
@@ -9252,14 +7621,8 @@
   $: if (globe && isDarkTheme !== undefined) {
     try {
       // Usar el método existente refreshPolyColors para forzar re-render
-      console.log(
-        "[GlobeGL] isDarkTheme cambió a:",
-        isDarkTheme,
-        "- forzando actualización de polígonos",
-      );
-      globe.refreshPolyColors();
+            globe.refreshPolyColors();
     } catch (e) {
-      console.error("[GlobeGL] Error al actualizar polígonos:", e);
     }
   }
 
@@ -9267,10 +7630,8 @@
   let popstateHandler: ((event: PopStateEvent) => Promise<void>) | null = null;
 
   onDestroy(() => {
-    console.log("[GlobeGL] 🧹 Cleanup iniciado...");
 
     // FASE 3: Cleanup automático de event listeners
-    console.log("[GlobeGL] 📌 Event listeners activos:", eventListeners.count);
     eventListeners.cleanup();
 
     try {
@@ -9332,44 +7693,13 @@
 
     // DEBUG: Logging para nivel subdivision (solo primeros 5)
     if (currentLevel === "subdivision" && Math.random() < 0.05) {
-      console.log("[onPolyCapColor] 🎨", {
-        level: currentLevel,
-        featureId,
-        hasAnswersData: !!answersData?.[featureId],
-        isoDominantKey: isoDominantKey?.[featureId],
-        colorMap: colorMap?.[isoDominantKey?.[featureId] || ""],
-        _forcedColor: props._forcedColor,
-      });
-    }
+          }
 
     // DEBUG ESPECÍFICO: Brasil y especialmente Mato Grosso do Sul
     if (featureId === "BRA.11") {
       // SIEMPRE loguear Mato Grosso do Sul
-      console.log("[onPolyCapColor] 🔴 MATO GROSSO DO SUL (BRA.11):", {
-        level: currentLevel,
-        hasAnswersData: !!answersData?.[featureId],
-        answersDataValue: answersData?.[featureId],
-        isoDominantKey: isoDominantKey?.[featureId],
-        colorMap: colorMap,
-        finalColor: isoDominantKey?.[featureId]
-          ? colorMap?.[isoDominantKey[featureId]]
-          : "NONE",
-        activePoll: !!activePoll,
-        isoDominantKeyEmpty:
-          !isoDominantKey || Object.keys(isoDominantKey).length === 0,
-      });
-    } else if (featureId.startsWith("BRA.") && Math.random() < 0.05) {
-      console.log("[onPolyCapColor] 🇧🇷 Brasil:", {
-        id: featureId,
-        name: props.NAME_1,
-        level: currentLevel,
-        hasAnswersData: !!answersData?.[featureId],
-        isoDominantKey: isoDominantKey?.[featureId],
-        finalColor: isoDominantKey?.[featureId]
-          ? colorMap?.[isoDominantKey[featureId]]
-          : "NONE",
-      });
-    }
+          } else if (featureId.startsWith("BRA.") && Math.random() < 0.05) {
+          }
 
     // VERIFICACIÓN CRÍTICA: Si activePoll es null, SOLO usar datos si isoDominantKey tiene contenido
     // Esto evita que se muestren colores de encuestas cerradas
@@ -9388,7 +7718,6 @@
     if (props._forcedColor && currentLevel !== "world" && activePoll) {
       // Debug ARG.1
       if (featureId === "ARG.1") {
-        console.log("[DEBUG ARG.1] Usando _forcedColor:", props._forcedColor);
       }
       return props._forcedColor;
     }
@@ -9485,18 +7814,10 @@
       const hasPollParam = urlParams.has("poll");
 
       if (navigationManager && !activePoll && !hasPollParam) {
-        console.log("[Init] 🌍 Navegando a mundo (sin poll en URL)");
-        navigationManager!.navigateToWorld();
+                navigationManager!.navigateToWorld();
       } else if (hasPollParam) {
-        console.log(
-          "[Init] ⏭️ Skipping navigateToWorld - poll param presente:",
-          urlParams.get("poll"),
-        );
-      } else if (activePoll) {
-        console.log(
-          "[Init] ⏭️ Skipping navigateToWorld - activePoll ya existe",
-        );
-      }
+              } else if (activePoll) {
+              }
 
       setTilesEnabled(false);
       updateGlobeColors();
@@ -9569,10 +7890,7 @@
         }
 
         if (pov.altitude > zoomOutThreshold) {
-          console.log(
-            `[Navigation] 🔙 Zoom out detectado en nivel ${levelName} (altitude: ${pov.altitude.toFixed(2)}, threshold: ${zoomOutThreshold}) - Volviendo atrás`,
-          );
-          setTimeout(async () => {
+                    setTimeout(async () => {
             if (navigationManager && !isZooming) {
               await navigationManager.goBack();
             }
@@ -9626,29 +7944,12 @@
           return; // No continuar con detección
         }
 
-        console.log(
-          "[CenterPolygon] Detección activa en nivel:",
-          currentLevel,
-          "altitude:",
-          pov.altitude.toFixed(2),
-          "pov:",
-          { lat: pov.lat.toFixed(2), lng: pov.lng.toFixed(2) },
-        );
-
-        // Detectar polígono en el centro de la pantalla
+                // Detectar polígono en el centro de la pantalla
         const detected = globe?.getCenterPolygon?.();
 
-        console.log(
-          "[CenterPolygon] getCenterPolygon resultado:",
-          detected ? "SÍ detectado" : "NO detectado",
-        );
-
-        // Si no detecta polígono en centro (polígono pequeño), buscar el más cercano
+                // Si no detecta polígono en centro (polígono pequeño), buscar el más cercano
         if (!detected || !detected.properties) {
-          console.log(
-            "[CenterPolygon] ⚠️ No detectado en centro, buscando más cercano",
-          );
-          findClosestPolygonWithData(currentLevel);
+                    findClosestPolygonWithData(currentLevel);
           return; // Terminar aquí
         }
 
@@ -9675,36 +7976,10 @@
             ).toUpperCase();
           }
 
-          console.log(
-            "[CenterPolygon] Nivel:",
-            currentLevel,
-            "| detectedId:",
-            detectedId,
-          );
-          console.log("[CenterPolygon] Props del polígono:", {
-            NAME_1: props.NAME_1,
-            NAME_2: props.NAME_2,
-            ID_1: props.ID_1,
-            ID_2: props.ID_2,
-            GID_1: props.GID_1,
-            GID_2: props.GID_2,
-          });
-
-          // Verificar si tiene datos antes de activar (EN TODOS LOS NIVELES)
+                              // Verificar si tiene datos antes de activar (EN TODOS LOS NIVELES)
           const hasData = detectedId && answersData?.[detectedId];
 
-          console.log(
-            "[CenterPolygon] hasData:",
-            hasData,
-            "| buscando ID:",
-            detectedId,
-          );
-          console.log(
-            "[CenterPolygon] answersData keys (primeros 20):",
-            Object.keys(answersData || {}).slice(0, 20),
-          );
-
-          if (hasData) {
+                              if (hasData) {
             // Solo activar si tiene datos
             // Solo actualizar si cambió el polígono
             if (detectedId !== centerPolygonId) {
@@ -9716,24 +7991,10 @@
 
               // Agregar etiqueta destacada para el polígono centrado
               addCenterPolygonLabel();
-              console.log(
-                "[CenterPolygon] Activado:",
-                detectedId,
-                "nivel:",
-                currentLevel,
-              );
-            }
+                          }
           } else {
             // No tiene datos, buscar el más cercano
-            console.log("[CenterPolygon] ❌ Sin datos para ID:", detectedId);
-            console.log(
-              "[CenterPolygon] Nombre del polígono:",
-              props.NAME_1 || props.NAME_2 || "Sin nombre",
-            );
-            console.log(
-              "[CenterPolygon] Buscando polígono más cercano con datos...",
-            );
-            findClosestPolygonWithData(currentLevel);
+                                    findClosestPolygonWithData(currentLevel);
           }
         }
         // Nota: El caso "no hay polígono detectado" ya se maneja arriba con return
@@ -9771,22 +8032,13 @@
         const isSpecialTerritory =
           SPECIAL_TERRITORIES_WITHOUT_TOPOJSON.has(iso);
         if (isSpecialTerritory) {
-          console.log(
-            `[PolygonClick] 🏝️ Territorio especial detectado: ${iso}`,
-          );
-          console.log(
-            "[PolygonClick] ✅ Navegación permitida (nivel país sin subdivisiones)",
-          );
-        }
+                            }
 
         // PASO 1: Verificar si hay datos ANTES de permitir la navegación
         // IMPORTANTE: answersData ya está filtrado por la encuesta activa (si existe)
         const countryRecord = answersData?.[iso];
         if (!countryRecord && !isSpecialTerritory) {
-          console.log(
-            "[PolygonClick] País sin datos (no es territorio especial), tratando como click fuera",
-          );
-          // NO HAY DATOS: Tratar como click fuera (no hace nada en nivel mundial)
+                    // NO HAY DATOS: Tratar como click fuera (no hace nada en nivel mundial)
           return;
         }
 
@@ -9802,7 +8054,6 @@
               props.NAME ||
               props.name ||
               iso;
-            console.log("[PolygonClick] 🔧 Nombre mejorado:", { iso, name });
           }
         }
 
@@ -9817,11 +8068,7 @@
         if (isSpecialTerritory) {
           // Para territorios especiales: zoom muy cercano (micro-estados)
           adaptiveAltitude = 0.15; // Zoom máximo para ver territorios muy pequeños
-          console.log(
-            "[PolygonClick] 🔍 Zoom cercano para micro-estado:",
-            adaptiveAltitude,
-          );
-        } else {
+                  } else {
           // Para países normales: zoom adaptativo según tamaño
           adaptiveAltitude = calculateAdaptiveZoom(feat);
         }
@@ -9831,29 +8078,14 @@
         // PASO 4: Actualizar datos del país (puede be undefined para territorios sin datos)
         const countryData = countryRecord ? [countryRecord] : [];
         const manualSegments = generateCountryChartSegments(countryData);
-        console.log(
-          "[Click] 📊 Actualizando countryChartSegments manualmente:",
-          iso,
-          "tiene datos:",
-          !!countryRecord,
-          "segmentos:",
-          manualSegments.length,
-        );
-        countryChartSegments = manualSegments;
+                countryChartSegments = manualSegments;
 
         // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 2)
         if (activePollOptions.length > 0) {
-          console.log(
-            "[Click] ✅ Actualizando votos para nivel 2 (país):",
-            iso,
-            countryRecord ? "con datos" : "sin datos (votos=0)",
-          );
-
-          const updatedOptions = activePollOptions.map((option) => {
+                    const updatedOptions = activePollOptions.map((option) => {
             const votesForOption = countryRecord
               ? countryRecord[option.key] || 0
               : 0;
-            console.log(`[Click]   ${option.label}: ${votesForOption} votos`);
             return { ...option, votes: votesForOption };
           });
 
@@ -9867,26 +8099,13 @@
             color: opt.color,
             count: opt.votes || 0,
           }));
-          console.log(
-            "[Click] ✅ legendItems actualizado para barra de progreso:",
-            legendItems.length,
-            "items",
-          );
-
-          tick().then(() => {
-            console.log(
-              "[Click] ✅ Votos y barra actualizados en nivel 2 - UI debería actualizarse",
-            );
-          });
+                    tick().then(() => {
+                      });
         }
 
         // PASO 5: Para territorios especiales, actualizar a nivel COUNTRY pero sin cargar subdivisiones
         if (isSpecialTerritory) {
-          console.log(
-            `[Navigate] 🏝️ Territorio especial: Actualizar a nivel COUNTRY sin subdivisiones`,
-          );
-
-          // SÍ cambiar a nivel 'country' para permitir navegación a otros países
+                    // SÍ cambiar a nivel 'country' para permitir navegación a otros países
           selectedCountryName = name;
           selectedCountryIso = iso;
 
@@ -9911,11 +8130,7 @@
               timestamp: Date.now(),
             };
             const url = `/?country=${encodeURIComponent(iso)}`;
-            console.log(
-              "[History] 📍 Territorio especial (nivel country) con goto():",
-              name,
-            );
-            await goto(url, {
+                        await goto(url, {
               replaceState: false,
               noScroll: true,
               keepFocus: true,
@@ -9941,35 +8156,20 @@
             ];
             updateSubdivisionLabels(true);
 
-            console.log(
-              "[Click] 🏝️ Territorio especial en nivel COUNTRY (sin subdivisiones):",
-              iso,
-            );
-          }, 250);
+                      }, 250);
 
-          console.log(
-            `[Navigate] ✅ Nivel COUNTRY - Mapa mundial visible, puedes navegar a otros países`,
-          );
-          console.log(
-            `[Navigate] ⏹️ Saltando precarga de polígonos para territorio especial`,
-          );
-          return; // ⚠️ IMPORTANTE: No intentar cargar subdivisiones ni navegar
+                              return; // ⚠️ IMPORTANTE: No intentar cargar subdivisiones ni navegar
         }
 
         // PASO 6: PRE-CARGAR subdivisiones en paralelo durante el zoom (sin bloquear)
         const preloadPromise = (async () => {
           try {
             if (preloadedCountryIso !== iso) {
-              console.log(`[PreLoad] Cargando polígonos para ${iso}...`);
               const polys = await loadCountryTopoAsGeoFeatures(iso);
-              console.log(
-                `[PreLoad] ✅ ${polys.length} polígonos cargados para ${iso}`,
-              );
-              preloadedPolygons = polys;
+                            preloadedPolygons = polys;
               preloadedCountryIso = iso;
             }
           } catch (e) {
-            console.error(`[PreLoad] ❌ Error cargando ${iso}:`, e);
             // Reset en caso de error
             preloadedPolygons = null;
             preloadedCountryIso = null;
@@ -9986,13 +8186,9 @@
 
             // Usar polígonos pre-cargados si están disponibles
             if (preloadedPolygons && preloadedCountryIso === iso) {
-              console.log(
-                `[Navigate] Usando polígonos pre-cargados para ${iso}`,
-              );
-              localPolygons = preloadedPolygons;
+                            localPolygons = preloadedPolygons;
               await navigationManager!.navigateToCountry(iso, name);
             } else {
-              console.log(`[Navigate] Navegando a ${iso} sin pre-carga`);
               await navigationManager!.navigateToCountry(iso, name);
             }
 
@@ -10002,7 +8198,6 @@
             await new Promise((resolve) => requestAnimationFrame(resolve));
             await updateGlobeColors(true); // true = con fade-in
           } catch (navError) {
-            console.error(`[Navigate] ❌ Error navegando a ${iso}:`, navError);
             // En caso de error, intentar recuperar el estado
             subdivisionLabels = [];
             updateSubdivisionLabels(false);
@@ -10014,25 +8209,10 @@
         const subdivisionName =
           feat.properties.NAME_1 || feat.properties.name_1 || name;
 
-        console.log("[PolygonClick] 🔍 Click en subdivisión:", {
-          iso,
-          subdivisionId,
-          subdivisionName,
-          properties: feat.properties,
-        });
-
-        // PASO 1: Verificar si hay datos ANTES de permitir la interacción
+                // PASO 1: Verificar si hay datos ANTES de permitir la interacción
         const subdivisionKey = subdivisionId; // subdivisionId ya es "ESP.1"
         const subdivisionRecord = answersData?.[subdivisionKey];
-        console.log(
-          "[PolygonClick] 🔍 Datos para",
-          subdivisionKey,
-          ":",
-          subdivisionRecord ? "SÍ tiene datos" : "NO tiene datos",
-        );
-
-        if (!subdivisionRecord) {
-          console.log("[PolygonClick] Subdivisión sin datos, volviendo atrás");
+                if (!subdivisionRecord) {
           // NO HAY DATOS: Volver a nivel mundial
           subdivisionLabels = [];
           updateSubdivisionLabels(false);
@@ -10069,14 +8249,8 @@
 
         // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 3)
         if (subdivisionRecord && activePollOptions.length > 0) {
-          console.log(
-            "[Click] ✅ Actualizando votos para nivel 3 (subdivisión):",
-            subdivisionKey,
-          );
-
-          const updatedOptions = activePollOptions.map((option) => {
+                    const updatedOptions = activePollOptions.map((option) => {
             const votesForOption = subdivisionRecord[option.key] || 0;
-            console.log(`[Click]   ${option.label}: ${votesForOption} votos`);
             return { ...option, votes: votesForOption };
           });
 
@@ -10085,19 +8259,12 @@
           voteOptionsUpdateTrigger++;
 
           tick().then(() => {
-            console.log(
-              "[Click] ✅ Votos actualizados en nivel 3 - UI debería actualizarse",
-            );
-          });
+                      });
         }
 
         // PASO 3: Verificar si es el nivel mínimo en la base de datos
         // Si isLowestLevel = true, NO intentar navegar más profundo aunque tenga archivos
-        console.log(
-          "[PolygonClick] 🔍 Verificando si es nivel mínimo en DB...",
-        );
-
-        let isLowestLevel = false;
+                let isLowestLevel = false;
         try {
           const dbCheckResp = await apiCall(
             `/api/subdivisions/check-lowest?id=${encodeURIComponent(subdivisionKey)}`,
@@ -10105,48 +8272,25 @@
           if (dbCheckResp.ok) {
             const { isLowestLevel: lowest } = await dbCheckResp.json();
             isLowestLevel = lowest;
-            console.log(
-              "[PolygonClick] 📊 isLowestLevel en DB:",
-              isLowestLevel,
-            );
-          }
+                      }
         } catch (err) {
-          console.log(
-            "[PolygonClick] ⚠️ No se pudo verificar isLowestLevel, continuando con verificación de archivos",
-          );
-        }
+                  }
 
         // Si NO es nivel mínimo en DB, verificar archivos TopoJSON
         let hasSubdivisions = false;
 
         if (!isLowestLevel) {
           const subdivisionPath = getCountryPath(iso, subdivisionId);
-          console.log(
-            "[PolygonClick] 🔍 Verificando subdivisiones en:",
-            subdivisionPath,
-          );
-
-          hasSubdivisions = await (async () => {
+                    hasSubdivisions = await (async () => {
             try {
               const resp = await fetch(subdivisionPath, { method: "HEAD" });
-              console.log(
-                "[PolygonClick] 🔍 Respuesta HEAD:",
-                resp.ok ? "OK (tiene subdivisiones)" : `Error ${resp.status}`,
-              );
-              return resp.ok;
+                            return resp.ok;
             } catch (err) {
-              console.log(
-                "[PolygonClick] ❌ Error verificando subdivisiones:",
-                err,
-              );
-              return false;
+                            return false;
             }
           })();
         } else {
-          console.log(
-            "[PolygonClick] ✅ Es nivel mínimo en DB, no buscar subdivisiones",
-          );
-        }
+                  }
 
         // PASO 4: Calcular zoom y centrar
         const centroid = centroidOf(feat);
@@ -10155,10 +8299,7 @@
 
         if (hasSubdivisions) {
           // TIENE subdivisiones: navegar al siguiente nivel
-          console.log(
-            `[PolygonClick] ✅ ${subdivisionName} SÍ tiene subdivisiones, navegando...`,
-          );
-          subdivisionLabels = [];
+                    subdivisionLabels = [];
           updateSubdivisionLabels(false);
 
           scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
@@ -10167,10 +8308,7 @@
             subdivisionLabels = [];
             updateSubdivisionLabels(false);
 
-            console.log(
-              `[PolygonClick] 🚀 Llamando navigateToSubdivision(${iso}, ${subdivisionId}, ${subdivisionName})`,
-            );
-            await navigationManager!.navigateToSubdivision(
+                        await navigationManager!.navigateToSubdivision(
               iso,
               subdivisionId,
               subdivisionName,
@@ -10181,64 +8319,33 @@
           }, 200);
         } else {
           // NO tiene subdivisiones (es nivel mínimo): solo centrar SIN cambiar nivel
-          console.log(
-            `[PolygonClick] 🏝️ ${subdivisionName} es nivel mínimo, solo zoom (nivel permanece en COUNTRY)...`,
-          );
-
-          // ✅ ACTUALIZAR ESTADO DE UI aunque no naveguemos más profundo
+                    // ✅ ACTUALIZAR ESTADO DE UI aunque no naveguemos más profundo
           selectedSubdivisionName = subdivisionName;
           selectedSubdivisionId = subdivisionId;
 
           // ✅ ACTUALIZAR LEGENDITEMS para la barra de resumen horizontal
           if (activePollOptions.length > 0) {
-            console.log(
-              "[Click] 🔍 activePollOptions antes de actualizar legendItems:",
-              activePollOptions,
-            );
-            legendItems = [
+                        legendItems = [
               ...activePollOptions.map((opt) => ({
                 key: opt.key,
                 color: opt.color,
                 count: opt.votes || 0,
               })),
             ];
-            console.log(
-              "[Click] ✅ legendItems actualizado para subdivisión mínima:",
-              legendItems,
-            );
-            console.log(
-              "[Click] 🔍 Total votos en legendItems:",
-              legendItems.reduce((sum, item) => sum + item.count, 0),
-            );
-
-            // ⚡ FORZAR ACTUALIZACIÓN de BottomSheet incrementando trigger
+                                    // ⚡ FORZAR ACTUALIZACIÓN de BottomSheet incrementando trigger
             voteOptionsUpdateTrigger++;
-            console.log(
-              "[Click] ⚡ voteOptionsUpdateTrigger incrementado:",
-              voteOptionsUpdateTrigger,
-            );
-          }
+                      }
 
           // ✅ ACTUALIZAR countryChartSegments Y subdivisionChartSegments con los datos de la subdivisión
           if (subdivisionRecord) {
             const segments = generateCountryChartSegments([subdivisionRecord]);
             countryChartSegments = [...segments]; // Forzar nueva referencia
             subdivisionChartSegments = [...segments]; // También actualizar subdivisionChartSegments
-            console.log(
-              "[Click] ✅ countryChartSegments Y subdivisionChartSegments actualizados para subdivisión mínima:",
-              segments.length,
-              "segmentos",
-            );
-          }
+                      }
 
           // Forzar actualización de UI
           tick().then(() => {
-            console.log(
-              "[Click] ✅ UI actualizada para subdivisión mínima - legendItems:",
-              legendItems.length,
-              "items",
-            );
-          });
+                      });
 
           // Solo hacer zoom y resaltar el polígono
           scheduleZoom(centroid.lat, centroid.lng, targetAlt, 500, 0);
@@ -10250,16 +8357,9 @@
             isCenterPolygonActive = true;
             globe?.refreshPolyAltitudes?.();
             addCenterPolygonLabel();
-            console.log(
-              "[Click] 🏝️ Subdivisión mínima resaltada (nivel country):",
-              subdivisionKey,
-            );
-          }, 250);
+                      }, 250);
 
-          console.log(
-            "[PolygonClick] ✅ Zoom completado - Nivel permanece en COUNTRY pero UI actualizada",
-          );
-        }
+                  }
       } else if (currentLevel === "subdivision" && feat.properties?.ID_2) {
         // NIVEL 3 o 4: Activar selección con etiqueta
         const cityName =
@@ -10268,32 +8368,10 @@
           feat.properties.NAME_1 || feat.properties.name_1;
         const cityId = feat.properties.ID_2;
 
-        console.log("[Click] 🎯 Click en nivel 4:", {
-          cityName,
-          cityId,
-          "feat.properties": feat.properties,
-        });
-
-        // Verificar si tiene datos
+                // Verificar si tiene datos
         const cityRecord = answersData?.[cityId];
         if (!cityRecord) {
-          console.log("[PolygonClick] ❌ Ciudad sin datos en answersData");
-          console.log("[PolygonClick] 🔍 cityId buscado:", cityId);
-          console.log(
-            "[PolygonClick] 📊 answersData tiene",
-            Object.keys(answersData || {}).length,
-            "claves",
-          );
-          console.log(
-            "[PolygonClick] 📊 IDs de nivel 3 en answersData:",
-            Object.keys(answersData || {})
-              .filter((k) => k.split(".").length === 3)
-              .slice(0, 10),
-          );
-          console.log(
-            "[PolygonClick] Ciudad sin datos, volviendo a nivel país",
-          );
-          // NO HAY DATOS: Volver a nivel país
+                                        // NO HAY DATOS: Volver a nivel país
           subdivisionLabels = [];
           updateSubdivisionLabels(false);
           centerPolygon = null;
@@ -10374,20 +8452,11 @@
           globe?.refreshPolyStrokes?.();
           globe?.refreshPolyAltitudes?.();
           addCenterPolygonLabel();
-          console.log(
-            "[Click] Polígono nivel 3/4 activado con etiqueta:",
-            cityId,
-          );
-        }, 100);
+                  }, 100);
 
         // Generate city data - PASAR cityId para usar datos reales
         generateCityChartSegments(cityName, cityId);
-        console.log(
-          "[Click] 📊 cityChartSegments después de generar:",
-          cityChartSegments,
-        );
-
-        // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 4)
+                // ✅ ACTUALIZAR VOTOS EN ACTIVEPOLLPTIONS (nivel 4)
         // Buscar el ID completo de esta sub-subdivisión en answersData
         const state = navigationManager?.getState();
         const countryIso = state?.countryIso || selectedCountryIso || "";
@@ -10410,12 +8479,7 @@
           }
         }
 
-        console.log(
-          "[Click] 🔢 Buscando votos para nivel 4 con IDs:",
-          possibleIds,
-        );
-
-        // Intentar encontrar datos con cualquiera de los IDs posibles
+                // Intentar encontrar datos con cualquiera de los IDs posibles
         let cityVoteData = null;
         let foundId = "";
         for (const id of possibleIds) {
@@ -10427,7 +8491,6 @@
         }
 
         if (cityVoteData && activePollOptions.length > 0) {
-          console.log("[Click] ✅ Datos encontrados con ID:", foundId);
 
           // 🔧 USAR FUNCIÓN CENTRALIZADA
           updateVoteDataForLevel(
@@ -10435,37 +8498,19 @@
             "Nivel 4 - Ciudad (click directo)",
           );
         } else {
-          console.log(
-            "[Click] ⚠️ No se encontraron datos de votos. Intentado:",
-            possibleIds,
-          );
-          console.log(
-            "[Click] 📊 answersData keys disponibles:",
-            Object.keys(answersData || {}).slice(0, 10),
-          );
-        }
+                            }
       }
     } catch (e) {
-      console.error("[Click] Error handling polygon click:", e);
     }
   }}
   on:globeClick={async (e) => {
-    console.log(
-      "[GlobeClick] 🔵 Evento disparado - isZooming:",
-      isZooming,
-      "labelClickInProgress:",
-      labelClickInProgress,
-    );
-
-    // BLOQUEAR clics durante animaciones de zoom
+        // BLOQUEAR clics durante animaciones de zoom
     if (isZooming) {
-      console.log("[GlobeClick] ⛔ Bloqueado por isZooming");
       return;
     }
 
     // BLOQUEAR si acabamos de hacer click en una etiqueta
     if (labelClickInProgress) {
-      console.log("[GlobeClick] ⛔ Bloqueado por labelClick en progreso");
       return;
     }
 
@@ -10473,7 +8518,6 @@
 
     try {
       const currentLevel = navigationManager!.getCurrentLevel();
-      console.log("[GlobeClick] ✅ Procesando click en nivel:", currentLevel);
 
       // ELIMINADO: código que navegaba al polígono centrado
       // Ahora SIEMPRE vuelve atrás al hacer click fuera
@@ -10600,7 +8644,6 @@
         }
       }
     } catch (e) {
-      console.error("[Click] Error handling globe click:", e);
     }
   }}
   on:labelClick={async (e) => {
@@ -10610,35 +8653,25 @@
 
     // ACTIVAR BANDERA para bloquear globeClick
     labelClickInProgress = true;
-    console.log("[LabelClick] 🚫 Bloqueando globeClick temporalmente");
 
     // Desactivar después de 1000ms (tiempo suficiente para que complete la navegación)
     setTimeout(() => {
       labelClickInProgress = false;
-      console.log("[LabelClick] ✅ Desbloqueando globeClick");
     }, 1000);
 
     try {
       const feat = e.detail?.feat;
       if (!feat) {
-        console.warn("[LabelClick] No hay feature en la etiqueta");
         labelClickInProgress = false; // Desbloquear inmediatamente si hay error
         return;
       }
 
-      console.log(
-        "[LabelClick] ✨ Click en etiqueta, navegando a polígono:",
-        feat.properties,
-      );
-
-      const currentLevel = navigationManager!.getCurrentLevel();
+            const currentLevel = navigationManager!.getCurrentLevel();
       const iso = isoOf(feat);
       const name = nameOf(feat);
 
       // NO VERIFICAR DATOS - La etiqueta solo existe si el polígono tiene datos
       // showFirstLabelWithData ya verificó esto antes de crear la etiqueta
-      console.log("[LabelClick] Nivel actual:", currentLevel);
-      console.log("[LabelClick] ISO:", iso, "Nombre:", name);
 
       // Mostrar bottom sheet con datos del polígono
       setSheetState("collapsed");
@@ -10672,25 +8705,11 @@
         const subdivisionName =
           feat.properties.NAME_1 || feat.properties.name_1 || name;
 
-        console.log("[LabelClick] 🗺️ Nivel país → Navegando a subdivisión");
-        console.log("[LabelClick] subdivisionId:", subdivisionId);
-        console.log("[LabelClick] subdivisionName:", subdivisionName);
-        console.log("[LabelClick] iso:", iso);
 
         const subdivisionKey = subdivisionId;
         const subdivisionRecord = answersData?.[subdivisionKey];
 
-        console.log(
-          "[LabelClick] subdivisionRecord existe:",
-          !!subdivisionRecord,
-        );
-        console.log(
-          "[LabelClick] answersData tiene",
-          Object.keys(answersData || {}).length,
-          "claves",
-        );
-
-        // NO VERIFICAR DATOS - La etiqueta solo existe si el feature tiene datos
+                        // NO VERIFICAR DATOS - La etiqueta solo existe si el feature tiene datos
         // Continuar con la navegación aunque subdivisionRecord sea undefined
         if (subdivisionRecord) {
           subdivisionChartSegments = generateCountryChartSegments([
@@ -10745,12 +8764,8 @@
           feat.properties.NAME_2 || feat.properties.name_2 || name;
         const cityId = feat.properties.ID_2;
 
-        console.log("[LabelClick] 🏙️ Nivel subdivisión → Zoom a nivel 4");
-        console.log("[LabelClick] cityId:", cityId);
-        console.log("[LabelClick] cityName:", cityName);
 
         const cityRecord = answersData?.[cityId];
-        console.log("[LabelClick] cityRecord existe:", !!cityRecord);
 
         // NO VERIFICAR DATOS - La etiqueta solo existe si el feature tiene datos
         selectedCityName = cityName;
@@ -10766,7 +8781,6 @@
         }, 100);
       }
     } catch (error) {
-      console.error("[LabelClick] Error handling label click:", error);
       labelClickInProgress = false; // Desbloquear en caso de error
     }
   }}
@@ -10799,7 +8813,6 @@
             originalSheetState = null;
             originalSheetY = null;
           } catch (e) {
-            console.warn("[Escape] Error restaurando estado del sheet:", e);
           }
         }
         return;
@@ -10986,14 +8999,10 @@
   }}
   on:vote={(e) => {}}
   on:polldropdownstatechange={(e) => {
-    console.log("[GlobeGL] Poll dropdown state change:", e.detail);
     // Establecer variable global
     if (typeof window !== "undefined") {
       (window as any).globalNavDropdownOpen = e.detail.open;
-      console.log(
-        `[GlobeGL] 🔵 window.globalNavDropdownOpen = ${e.detail.open}`,
-      );
-    }
+          }
     // También dispatch al padre
     dispatch("dropdownstatechange", { open: e.detail.open });
   }}
@@ -11019,11 +9028,7 @@
           originalSheetState = null;
           originalSheetY = null;
         } catch (e) {
-          console.warn(
-            "[Overlay click] Error restaurando estado del sheet:",
-            e,
-          );
-        }
+                  }
       }
     }}
     on:keydown={(e) => {
@@ -11043,11 +9048,7 @@
             originalSheetState = null;
             originalSheetY = null;
           } catch (e) {
-            console.warn(
-              "[Overlay keydown] Error restaurando estado del sheet:",
-              e,
-            );
-          }
+                      }
         }
       }
     }}

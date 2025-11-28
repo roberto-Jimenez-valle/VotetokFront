@@ -1,8 +1,5 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
-  import { fly } from 'svelte/transition';
-  import { currentUser } from '$lib/stores';
-  import { apiCall } from '$lib/api/client';
   import { navigationState } from '$lib/stores/globalState';
   import '$lib/styles/trending-ranking.css';
   
