@@ -376,7 +376,7 @@
   const DETAILED_LABELS_ALT = 0.3; // mostrar etiquetas detalladas cuando altitud < 0.3
 
   // Límites de zoom del globo
-  const MIN_ZOOM_ALTITUDE = 0.04; // límite mínimo de zoom (más cerca) - ajustado para evitar acercamiento excesivo
+  const MIN_ZOOM_ALTITUDE = 0.4; // límite mínimo de zoom (más cerca) - ajustado para evitar acercamiento excesivo
   const MAX_ZOOM_ALTITUDE = 4.0; // límite máximo de zoom (más lejos)
 
   // Caches para optimización (evitar recálculos)
