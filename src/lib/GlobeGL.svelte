@@ -1670,8 +1670,9 @@
                 type: "FeatureCollection",
                 features: subdivisionPolygons,
               };
+              // CRÍTICO: Usar allLevelsData directamente, NO la variable reactiva answersData
               const vm = computeGlobeViewModel(geoData, {
-                ANSWERS: answersData,
+                ANSWERS: allLevelsData,
                 colors: colorMap,
               });
               isoDominantKey = vm.isoDominantKey;
@@ -2516,8 +2517,9 @@
             type: "FeatureCollection",
             features: worldPolygons || [],
           };
+          // CRÍTICO: Usar data directamente, NO la variable reactiva answersData
           const vm = computeGlobeViewModel(geoData, {
-            ANSWERS: answersData,
+            ANSWERS: data,
             colors: colorMap,
           });
           isoDominantKey = vm.isoDominantKey;
@@ -2561,8 +2563,9 @@
             type: "FeatureCollection",
             features: worldPolygons || [],
           };
+          // CRÍTICO: Usar worldLevelAnswers directamente, NO la variable reactiva answersData
           const vm = computeGlobeViewModel(geoData, {
-            ANSWERS: answersData,
+            ANSWERS: worldLevelAnswers,
             colors: colorMap,
           });
           isoDominantKey = vm.isoDominantKey;
