@@ -1723,9 +1723,10 @@
             } catch (refreshError) {
                           }
           }
-        } else if (!activePoll && !skipPolygonLoad) {
+        } else if (!activePoll) {
           // MODO TRENDING: Cargar datos de trending para este país
-          // Solo si NO viene de búsqueda directa (skipPolygonLoad=false), ya que los datos ya se cargaron
+          // Se ejecuta siempre en modo trending, independiente de skipPolygonLoad
+          console.log(`[navigateToCountry/trending] 🔄 Iniciando carga de trending para ${iso}, skipPolygonLoad=${skipPolygonLoad}`);
           try {
             const hours = TIME_FILTER_HOURS[trendingTimeFilter];
             // Usar código ISO del país, no el nombre
@@ -1740,6 +1741,7 @@
 
             if (response.ok) {
               const { data: trendingPolls } = await response.json();
+              console.log(`[navigateToCountry/trending] 📊 Encuestas trending encontradas: ${trendingPolls?.length || 0}`);
 
               // Agregar datos de trending por subdivisión
               let aggregatedData: Record<string, Record<string, number>> = {};
@@ -1862,9 +1864,10 @@
                             type: "FeatureCollection",
                             features: subdivisionPolygons,
                           };
+                          // CRÍTICO: Usar aggregatedData directamente, NO la variable reactiva
                           const vm = computeGlobeViewModel(geoData, {
-                            ANSWERS: answersData,
-                            colors: colorMap,
+                            ANSWERS: aggregatedData,
+                            colors: aggregatedColors,
                           });
                           isoDominantKey = vm.isoDominantKey;
                           // *** USAR TOTALES AGREGADOS: Sumar todos los votos de este país y subniveles ***
@@ -1933,6 +1936,7 @@
               countryLevelAnswers = aggregatedData;
               updateAnswersData(aggregatedData);
               colorMap = aggregatedColors;
+              console.log(`[navigateToCountry/trending] 📥 answersData actualizado con ${Object.keys(aggregatedData).length} claves:`, Object.keys(aggregatedData).slice(0, 10));
 
               // Recalcular colores dominantes
               const subdivisionPolygons = countryPolygons.filter(
@@ -1944,14 +1948,16 @@
                   console.log(`[navigateToCountry/trending] ❌ BLOQUEANDO computeGlobeViewModel`);
                   return;
                 }
-                console.log(`[navigateToCountry/trending] ✅ Calculando con ${subdivisionPolygons.length} polígonos`);
+                console.log(`[navigateToCountry/trending] ✅ Calculando con ${subdivisionPolygons.length} polígonos, ${Object.keys(aggregatedData).length} claves de datos`);
                 const geoData = {
                   type: "FeatureCollection",
                   features: subdivisionPolygons,
                 };
+                // CRÍTICO: Usar aggregatedData directamente, NO la variable reactiva answersData
+                // porque la reactividad de Svelte puede no haber propagado aún
                 const vm = computeGlobeViewModel(geoData, {
-                  ANSWERS: answersData,
-                  colors: colorMap,
+                  ANSWERS: aggregatedData,
+                  colors: aggregatedColors,
                 });
                 isoDominantKey = vm.isoDominantKey;
                 // *** USAR TOTALES AGREGADOS: Sumar todos los votos de este país y subniveles ***
