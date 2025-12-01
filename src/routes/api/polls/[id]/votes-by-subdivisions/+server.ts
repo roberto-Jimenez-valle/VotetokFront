@@ -20,6 +20,8 @@ import { prisma } from '$lib/server/prisma';
 export const GET: RequestHandler = async ({ params, url }) => {
 	const pollId = parseInt(params.id);
 	const countryIso = url.searchParams.get('country');
+	const hoursParam = url.searchParams.get('hours');
+	const hours = hoursParam ? parseInt(hoursParam) : null;
 
 	if (!countryIso) {
 		return json({ error: 'Country ISO code is required' }, { status: 400 });
@@ -40,10 +42,18 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			return json({ data: {} });
 		}
 
+		// Construir filtro de fecha si se especificó hours
+		const dateFilter = hours ? {
+			createdAt: {
+				gte: new Date(Date.now() - hours * 60 * 60 * 1000)
+			}
+		} : {};
+
 		// Obtener votos con subdivisión del país especificado
 		const votes = await prisma.vote.findMany({
 			where: {
 				pollId,
+				...dateFilter,
 				subdivision: {
 					subdivisionId: {
 						startsWith: countryIso  // ESP, FRA, etc.

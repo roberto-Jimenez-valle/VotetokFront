@@ -17,8 +17,10 @@ import { prisma } from '$lib/server/prisma';
  *   }
  * }
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, url }) => {
 	const pollId = parseInt(params.id);
+	const hoursParam = url.searchParams.get('hours');
+	const hours = hoursParam ? parseInt(hoursParam) : null;
 
 	if (isNaN(pollId)) {
 		return json({ error: 'Invalid poll ID' }, { status: 400 });
@@ -39,10 +41,18 @@ export const GET: RequestHandler = async ({ params }) => {
 			return json({ data: {} });
 		}
 
-		// Obtener todos los votos con subdivisión
+		// Construir filtro de fecha si se especificó hours
+		const dateFilter = hours ? {
+			createdAt: {
+				gte: new Date(Date.now() - hours * 60 * 60 * 1000)
+			}
+		} : {};
+
+		// Obtener votos con subdivisión (filtrados por fecha si aplica)
 		const votes = await prisma.vote.findMany({
 			where: {
-				pollId
+				pollId,
+				...dateFilter
 			},
 			select: {
 				optionId: true,
@@ -81,9 +91,8 @@ export const GET: RequestHandler = async ({ params }) => {
 		}
 
 
-		console.log(`[API votes-by-country] Poll ${pollId}: ${votes.length} votos encontrados en BD`);
-		console.log(`[API votes-by-country] Poll ${pollId}: ${Object.keys(countryVotes).length} países con datos`);
-		console.log(`[API votes-by-country] Poll ${pollId}: Países:`, Object.keys(countryVotes));
+		const hoursLabel = hours ? `últimas ${hours}h` : 'todos';
+		console.log(`[API votes-by-country] Poll ${pollId} (${hoursLabel}): ${votes.length} votos, ${Object.keys(countryVotes).length} países`);
 
 		return json({ data: countryVotes });
 

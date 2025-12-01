@@ -238,6 +238,10 @@
   let subdivisionLevelColorMap: Record<string, string> = {};
   let intensityMin = 0;
   let intensityMax = 1;
+  
+  // Filtros usados cuando se guardó la caché mundial (para invalidación inteligente)
+  let worldCacheTimeFilter: string | null = null;
+  let worldCacheTopTab: string | null = null;
 
   // Cache de ubicación del usuario (para no detectarla múltiples veces)
   let cachedUserCountryCentroid: { lat: number; lng: number } | null = null;
@@ -295,6 +299,47 @@
   ];
   let trendingTimeFilter: TimeFilterOption = "30d";
   let showTimeMenu = false; // Estado del menú de filtros de tiempo
+  
+  // Filtros de tiempo disponibles (dinámicos según datos)
+  let availableTimeFilters: Record<string, boolean> = {
+    "24h": true, "7d": true, "30d": true, "90d": true, "1y": true, "5y": true
+  };
+  let isLoadingTimeFilters = false;
+  
+  // Función para cargar filtros de tiempo disponibles
+  async function loadAvailableTimeFilters() {
+    isLoadingTimeFilters = true;
+    try {
+      const params = new URLSearchParams();
+      if (activePoll?.id) {
+        params.set('pollId', String(activePoll.id));
+      }
+      // Añadir región según el nivel de navegación
+      if (navigationState.level === "country" && selectedCountryIso) {
+        params.set('region', selectedCountryIso);
+      } else if (navigationState.level === "subdivision" && selectedSubdivisionId) {
+        params.set('region', selectedSubdivisionId);
+      }
+      
+      const response = await apiCall(`/api/polls/available-time-filters?${params.toString()}`);
+      if (response.ok) {
+        const { data } = await response.json();
+        availableTimeFilters = data;
+        
+        // Si el filtro actual no está disponible, cambiar al primer filtro disponible
+        if (!availableTimeFilters[trendingTimeFilter]) {
+          const firstAvailable = TIME_FILTER_OPTIONS.find(f => availableTimeFilters[f]);
+          if (firstAvailable) {
+            trendingTimeFilter = firstAvailable;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[loadAvailableTimeFilters] Error:', error);
+    } finally {
+      isLoadingTimeFilters = false;
+    }
+  }
   
   // Handlers para coordinación de dropdowns
   let closeTimeMenuOnClickOutside: ((e: MouseEvent) => void) | null = null;
@@ -1555,9 +1600,11 @@
         // Cargar datos de subdivisiones y actualizar answersData DESPUÉS de renderizar
         if (activePoll && activePoll.id) {
           // MODO ENCUESTA ESPECÍFICA: Cargar datos de esa encuesta CON REINTENTOS
+          // Usar el filtro de tiempo actual
+          const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
           try {
-                        const { data } = await loadDataWithRetry(
-              `/api/polls/${activePoll.id}/votes-by-subdivisions?country=${iso}`,
+            const { data } = await loadDataWithRetry(
+              `/api/polls/${activePoll.id}/votes-by-subdivisions?country=${iso}&hours=${hoursFilter}`,
               navToken,
               3, // 3 intentos
               500, // 500ms entre intentos
@@ -1566,6 +1613,12 @@
             // Verificar que realmente tenemos datos
             if (!data || Object.keys(data).length === 0) {
               throw new Error("No data received");
+            }
+
+            // VERIFICAR que seguimos en la misma navegación
+            if (navToken !== currentNavigationToken) {
+              console.log(`[navigateToCountry] ⏸️ Navegación cancelada después de cargar datos`);
+              return;
             }
 
             // *** INCLUIR TODOS LOS NIVELES para conteo agregado correcto ***
@@ -1581,6 +1634,12 @@
               }
             }
 
+            // VERIFICAR NUEVAMENTE antes de actualizar estado
+            if (navToken !== currentNavigationToken) {
+              console.log(`[navigateToCountry] ⏸️ Navegación cancelada antes de actualizar estado`);
+              return;
+            }
+
             // Guardar en cache de nivel country
             countryLevelAnswers = allLevelsData;
 
@@ -1592,8 +1651,15 @@
               (p: any) => !p.properties?._isParent,
             );
 
-            // Solo calcular si hay polígonos de subdivisión
+            // Solo calcular si hay polígonos de subdivisión Y navegación sigue válida
             if (subdivisionPolygons.length > 0) {
+              // VERIFICAR TOKEN ANTES DE EJECUTAR
+              if (navToken !== currentNavigationToken) {
+                console.log(`[navigateToCountry] ❌ BLOQUEANDO computeGlobeViewModel (token: ${navToken}/${currentNavigationToken})`);
+                return;
+              }
+              
+              console.log(`[navigateToCountry] ✅ Calculando con ${subdivisionPolygons.length} polígonos (token: ${navToken}/${currentNavigationToken})`);
               // Recalcular isoDominantKey y legendItems con los polígonos de subdivisión
               const geoData = {
                 type: "FeatureCollection",
@@ -1614,7 +1680,7 @@
               isoIntensity = vm.isoIntensity;
 
               // FORZAR MÚLTIPLES REFRESH DE COLORES para garantizar actualización
-                            // Refresh inmediato
+              // Refresh inmediato
               this.globe?.refreshPolyColors?.();
 
               // Refresh adicional después de 2 frames para asegurar
@@ -1625,7 +1691,7 @@
               // Refresh final después de un delay corto
               setTimeout(() => {
                 this.globe?.refreshPolyColors?.();
-                              }, 100);
+              }, 100);
             }
 
             // MOSTRAR ETIQUETA después de cargar datos (NIVEL 2 - Encuesta específica)
@@ -1656,8 +1722,9 @@
           // MODO TRENDING: Cargar datos de trending para este país
           try {
             const hours = TIME_FILTER_HOURS[trendingTimeFilter];
+            // Usar código ISO del país, no el nombre
             const response = await apiCall(
-              `/api/polls/trending-by-region?region=${encodeURIComponent(selectedCountryName || iso)}&limit=20&hours=${hours}`,
+              `/api/polls/trending-by-region?region=${encodeURIComponent(iso)}&limit=20&hours=${hours}`,
             );
 
             // Verificar si la navegación sigue siendo válida
@@ -1726,7 +1793,7 @@
 
                     try {
                       const pollResponse = await apiCall(
-                        `/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}`,
+                        `/api/polls/${poll.id}/votes-by-subdivisions?country=${iso}&hours=${hours}`,
                       );
 
                       // Verificar si la navegación sigue siendo válida después de cada poll
@@ -1765,6 +1832,12 @@
                         // *** ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de que esta encuesta termine ***
                         completedCount++;
 
+                        // VERIFICAR que la navegación sigue válida ANTES de actualizar datos globales
+                        if (navToken !== currentNavigationToken) {
+                          console.log(`[navigateToCountry/callback] ❌ BLOQUEANDO ANTES de actualizar datos (token: ${navToken}/${currentNavigationToken})`);
+                          return;
+                        }
+
                         // Actualizar datos globales progresivamente
                         answersData = { ...aggregatedData };
                         colorMap = { ...aggregatedColors };
@@ -1774,6 +1847,11 @@
                           (p: any) => !p.properties?._isParent,
                         );
                         if (subdivisionPolygons.length > 0) {
+                          // Doble verificación justo antes de ejecutar
+                          if (navToken !== currentNavigationToken) {
+                            console.log(`[navigateToCountry/callback] ❌ BLOQUEANDO computeGlobeViewModel`);
+                            return;
+                          }
                           const geoData = {
                             type: "FeatureCollection",
                             features: subdivisionPolygons,
@@ -1828,6 +1906,12 @@
                 };
               }
 
+              // VERIFICAR navegación ANTES de actualizar datos globales
+              if (navToken !== currentNavigationToken) {
+                console.log(`[navigateToCountry/trending] ❌ BLOQUEANDO ANTES de actualizar datos - token ${navToken}/${currentNavigationToken}`);
+                return;
+              }
+
               // Actualizar votos totales en activePollOptions
               activePollOptions = activePollOptions.map((option) => {
                 const totalVotesForPoll = Object.values(aggregatedData).reduce(
@@ -1849,6 +1933,12 @@
                 (p: any) => !p.properties?._isParent,
               );
               if (subdivisionPolygons.length > 0) {
+                // Doble verificación justo antes de ejecutar
+                if (navToken !== currentNavigationToken) {
+                  console.log(`[navigateToCountry/trending] ❌ BLOQUEANDO computeGlobeViewModel`);
+                  return;
+                }
+                console.log(`[navigateToCountry/trending] ✅ Calculando con ${subdivisionPolygons.length} polígonos`);
                 const geoData = {
                   type: "FeatureCollection",
                   features: subdivisionPolygons,
@@ -1870,7 +1960,7 @@
                 isoIntensity = vm.isoIntensity;
 
                 // FORZAR REFRESH DE COLORES - Los polígonos ya están renderizados, actualizar sus colores
-                                this.globe?.refreshPolyColors?.();
+                this.globe?.refreshPolyColors?.();
               }
 
               // MOSTRAR ETIQUETA después de cargar datos (NIVEL 2 - Trending)
@@ -2065,14 +2155,16 @@
         const polygonsToUse = skipPolygonLoad
           ? localPolygons
           : subdivisionPolygons;
-                        if (activePoll && activePoll.id) {
+        if (activePoll && activePoll.id) {
           // MODO ENCUESTA ESPECÍFICA: Cargar datos de esa encuesta CON REINTENTOS
+          // Usar el filtro de tiempo actual
+          const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
           try {
-                        const cleanSubdivisionId = subdivisionId.includes(".")
+            const cleanSubdivisionId = subdivisionId.includes(".")
               ? subdivisionId.split(".").pop()
               : subdivisionId;
             const { data } = await loadDataWithRetry(
-              `/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`,
+              `/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}&hours=${hoursFilter}`,
               navToken,
               3, // 3 intentos
               500, // 500ms entre intentos
@@ -2144,8 +2236,12 @@
           // MODO TRENDING: Cargar datos de trending para esta subdivisión
           try {
             const hours = TIME_FILTER_HOURS[trendingTimeFilter];
+            // Usar subdivisionId (ej: "ESP.4") en lugar de subdivisionName (ej: "Aragón")
+            const fullSubdivisionIdForApi = subdivisionId.includes(".")
+              ? subdivisionId
+              : `${countryIso}.${subdivisionId}`;
             const response = await apiCall(
-              `/api/polls/trending-by-region?region=${encodeURIComponent(subdivisionName)}&limit=20&hours=${hours}`,
+              `/api/polls/trending-by-region?region=${encodeURIComponent(fullSubdivisionIdForApi)}&limit=20&hours=${hours}`,
             );
             if (response.ok) {
               const { data: trendingPolls } = await response.json();
@@ -2195,8 +2291,8 @@
 
                   // Cargar datos de votos por sub-subdivisión para cada encuesta trending
                   try {
-                                        const pollResponse = await apiCall(
-                      `/api/polls/${poll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`,
+                    const pollResponse = await apiCall(
+                      `/api/polls/${poll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}&hours=${hours}`,
                     );
                     if (pollResponse.ok) {
                       const { data: pollData } = await pollResponse.json();
@@ -2387,23 +2483,20 @@
       // Restaurar datos mundiales desde cache
       if (activePoll && activePoll.id) {
         try {
-          // Si ya tenemos datos en cache, usarlos
-          if (Object.keys(worldLevelAnswers).length > 0) {
-            answersData = worldLevelAnswers;
-                      } else {
-            // Si no hay cache, cargar desde API usando PollDataService
-                        const data = await pollDataService.loadVotesByCountry(
-              activePoll.id,
-            );
+          // Cargar datos usando el filtro de tiempo actual
+          const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
+          const data = await pollDataService.loadVotesByCountry(
+            activePoll.id,
+            hoursFilter
+          );
 
-            // Verificar si la navegación sigue siendo válida
-            if (navToken !== currentNavigationToken) {
-                            return;
-            }
+          // Verificar si la navegación sigue siendo válida
+          if (navToken !== currentNavigationToken) {
+            return;
+          }
 
-            worldLevelAnswers = data;
-            answersData = data;
-                      }
+          worldLevelAnswers = data;
+          answersData = data;
 
           // Recalcular isoDominantKey y legendItems
           const geoData = {
@@ -2427,15 +2520,28 @@
           // Error restoring world data
         }
       } else if (!activePoll) {
-        // MODO TRENDING: Cargar datos de trending mundial
-        // Si ya hay datos de trending mundial en cache, usarlos
-
-        if (
-          Object.keys(worldLevelAnswers).length > 0 &&
-          Object.keys(worldLevelColorMap).length > 0
-        ) {
+        // MODO TRENDING: Usar caché solo si los filtros no han cambiado
+        // IMPORTANTE: No usar caché si venimos del historial (botón atrás) para evitar datos incorrectos
+        // IMPORTANTE: Verificar que el caché tiene datos de PAÍSES (ISO 3 letras) y no de subdivisiones (ESP.1, ESP.1.2)
+        const cacheKeys = Object.keys(worldLevelAnswers);
+        const hasWorldLevelData = cacheKeys.length > 0 && cacheKeys.some(key => 
+          /^[A-Z]{2,3}$/.test(key) // ISO codes: 2-3 letras mayúsculas sin puntos
+        );
+        
+        const cacheIsValid = 
+          !isNavigatingFromHistory &&
+          worldCacheTimeFilter === trendingTimeFilter &&
+          worldCacheTopTab === activeTopTab &&
+          hasWorldLevelData &&
+          Object.keys(worldLevelColorMap).length > 0;
+        
+        console.log(`[navigateToWorld] Cache check: isValid=${cacheIsValid}, isNavigatingFromHistory=${isNavigatingFromHistory}, filters match=${worldCacheTimeFilter === trendingTimeFilter && worldCacheTopTab === activeTopTab}, hasWorldLevelData=${hasWorldLevelData}, cacheKeys sample:`, cacheKeys.slice(0, 5));
+        
+        if (cacheIsValid) {
+          // Restaurar desde caché
+          console.log('[navigateToWorld] Usando caché de world');
           answersData = worldLevelAnswers;
-          colorMap = worldLevelColorMap; // CRÍTICO: Restaurar también el colorMap mundial
+          colorMap = worldLevelColorMap;
 
           // Recalcular isoDominantKey con los datos mundiales
           const geoData = {
@@ -2447,14 +2553,13 @@
             colors: colorMap,
           });
           isoDominantKey = vm.isoDominantKey;
-          // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
-          const aggregatedLegend = calculateAggregatedLegendItems(
-            "world",
-            null,
-          );
-          legendItems =
-            aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
+          const aggregatedLegend = calculateAggregatedLegendItems("world", null);
+          legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
           isoIntensity = vm.isoIntensity;
+        } else {
+          // Filtros cambiaron o no hay caché: recargar datos frescos
+          console.log('[navigateToWorld] Llamando a loadTrendingData() - NO usando caché');
+          await loadTrendingData();
         }
       }
 
@@ -2609,13 +2714,40 @@
       }
     }
 
+    // Método público para re-renderizar la vista del país (usado por refreshCurrentView)
+    async renderCountryViewPublic(iso: string, countryPolygons: any[]) {
+      return this.renderCountryView(iso, countryPolygons);
+    }
+
     private async renderCountryView(iso: string, countryPolygons: any[]) {
+      // CAPTURAR TOKEN AL INICIO para verificar si la navegación sigue válida
+      const startToken = currentNavigationToken;
+      
+      // CRÍTICO: Verificar que seguimos en el nivel country para este ISO
+      // Si el usuario navegó a otro lugar, cancelar esta operación
+      if (navigationState.level !== "country" || navigationState.countryIso !== iso) {
+        console.log(`[renderCountryView] ⏸️ Cancelando - navegación cambió (actual: ${navigationState.level}/${navigationState.countryIso}, esperado: country/${iso})`);
+        return;
+      }
+      
       try {
         // Cargar subdivisiones del país
         let subdivisionPolygons: any[] = [];
         try {
           subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(iso, iso);
         } catch (e) {
+        }
+
+        // VERIFICAR TOKEN después de la operación async
+        if (startToken !== currentNavigationToken) {
+          console.log(`[renderCountryView] ⏸️ Token cambió después de cargar subdivisiones (${startToken}/${currentNavigationToken})`);
+          return;
+        }
+
+        // VERIFICAR ESTADO DE NAVEGACIÓN
+        if (navigationState.level !== "country" || navigationState.countryIso !== iso) {
+          console.log(`[renderCountryView] ⏸️ Cancelando después de cargar subdivisiones - navegación cambió`);
+          return;
         }
 
         // FILTRAR polígonos inválidos ANTES de procesarlos
@@ -2734,7 +2866,20 @@
           }
         }
 
+        // VERIFICAR TOKEN FINAL antes de aplicar polígonos
+        if (startToken !== currentNavigationToken) {
+          console.log(`[renderCountryView] ⏸️ Token cambió antes de aplicar polígonos (${startToken}/${currentNavigationToken})`);
+          return;
+        }
+        
+        // VERIFICAR ESTADO DE NAVEGACIÓN
+        if (navigationState.level !== "country" || navigationState.countryIso !== iso) {
+          console.log(`[renderCountryView] ⏸️ Cancelando antes de aplicar polígonos - navegación cambió`);
+          return;
+        }
+
         // Combinar y renderizar
+        console.log(`[renderCountryView] ✅ Aplicando ${parentMarked.length + childMarked.length} polígonos (token: ${startToken})`);
         const combined = [...parentMarked, ...childMarked];
         this.globe?.setPolygonsData(combined);
 
@@ -2751,7 +2896,14 @@
       subdivisionId: string,
       subdivisionPolygons: any[],
     ) {
-            try {
+      // CRÍTICO: Verificar que seguimos en el nivel subdivision para este ID
+      // Si el usuario navegó a otro lugar, cancelar esta operación
+      if (navigationState.level !== "subdivision" || navigationState.subdivisionId !== subdivisionId) {
+        console.log(`[renderSubdivisionView] ⏸️ Cancelando - navegación cambió (actual: ${navigationState.level}/${navigationState.subdivisionId}, esperado: subdivision/${subdivisionId})`);
+        return;
+      }
+      
+      try {
         // Filter out null or invalid polygons first
         const validPolygons = subdivisionPolygons.filter((poly) => {
           return poly && poly.geometry && poly.geometry.type && poly.properties;
@@ -2842,11 +2994,17 @@
           }
         }
 
-                // Set subdivision polygons con colores ya aplicados
-                        this.globe?.setPolygonsData(markedPolygons);
+        // VERIFICAR FINAL antes de aplicar polígonos
+        if (navigationState.level !== "subdivision" || navigationState.subdivisionId !== subdivisionId) {
+          console.log(`[renderSubdivisionView] ⏸️ Cancelando antes de aplicar polígonos - navegación cambió`);
+          return;
+        }
+
+        // Set subdivision polygons con colores ya aplicados
+        this.globe?.setPolygonsData(markedPolygons);
 
         // IMPORTANTE: Hacer refresh INMEDIATO para aplicar colores de BD (igual que en nivel 2)
-                this.globe?.refreshPolyColors?.();
+        this.globe?.refreshPolyColors?.();
         this.globe?.refreshPolyAltitudes?.();
 
         // REFRESH ADICIONAL: Forzar refresh completo después de un pequeño delay
@@ -3116,10 +3274,9 @@
     navigationManager = new NavigationManager(globe);
   }
 
-  // Recargar trending cuando cambia el filtro de tiempo
-  $: if (trendingTimeFilter && globe && !activePoll) {
-    loadTrendingData();
-  }
+  // NOTA: La recarga de datos al cambiar el filtro de tiempo ahora se maneja
+  // en refreshCurrentView() que se llama desde el dropdown de tiempo.
+  // Esto evita cargas automáticas que interferían con las encuestas específicas.
 
   // Function to toggle dropdown and load options
   async function toggleDropdown(event?: Event) {
@@ -3520,12 +3677,13 @@
           selectedCityId = option.id;
 
           // 5. ✅ CARGAR DATOS DE LA API para nivel 3/4 (antes del zoom)
-                    if (activePoll && activePoll.id) {
-            // MODO ENCUESTA ESPECÍFICA
+          if (activePoll && activePoll.id) {
+            // MODO ENCUESTA ESPECÍFICA - usar filtro de tiempo actual
+            const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
             try {
               const cleanSubdivisionId = parentIdClean;
               const response = await apiCall(
-                `/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`,
+                `/api/polls/${activePoll.id}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}&hours=${hoursFilter}`,
               );
               if (response.ok) {
                 const { data } = await response.json();
@@ -4645,12 +4803,49 @@
     isClosingPoll = false;
   }
 
+  // Token para cancelar cargas anteriores de loadTrendingData
+  let loadTrendingToken = 0;
+  
+  // Flag para indicar que se está cargando una encuesta específica
+  // Esto previene que loadTrendingData se ejecute mientras se carga una encuesta
+  let isLoadingSpecificPoll = false;
+  
   // Función para cargar datos de trending (múltiples encuestas agregadas)
   async function loadTrendingData() {
+    // CRÍTICO: No cargar trending si se está cargando una encuesta específica
+    if (isLoadingSpecificPoll) {
+      console.log('[loadTrendingData] ⏸️ Ignorando - se está cargando una encuesta específica');
+      return;
+    }
+    
+    // Generar nuevo token para esta carga - esto invalida cargas anteriores
+    const myToken = ++loadTrendingToken;
+    
+    // Capturar AHORA el estado para saber qué nivel cargar
+    const levelAtStart = navigationState.level;
+    const countryAtStart = selectedCountryIso;
+    const subdivisionAtStart = selectedSubdivisionId;
+    
+    console.log(`[loadTrendingData] Iniciando carga con token: ${myToken}, nivel: ${levelAtStart}, country: ${countryAtStart}, subdiv: ${subdivisionAtStart}`);
+    
         try {
-      // Determinar qué API usar según el tab activo
+      // Determinar qué API usar según el tab activo y nivel de navegación
       const hours = TIME_FILTER_HOURS[trendingTimeFilter];
-      let apiUrl = `/api/polls/trending-by-region?region=Global&limit=20&hours=${hours}`;
+      
+      // Determinar región según el nivel actual
+      // World → Global
+      // Country (ESP) → ESP (busca ESP.*)
+      // Subdivision (ESP.1) → ESP.1 (busca ESP.1.*)
+      // Usar valores CAPTURADOS (no reactivos) para consistencia
+      let region = "Global";
+      if (levelAtStart === "country" && countryAtStart) {
+        region = countryAtStart;
+      } else if (levelAtStart === "subdivision" && subdivisionAtStart) {
+        region = subdivisionAtStart;
+      }
+      
+      let apiUrl = `/api/polls/trending-by-region?region=${region}&limit=20&hours=${hours}`;
+      console.log('[loadTrendingData] Cargando trending para región:', region, 'nivel:', levelAtStart);
 
       if (activeTopTab === "Para ti" && userData?.id) {
         // Si está en "Para ti" y hay usuario logueado, usar API personalizada
@@ -4665,7 +4860,14 @@
       // Cargar encuestas desde la API correspondiente usando cliente seguro
       try {
         const { data: trendingPolls } = await apiGet(apiUrl);
-                await processTrendingPolls(trendingPolls);
+        
+        // Verificar si esta carga fue cancelada
+        if (myToken !== loadTrendingToken) {
+          console.log(`[loadTrendingData] ⏭️ Carga ${myToken} cancelada, actual: ${loadTrendingToken}`);
+          return;
+        }
+        
+        await processTrendingPolls(trendingPolls, myToken, levelAtStart, countryAtStart, subdivisionAtStart);
         return;
       } catch (error: any) {
 
@@ -4676,7 +4878,10 @@
               "/api/polls/trending-by-region?region=Global&limit=20",
             );
             const { data: trendingPolls } = fallbackData;
-            await processTrendingPolls(trendingPolls);
+            
+            if (myToken !== loadTrendingToken) return;
+            
+            await processTrendingPolls(trendingPolls, myToken, levelAtStart, countryAtStart, subdivisionAtStart);
             return;
           } catch (fallbackError) {
                         return;
@@ -4689,8 +4894,20 @@
   }
 
   // Función auxiliar para procesar las encuestas trending
-  async function processTrendingPolls(trendingPolls: any[]) {
+  async function processTrendingPolls(
+    trendingPolls: any[], 
+    loadToken: number,
+    currentNavLevel: string,
+    currentCountryIso: string | null,
+    currentSubdivisionId: string | null
+  ) {
         try {
+      console.log(`[processTrendingPolls] Iniciando con nivel: ${currentNavLevel}, country: ${currentCountryIso}, loadToken: ${loadToken}`);
+      
+      // LIMPIAR datos anteriores al inicio para evitar mezcla de niveles
+      answersData = {};
+      colorMap = {};
+      
       // MODO TRENDING: Cada encuesta es una "opción"
       // Los países se pintan según qué encuesta tiene más votos totales
       const aggregatedData: Record<string, Record<string, number>> = {};
@@ -4729,36 +4946,89 @@
           pollData: poll, // IMPORTANTE: Guardar datos completos de la encuesta
         });
 
-        // Cargar datos de votos por país usando PollDataService
+        // Cargar datos de votos según el nivel capturado al inicio (NO usar variables reactivas)
         try {
-          const pollData = await pollDataService.loadVotesByCountry(poll.id);
+          // Verificar si esta carga fue cancelada por una nueva
+          if (loadToken !== loadTrendingToken) {
+            return;
+          }
+          
+          let pollData: Record<string, Record<string, number>> = {};
+          
+          // Usar el filtro de tiempo actual para cargar votos
+          const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
+          
+          // Si estamos en nivel país o subdivisión, cargar votos por subdivisión
+          if (currentNavLevel === "country" && currentCountryIso) {
+            pollData = await pollDataService.loadVotesBySubdivisions(poll.id, currentCountryIso, hoursFilter);
+            console.log(`[processTrendingPolls] Cargando subdivisiones de ${currentCountryIso} para poll ${poll.id} (${trendingTimeFilter}):`, Object.keys(pollData));
+          } else if (currentNavLevel === "subdivision" && currentSubdivisionId && currentCountryIso) {
+            // En nivel subdivisión, cargar votos por sub-subdivisiones
+            pollData = await pollDataService.loadVotesBySubSubdivisions(poll.id, currentCountryIso, currentSubdivisionId, hoursFilter);
+            console.log(`[processTrendingPolls] Cargando sub-subdivisiones de ${currentSubdivisionId} para poll ${poll.id} (${trendingTimeFilter}):`, Object.keys(pollData));
+          } else {
+            // Nivel world: cargar por países
+            pollData = await pollDataService.loadVotesByCountry(poll.id, hoursFilter);
+          }
 
-          // Sumar TODOS los votos de esta encuesta por país
-          for (const [countryIso, votes] of Object.entries(pollData)) {
-            if (!aggregatedData[countryIso]) {
-              aggregatedData[countryIso] = {};
+          // Sumar TODOS los votos de esta encuesta por región (país o subdivisión)
+          for (const [regionId, votes] of Object.entries(pollData)) {
+            if (!aggregatedData[regionId]) {
+              aggregatedData[regionId] = {};
             }
 
             const totalVotes = Object.values(votes).reduce(
               (sum, count) => sum + (count as number),
               0,
             );
-            aggregatedData[countryIso][pollKey] = totalVotes;
+            aggregatedData[regionId][pollKey] = totalVotes;
           }
 
           // *** ACTUALIZACIÓN PROGRESIVA: Pintar inmediatamente después de que esta encuesta termine ***
           completedCount++;
 
-          // Actualizar datos globales progresivamente
+          // CRÍTICO: Verificar token ANTES de modificar datos globales
+          // Si la carga fue cancelada, NO modificar answersData para no contaminar el nuevo flujo
+          if (loadToken !== loadTrendingToken) {
+            return;
+          }
+
+          // Actualizar datos globales progresivamente (solo si el token sigue válido)
           answersData = { ...aggregatedData };
           colorMap = { ...aggregatedColors };
-
-          // Esperar a que worldPolygons esté disponible
-          if (worldPolygons && worldPolygons.length > 0) {
+          
+          // Usar polígonos según el nivel capturado (NO variables reactivas)
+          let polygonsToUse = worldPolygons;
+          let levelForLegend: "world" | "country" = "world";
+          let isoForLegend: string | null = null;
+          
+          // Si estamos en nivel country, usar polígonos del país
+          if (currentNavLevel === "country" && currentCountryIso && navigationManager) {
+            const countryPolygons = navigationManager?.["polygonCache"]?.get(currentCountryIso) || [];
+            if (countryPolygons.length > 0) {
+              polygonsToUse = countryPolygons.filter((p: any) => !p.properties?._isParent);
+              levelForLegend = "country";
+              isoForLegend = currentCountryIso;
+            }
+          } else if (currentNavLevel === "subdivision" && currentSubdivisionId && currentCountryIso && navigationManager) {
+            // En nivel subdivision, usar polígonos de la subdivisión
+            const subdivNumId = currentSubdivisionId.includes('.') 
+              ? currentSubdivisionId.split('.').slice(1).join('.') 
+              : currentSubdivisionId;
+            const cacheKey = `${currentCountryIso}/${subdivNumId}`;
+            const subdivPolygons = navigationManager?.["polygonCache"]?.get(cacheKey) || [];
+            if (subdivPolygons.length > 0) {
+              polygonsToUse = subdivPolygons.filter((p: any) => !p.properties?._isParent);
+              levelForLegend = "country";
+              isoForLegend = currentSubdivisionId;
+            }
+          }
+          
+          if (polygonsToUse && polygonsToUse.length > 0) {
             // Recalcular y repintar colores progresivamente
             const geoData = {
               type: "FeatureCollection",
-              features: worldPolygons,
+              features: polygonsToUse,
             };
             const vm = computeGlobeViewModel(geoData, {
               ANSWERS: answersData,
@@ -4767,8 +5037,8 @@
             isoDominantKey = vm.isoDominantKey;
             // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
             const aggregatedLegend = calculateAggregatedLegendItems(
-              "world",
-              null,
+              levelForLegend,
+              isoForLegend,
             );
             legendItems =
               aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
@@ -4807,24 +5077,62 @@
       colorMap = aggregatedColors;
 
       // CRÍTICO: Guardar en cache mundial para poder restaurar después
+      // También guardar los filtros usados para invalidación inteligente
       worldLevelAnswers = aggregatedData;
       worldLevelColorMap = aggregatedColors;
+      worldCacheTimeFilter = trendingTimeFilter;
+      worldCacheTopTab = activeTopTab;
 
-      // Esperar a que worldPolygons esté disponible (máximo 2 segundos)
-      let attempts = 0;
-      while ((!worldPolygons || worldPolygons.length === 0) && attempts < 10) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        attempts++;
+      // Verificar si la carga fue cancelada - si es así, no continuar
+      if (loadToken !== loadTrendingToken) {
+        return;
+      }
+      
+      // Determinar qué polígonos usar según el nivel CAPTURADO (no el actual)
+      let finalPolygons = worldPolygons;
+      let levelForFinalLegend: "world" | "country" = "world";
+      let isoForFinalLegend: string | null = null;
+      
+      // Si estamos en nivel country, usar polígonos del país
+      if (currentNavLevel === "country" && currentCountryIso && navigationManager) {
+        const countryPolygons = navigationManager?.["polygonCache"]?.get(currentCountryIso) || [];
+        if (countryPolygons.length > 0) {
+          finalPolygons = countryPolygons.filter((p: any) => !p.properties?._isParent);
+          levelForFinalLegend = "country";
+          isoForFinalLegend = currentCountryIso;
+        }
+      } else if (currentNavLevel === "subdivision" && currentSubdivisionId && currentCountryIso && navigationManager) {
+        // En nivel subdivision, usar polígonos de la subdivisión
+        const subdivNumId = currentSubdivisionId.includes('.') 
+          ? currentSubdivisionId.split('.').slice(1).join('.') 
+          : currentSubdivisionId;
+        const cacheKey = `${currentCountryIso}/${subdivNumId}`;
+        const subdivPolygons = navigationManager?.["polygonCache"]?.get(cacheKey) || [];
+        if (subdivPolygons.length > 0) {
+          finalPolygons = subdivPolygons.filter((p: any) => !p.properties?._isParent);
+          levelForFinalLegend = "country";
+          isoForFinalLegend = currentSubdivisionId;
+        }
+      }
+      
+      // Si no hay polígonos disponibles, esperar a worldPolygons (solo para nivel world)
+      if (currentNavLevel === "world") {
+        let attempts = 0;
+        while ((!worldPolygons || worldPolygons.length === 0) && attempts < 10) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          attempts++;
+        }
+        finalPolygons = worldPolygons;
       }
 
-      if (!worldPolygons || worldPolygons.length === 0) {
+      if (!finalPolygons || finalPolygons.length === 0) {
         return;
       }
 
-      // Recalcular colores dominantes
+      // Recalcular colores dominantes con los polígonos correctos
       const geoData = {
         type: "FeatureCollection",
-        features: worldPolygons || [],
+        features: finalPolygons,
       };
       const vm = computeGlobeViewModel(geoData, {
         ANSWERS: answersData,
@@ -4832,7 +5140,7 @@
       });
       isoDominantKey = vm.isoDominantKey;
       // *** USAR TOTALES AGREGADOS: Sumar todos los votos de todos los subniveles ***
-      const aggregatedLegend = calculateAggregatedLegendItems("world", null);
+      const aggregatedLegend = calculateAggregatedLegendItems(levelForFinalLegend, isoForFinalLegend);
       legendItems =
         aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
       isoIntensity = vm.isoIntensity;
@@ -4843,12 +5151,9 @@
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
       // IMPORTANTE: Solo actualizar polígonos mundiales si estamos en nivel mundial
-      // Si estamos en país/subdivisión, NO sobrescribir con polígonos mundiales
-      const currentLevel = navigationManager?.getCurrentLevel();
-      if (currentLevel === "world" && globe?.setPolygonsData) {
-                globe.setPolygonsData(worldPolygons);
-      } else {
-              }
+      if (currentNavLevel === "world" && globe?.setPolygonsData) {
+        globe.setPolygonsData(worldPolygons);
+      }
 
       await updateGlobeColors();
       globe?.refreshPolyColors?.();
@@ -5034,18 +5339,24 @@
     // CRÍTICO: Esperar un tick antes de procesar para que el BottomSheet termine su transición
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-        // Si poll es null (trending/main poll), cerrar encuesta activa
+    // Si poll es null (trending/main poll), cerrar encuesta activa
     if (!poll || !poll.id) {
       if (activePoll) {
-                await closePoll();
+        await closePoll();
       }
       // Cargar datos de trending
       await loadTrendingData();
       return;
     }
+    
+    // CRÍTICO: Marcar que estamos cargando una encuesta específica
+    // Esto previene que loadTrendingData se ejecute durante la carga
+    isLoadingSpecificPoll = true;
+    console.log('[handleOpenPollInGlobe] 🔒 Iniciando carga de encuesta', poll.id);
 
     // Si es la misma encuesta Y NO viene del historial, no hacer nada
     if (activePoll && activePoll.id === poll.id && !isNavigatingFromHistory) {
+      isLoadingSpecificPoll = false; // Limpiar flag
       return;
     }
 
@@ -5164,8 +5475,10 @@
     const newAnswersData: Record<string, Record<string, number>> = {};
 
     try {
-      // Cargar votos usando PollDataService
-      const data = await pollDataService.loadVotesByCountry(poll.id);
+      // Cargar votos usando PollDataService con el filtro de tiempo actual
+      const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
+      console.log(`[handleOpenPollInGlobe] Cargando votos de poll ${poll.id} para las últimas ${trendingTimeFilter}`);
+      const data = await pollDataService.loadVotesByCountry(poll.id, hoursFilter);
 
       // *** PROCESAMIENTO PROGRESIVO: Pintar a medida que procesamos cada país ***
       const countries = Object.entries(data);
@@ -5368,10 +5681,14 @@
     // CRÍTICO: Asegurar que el controlador del BottomSheet está listo después de todas las animaciones
     setTimeout(() => {
       if (sheetCtrl) {
-                // Limpiar cualquier estado de drag que pueda haber quedado activo
+        // Limpiar cualquier estado de drag que pueda haber quedado activo
         sheetCtrl.resetDragState();
       }
     }, 1200); // Después de que termine el zoom (1000ms) + margen
+    
+    // CRÍTICO: Limpiar flag de carga de encuesta
+    isLoadingSpecificPoll = false;
+    console.log('[handleOpenPollInGlobe] 🔓 Carga de encuesta completada', poll.id);
   }
 
   function onSheetScroll(e: Event) {
@@ -6610,28 +6927,115 @@
     avatar: string;
   }> = [];
 
+  // Estado de recarga de datos
+  let isRefreshingData = false;
+
+  // Función para recargar datos del nivel actual (usado al cambiar filtros o tabs)
+  async function refreshCurrentView() {
+    console.log('[refreshCurrentView] Recargando nivel:', navigationState.level, 'activePoll:', activePoll?.id);
+    
+    // Activar estado de carga
+    isRefreshingData = true;
+    
+    try {
+      // Si hay una encuesta activa, recargar sus datos con el nuevo filtro de tiempo
+      if (activePoll && activePoll.id) {
+        const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
+        console.log(`[refreshCurrentView] Recargando encuesta ${activePoll.id} con filtro ${trendingTimeFilter} (${hoursFilter}h)`);
+        
+        if (navigationState.level === "world") {
+          // Recargar votos por país con el nuevo filtro
+          const data = await pollDataService.loadVotesByCountry(activePoll.id, hoursFilter);
+          answersData = data;
+          worldLevelAnswers = data;
+          
+          // Recalcular colores
+          if (worldPolygons && worldPolygons.length > 0) {
+            const geoData = { type: "FeatureCollection", features: worldPolygons };
+            const vm = computeGlobeViewModel(geoData, { ANSWERS: answersData, colors: colorMap });
+            isoDominantKey = vm.isoDominantKey;
+            const aggregatedLegend = calculateAggregatedLegendItems("world", null);
+            legendItems = aggregatedLegend.length > 0 ? aggregatedLegend : vm.legendItems;
+            isoIntensity = vm.isoIntensity;
+            globe?.refreshPolyColors?.();
+          }
+        } else if (navigationState.level === "country" && selectedCountryIso) {
+          // Recargar votos por subdivisión con el nuevo filtro
+          const data = await pollDataService.loadVotesBySubdivisions(activePoll.id, selectedCountryIso, hoursFilter);
+          answersData = data;
+          countryLevelAnswers = data;
+          globe?.refreshPolyColors?.();
+        } else if (navigationState.level === "subdivision" && selectedSubdivisionId && selectedCountryIso) {
+          // Recargar votos por sub-subdivisión con el nuevo filtro
+          const data = await pollDataService.loadVotesBySubSubdivisions(activePoll.id, selectedCountryIso, selectedSubdivisionId, hoursFilter);
+          answersData = data;
+          globe?.refreshPolyColors?.();
+        }
+        return;
+      }
+      
+      // Si NO hay encuesta activa, comportamiento normal (trending)
+      // Cerrar cualquier estado residual
+      globalActivePoll.close();
+      
+      if (navigationState.level === "world") {
+        // Nivel world: recargar trending global y actualizar colores
+        await loadTrendingData();
+        await updateGlobeColors(true);
+      } else if (navigationState.level === "country" && selectedCountryIso && navigationManager) {
+        // Nivel country: recargar datos de trending para este país
+        console.log('[refreshCurrentView] Recargando país:', selectedCountryIso);
+        
+        // Cargar datos trending específicos del país
+        await loadTrendingData();
+        
+        // Obtener polígonos actuales del caché y re-renderizar
+        const countryPolygons = navigationManager?.["polygonCache"]?.get(selectedCountryIso) || [];
+        if (countryPolygons.length > 0) {
+          await navigationManager.renderCountryViewPublic(selectedCountryIso, countryPolygons);
+        }
+      } else if (navigationState.level === "subdivision" && selectedSubdivisionId && selectedCountryIso && navigationManager) {
+        // Nivel subdivision: recargar datos de la subdivisión
+        console.log('[refreshCurrentView] Recargando subdivisión:', selectedSubdivisionId);
+        
+        await loadTrendingData();
+        
+        // Usar polígonos de la subdivisión específica
+        // La clave del caché es "countryIso/subdivisionId" (ej: "ESP/1")
+        const subdivNumId = selectedSubdivisionId.includes('.') 
+          ? selectedSubdivisionId.split('.').slice(1).join('.') 
+          : selectedSubdivisionId;
+        const cacheKey = `${selectedCountryIso}/${subdivNumId}`;
+        const subdivPolygons = navigationManager?.["polygonCache"]?.get(cacheKey) || [];
+        if (subdivPolygons.length > 0) {
+          // Renderizar la vista de subdivisión
+          globe?.refreshPolyColors?.();
+        }
+      }
+      
+    } finally {
+      // Desactivar estado de carga con un pequeño delay para transición suave
+      setTimeout(() => {
+        isRefreshingData = false;
+      }, 300);
+    }
+  }
+
   // Handler para cambio de tab "Para ti" / "Tendencias"
   async function handleTopTabChange(event: CustomEvent<string>) {
     const newTab = event.detail as "Para ti" | "Tendencias" | "Live";
+    console.log('[handleTopTabChange] Cambiando a tab:', newTab, 'activePoll:', activePoll?.id);
 
-        // IMPORTANTE: No comparar con activeTopTab porque bind:active ya lo actualizó
-    // Solo verificar que el tab sea válido
-
-    // activeTopTab ya está actualizado por bind:active, no hace falta setearlo aquí
-
-    // En modo trending (nivel mundial), SIEMPRE recargar al cambiar tab
-    // Esto permite cambiar entre "Para ti" y "Tendencias" dinámicamente
-    if (navigationState.level === "world") {
-
-      // FASE 3: Limpiar la encuesta activa usando store para forzar modo trending
-      globalActivePoll.close();
-
-      // Recargar datos según el nuevo tab
-      await loadTrendingData();
-      await updateGlobeColors(true); // Con fade
-    } else {
-      // Si estás en nivel regional (país o subdivisión), mantener la vista actual
-          }
+    // Si hay una encuesta activa y el usuario cambia de tab, cerrar la encuesta
+    // y volver a modo trending
+    if (activePoll) {
+      console.log('[handleTopTabChange] Cerrando encuesta activa para volver a trending');
+      await closePoll(); // Esto cargará trending automáticamente
+      return; // No necesitamos llamar a refreshCurrentView porque closePoll ya lo hace
+    }
+    
+    // Recargar datos del nivel actual al cambiar de tab (solo si no había encuesta)
+    await refreshCurrentView();
   }
 
   // Activar/desactivar teselas OSM según visibilidad de polígonos
@@ -7476,6 +7880,10 @@
       // Marcar como procesado para evitar doble carga en el watcher
       lastProcessedPollId = pollIdParam;
 
+      // CRÍTICO: Marcar que estamos cargando una encuesta específica
+      // Esto previene que loadTrendingData se ejecute durante la carga
+      isLoadingSpecificPoll = true;
+      
       // CRÍTICO: Marcar que estamos navegando desde carga inicial
       // para evitar que handleOpenPollInGlobe cierre encuestas o haga pushState
       isNavigatingFromHistory = true;
@@ -7492,6 +7900,7 @@
 
       if (!globe) {
         isNavigatingFromHistory = false;
+        isLoadingSpecificPoll = false; // Limpiar flag
         isInitialMount = false;
         return;
       }
@@ -7578,10 +7987,12 @@
       const loadNewPoll = async () => {
         // Marcar que estamos navegando desde el watcher para evitar pushState
         isNavigatingFromHistory = true;
+        // Marcar que estamos cargando una encuesta específica
+        isLoadingSpecificPoll = true;
 
         try {
           if (activePoll) {
-                        // Cerrar sin cargar trending, vamos a abrir otra encuesta inmediatamente
+            // Cerrar sin cargar trending, vamos a abrir otra encuesta inmediatamente
             await closePoll(true);
             // Esperar un frame para que se complete el cierre
             await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -7622,8 +8033,10 @@
 
           await handleOpenPollInGlobe(syntheticEvent);
         } catch (error) {
-                  } finally {
-          // Limpiar flag
+          console.error('[Watcher] Error cargando encuesta:', error);
+          isLoadingSpecificPoll = false; // Limpiar en caso de error
+        } finally {
+          // Limpiar flags
           isNavigatingFromHistory = false;
         }
       };
@@ -8825,6 +9238,11 @@
   style={`background: linear-gradient(to bottom, ${bgColor} 0%, ${hexToRgba(bgColor, 1)} 25%, ${hexToRgba(bgColor, 0.3)} 70%, transparent 100%)`}
 ></div>
 
+<!-- Overlay de carga minimalista -->
+{#if isRefreshingData}
+  <div class="data-loading-overlay" transition:fade={{ duration: 200 }}></div>
+{/if}
+
 <!-- Zoom out para volver - sin indicador visual -->
 
 <svelte:window
@@ -8914,6 +9332,7 @@
     <TopTabs
       bind:active={activeTopTab}
       options={["Para ti", "Tendencias", "Live"]}
+      customActiveLabel={activePoll ? "Encuesta" : null}
       on:change={handleTopTabChange}
     />
 
@@ -8921,10 +9340,13 @@
       <div class="time-dropdown-wrapper">
         <button
           class="time-trigger"
-          on:click|stopPropagation={() => {
+          on:click|stopPropagation={async () => {
+            const wasOpen = showTimeMenu;
             showTimeMenu = !showTimeMenu;
             if (showTimeMenu) {
               window.dispatchEvent(new CustomEvent('closeOtherDropdowns', { detail: 'timeMenu' }));
+              // Cargar filtros disponibles al abrir el dropdown
+              await loadAvailableTimeFilters();
             }
           }}
         >
@@ -8951,21 +9373,27 @@
 
         {#if showTimeMenu}
           <div class="time-menu" transition:fade={{ duration: 100 }}>
-            {#each TIME_FILTER_OPTIONS as time}
-              <button
-                class="time-option"
-                class:selected={trendingTimeFilter === time}
-                on:click|stopPropagation={() => {
-                  trendingTimeFilter = time;
-                  showTimeMenu = false;
-                }}
-              >
-                {#if time === "1y"}1a
-                {:else if time === "5y"}5a
-                {:else}{time}
-                {/if}
-              </button>
-            {/each}
+            {#if isLoadingTimeFilters}
+              <div class="time-loading">Cargando...</div>
+            {:else}
+              {#each TIME_FILTER_OPTIONS.filter(t => availableTimeFilters[t]) as time}
+                <button
+                  class="time-option"
+                  class:selected={trendingTimeFilter === time}
+                  on:click|stopPropagation={async () => {
+                    trendingTimeFilter = time;
+                    showTimeMenu = false;
+                    // Recargar datos del nivel actual
+                    await refreshCurrentView();
+                  }}
+                >
+                  {#if time === "1y"}1a
+                  {:else if time === "5y"}5a
+                  {:else}{time}
+                  {/if}
+                </button>
+              {/each}
+            {/if}
           </div>
         {/if}
       </div>
@@ -9260,6 +9688,13 @@
     box-shadow: 
       inset 2px 2px 5px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
       inset -2px -2px 5px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
+  }
+
+  .time-loading {
+    padding: 12px 16px;
+    text-align: center;
+    color: var(--neo-text-light, #9ca3af);
+    font-size: 12px;
   }
 
   /* Bloquear elementos durante animaciones de cámara */

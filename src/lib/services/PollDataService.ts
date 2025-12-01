@@ -24,10 +24,15 @@ export interface TrendingPoll {
 export class PollDataService {
   /**
    * Cargar votos de una encuesta por país
+   * @param pollId - ID de la encuesta
+   * @param hours - Opcional: filtrar votos de las últimas N horas
    */
-  async loadVotesByCountry(pollId: number | string): Promise<VotesBySubdivision> {
+  async loadVotesByCountry(pollId: number | string, hours?: number): Promise<VotesBySubdivision> {
     try {
-      const response = await apiCall(`/api/polls/${pollId}/votes-by-country`);
+      const url = hours 
+        ? `/api/polls/${pollId}/votes-by-country?hours=${hours}`
+        : `/api/polls/${pollId}/votes-by-country`;
+      const response = await apiCall(url);
 
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando votos por país`);
@@ -35,7 +40,8 @@ export class PollDataService {
       }
 
       const { data } = await response.json();
-      console.log(`[PollDataService] ✅ Votos por país cargados:`, Object.keys(data || {}).length, 'países');
+      const hoursLabel = hours ? `últimas ${hours}h` : 'todos';
+      console.log(`[PollDataService] ✅ Votos por país (${hoursLabel}):`, Object.keys(data || {}).length, 'países');
 
       return data || {};
     } catch (error) {
@@ -46,15 +52,20 @@ export class PollDataService {
 
   /**
    * Cargar votos de una encuesta por subdivisiones (nivel 1)
+   * @param pollId - ID de la encuesta
+   * @param countryIso - Código ISO del país
+   * @param hours - Opcional: filtrar votos de las últimas N horas
    */
   async loadVotesBySubdivisions(
     pollId: number | string,
-    countryIso: string
+    countryIso: string,
+    hours?: number
   ): Promise<VotesBySubdivision> {
     try {
-      const response = await apiCall(
-        `/api/polls/${pollId}/votes-by-subdivisions?country=${countryIso}`
-      );
+      const url = hours
+        ? `/api/polls/${pollId}/votes-by-subdivisions?country=${countryIso}&hours=${hours}`
+        : `/api/polls/${pollId}/votes-by-subdivisions?country=${countryIso}`;
+      const response = await apiCall(url);
 
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando votos por subdivisiones`);
@@ -72,7 +83,8 @@ export class PollDataService {
         }
       }
 
-      console.log(`[PollDataService] ✅ Votos nivel 1 cargados:`, Object.keys(level1Data).length, 'subdivisiones');
+      const hoursLabel = hours ? `últimas ${hours}h` : 'todos';
+      console.log(`[PollDataService] ✅ Votos nivel 1 (${hoursLabel}):`, Object.keys(level1Data).length, 'subdivisiones');
 
       return level1Data;
     } catch (error) {
@@ -83,20 +95,25 @@ export class PollDataService {
 
   /**
    * Cargar votos de una encuesta por sub-subdivisiones (nivel 2)
+   * @param pollId - ID de la encuesta
+   * @param countryIso - Código ISO del país
+   * @param subdivisionId - ID de la subdivisión padre
+   * @param hours - Opcional: filtrar votos de las últimas N horas
    */
   async loadVotesBySubSubdivisions(
     pollId: number | string,
     countryIso: string,
-    subdivisionId: string
+    subdivisionId: string,
+    hours?: number
   ): Promise<VotesBySubdivision> {
     try {
       const cleanSubdivisionId = subdivisionId.includes('.')
         ? subdivisionId.split('.').pop()
         : subdivisionId;
 
-      const response = await apiCall(
-        `/api/polls/${pollId}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`
-      );
+      const baseUrl = `/api/polls/${pollId}/votes-by-subsubdivisions?country=${countryIso}&subdivision=${cleanSubdivisionId}`;
+      const url = hours ? `${baseUrl}&hours=${hours}` : baseUrl;
+      const response = await apiCall(url);
 
       if (!response.ok) {
         console.warn(`[PollDataService] ⚠️ Error ${response.status} cargando votos por sub-subdivisiones`);
@@ -114,7 +131,8 @@ export class PollDataService {
         }
       }
 
-      console.log(`[PollDataService] ✅ Votos nivel 2 cargados:`, Object.keys(level2Data).length, 'sub-subdivisiones');
+      const hoursLabel = hours ? `últimas ${hours}h` : 'todos';
+      console.log(`[PollDataService] ✅ Votos nivel 2 (${hoursLabel}):`, Object.keys(level2Data).length, 'sub-subdivisiones');
 
       return level2Data;
     } catch (error) {

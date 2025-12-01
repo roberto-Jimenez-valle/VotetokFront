@@ -4,6 +4,8 @@
 
   export let active: 'Para ti' | 'Tendencias' | 'Amigos' | 'Live' = 'Para ti';
   export let options: Array<'Para ti' | 'Tendencias' | 'Amigos' | 'Live'> = ['Para ti','Tendencias','Amigos','Live'];
+  // Label personalizado para mostrar en el trigger (ej: "Encuesta" cuando hay poll activa)
+  export let customActiveLabel: string | null = null;
   const dispatch = createEventDispatcher<{ change: string; symbolChange: '#' | '@' }>();
   let open = false;
   let rootEl: HTMLDivElement | null = null;
@@ -78,6 +80,17 @@
   .tabs-trigger:hover { 
     opacity: 0.8;
   }
+  .tabs-trigger.has-custom-label {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+  .tabs-trigger.has-custom-label span {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
   .caret { 
     color: var(--neo-text-light, #9ca3af);
     opacity: 0.8;
@@ -135,8 +148,8 @@
 </style>
 
 <div class="tabs-dd" bind:this={rootEl}>
-  <button class="tabs-trigger" on:click={toggle} aria-haspopup="menu" aria-expanded={open}>
-    <span>{active}</span>
+  <button class="tabs-trigger" class:has-custom-label={!!customActiveLabel} on:click={toggle} aria-haspopup="menu" aria-expanded={open}>
+    <span>{customActiveLabel || active}</span>
     <svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
@@ -147,7 +160,7 @@
 {#if open}
   <div role="menu" class="menu">
     {#each options as opt}
-      <button role="menuitemradio" aria-checked={active === opt} on:click={() => select(opt)}>{opt}</button>
+      <button role="menuitemradio" aria-checked={!customActiveLabel && active === opt} on:click={() => select(opt)}>{opt}</button>
     {/each}
   </div>
 {/if}

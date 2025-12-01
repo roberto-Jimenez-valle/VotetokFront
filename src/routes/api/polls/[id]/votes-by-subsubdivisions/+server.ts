@@ -26,6 +26,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	const pollId = parseInt(params.id);
 	const countryIso = url.searchParams.get('country');
 	const subdivisionId = url.searchParams.get('subdivision');
+	const hoursParam = url.searchParams.get('hours');
+	const hours = hoursParam ? parseInt(hoursParam) : null;
 
 	if (!countryIso) {
 		return json({ error: 'Country ISO code is required' }, { status: 400 });
@@ -48,11 +50,15 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			? subdivisionId 
 			: `${countryIso}.${subdivisionId}`;
 		
+		// Calcular fecha límite si se especificó hours
+		const dateLimit = hours ? new Date(Date.now() - hours * 60 * 60 * 1000) : null;
+		
 		console.log('[API votes-by-subsubdivisions] Buscando votos:', {
 			pollId,
 			countryIso,
 			subdivisionId,
-			normalizedSubdivisionId
+			normalizedSubdivisionId,
+			hours: hours || 'todos'
 		});
 		
 		// Obtener todas las opciones de la encuesta
@@ -74,13 +80,23 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		// subdivisions.subdivision_id es STRING jerárquico ("ESP.1.2")
 		const searchPattern = normalizedSubdivisionId + '.%';
 		
-		const votes = await prisma.$queryRaw<Array<{ subdivisionId: string; optionId: number }>>`
-			SELECT s.subdivision_id as "subdivisionId", v.option_id as "optionId"
-			FROM votes v
-			INNER JOIN subdivisions s ON v.subdivision_id = s.id
-			WHERE v.poll_id = ${pollId}
-			  AND s.subdivision_id LIKE ${searchPattern}
-		`;
+		// Query con o sin filtro de fecha
+		const votes = dateLimit 
+			? await prisma.$queryRaw<Array<{ subdivisionId: string; optionId: number }>>`
+				SELECT s.subdivision_id as "subdivisionId", v.option_id as "optionId"
+				FROM votes v
+				INNER JOIN subdivisions s ON v.subdivision_id = s.id
+				WHERE v.poll_id = ${pollId}
+				  AND s.subdivision_id LIKE ${searchPattern}
+				  AND v.created_at >= ${dateLimit}
+			`
+			: await prisma.$queryRaw<Array<{ subdivisionId: string; optionId: number }>>`
+				SELECT s.subdivision_id as "subdivisionId", v.option_id as "optionId"
+				FROM votes v
+				INNER JOIN subdivisions s ON v.subdivision_id = s.id
+				WHERE v.poll_id = ${pollId}
+				  AND s.subdivision_id LIKE ${searchPattern}
+			`;
 		
 		console.log('[API votes-by-subsubdivisions] Votos encontrados:', votes.length);
 

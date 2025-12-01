@@ -2,8 +2,13 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
 /**
- * GET /api/polls/trending-by-region?region=Spain&limit=5
+ * GET /api/polls/trending-by-region?region=Global&limit=5&hours=720
  * Obtiene las encuestas más trending de una región específica
+ * 
+ * Parámetros:
+ * - region: "Global" para todas, o código ISO de país (ej: "ESP", "USA")
+ * - limit: número máximo de encuestas (1-20)
+ * - hours: ventana de tiempo en horas (default: 720 = 30 días)
  */
 export const GET: RequestHandler = async ({ url }) => {
   try {
@@ -14,16 +19,37 @@ export const GET: RequestHandler = async ({ url }) => {
     const dateLimit = new Date();
     dateLimit.setHours(dateLimit.getHours() - hoursAgo);
 
+    const isGlobal = region === 'Global' || region === 'global';
+
+    // Construir filtro base
+    const baseWhere: any = {
+      status: 'active',
+      isRell: false,
+      createdAt: {
+        gte: dateLimit,
+      },
+    };
+
+    // Si es una región específica (país), filtrar encuestas que tengan votos en ese país
+    if (!isGlobal) {
+      // Buscar encuestas que tengan al menos un voto en el país especificado
+      // El país se identifica por el prefijo del subdivisionId (ej: "ESP.1" para España)
+      // Añadimos el punto para asegurar match exacto del país (ESP. no ESPx)
+      const countryPrefix = `${region.toUpperCase()}.`;
+      baseWhere.votes = {
+        some: {
+          subdivision: {
+            subdivisionId: {
+              startsWith: countryPrefix,
+            },
+          },
+        },
+      };
+    }
 
     // Obtener encuestas activas de la región
     const polls = await prisma.poll.findMany({
-      where: {
-        status: 'active',
-        isRell: false, // Excluir rells del trending
-        createdAt: {
-          gte: dateLimit,
-        },
-      },
+      where: baseWhere,
       select: {
         id: true,
         userId: true,
@@ -69,19 +95,37 @@ export const GET: RequestHandler = async ({ url }) => {
             interactions: true,
           },
         },
+        // Si es región específica, también obtener conteo de votos en esa región
+        ...(isGlobal ? {} : {
+          votes: {
+            where: {
+              subdivision: {
+                subdivisionId: {
+                  startsWith: `${region.toUpperCase()}.`,
+                },
+              },
+            },
+            select: {
+              id: true,
+            },
+          },
+        }),
       },
       orderBy: [
-        { votes: { _count: 'desc' } }, // Priorizar encuestas con más votos
-        { createdAt: 'desc' }          // Desempate por fecha
+        { votes: { _count: 'desc' } },
+        { createdAt: 'desc' }
       ],
     });
 
-    // Calcular score de trending
-    const pollsWithScore = polls.map(poll => {
+    // Calcular score de trending (usando votos de la región si es específica)
+    const pollsWithScore = polls.map((poll: any) => {
+      // Si es región específica, usar votos de esa región; si no, usar total
+      const regionalVotes = !isGlobal && poll.votes ? poll.votes.length : poll._count.votes;
       const totalVotes = poll._count.votes;
-      const votesScore = totalVotes;
-      const viewsScore = totalVotes * 1.5; // Proxy: asumir 3x vistas por voto
-      const engagementRate = totalVotes > 0 ? 2.0 : 0;
+      
+      const votesScore = regionalVotes;
+      const viewsScore = regionalVotes * 1.5;
+      const engagementRate = regionalVotes > 0 ? 2.0 : 0;
       const commentsScore = poll._count.comments * 3.0;
       const interactionsScore = poll._count.interactions * 2.0;
       const hoursOld = (Date.now() - poll.createdAt.getTime()) / (1000 * 60 * 60);
@@ -95,9 +139,13 @@ export const GET: RequestHandler = async ({ url }) => {
         interactionsScore
       ) * (1 + recencyFactor);
 
+      // Eliminar el array de votes del resultado final para no enviar datos innecesarios
+      const { votes: _, ...pollWithoutVotes } = poll;
+
       return {
-        ...poll,
+        ...pollWithoutVotes,
         trendingScore: Math.round(trendingScore),
+        regionalVotes: !isGlobal ? regionalVotes : undefined,
       };
     });
 
@@ -107,18 +155,18 @@ export const GET: RequestHandler = async ({ url }) => {
       .slice(0, limit)
       .map(poll => ({
         ...poll,
-        options: poll.options.map(option => ({
+        options: poll.options.map((option: any) => ({
           ...option,
           voteCount: option._count.votes,
           avatarUrl: option.createdBy?.avatarUrl || null
         }))
       }));
 
-
     return json({
       data: trendingPolls,
       meta: {
         region,
+        isGlobal,
         hoursAgo,
         totalPolls: polls.length,
         dateLimit: dateLimit.toISOString(),
