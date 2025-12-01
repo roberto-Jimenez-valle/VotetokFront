@@ -1079,35 +1079,59 @@
   .toggle-track {
     width: 56px;
     height: 28px;
-    background: rgba(0, 0, 0, 0.15);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: var(--neo-bg, #e0e5ec);
     border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: none;
     position: relative;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+    /* Neumorfismo inset profundo */
+    box-shadow: 
+      inset 5px 5px 10px var(--neo-shadow-dark, rgba(163, 177, 198, 0.7)),
+      inset -5px -5px 10px var(--neo-shadow-light, rgba(255, 255, 255, 0.8)),
+      inset 0 0 4px var(--neo-shadow-dark, rgba(163, 177, 198, 0.3));
   }
 
   .unified-toggle:hover .toggle-track {
-    background: rgba(0, 0, 0, 0.2);
-    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 
+      inset 6px 6px 12px var(--neo-shadow-dark, rgba(163, 177, 198, 0.8)),
+      inset -6px -6px 12px var(--neo-shadow-light, rgba(255, 255, 255, 0.9)),
+      inset 0 0 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4));
+  }
+
+  /* Modo claro - más profundidad */
+  :global(html:not(.dark)) .toggle-track {
+    background: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0);
+    box-shadow: 
+      inset 5px 5px 12px rgba(163, 177, 198, 0.6),
+      inset -5px -5px 12px rgba(255, 255, 255, 0.9),
+      inset 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  :global(html:not(.dark)) .unified-toggle:hover .toggle-track {
+    box-shadow: 
+      inset 6px 6px 14px rgba(163, 177, 198, 0.7),
+      inset -6px -6px 14px rgba(255, 255, 255, 1),
+      inset 0 3px 6px rgba(0, 0, 0, 0.1);
   }
 
   .toggle-icon {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     /* background dinámico aplicado por style="" */
     border-radius: 50%;
     position: absolute;
-    top: 2px;
-    left: 2px;
+    top: 3px;
+    left: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Neumorfismo elevado para el círculo */
+    box-shadow: 
+      3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+      -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
   }
 
   .toggle-icon.dark {
@@ -1167,13 +1191,13 @@
   /* Toggle integrado en modo claro */
   :global(html:not(.dark)) .toggle-track {
     background: rgba(255, 255, 255, 0.3);
-    border: 1px solid rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
   :global(html:not(.dark)) .unified-toggle:hover .toggle-track {
-    background: rgba(255, 255, 255, 0.4);
-    border-color: rgba(0, 0, 0, 0.2);
+    background: rgba(255, 249, 249, 0.4);
+    border-color: rgba(253, 253, 253, 0.2);
   }
 
   /* Selector de paletas */
