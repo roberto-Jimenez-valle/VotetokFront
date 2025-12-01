@@ -706,7 +706,7 @@
 
       // Navegar al mundo y hacer zoom hacia atrás
       await navigationManager!.navigateToWorld();
-      scheduleZoom(0, 0, 2.0, 1000);
+      scheduleZoom(0, 0, 4.0, 1000);
     } else if (targetLevel === "country" && selectedCountryIso) {
       // Limpiar niveles inferiores
       selectedSubdivisionName = null;
@@ -3109,14 +3109,14 @@
         const currentLat = currentPov?.lat || 0;
         const currentLng = currentPov?.lng || 0;
         await this.navigateToWorld();
-        scheduleZoom(currentLat, currentLng, 2.0, 1000);
+        scheduleZoom(currentLat, currentLng, 4.0, 1000);
       } else if (currentLevel === "subdivision") {
         // Nivel 3 -> Volver directamente a nivel 0 (world)
                 const currentPov = globe?.pointOfView();
         const currentLat = currentPov?.lat || 0;
         const currentLng = currentPov?.lng || 0;
         await this.navigateToWorld();
-        scheduleZoom(currentLat, currentLng, 2.0, 1000);
+        scheduleZoom(currentLat, currentLng, 4.0, 1000);
       } else if (currentLevel === "country") {
         // Nivel 2 -> Volver a nivel 1 (world)
                 // Obtener posición actual antes de navegar
@@ -3127,7 +3127,7 @@
         await this.navigateToWorld();
 
         // Mantener la posición actual, solo alejarse
-        scheduleZoom(currentLat, currentLng, 2.0, 1000);
+        scheduleZoom(currentLat, currentLng, 4.0, 1000);
       }
     }
 
@@ -7183,7 +7183,8 @@
       const lng = location.longitude;
 
       // Detener cualquier rotación automática antes de mover la cámara
-      const targetAltitude = MIN_ZOOM_ALTITUDE; // límite mínimo permitido
+      // Usar una altitud cómoda (0.15) en lugar del mínimo (0.04) para no acercarse tanto
+      const targetAltitude = 0.15;
 
       if (polygonsVisible && targetAltitude < ALT_THRESHOLD) {
         globe?.setPolygonsData([]);
@@ -8440,16 +8441,17 @@
 
         if (isLevel4) {
           // Nivel 4 (sub-subdivisiones) -> volver a nivel 3 (subdivision)
-          zoomOutThreshold = 0.6;
+          zoomOutThreshold = 1.0;
           levelName = "level4";
         } else if (navLevel === "subdivision") {
           // Nivel 3 (subdivision) -> volver a nivel 2 (country)
-          zoomOutThreshold = 1.2;
+          // AUMENTADO para países muy grandes como Rusia
+          zoomOutThreshold = 2.0;
           levelName = "subdivision";
         } else if (navLevel === "country") {
           // Nivel 2 (country) -> volver a nivel 1 (world)
-          // AUMENTADO de 2.2 a 3.0 para dar margen a países muy grandes (Rusia, Canadá)
-          zoomOutThreshold = 3.0;
+          // AUMENTADO para dar margen a países muy grandes (Rusia, Canadá, China)
+          zoomOutThreshold = 3.5;
           levelName = "country";
         }
 
@@ -8460,7 +8462,8 @@
         }
 
         if (pov.altitude > zoomOutThreshold) {
-                    setTimeout(async () => {
+          console.log(`[ZoomOut] ⚠️ Detectado: altitude=${pov.altitude.toFixed(2)}, threshold=${zoomOutThreshold}, level=${levelName}, isProgrammaticZoom=${isProgrammaticZoom}`);
+          setTimeout(async () => {
             if (navigationManager && !isZooming) {
               await navigationManager.goBack();
             }
