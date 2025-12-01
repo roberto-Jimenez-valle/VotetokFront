@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
-  import { navigationState } from '$lib/stores/globalState';
+  import { navigationState, regionsWithData } from '$lib/stores/globalState';
   import '$lib/styles/trending-ranking.css';
   
   const dispatch = createEventDispatcher();
@@ -55,6 +55,7 @@
     iso?: string;
     type: 'country' | 'subdivision';
     parentName?: string | null;
+    hasData?: boolean;
   }>>([]);
   let isSearching = $state(false);
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -93,21 +94,30 @@
         if (response.ok) {
           const data = await response.json();
           const places = data.data?.places || [];
+          const dataKeys = $regionsWithData;
           
           for (const place of places) {
             const type = place.level === 1 ? 'country' : 'subdivision';
+            const id = place.subdivisionId;
+            // Usar hasData de la API (verificado contra BD)
             results.push({
-              id: place.subdivisionId,
+              id,
               name: place.name,
-              iso: place.level === 1 ? place.subdivisionId : undefined,
+              iso: place.level === 1 ? id : undefined,
               type: type,
               parentName: place.parentName || null,
+              hasData: place.hasData ?? false,
             });
           }
         }
         
-        // Ordenar por relevancia
+        // Ordenar: primero con datos, luego por relevancia
         results.sort((a, b) => {
+          // Primero ordenar por hasData (true primero)
+          if (a.hasData !== b.hasData) {
+            return a.hasData ? -1 : 1;
+          }
+          // Luego por relevancia (empieza con query)
           const aStarts = a.name.toLowerCase().startsWith(lowerQuery);
           const bStarts = b.name.toLowerCase().startsWith(lowerQuery);
           if (aStarts && !bStarts) return -1;
@@ -127,6 +137,11 @@
   
   // Seleccionar resultado de búsqueda (igual que BottomSheet)
   function selectSearchResult(result: typeof searchResults[0]) {
+    // No navegar si no tiene datos
+    if (result.hasData === false) {
+      return;
+    }
+    
     tagQuery = '';
     searchResults = [];
     showSearch = false;
@@ -323,7 +338,11 @@
 							<div class="search-loading">Buscando...</div>
 						{:else if searchResults.length > 0}
 							{#each searchResults as result}
-								<button class="search-result-item" onclick={() => selectSearchResult(result)}>
+								<button 
+									class="search-result-item {result.hasData === false ? 'no-data' : ''}" 
+									onclick={() => selectSearchResult(result)}
+									disabled={result.hasData === false}
+								>
 									<span class="result-icon">
 										{#if result.type === 'country'}
 											🌍
@@ -343,6 +362,9 @@
 											{result.name}
 										{/if}
 									</span>
+									{#if result.hasData === false}
+										<span class="no-data-badge">Sin datos</span>
+									{/if}
 								</button>
 							{/each}
 						{/if}
@@ -901,6 +923,35 @@
 	
 	.hierarchy-city {
 		color: var(--neo-text);
+	}
+	
+	/* Estilos para opciones sin datos */
+	.search-result-item.no-data {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	
+	.search-result-item.no-data:hover {
+		background: transparent;
+		box-shadow: none;
+	}
+	
+	.search-result-item.no-data .result-name {
+		color: var(--neo-text-light, #9ca3af);
+	}
+	
+	.no-data-badge {
+		flex-shrink: 0;
+		font-size: 10px;
+		font-weight: 600;
+		text-transform: uppercase;
+		background: rgba(156, 163, 175, 0.2);
+		color: var(--neo-text-light, #9ca3af);
+		padding: 3px 6px;
+		border-radius: 4px;
+		letter-spacing: 0.3px;
+		border: 1px solid rgba(156, 163, 175, 0.3);
+		white-space: nowrap;
 	}
 </style>
 

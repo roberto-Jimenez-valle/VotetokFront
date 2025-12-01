@@ -236,12 +236,57 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				take: limit
 			});
 
-			// Para nivel 3, obtener los nombres de los padres
+			// Obtener todos los prefijos a verificar (países y subdivisiones nivel 2)
+			const allPrefixes = [...new Set(places
+				.filter(p => p.subdivisionId)
+				.flatMap(p => {
+					const parts = p.subdivisionId.split('.');
+					const prefixes = [parts[0]]; // País
+					if (parts.length >= 2) {
+						prefixes.push(`${parts[0]}.${parts[1]}`); // Subdivisión nivel 2
+					}
+					return prefixes;
+				})
+			)];
+
+			// Verificar qué prefijos tienen votos (directos o en subdivisiones hijas)
+			// Esto encuentra TODAS las subdivisiones con votos que empiezan con cada prefijo
+			const subdivisionsWithVotesResult = allPrefixes.length > 0
+				? await prisma.subdivision.findMany({
+						where: {
+							OR: allPrefixes.map(prefix => ({
+								subdivisionId: { startsWith: prefix },
+								votes: { some: {} }
+							}))
+						},
+						select: {
+							subdivisionId: true
+						}
+					})
+				: [];
+			
+			// Crear un Set de prefijos que tienen al menos una subdivisión con votos
+			const prefixesWithVotesSet = new Set<string>();
+			for (const subdiv of subdivisionsWithVotesResult) {
+				const parts = subdiv.subdivisionId.split('.');
+				// Añadir el país
+				prefixesWithVotesSet.add(parts[0]);
+				// Añadir la subdivisión nivel 2 si existe
+				if (parts.length >= 2) {
+					prefixesWithVotesSet.add(`${parts[0]}.${parts[1]}`);
+				}
+				// Añadir la subdivisión exacta
+				prefixesWithVotesSet.add(subdiv.subdivisionId);
+			}
+
+			// Para nivel 2+, obtener los nombres de los padres
 			const parentIds = places
-				.filter(p => p.level === 3 && p.subdivisionId)
+				.filter(p => p.level >= 2 && p.subdivisionId)
 				.map(p => {
 					const parts = p.subdivisionId.split('.');
-					return parts.length >= 2 ? `${parts[0]}.${parts[1]}` : null;
+					if (p.level === 2) return parts[0]; // País padre
+					if (p.level === 3) return `${parts[0]}.${parts[1]}`; // Subdivisión padre
+					return null;
 				})
 				.filter(Boolean) as string[];
 
@@ -249,12 +294,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			const parents = parentIds.length > 0
 				? await prisma.subdivision.findMany({
 						where: {
-							subdivisionId: { in: parentIds }
+							subdivisionId: { in: [...new Set(parentIds)] }
 						},
 						select: {
 							subdivisionId: true,
 							name: true,
-							nameLocal: true
+							nameLocal: true,
+							_count: {
+								select: {
+									votes: true
+								}
+							}
 						}
 					})
 				: [];
@@ -264,16 +314,33 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			results.places = places.map(place => {
 				let parentName = null;
 				let parentNameLocal = null;
+				let hasData = false;
 
-				if (place.level === 3 && place.subdivisionId) {
-					const parts = place.subdivisionId.split('.');
-					if (parts.length >= 2) {
-						const parentId = `${parts[0]}.${parts[1]}`;
-						const parent = parentMap.get(parentId);
-						if (parent) {
-							parentName = parent.name;
-							parentNameLocal = parent.nameLocal;
-						}
+				const parts = place.subdivisionId?.split('.') || [];
+				const countryIso = parts[0];
+
+				if (place.level === 1) {
+					// País: tiene datos si hay votos en él o en cualquier subdivisión
+					hasData = prefixesWithVotesSet.has(countryIso);
+				} else if (place.level === 2) {
+					// Subdivisión nivel 2: tiene datos si hay votos en ella o en cualquier subdivisión hija
+					const subdivId = `${parts[0]}.${parts[1]}`;
+					hasData = prefixesWithVotesSet.has(subdivId);
+					// Obtener nombre del país padre
+					const parent = parentMap.get(countryIso);
+					if (parent) {
+						parentName = parent.name;
+						parentNameLocal = parent.nameLocal;
+					}
+				} else if (place.level === 3) {
+					// Subdivisión nivel 3: tiene datos si tiene votos directos
+					hasData = prefixesWithVotesSet.has(place.subdivisionId);
+					// Obtener nombre de la subdivisión padre
+					const parentSubdivId = `${parts[0]}.${parts[1]}`;
+					const parentSubdiv = parentMap.get(parentSubdivId);
+					if (parentSubdiv) {
+						parentName = parentSubdiv.name;
+						parentNameLocal = parentSubdiv.nameLocal;
 					}
 				}
 
@@ -287,6 +354,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 					latitude: place.latitude,
 					longitude: place.longitude,
 					votesCount: place._count.votes,
+					hasData,
 					parentName,
 					parentNameLocal
 				};

@@ -197,6 +197,9 @@ interface AnswersData {
 export const answersData = writable<AnswersData>({});
 export const colorMap = writable<Record<string, string>>({});
 
+// Store derivado con las claves que tienen datos (para verificar rápidamente si una región tiene datos)
+export const regionsWithData = derived(answersData, $data => new Set(Object.keys($data)));
+
 // Caches por nivel
 export const worldLevelAnswers = writable<AnswersData>({});
 export const countryLevelAnswers = writable<AnswersData>({});

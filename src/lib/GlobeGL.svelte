@@ -225,6 +225,11 @@
   $: answersData = $globalAnswersData;
   $: colorMap = $globalColorMap;
 
+  // Helper para actualizar answersData y sincronizar con el store global
+  function updateAnswersData(newData: Record<string, Record<string, number>>) {
+    globalAnswersData.set(newData);
+  }
+
   let isoIntensity: Record<string, number> = {};
 
   // Cache de datos por nivel - migrado a stores
@@ -273,7 +278,7 @@
 
   // Dropdown state for navigation breadcrumb
   let showDropdown = false;
-  let dropdownOptions: Array<{ id: string; name: string; iso?: string }> = [];
+  let dropdownOptions: Array<{ id: string; name: string; iso?: string; hasData?: boolean }> = [];
   let dropdownSearchQuery = "";
   let originalSheetY: number | null = null; // Para guardar la posición original del sheet
   let originalSheetState: SheetState | null = null; // Para guardar el estado original del sheet
@@ -796,7 +801,7 @@
       await tick();
     } catch {}
     const vm = computeGlobeViewModel(geoIn, dataIn);
-    answersData = dataIn?.ANSWERS ?? {};
+    updateAnswersData(dataIn?.ANSWERS ?? {});
     colorMap = dataIn?.colors ?? {};
     isoDominantKey = vm.isoDominantKey;
     legendItems = vm.legendItems;
@@ -1579,7 +1584,7 @@
 
         // LIMPIAR answersData Y CACHE ANTES de renderizar para evitar datos obsoletos
         if (!skipPolygonLoad) {
-          answersData = {};
+          updateAnswersData({});
           isoDominantKey = {}; // También limpiar el mapa de colores dominantes
                   }
 
@@ -1644,7 +1649,7 @@
             countryLevelAnswers = allLevelsData;
 
             // Actualizar answersData con datos de TODOS los niveles
-            answersData = allLevelsData;
+            updateAnswersData(allLevelsData);
 
             // USAR countryPolygons (los que se pasaron a la función) en lugar de intentar obtenerlos del globo
             const subdivisionPolygons = countryPolygons.filter(
@@ -1718,8 +1723,9 @@
             } catch (refreshError) {
                           }
           }
-        } else if (!activePoll) {
+        } else if (!activePoll && !skipPolygonLoad) {
           // MODO TRENDING: Cargar datos de trending para este país
+          // Solo si NO viene de búsqueda directa (skipPolygonLoad=false), ya que los datos ya se cargaron
           try {
             const hours = TIME_FILTER_HOURS[trendingTimeFilter];
             // Usar código ISO del país, no el nombre
@@ -1839,7 +1845,7 @@
                         }
 
                         // Actualizar datos globales progresivamente
-                        answersData = { ...aggregatedData };
+                        updateAnswersData({ ...aggregatedData });
                         colorMap = { ...aggregatedColors };
 
                         // Recalcular y refrescar colores progresivamente
@@ -1925,7 +1931,7 @@
 
               // Actualizar datos y colorMap
               countryLevelAnswers = aggregatedData;
-              answersData = aggregatedData;
+              updateAnswersData(aggregatedData);
               colorMap = aggregatedColors;
 
               // Recalcular colores dominantes
@@ -2136,7 +2142,7 @@
                 if (!skipPolygonLoad && subdivisionPolygons.length > 0) {
           // Si hay encuesta activa, limpiar antes de renderizar
           if (activePoll) {
-            answersData = {};
+            updateAnswersData({});
                       }
 
                     await this.renderSubdivisionView(
@@ -2195,7 +2201,7 @@
             subdivisionLevelAnswers = allLevelsData;
 
             // Actualizar answersData con datos de TODOS los niveles
-            answersData = allLevelsData;
+            updateAnswersData(allLevelsData);
 
             // 🔍 DEBUG: Mostrar qué IDs tenemos en answersData
                                     // Solo calcular si hay polígonos
@@ -2232,8 +2238,9 @@
           } catch (error) {
             // Error loading sub-subdivision data
           }
-        } else if (!activePoll) {
+        } else if (!activePoll && !skipPolygonLoad) {
           // MODO TRENDING: Cargar datos de trending para esta subdivisión
+          // Solo si NO viene de búsqueda directa (skipPolygonLoad=false), ya que los datos ya se cargaron
           try {
             const hours = TIME_FILTER_HOURS[trendingTimeFilter];
             // Usar subdivisionId (ej: "ESP.4") en lugar de subdivisionName (ej: "Aragón")
@@ -2270,7 +2277,7 @@
                 : subdivisionId;
 
               // LIMPIAR answersData AHORA, justo antes de cargar trending
-              answersData = {};
+              updateAnswersData({});
                                           await limitConcurrency(
                 trendingPolls,
                 async (poll: any, i: number) => {
@@ -2328,7 +2335,7 @@
                       completedCount++;
 
                       // Actualizar answersData y colorMap progresivamente
-                      answersData = { ...aggregatedData };
+                      updateAnswersData({ ...aggregatedData });
                       colorMap = { ...aggregatedColors };
 
                       // Recalcular y repintar polígonos progresivamente
@@ -2379,7 +2386,7 @@
 
               // Actualizar datos y colorMap
               subdivisionLevelAnswers = aggregatedData;
-              answersData = aggregatedData;
+              updateAnswersData(aggregatedData);
               colorMap = aggregatedColors;
 
               // 🔍 DEBUG: Mostrar qué IDs tenemos en answersData (trending nivel 3/4)
@@ -2496,7 +2503,7 @@
           }
 
           worldLevelAnswers = data;
-          answersData = data;
+          updateAnswersData(data);
 
           // Recalcular isoDominantKey y legendItems
           const geoData = {
@@ -2540,7 +2547,7 @@
         if (cacheIsValid) {
           // Restaurar desde caché
           console.log('[navigateToWorld] Usando caché de world');
-          answersData = worldLevelAnswers;
+          updateAnswersData(worldLevelAnswers);
           colorMap = worldLevelColorMap;
 
           // Recalcular isoDominantKey con los datos mundiales
@@ -3120,14 +3127,14 @@
 
     // Get available options for next level
     async getAvailableOptions(): Promise<
-      Array<{ id: string; name: string; iso?: string }>
+      Array<{ id: string; name: string; iso?: string; hasData?: boolean }>
     > {
-      const options: Array<{ id: string; name: string; iso?: string }> = [];
+      const options: Array<{ id: string; name: string; iso?: string; hasData?: boolean }> = [];
 
       if (this.state.level === "world") {
-        // Return ONLY countries with active data
+        // Return ALL countries, marking which have data
         if (worldPolygons?.length) {
-          const countryMap = new Map<string, string>();
+          const countryMap = new Map<string, { name: string; hasData: boolean }>();
           // Filtrar polígonos nulos antes de iterar
           worldPolygons
             .filter((poly) => poly !== null && poly !== undefined)
@@ -3135,26 +3142,24 @@
               const iso = isoOf(poly);
               const name = nameOf(poly);
 
-              // FILTRO: Solo agregar si tiene datos activos
+              // Agregar todos los países, marcando si tienen datos
               if (iso && name && !countryMap.has(iso)) {
                 const hasData = Boolean(answersData?.[iso]);
-                if (hasData) {
-                  countryMap.set(iso, name);
-                }
+                countryMap.set(iso, { name, hasData });
               }
             });
-          countryMap.forEach((name, iso) => {
-            options.push({ id: iso, name, iso });
+          countryMap.forEach(({ name, hasData }, iso) => {
+            options.push({ id: iso, name, iso, hasData });
           });
         }
       } else if (this.state.level === "country" && this.state.countryIso) {
-        // Return ONLY subdivisions with active data
+        // Return ALL subdivisions, marking which have data
         try {
           const subdivisionPolygons = await loadSubregionTopoAsGeoFeatures(
             this.state.countryIso,
             this.state.countryIso,
           );
-          const subdivisionMap = new Map<string, string>();
+          const subdivisionMap = new Map<string, { name: string; hasData: boolean }>();
           // Filtrar polígonos nulos antes de iterar
           subdivisionPolygons
             .filter((poly) => poly !== null && poly !== undefined)
@@ -3177,26 +3182,24 @@
                   ? id1
                   : `${this.state.countryIso}.${id1}`;
 
-                // FILTRO: Solo agregar si tiene datos activos
+                // Agregar todas las subdivisiones, marcando si tienen datos
                 if (!subdivisionMap.has(fullId)) {
                   const hasData = Boolean(answersData?.[fullId]);
-                  if (hasData) {
-                    subdivisionMap.set(fullId, String(name1));
-                                      }
+                  subdivisionMap.set(fullId, { name: String(name1), hasData });
                 }
               }
             });
-          subdivisionMap.forEach((name, id) => {
-            options.push({ id, name });
+          subdivisionMap.forEach(({ name, hasData }, id) => {
+            options.push({ id, name, hasData });
           });
         } catch (e) {
-                  }
+        }
       } else if (
         this.state.level === "subdivision" &&
         this.state.countryIso &&
         this.state.subdivisionId
       ) {
-        // Return ONLY sub-subdivisions with active data
+        // Return ALL sub-subdivisions, marking which have data
         try {
           // 🔧 FIX: Limpiar subdivisionId para evitar duplicación
           // Si subdivisionId = "ESP.1" o "ESP.1.ESP.1", extraer solo la parte numérica final
@@ -3207,16 +3210,16 @@
           if (parts.length > 2 && parts[0] === parts[2]) {
             // Caso "ESP.1.ESP.1" → tomar primeras 2 partes
             cleanSubdivisionId = `${parts[0]}.${parts[1]}`;
-                      }
+          }
 
           const numericPart = cleanSubdivisionId.split(".").pop();
-                              if (numericPart) {
+          if (numericPart) {
             const subdivisionFile = `${this.state.countryIso}.${numericPart}`;
             const subSubPolygons = await loadSubregionTopoAsGeoFeatures(
               this.state.countryIso,
               subdivisionFile,
             );
-            const subSubMap = new Map<string, string>();
+            const subSubMap = new Map<string, { name: string; hasData: boolean }>();
             // Filtrar polígonos nulos antes de iterar
             subSubPolygons
               .filter((poly) => poly !== null && poly !== undefined)
@@ -3235,7 +3238,7 @@
                   id2 = String(id2).split(".").pop();
                 }
 
-                // FILTRO: Solo agregar si tiene datos activos
+                // Agregar todas las sub-subdivisiones, marcando si tienen datos
                 if (id2 && name2 && !subSubMap.has(String(id2))) {
                   // 🔧 FIX: Buscar con ID completo en answersData
                   const fullId = `${this.state.countryIso}.${numericPart}.${id2}`;
@@ -3247,24 +3250,28 @@
                       answersData?.[String(id2)], // "4" como string
                   );
 
-                  if (hasData) {
-                                        subSubMap.set(String(id2), String(name2));
-                  } else {
-                                      }
+                  subSubMap.set(String(id2), { name: String(name2), hasData });
                 }
               });
 
-                        subSubMap.forEach((name, id) => {
+            subSubMap.forEach(({ name, hasData }, id) => {
               const fullId = `${this.state.countryIso}.${numericPart}.${id}`;
-                            options.push({ id: fullId, name });
+              options.push({ id: fullId, name, hasData });
             });
           }
         } catch (e) {
-                  }
+        }
       }
 
-      // Sort alphabetically by name
-      return options.sort((a, b) => a.name.localeCompare(b.name));
+      // Sort: first items with data, then without data, both alphabetically
+      return options.sort((a, b) => {
+        // Primero ordenar por hasData (true primero)
+        if (a.hasData !== b.hasData) {
+          return a.hasData ? -1 : 1;
+        }
+        // Luego ordenar alfabéticamente
+        return a.name.localeCompare(b.name);
+      });
     }
   }
 
@@ -3703,13 +3710,57 @@
                   }
                 }
 
-                answersData = allLevelsData;
+                updateAnswersData(allLevelsData);
                               }
             } catch (error) {
                           }
           } else if (!activePoll) {
-            // MODO TRENDING
-                                  }
+            // MODO TRENDING - Cargar datos de trending para la subdivisión
+            try {
+              const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
+              const regionId = `${countryIso}.${parentIdClean}`;
+              console.log(`[selectDropdownOption/level3] Cargando trending para region=${regionId}`);
+              const trendingResponse = await apiCall(`/api/polls/trending-by-region?region=${encodeURIComponent(regionId)}&hours=${hoursFilter}`);
+              if (trendingResponse.ok) {
+                const trendingData = await trendingResponse.json();
+                const trendingPolls = trendingData.data || trendingData.polls || [];
+                console.log(`[selectDropdownOption/level3] Trending polls encontradas:`, trendingPolls.length);
+                if (trendingPolls.length > 0) {
+                  // Cargar votos de cada encuesta trending
+                  const aggregatedData: Record<string, Record<string, number>> = {};
+                  const aggregatedColors: Record<string, string> = {};
+                  const pollColors = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9", "#fd79a8", "#a29bfe"];
+                  
+                  for (let i = 0; i < trendingPolls.length; i++) {
+                    const poll = trendingPolls[i];
+                    const pollKey = `poll_${poll.id}`;
+                    aggregatedColors[pollKey] = pollColors[i % pollColors.length];
+                    
+                    const pollData = await pollDataService.loadVotesBySubSubdivisions(poll.id, countryIso, parentIdClean, hoursFilter);
+                    for (const [subdivId, votes] of Object.entries(pollData)) {
+                      if (!aggregatedData[subdivId]) aggregatedData[subdivId] = {};
+                      aggregatedData[subdivId][pollKey] = Object.values(votes as Record<string, number>).reduce((a, b) => a + b, 0);
+                    }
+                  }
+                  
+                  updateAnswersData(aggregatedData);
+                  colorMap = aggregatedColors;
+                  console.log('[selectDropdownOption] Trending level 3 cargado:', Object.keys(aggregatedData));
+                  
+                  // Actualizar activePollOptions con las encuestas trending
+                  activePollOptions = trendingPolls.map((poll: any, i: number) => ({
+                    key: `poll_${poll.id}`,
+                    label: poll.question || poll.title || `Encuesta ${poll.id}`,
+                    color: pollColors[i % pollColors.length],
+                    votes: 0,
+                    pollData: poll,
+                  }));
+                }
+              }
+            } catch (e) {
+              console.error('[selectDropdownOption] Error cargando trending level 3:', e);
+            }
+          }
 
           // 6. ⚡ PRIMERO: Establecer contexto de navegación (ANTES del zoom)
                     // Si viene de búsqueda directa, necesitamos establecer contexto de país primero
@@ -3768,12 +3819,15 @@
               globe?.refreshPolyStrokes?.();
               globe?.refreshPolyAltitudes?.();
 
-              // DEBUG: Verificar datos antes de colorear
-                                          // ⚡ CRÍTICO: Recalcular isoDominantKey con los nuevos polígonos
+              // ⚡ CRÍTICO: Recalcular isoDominantKey con los nuevos polígonos
+              // Esperar a que Svelte propague las actualizaciones de stores
+              await tick();
+              
               const geoData = {
                 type: "FeatureCollection",
                 features: level3Polygons,
               };
+              console.log('[selectDropdownOption/level3] computeGlobeViewModel con answersData keys:', Object.keys(answersData));
               const vm = computeGlobeViewModel(geoData, {
                 ANSWERS: answersData,
                 colors: colorMap,
@@ -3924,7 +3978,7 @@
             );
           }
         } else {
-          // Sin datos, limpiar votos
+          // Sin datos en cache, limpiar votos
           subdivisionChartSegments = [];
           if (activePollOptions.length > 0) {
             activePollOptions.forEach((opt, index) => {
@@ -3934,8 +3988,7 @@
           }
         }
 
-        // 7. Navegación con NavigationManager (ANTES del zoom)
-                // Verificar si tiene subdivisiones (nivel 3)
+        // 7. Verificar si tiene subdivisiones (nivel 3) - ANTES de cargar trending
         const hasSubdivisions = await (async () => {
           try {
             const resp = await fetch(
@@ -3947,6 +4000,66 @@
             return false;
           }
         })();
+
+        // 6b. MODO TRENDING: Cargar datos de trending para la subdivisión si viene de búsqueda
+        if (!activePoll && isDirectSearch) {
+          try {
+            const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
+            // Usar la subdivisión como región si tiene hijos, o el país si no
+            const regionForTrending = hasSubdivisions ? subdivisionId : countryIso;
+            console.log(`[selectDropdownOption/level2] Cargando trending para region=${regionForTrending}, hasSubdivisions=${hasSubdivisions}`);
+            const trendingResponse = await apiCall(`/api/polls/trending-by-region?region=${encodeURIComponent(regionForTrending)}&hours=${hoursFilter}`);
+            if (trendingResponse.ok) {
+              const trendingData = await trendingResponse.json();
+              const trendingPolls = trendingData.data || trendingData.polls || [];
+              console.log(`[selectDropdownOption/level2] Trending polls encontradas:`, trendingPolls.length);
+              if (trendingPolls.length > 0) {
+                // Cargar votos de cada encuesta trending
+                const aggregatedData: Record<string, Record<string, number>> = {};
+                const aggregatedColors: Record<string, string> = {};
+                const pollColors = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9", "#fd79a8", "#a29bfe"];
+                
+                // Extraer el ID limpio de la subdivisión (sin el país)
+                const cleanSubdivId = subdivisionId.includes('.') 
+                  ? subdivisionId.split('.').pop() 
+                  : subdivisionId;
+                
+                for (let i = 0; i < trendingPolls.length; i++) {
+                  const poll = trendingPolls[i];
+                  const pollKey = `poll_${poll.id}`;
+                  aggregatedColors[pollKey] = pollColors[i % pollColors.length];
+                  
+                  // Si tiene subdivisiones, cargar datos de nivel 3; si no, de nivel 2
+                  const pollData = hasSubdivisions
+                    ? await pollDataService.loadVotesBySubSubdivisions(poll.id, countryIso, cleanSubdivId!, hoursFilter)
+                    : await pollDataService.loadVotesBySubdivisions(poll.id, countryIso, hoursFilter);
+                  
+                  for (const [subdivId, votes] of Object.entries(pollData)) {
+                    if (!aggregatedData[subdivId]) aggregatedData[subdivId] = {};
+                    aggregatedData[subdivId][pollKey] = Object.values(votes as Record<string, number>).reduce((a, b) => a + b, 0);
+                  }
+                }
+                
+                updateAnswersData(aggregatedData);
+                colorMap = aggregatedColors;
+                console.log('[selectDropdownOption] Trending level 2 cargado:', Object.keys(aggregatedData));
+                
+                // Actualizar activePollOptions con las encuestas trending
+                activePollOptions = trendingPolls.map((poll: any, i: number) => ({
+                  key: `poll_${poll.id}`,
+                  label: poll.question || poll.title || `Encuesta ${poll.id}`,
+                  color: pollColors[i % pollColors.length],
+                  votes: 0,
+                  pollData: poll,
+                }));
+              }
+            }
+          } catch (e) {
+            console.error('[selectDropdownOption] Error cargando trending level 2:', e);
+          }
+        }
+
+        // 7. Navegación con NavigationManager (continúa)
 
                 if (hasSubdivisions) {
           // Navegar a subdivisión
@@ -4070,10 +4183,14 @@
             globe?.refreshPolyAltitudes?.();
 
             // ⚡ CRÍTICO: Recalcular isoDominantKey con los nuevos polígonos
+            // Esperar a que Svelte propague las actualizaciones de stores
+            await tick();
+            
             const geoData = {
               type: "FeatureCollection",
               features: polygonsToLoad,
             };
+            console.log('[selectDropdownOption] computeGlobeViewModel con answersData keys:', Object.keys(answersData));
             const vm = computeGlobeViewModel(geoData, {
               ANSWERS: answersData,
               colors: colorMap,
@@ -4905,7 +5022,7 @@
       console.log(`[processTrendingPolls] Iniciando con nivel: ${currentNavLevel}, country: ${currentCountryIso}, loadToken: ${loadToken}`);
       
       // LIMPIAR datos anteriores al inicio para evitar mezcla de niveles
-      answersData = {};
+      updateAnswersData({});
       colorMap = {};
       
       // MODO TRENDING: Cada encuesta es una "opción"
@@ -4994,7 +5111,7 @@
           }
 
           // Actualizar datos globales progresivamente (solo si el token sigue válido)
-          answersData = { ...aggregatedData };
+          updateAnswersData({ ...aggregatedData });
           colorMap = { ...aggregatedColors };
           
           // Usar polígonos según el nivel capturado (NO variables reactivas)
@@ -5073,7 +5190,7 @@
       }
 
       // Actualizar datos globales
-                  answersData = aggregatedData;
+      updateAnswersData(aggregatedData);
       colorMap = aggregatedColors;
 
       // CRÍTICO: Guardar en cache mundial para poder restaurar después
@@ -5493,7 +5610,7 @@
         }
 
         // Actualizar datos globales progresivamente
-        answersData = { ...newAnswersData };
+        updateAnswersData({ ...newAnswersData });
 
         // Esperar a que worldPolygons esté disponible
         if (worldPolygons && worldPolygons.length > 0) {
@@ -5526,7 +5643,7 @@
 
     // Guardar en cache mundial
     worldLevelAnswers = newAnswersData;
-    answersData = newAnswersData;
+    updateAnswersData(newAnswersData);
 
         // IDENTIFICAR EL TERRITORIO CON MÁS VOTOS PRIMERO
     let topCountryIso: string | null = null;
@@ -6946,7 +7063,7 @@
         if (navigationState.level === "world") {
           // Recargar votos por país con el nuevo filtro
           const data = await pollDataService.loadVotesByCountry(activePoll.id, hoursFilter);
-          answersData = data;
+          updateAnswersData(data);
           worldLevelAnswers = data;
           
           // Recalcular colores
@@ -6962,13 +7079,13 @@
         } else if (navigationState.level === "country" && selectedCountryIso) {
           // Recargar votos por subdivisión con el nuevo filtro
           const data = await pollDataService.loadVotesBySubdivisions(activePoll.id, selectedCountryIso, hoursFilter);
-          answersData = data;
+          updateAnswersData(data);
           countryLevelAnswers = data;
           globe?.refreshPolyColors?.();
         } else if (navigationState.level === "subdivision" && selectedSubdivisionId && selectedCountryIso) {
           // Recargar votos por sub-subdivisión con el nuevo filtro
           const data = await pollDataService.loadVotesBySubSubdivisions(activePoll.id, selectedCountryIso, selectedSubdivisionId, hoursFilter);
-          answersData = data;
+          updateAnswersData(data);
           globe?.refreshPolyColors?.();
         }
         return;
@@ -9553,14 +9670,18 @@
           {:else}
             {#each filteredDropdownOptions as option}
               <button
-                class="dropdown-option"
-                on:click={() => selectDropdownOption(option)}
+                class="dropdown-option {option.hasData === false ? 'no-data' : ''}"
+                on:click={() => option.hasData !== false && selectDropdownOption(option)}
+                disabled={option.hasData === false}
               >
                 <span class="option-name">{option.name}</span>
                 {#if option.id.includes(".")}
                   <span class="option-country"
                     >{getCountryNameFromISO(option.id.split(".")[0])}</span
                   >
+                {/if}
+                {#if option.hasData === false}
+                  <span class="no-data-badge">Sin datos</span>
                 {/if}
               </button>
             {/each}
@@ -9756,5 +9877,35 @@
     max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Estilos para opciones sin datos */
+  :global(.dropdown-option.no-data) {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: transparent !important;
+  }
+
+  :global(.dropdown-option.no-data:hover) {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  :global(.dropdown-option.no-data .option-name) {
+    color: var(--neo-text-light, #9ca3af);
+  }
+
+  :global(.no-data-badge) {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: rgba(156, 163, 175, 0.2);
+    color: var(--neo-text-light, #9ca3af);
+    padding: 3px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+    border: 1px solid rgba(156, 163, 175, 0.3);
+    white-space: nowrap;
   }
 </style>
