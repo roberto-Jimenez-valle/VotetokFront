@@ -462,87 +462,98 @@
 		display: none;
 	}
 	
-	/* Chips de navegación con estilos neomórficos */
+	/* Chips de navegación con neumorfismo suave */
 	.nav-chip {
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		padding: 8px 16px;
+		gap: 6px;
+		padding: 10px 20px;
 		font-size: 13px;
 		font-weight: 500;
+		letter-spacing: 0.2px;
 		white-space: nowrap;
 		flex-shrink: 0;
-		height: 38px;
-		border-radius: 19px;
+		height: 40px;
+		border-radius: 12px;
 		
-		/* Estilos neomórficos sutiles */
-		background: var(--neo-bg);
-		color: var(--neo-text);
+		/* Neumorfismo suave integrado con fondo */
+		background: var(--neo-bg, #e0e5ec);
+		color: var(--neo-text, #6b7280);
 		border: none;
 		box-shadow: 
-			3px 3px 8px var(--neo-shadow-dark),
-			-3px -3px 8px var(--neo-shadow-light);
+			5px 5px 10px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+			-5px -5px 10px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 		cursor: pointer;
 		outline: none;
-		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		transition: all 0.15s ease-out;
 		user-select: none;
 		position: relative;
 	}
 	
 	.nav-chip:hover {
 		box-shadow: 
-			4px 4px 10px var(--neo-shadow-dark),
-			-4px -4px 10px var(--neo-shadow-light);
-		transform: translateY(-1px);
+			6px 6px 12px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
+			-6px -6px 12px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
 	}
 	
 	.nav-chip:active {
 		box-shadow: 
-			inset 3px 3px 6px var(--neo-shadow-dark),
-			inset -3px -3px 6px var(--neo-shadow-light);
-		transform: translateY(0);
+			inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+			inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 	}
 	
 	.nav-chip.active {
 		font-weight: 600;
+		color: var(--neo-text, #6b7280);
 		box-shadow: 
-			inset 2px 2px 5px var(--neo-shadow-dark),
-			inset -2px -2px 5px var(--neo-shadow-light),
-			1px 1px 3px var(--neo-shadow-dark);
+			inset 2px 2px 5px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+			inset -2px -2px 5px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 	}
 	
 	.nav-chip.dropdown-trigger {
-		padding-right: 10px;
+		padding-right: 14px;
 	}
 	
 	.nav-chip.dropdown-trigger span {
 		font-size: 9px;
-		color: var(--neo-text-light);
-		opacity: 0.7;
-		margin-left: 2px;
+		color: var(--neo-text-light, #9ca3af);
+		opacity: 0.8;
+		margin-left: 4px;
+		transition: transform 0.15s ease;
+	}
+	
+	.nav-chip.dropdown-trigger:hover span {
+		transform: translateY(1px);
 	}
 	
 	.nav-divider {
-		color: var(--neo-text-light);
-		opacity: 0.4;
+		color: var(--neo-text-light, #9ca3af);
+		opacity: 0.5;
 		font-size: 12px;
+		font-weight: 400;
 		flex-shrink: 0;
 		margin: 0 2px;
+		transition: opacity 0.15s ease;
+	}
+	
+	.header-nav-minimal:hover .nav-divider {
+		opacity: 0.7;
 	}
 	
 	/* Grupo de botones de navegación */
 	.nav-buttons-group {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 12px;
 		flex-shrink: 0;
+		margin-left: 8px;
 	}
 	
 	/* Ajustes para móvil */
 	@media (max-width: 768px) {
 		.nav-buttons-group {
-			gap: 6px;
-			margin-left: 4px;
+			gap: 10px;
+			margin-left: 6px;
 		}
 		
 		.header-nav-minimal {
@@ -551,73 +562,91 @@
 		}
 	}
 	
-	/* Botones de icono con estilos neomórficos */
+	/* Botones de icono con neumorfismo suave */
 	.nav-icon-btn {
-		width: 38px;
-		height: 38px;
+		width: 40px;
+		height: 40px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 50%;
+		border-radius: 12px;
 		flex-shrink: 0;
 		
-		/* Estilos neomórficos sutiles */
-		background: var(--neo-bg);
-		color: var(--neo-text);
+		/* Neumorfismo suave integrado con fondo */
+		background: var(--neo-bg, #e0e5ec);
+		color: var(--neo-text, #6b7280);
 		border: none;
 		box-shadow: 
-			3px 3px 8px var(--neo-shadow-dark),
-			-3px -3px 8px var(--neo-shadow-light);
+			5px 5px 10px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+			-5px -5px 10px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 		cursor: pointer;
 		outline: none;
-		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		transition: all 0.15s ease-out;
 		user-select: none;
 		position: relative;
 	}
 	
 	.nav-icon-btn:hover {
+		color: var(--neo-text, #6b7280);
 		box-shadow: 
-			4px 4px 10px var(--neo-shadow-dark),
-			-4px -4px 10px var(--neo-shadow-light);
-		transform: translateY(-1px);
+			6px 6px 12px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
+			-6px -6px 12px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
 	}
 	
 	.nav-icon-btn:active {
 		box-shadow: 
-			inset 3px 3px 6px var(--neo-shadow-dark),
-			inset -3px -3px 6px var(--neo-shadow-light);
-		transform: translateY(0);
+			inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+			inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 	}
 	
-	/* Overlay de búsqueda con estilo neomórfico */
+	.nav-icon-btn svg {
+		transition: all 0.15s ease;
+	}
+	
+	.nav-icon-btn:hover svg {
+		transform: scale(1.05);
+	}
+	
+	/* Overlay de búsqueda con neumorfismo suave */
 	.nav-search-overlay {
 		position: absolute;
-		left: 16px;
-		right: 16px;
-		top: 8px;
+		left: 0;
+		right: 0;
+		top: 0;
+		bottom: 0;
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		max-height:47px;
-		padding: 10px 16px;
-		background: var(--neo-bg);
-		border-radius: 19px;
-		border: none;
-		z-index: 10;
-		animation: searchExpandMobile 0.25s ease-out forwards;
+		padding: 0 16px;
+		z-index: 20;
+		animation: searchFadeIn 0.15s ease-out forwards;
+		border-radius: 16px;
 		
-		/* Estilos neomórficos sutiles */
-		box-shadow: 
-			inset 2px 2px 3px var(--neo-shadow-dark),
-			inset -2px -2px 3px var(--neo-shadow-light),
-			1px 1px 4px var(--neo-shadow-dark);
+		/* Fondo sólido para cubrir los botones */
+		background: var(--neo-bg, #e0e5ec);
+		border: none;
 	}
 	
-	@keyframes searchExpandMobile {
+	/* Input contenedor con neumorfismo inset */
+	.nav-search-overlay::before {
+		content: '';
+		position: absolute;
+		left: 12px;
+		right: 12px;
+		top: 50%;
+		transform: translateY(-50%);
+		height: 42px;
+		border-radius: 21px;
+		background: var(--neo-bg, #e0e5ec);
+		box-shadow: 
+			inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+			inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
+		z-index: -1;
+	}
+	
+	@keyframes searchFadeIn {
 		from {
 			opacity: 0;
-			transform: scaleX(0.3);
-			transform-origin: right center;
 		}
 		to {
 			opacity: 1;
@@ -650,8 +679,9 @@
 	}
 	
 	.nav-search-icon {
-		color: var(--neo-text-light);
+		color: var(--neo-text-light, #9ca3af);
 		flex-shrink: 0;
+		z-index: 1;
 	}
 	
 	.nav-search-input-full {
@@ -659,87 +689,111 @@
 		background: transparent;
 		border: none;
 		outline: none;
-		color: var(--neo-text);
+		color: var(--neo-text, #6b7280);
 		font-size: 14px;
 		min-width: 0;
 		font-weight: 500;
+		z-index: 1;
 	}
 	
 	.nav-search-input-full::placeholder {
-		color: var(--neo-text-light);
-		opacity: 0.7;
+		color: var(--neo-text-light, #9ca3af);
+		opacity: 0.8;
 	}
 	
 	.nav-search-clear-btn {
-		background: transparent;
+		background: var(--neo-bg, #e0e5ec);
 		border: none;
-		padding: 4px 10px;
-		border-radius: 12px;
-		color: var(--neo-text-light);
+		padding: 6px 14px;
+		border-radius: 10px;
+		color: var(--neo-text-light, #9ca3af);
 		font-size: 12px;
-		cursor: pointer;
-		transition: all 0.2s ease;
 		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		z-index: 1;
+		margin-right: 10px;
+		box-shadow: 
+			3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+			-3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
 	}
 	
 	.nav-search-clear-btn:hover {
-		color: var(--neo-text);
+		color: var(--neo-text, #6b7280);
+	}
+	
+	.nav-search-clear-btn:active {
 		box-shadow: 
-			inset 2px 2px 4px var(--neo-shadow-dark),
-			inset -2px -2px 4px var(--neo-shadow-light);
+			inset 2px 2px 4px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+			inset -2px -2px 4px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
 	}
 	
 	.nav-search-close-btn {
-		background: none;
+		background: var(--neo-bg, #e0e5ec);
 		border: none;
-		padding: 4px;
+		width: 32px;
+		height: 32px;
+		border-radius: 10px;
 		cursor: pointer;
-		color: var(--neo-text-light);
+		color: var(--neo-text-light, #9ca3af);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		transition: all 0.2s ease;
+		transition: all 0.15s ease;
+		z-index: 1;
+		flex-shrink: 0;
+		box-shadow: 
+			3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+			-3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
 	}
 	
 	.nav-search-close-btn:hover {
-		color: var(--neo-text);
+		color: var(--neo-text, #6b7280);
 	}
 	
-	/* Resultados de búsqueda con estilo neomórfico */
+	.nav-search-close-btn:active {
+		box-shadow: 
+			inset 2px 2px 4px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+			inset -2px -2px 4px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
+	}
+	
+	/* Resultados de búsqueda con neumorfismo suave */
 	.nav-search-results {
 		position: absolute;
-		left: 16px;
-		right: 16px;
+		left: 0px;
+		right: 0px;
 		top: 60px;
-		background: var(--neo-bg);
 		border-radius: 16px;
-		border: none;
-		max-height: 250px;
+		max-height: 300px;
 		overflow-y: auto;
-		z-index: 10;
+		z-index: 30;
+		padding: 2px;
 		
-		/* Sombras neomórficas sutiles */
+		/* Neumorfismo suave elevado */
+		background: var(--neo-bg, #e0e5ec);
+		border: none;
 		box-shadow: 
-			3px 3px 8px var(--neo-shadow-dark),
-			-3px -3px 8px var(--neo-shadow-light);
+			6px 6px 18px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
+			-6px -6px 18px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
 	}
 	
 	/* Scrollbar del dropdown */
 	.nav-search-results::-webkit-scrollbar {
-		width: 6px;
+		width: 4px;
 	}
 	
 	.nav-search-results::-webkit-scrollbar-track {
 		background: transparent;
+		margin: 8px;
 	}
 	
 	.nav-search-results::-webkit-scrollbar-thumb {
-		background: var(--neo-shadow-dark);
-		border-radius: 3px;
+		background: var(--neo-shadow-dark, rgba(163, 177, 198, 0.5));
+		border-radius: 4px;
 	}
 	
 	.nav-search-results::-webkit-scrollbar-thumb:hover {
-		background: var(--neo-text-light);
+		background: var(--neo-text-light, #9ca3af);
 	}
 	
 	/* Desktop: mismo ancho que el input */
@@ -748,17 +802,17 @@
 			left: 50%;
 			right: auto;
 			transform: translateX(-50%);
-			width: 100%;
+			width: calc(100% - 120px);
 			max-width: 400px;
 		}
 	}
 	
 	.search-loading {
-		padding: 16px;
+		padding: 20px 16px;
 		text-align: center;
-		color: var(--neo-text-light);
-		opacity: 0.7;
+		color: var(--neo-text-light, #9ca3af);
 		font-size: 13px;
+		font-weight: 500;
 	}
 	
 	.search-result-item {
@@ -766,25 +820,57 @@
 		align-items: center;
 		gap: 12px;
 		width: 100%;
-		padding: 12px 16px;
+		padding: 12px 14px;
 		background: transparent;
 		border: none;
-		color: var(--neo-text);
+		color: var(--neo-text, #6b7280);
 		font-size: 14px;
+		font-weight: 500;
 		text-align: left;
 		cursor: pointer;
-		transition: all 0.2s ease;
+		transition: all 0.15s ease;
+		position: relative;
+		border-radius: 10px;
+		margin-bottom: 4px;
+	}
+	
+	.search-result-item:last-child {
+		margin-bottom: 0;
 	}
 	
 	.search-result-item:hover {
+		background: var(--neo-bg, #e0e5ec);
 		box-shadow: 
-			inset 2px 2px 4px var(--neo-shadow-dark),
-			inset -2px -2px 4px var(--neo-shadow-light);
+			inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+			inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 	}
 	
-	.search-result-item:not(:last-child) {
-		border-bottom: 1px solid var(--neo-shadow-dark);
-		border-bottom-width: 0.5px;
+	.search-result-item:active {
+		box-shadow: 
+			inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+			inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
+	}
+	
+	.result-icon {
+		font-size: 18px;
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--neo-bg, #e0e5ec);
+		border-radius: 8px;
+		box-shadow: 
+			2px 2px 4px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+			-2px -2px 4px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
+	}
+	
+	.result-name {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	
 	.result-icon {

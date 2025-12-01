@@ -9163,10 +9163,9 @@
     padding: 8px 12px;
     background: transparent;
     border: none;
-    color: #e5e7eb;
-    font:
-      700 13px/1 system-ui,
-      sans-serif;
+    color: var(--neo-text, #e5e7eb);
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     transition: opacity 0.2s;
   }
@@ -9178,22 +9177,23 @@
   .time-menu {
     position: absolute;
     top: 100%;
-    left: 0;
-    margin-top: 4px;
-    background: var(--neo-bg, rgba(0, 0, 0, 0.95));
+    right: 0;
+    left: auto;
+    margin-top: 8px;
+    background: var(--neo-bg, #e0e5ec);
     border: none;
     border-radius: 16px;
-    padding: 6px;
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    min-width: 80px;
+    gap: 4px;
+    min-width: 100px;
     z-index: 1001;
     
-    /* Estilos neomórficos */
+    /* Neumorfismo elevado */
     box-shadow: 
-      3px 3px 8px var(--neo-shadow-dark, rgba(0, 0, 0, 0.5)),
-      -3px -3px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.05));
+      6px 6px 18px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
+      -6px -6px 18px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
   }
 
   .time-option {
@@ -9201,24 +9201,26 @@
     text-align: left;
     background: transparent;
     border: none;
-    color: #e5e7eb;
-    font-size: 14px;
+    color: var(--neo-text, #6b7280);
+    font-size: 13px;
     border-radius: 10px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s ease;
     font-weight: 500;
   }
 
   .time-option:hover {
-    background: rgba(255, 255, 255, 0.15);
-    transform: translateX(2px);
-    color: white;
+    background: var(--neo-bg, #e0e5ec);
+    box-shadow: 
+      inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+      inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
   }
 
   .time-option.selected {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
     font-weight: 700;
+    box-shadow: 
+      inset 2px 2px 5px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+      inset -2px -2px 5px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
   }
 
   /* Bloquear elementos durante animaciones de cámara */

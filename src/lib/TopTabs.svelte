@@ -42,21 +42,20 @@
   .tabs-trigger {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 0;
+    gap: 6px;
+    padding: 8px 12px;
     height: 36px;
     border-radius: 0;
     border: none;
     background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
     color: var(--neo-text, #e5e7eb);
     cursor: pointer;
-    font: 700 13px/1 system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
     transition: all 0.2s ease;
   }
   .tabs-trigger:hover { 
-    color: var(--neo-text-light, #9ca3af);
+    opacity: 0.8;
   }
   .caret { 
     color: var(--neo-text-light, #9ca3af);
@@ -69,7 +68,7 @@
     min-width: 160px;
     max-width: 200px;
     border: none;
-    background: var(--neo-bg, rgba(0, 0, 0, 0.95));
+    background: var(--neo-bg, #e0e5ec);
     border-radius: 16px;
     padding: 8px;
     display: grid;
@@ -77,38 +76,40 @@
     z-index: 999999;
     isolation: isolate;
     
-    /* Estilos neomórficos */
+    /* Neumorfismo elevado */
     box-shadow: 
-      3px 3px 8px var(--neo-shadow-dark, rgba(0, 0, 0, 0.5)),
-      -3px -3px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.05));
+      6px 6px 18px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
+      -6px -6px 18px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
   }
   .menu button {
     text-align: left;
     padding: 12px 16px;
     border-radius: 10px;
-    color: var(--neo-text, #e5e7eb);
+    color: var(--neo-text, #6b7280);
     background: transparent;
     border: none;
     cursor: pointer;
-    font: 14px/1.2 system-ui, sans-serif;
-    transition: all 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.15s ease;
     white-space: nowrap;
   }
   .menu button[aria-checked="true"] {
-    font-weight: 600;
-    color: var(--neo-text, #ffffff);
+    font-weight: 700;
     box-shadow: 
-      inset 2px 2px 4px var(--neo-shadow-dark, rgba(0, 0, 0, 0.3)),
-      inset -2px -2px 4px var(--neo-shadow-light, rgba(255, 255, 255, 0.05));
+      inset 2px 2px 5px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+      inset -2px -2px 5px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
   }
   .menu button:hover { 
+    background: var(--neo-bg, #e0e5ec);
     box-shadow: 
-      inset 1px 1px 3px var(--neo-shadow-dark, rgba(0, 0, 0, 0.2)),
-      inset -1px -1px 3px var(--neo-shadow-light, rgba(255, 255, 255, 0.03));
-    transform: translateX(-2px);
+      inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+      inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
   }
   .menu button:active {
-    transform: scale(0.98);
+    box-shadow: 
+      inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+      inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
   }
 </style>
 

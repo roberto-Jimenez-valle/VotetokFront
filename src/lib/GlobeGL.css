@@ -3753,105 +3753,120 @@ header {
 }
 
 .dropdown-loading {
-  padding: 16px;
+  padding: 20px 16px;
   text-align: center;
-  color: #aaa;
+  color: var(--neo-text-light, #9ca3af);
   font-size: 13px;
+  font-weight: 500;
 }
 
 .dropdown-search {
   padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
 }
 
 .dropdown-search input {
   width: 100%;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 16px; /* Mínimo 16px para evitar zoom en iOS */
+  padding: 12px 16px;
+  background: var(--neo-bg, #e0e5ec);
+  border: none;
+  border-radius: 12px;
+  color: var(--neo-text, #6b7280);
+  font-size: 16px;
+  font-weight: 500;
   outline: none;
-  -webkit-transition: all 0.2s ease;
-  -moz-transition: all 0.2s ease;
-  transition: all 0.2s ease;
-  /* Quitar estilos nativos de Safari */
+  transition: all 0.15s ease;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+  /* Neumorfismo inset */
+  box-shadow: 
+    inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+    inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 }
 
 .dropdown-search input:focus {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
+    inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
 }
 
 .dropdown-search input::placeholder {
-  color: #888;
+  color: var(--neo-text-light, #9ca3af);
+  opacity: 0.8;
 }
 
 .dropdown-options {
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  max-height: none !important; /* Quitar max-height fijo */
-  flex: 1 !important; /* Ocupar TODO el espacio disponible del dropdown */
-  min-height: 0 !important; /* Permitir que se encoja */
-  padding: 4px;
+  max-height: none !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+  padding: 8px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
 }
 
 .dropdown-options::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 
 .dropdown-options::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+  background: transparent;
+  margin: 8px;
 }
 
 .dropdown-options::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--neo-shadow-dark, rgba(163, 177, 198, 0.5));
   border-radius: 4px;
 }
 
 .dropdown-options::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--neo-text-light, #9ca3af);
 }
 
 .dropdown-option {
   width: 100%;
-  padding: 10px 12px;
-  background: none;
+  padding: 12px 14px;
+  background: transparent;
   border: none;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 400;
+  color: var(--neo-text, #6b7280);
+  font-size: 14px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 10px;
+  transition: all 0.15s ease;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.dropdown-option:last-child {
+  margin-bottom: 0;
 }
 
 .dropdown-option:hover {
-  background: rgba(255, 255, 255, 0.15);
-  -webkit-transform: translateX(4px);
-  -moz-transform: translateX(4px);
-  -ms-transform: translateX(4px);
-  transform: translateX(4px);
+  background: var(--neo-bg, #e0e5ec);
+  box-shadow: 
+    inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
+    inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
+}
+
+.dropdown-option:active {
+  box-shadow: 
+    inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
+    inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
 }
 
 .dropdown-no-results {
-  padding: 16px;
+  padding: 20px 16px;
   text-align: center;
-  color: #888;
+  color: var(--neo-text-light, #9ca3af);
   font-size: 13px;
-  font-style: italic;
+  font-weight: 500;
 }
 
 /* Global dropdown overlay and container */
@@ -3861,15 +3876,15 @@ header {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  z-index: 200000; /* MUY por encima del BottomSheet (20000) */
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 200000;
   display: flex;
-  align-items: flex-start; /* Alinear al inicio en lugar del centro */
+  align-items: flex-start;
   justify-content: center;
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  overflow-y: auto; /* Permitir scroll si es necesario */
-  padding: 80px 12px 120px; /* Más padding inferior en móvil */
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  overflow-y: auto;
+  padding: 80px 12px 120px;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -3884,29 +3899,29 @@ header {
 }
 
 .global-dropdown {
-  position: fixed !important; /* Posición fija FORZADA */
-  top: 80px !important; /* Desde arriba */
+  position: fixed !important;
+  top: 80px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   min-width: 300px;
   max-width: 85vw;
   width: calc(100% - 30px);
-  /* CRÍTICO: altura calculada para NUNCA tocar el nav */
-  height: calc(100vh - 80px - 140px) !important; /* viewport - top - espacio para nav */
-  max-height: 450px !important; /* Máximo absoluto */
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  height: calc(100vh - 80px - 140px) !important;
+  max-height: 450px !important;
+  /* Neumorfismo */
+  background: var(--neo-bg, #e0e5ec);
+  border: none;
   border-radius: 16px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
-  overflow: hidden !important; /* NUNCA permitir overflow */
+  box-shadow: 
+    8px 8px 24px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
+    -8px -8px 24px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
+  overflow: hidden !important;
   display: flex;
   flex-direction: column;
   animation: dropdownFadeIn 0.2s ease-out;
   touch-action: auto;
   pointer-events: auto;
-  z-index: 200001 !important; /* Por encima de TODO */
+  z-index: 200001 !important;
 }
 
 /* En desktop, más espacio disponible */
