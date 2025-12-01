@@ -10,7 +10,14 @@
   // Estado del toggle minimal "# / @"
   export let symbolMode: '#' | '@' = '#';
 
-  function toggle() { open = !open; }
+  function toggle() { 
+    open = !open;
+    // Notificar a otros dropdowns que se cierre
+    if (open) {
+      window.dispatchEvent(new CustomEvent('closeOtherDropdowns', { detail: 'topTabs' }));
+    }
+  }
+  
   function select(tab: typeof options[number]) {
     console.log('[TopTabs] 🔘 Tab seleccionado:', tab);
     console.log('[TopTabs] 🔘 Tab anterior:', active);
@@ -27,11 +34,25 @@
   function onWindowClick(e: MouseEvent) {
     if (!rootEl) return;
     if (!(e.target instanceof Node)) return;
+    // Verificar si el clic fue en el menú flotante
+    const menu = document.querySelector('.menu');
+    if (menu && menu.contains(e.target)) return;
     if (!rootEl.contains(e.target)) open = false;
   }
+  
+  function onCloseOtherDropdowns(e: CustomEvent) {
+    if (e.detail !== 'topTabs') {
+      open = false;
+    }
+  }
+  
   onMount(() => {
     window.addEventListener('click', onWindowClick, { passive: true } as any);
-    return () => window.removeEventListener('click', onWindowClick as any);
+    window.addEventListener('closeOtherDropdowns', onCloseOtherDropdowns as any);
+    return () => {
+      window.removeEventListener('click', onWindowClick as any);
+      window.removeEventListener('closeOtherDropdowns', onCloseOtherDropdowns as any);
+    };
   });
 </script>
 

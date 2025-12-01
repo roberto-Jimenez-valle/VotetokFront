@@ -295,6 +295,11 @@
   ];
   let trendingTimeFilter: TimeFilterOption = "30d";
   let showTimeMenu = false; // Estado del menú de filtros de tiempo
+  
+  // Handlers para coordinación de dropdowns
+  let closeTimeMenuOnClickOutside: ((e: MouseEvent) => void) | null = null;
+  let closeTimeMenuOnOtherDropdown: ((e: Event) => void) | null = null;
+  
   const TIME_FILTER_HOURS = {
     "24h": 24,
     "7d": 168, // 7 * 24
@@ -7014,6 +7019,28 @@
 
   onMount(async () => {
     // ============================================
+    // COORDINACIÓN DE DROPDOWNS
+    // ============================================
+    closeTimeMenuOnClickOutside = (e: MouseEvent) => {
+      if (!showTimeMenu) return;
+      const target = e.target as HTMLElement;
+      const timeWrapper = target.closest('.time-dropdown-wrapper');
+      if (!timeWrapper) {
+        showTimeMenu = false;
+      }
+    };
+    
+    closeTimeMenuOnOtherDropdown = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail !== 'timeMenu') {
+        showTimeMenu = false;
+      }
+    };
+    
+    window.addEventListener('click', closeTimeMenuOnClickOutside);
+    window.addEventListener('closeOtherDropdowns', closeTimeMenuOnOtherDropdown);
+    
+    // ============================================
     // HISTORY API - Navegación SPA con botón atrás
     // ============================================
     popstateHandler = async (event: PopStateEvent) => {
@@ -7655,6 +7682,13 @@
     // Remove popstate listener
     if (popstateHandler) {
       window.removeEventListener("popstate", popstateHandler as any);
+    }
+    // Remove dropdown coordination listeners
+    if (closeTimeMenuOnClickOutside) {
+      window.removeEventListener('click', closeTimeMenuOnClickOutside);
+    }
+    if (closeTimeMenuOnOtherDropdown) {
+      window.removeEventListener('closeOtherDropdowns', closeTimeMenuOnOtherDropdown);
     }
     // Remove header event listeners
     if (headerToggleDropdownHandler) {
@@ -8887,7 +8921,12 @@
       <div class="time-dropdown-wrapper">
         <button
           class="time-trigger"
-          on:click|stopPropagation={() => (showTimeMenu = !showTimeMenu)}
+          on:click|stopPropagation={() => {
+            showTimeMenu = !showTimeMenu;
+            if (showTimeMenu) {
+              window.dispatchEvent(new CustomEvent('closeOtherDropdowns', { detail: 'timeMenu' }));
+            }
+          }}
         >
           <span>
             {#if trendingTimeFilter === "1y"}1a
@@ -9237,9 +9276,6 @@
     color: #111827; /* Texto oscuro */
   }
 
-  .tabs-float.light-mode .time-trigger:hover {
-    background: rgba(255, 255, 255, 0.8);
-  }
 
   /* Overlay semi-transparente para bloquear clics */
   .zoom-overlay {
