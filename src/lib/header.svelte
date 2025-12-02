@@ -215,11 +215,11 @@
 	<div class="w-full flex flex-col">
 		<!-- Logo y Toggle -->
 		<div class="transition-opacity duration-300 ease-in-out px-2 sm:px-4">
-			<div class="flex items-center justify-between h-8 sm:h-10 w-full">
+			<div class="flex items-center justify-between h-14 sm:h-14 md:h-16 w-full">
 				<img 
 					src="/logo.png" 
 					alt="VouTop" 
-					class="h-6 sm:h-8 w-auto"
+					class="h-12 sm:h-16 md:h-18 w-auto"
 				/>
 				<div id="theme-toggle-slot"></div>
 			</div>
