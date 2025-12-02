@@ -9732,6 +9732,23 @@
     justify-content: center;
     pointer-events: auto;
     gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* En móvil, el time-dropdown va debajo centrado */
+  @media (max-width: 480px) {
+    .tabs-row {
+      position: relative;
+    }
+    
+    .tabs-row .time-dropdown-wrapper {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      left: auto;
+      transform: none;
+      margin-top: 4px;
+    }
   }
 
   /* Wrapper para el toggle */
