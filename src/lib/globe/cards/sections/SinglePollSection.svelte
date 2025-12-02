@@ -1530,9 +1530,9 @@
               }
             }}
           >
-            <div class="mini-bottom-sheet-icon {pollVotedOption ? 'bg-emerald-500/20' : 'bg-white/10'}">
+            <div class="mini-bottom-sheet-icon" style="background-color: {pollVotedOption && votedOptionData ? `${votedOptionData.color}33` : 'rgba(255, 255, 255, 0.1)'}">
               {#if pollVotedOption}
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#10b981" stroke="#10b981" stroke-width="2">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="{votedOptionData?.color || '#10b981'}" stroke="{votedOptionData?.color || '#10b981'}" stroke-width="2">
                   <path d="M9 11l3 3L22 4"/>
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                 </svg>
@@ -1543,7 +1543,7 @@
               {/if}
             </div>
             <div class="mini-bottom-sheet-text">
-              <span>{pollVotedOption ? 'Votado' : 'Votar'}</span>
+              <span style="color: {pollVotedOption && votedOptionData ? votedOptionData.color : 'inherit'}">{pollVotedOption ? 'Votado' : 'Votar'}</span>
               <p>{formatCount(poll.stats?.totalVotes || poll.totalVotes)} votos</p>
             </div>
           </button>
@@ -3863,8 +3863,8 @@
   }
 
   .mini-action-btn.voted {
-    background: rgba(16, 185, 129, 0.15);
-    color: #10b981;
+    background: color-mix(in srgb, var(--vote-color, #10b981) 15%, transparent);
+    color: var(--vote-color, #10b981);
   }
 
   .mini-action-btn svg {
@@ -3888,10 +3888,11 @@
     font-weight: 600;
     font-family: monospace;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    color: var(--vote-color, #10b981);
   }
 
   .mini-action-count.voted {
-    color: #10b981;
+    color: var(--vote-color, #10b981);
   }
 
   .mini-more-btn-scroll {

@@ -26,6 +26,8 @@
     Link,
     Square,
     SquareCheck,
+    Volume2,
+    VolumeX,
   } from "lucide-svelte";
   import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -132,14 +134,31 @@
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
   
   // Usar $state con $effect para evitar problemas con análisis estático
+  // Si el usuario ya votó, mostrar el color de la opción votada
+  // Si no ha votado, mostrar el color de la opción activa
   let voteColor = $state('#10b981');
   
   $effect(() => {
-    const index = options.findIndex((o) => o.id === activeOptionId);
-    if (index !== -1 && options[index]) {
-      voteColor = options[index].color || '#10b981';
+    if (hasVoted) {
+      // Buscar la opción que el usuario votó
+      const votedOption = options.find((o) => o.voted === true);
+      if (votedOption) {
+        voteColor = votedOption.color || '#10b981';
+      } else {
+        // Fallback: usar la opción activa
+        const index = options.findIndex((o) => o.id === activeOptionId);
+        if (index !== -1 && options[index]) {
+          voteColor = options[index].color || '#10b981';
+        }
+      }
     } else {
-      voteColor = '#10b981';
+      // Si no ha votado, usar el color de la opción activa
+      const index = options.findIndex((o) => o.id === activeOptionId);
+      if (index !== -1 && options[index]) {
+        voteColor = options[index].color || '#10b981';
+      } else {
+        voteColor = '#10b981';
+      }
     }
   });
 
@@ -416,6 +435,72 @@
   let expandedOptions = $state<Record<string, boolean>>({});
   let isMoreMenuOpen = $state(false);
   
+  // Estado del sonido para videos
+  let isMuted = $state(true); // Los videos empiezan muteados por autoplay
+  
+  // Detectar si la opción actual es un video (YouTube, Vimeo, o video directo)
+  function isVideoContent(opt: PollOption): boolean {
+    if (!opt?.imageUrl) return false;
+    const url = opt.imageUrl.toLowerCase();
+    return (
+      url.includes('youtube.com') ||
+      url.includes('youtu.be') ||
+      url.includes('vimeo.com') ||
+      url.match(/\.(mp4|webm|ogg|mov)(\?|$)/) !== null
+    );
+  }
+  
+  // Activar sonido del video actual
+  function unmuteCurrentVideo() {
+    if (!scrollContainer) return;
+    
+    const iframes = scrollContainer.querySelectorAll('iframe');
+    const videos = scrollContainer.querySelectorAll('video');
+    
+    // Para iframes de YouTube/Vimeo
+    iframes.forEach((iframe) => {
+      try {
+        const src = iframe.src || '';
+        
+        // YouTube - usar postMessage API
+        if (src.includes('youtube.com') || src.includes('youtu.be')) {
+          // Modificar src para quitar mute
+          const newSrc = src.replace(/[&?]mute=1/, '').replace(/mute=1[&]?/, '');
+          if (newSrc !== src) {
+            iframe.src = newSrc;
+          }
+          // También enviar comando de unmute
+          iframe.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+            '*'
+          );
+        }
+        
+        // Vimeo - usar postMessage API
+        if (src.includes('vimeo.com')) {
+          const newSrc = src.replace(/[&?]muted=1/, '').replace(/muted=1[&]?/, '');
+          if (newSrc !== src) {
+            iframe.src = newSrc;
+          }
+          iframe.contentWindow?.postMessage(
+            JSON.stringify({ method: 'setVolume', value: 1 }),
+            '*'
+          );
+        }
+      } catch (e) {
+        console.warn('[PollMaximizedView] Error al activar sonido:', e);
+      }
+    });
+    
+    // Para videos HTML5 nativos
+    videos.forEach((video) => {
+      video.muted = false;
+    });
+    
+    isMuted = false;
+    console.log('[PollMaximizedView] 🔊 Sonido activado');
+  }
+  
   // Swipe para cerrar bottom sheet
   let sheetTouchStartY = 0;
   let sheetCurrentY = 0;
@@ -481,6 +566,18 @@
       interactingOptionId = null;
     }
   });
+  
+  // Resetear estado de mute cuando cambie la opción activa (cada video empieza muteado)
+  $effect(() => {
+    if (activeIndex >= 0) {
+      isMuted = true; // Cada nuevo slide empieza muteado
+    }
+  });
+  
+  // Derivado: ¿la opción actual es video?
+  let currentOptionIsVideo = $derived(
+    activeIndex >= 0 && options[activeIndex] ? isVideoContent(options[activeIndex]) : false
+  );
 
   // --- COMPONENTES VISUALES (INLINE) ---
 </script>
@@ -509,9 +606,9 @@
               ? Math.max(opt.votes || 0, totalVotes * 0.02)
               : 1}
             <div
-              class="h-full transition-all duration-700 ease-out overflow-hidden relative bg-white/20 rounded-sm"
+              class="h-full transition-all duration-700 ease-out overflow-hidden relative rounded-sm"
               style:flex="{flexWeight} 1 0%"
-              style:opacity={hasVoted ? (isActive ? 1 : 0.3) : 1}
+              style:background-color={hasVoted ? opt.color : "rgba(255, 255, 255, 0.2)"}
               style:transform={hasVoted && isActive
                 ? "scaleY(1.5)"
                 : "scaleY(1)"}
@@ -526,7 +623,7 @@
                     : isActive
                       ? "100%"
                       : "0%"}
-                style:background-color={hasVoted ? opt.color : "#fff"}
+                style:background-color={hasVoted ? "transparent" : "#fff"}
               ></div>
             </div>
           {/each}
@@ -880,6 +977,21 @@
       </div>
     </div>
   {/key}
+
+  <!-- BOTÓN DE ACTIVAR SONIDO - Solo visible cuando es video y está muteado -->
+  {#if currentOptionIsVideo && isMuted}
+    <button
+      class="unmute-button"
+      onclick={unmuteCurrentVideo}
+      transition:scale={{ duration: 200, easing: cubicOut }}
+      aria-label="Activar sonido"
+    >
+      <div class="unmute-icon-wrapper">
+        <VolumeX size={48} class="text-white" />
+      </div>
+      <span class="unmute-text">Toca para activar sonido</span>
+    </button>
+  {/if}
 
   <!-- VOTE CHECK ANIMATION -->
   {#if showLikeAnim}
@@ -1702,5 +1814,91 @@
 
   .maximized-view :global(.ring-white) {
     --tw-ring-color: rgba(255, 255, 255, 0.2) !important;
+  }
+
+  /* ========================================
+     BOTÓN DE ACTIVAR SONIDO
+     ======================================== */
+  
+  .unmute-button {
+    position: absolute;
+    top: calc(50% + 50px);
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 32px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    animation: pulseUnmute 2s ease-in-out infinite;
+  }
+
+  .unmute-button:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: translate(-50%, -50%) scale(1.05);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .unmute-button:active {
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+
+  .unmute-icon-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .unmute-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  @keyframes pulseUnmute {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 0 15px rgba(255, 255, 255, 0);
+    }
+  }
+
+  /* Responsive para móvil */
+  @media (max-width: 480px) {
+    .unmute-button {
+      padding: 20px 28px;
+      gap: 10px;
+    }
+
+    .unmute-icon-wrapper {
+      width: 64px;
+      height: 64px;
+    }
+
+    .unmute-icon-wrapper :global(svg) {
+      width: 36px;
+      height: 36px;
+    }
+
+    .unmute-text {
+      font-size: 12px;
+    }
   }
 </style>
