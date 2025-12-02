@@ -701,6 +701,15 @@
                 style="pointer-events: auto;"
               ></textarea>
             {/if}
+            
+            <!-- Botón minimizar (en línea con la pregunta) -->
+            <button 
+              onclick={onClose} 
+              class="w-8 h-8 bg-black/40 rounded-full flex items-center justify-center border border-white/20 flex-shrink-0 pointer-events-auto transition-all hover:bg-black/60 active:scale-95"
+              aria-label="Minimizar"
+            >
+              <ChevronDown size={18} class="text-white" />
+            </button>
           </div>
         </div>
       </div>
@@ -867,49 +876,55 @@
                           </span>
                         {/if}
                         
-                        <h2 class="{opt.label.length > 40 ? 'text-2xl' : opt.label.length > 25 ? 'text-3xl' : 'text-4xl'} font-bold text-white uppercase tracking-tighter leading-none text-center">
+                        <h2 class="{opt.label.length > 40 ? 'text-2xl' : opt.label.length > 25 ? 'text-3xl' : 'text-4xl'} font-bold text-white uppercase tracking-tighter leading-none text-left w-full">
                           {opt.label}
                         </h2>
                         
-                        {#if hasVoted && totalVotes > 0}
-                          <div class="text-percentage-display">
-                            <span class="text-percentage-value">
-                              {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
-                            </span>
-                            <span class="text-percentage-label">de los votos</span>
-                          </div>
-                        {/if}
-                        
-                        <!-- Avatares de amigos -->
-                        {#if getFriendsForOption(opt.id).length > 0}
-                          {@const optFriends = getFriendsForOption(opt.id)}
-                          <button 
-                            class="friends-avatars-btn mt-2 pointer-events-auto"
-                            onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
-                            aria-label="Ver votos de amigos"
-                          >
-                            {#each optFriends.slice(0, 5) as friend, idx}
-                              <div 
-                                class="friend-avatar-item" 
-                                style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
-                              >
-                                <img 
-                                  src={friend.avatarUrl || '/default-avatar.png'}
-                                  alt={friend.name}
-                                  class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
-                                />
-                              </div>
-                            {/each}
-                            {#if optFriends.length > 5}
-                              <div 
-                                class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
-                                style="margin-left: -8px; z-index: 0;"
-                              >
-                                <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
-                              </div>
-                            {/if}
-                          </button>
-                        {/if}
+                        <!-- Fila con porcentaje (izq) y avatares (der) -->
+                        <div class="w-full flex items-center justify-between mt-3">
+                          <!-- Porcentaje a la izquierda -->
+                          {#if hasVoted && totalVotes > 0}
+                            <div class="text-percentage-inline">
+                              <span class="text-percentage-value-inline">
+                                {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
+                              </span>
+                              <span class="text-percentage-label-inline">de los votos</span>
+                            </div>
+                          {:else}
+                            <div></div>
+                          {/if}
+                          
+                          <!-- Avatares a la derecha -->
+                          {#if getFriendsForOption(opt.id).length > 0}
+                            {@const optFriends = getFriendsForOption(opt.id)}
+                            <button 
+                              class="friends-avatars-btn pointer-events-auto"
+                              onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
+                              aria-label="Ver votos de amigos"
+                            >
+                              {#each optFriends.slice(0, 5) as friend, idx}
+                                <div 
+                                  class="friend-avatar-item" 
+                                  style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
+                                >
+                                  <img 
+                                    src={friend.avatarUrl || '/default-avatar.png'}
+                                    alt={friend.name}
+                                    class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                                  />
+                                </div>
+                              {/each}
+                              {#if optFriends.length > 5}
+                                <div 
+                                  class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
+                                  style="margin-left: -8px; z-index: 0;"
+                                >
+                                  <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
+                                </div>
+                              {/if}
+                            </button>
+                          {/if}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1002,19 +1017,7 @@
     </div>
   {/if}
 
-  <!-- FLOATING CLOSE BUTTON -->
-  <div
-    class="absolute right-3 bottom-24 z-50 flex flex-col gap-3 items-center pointer-events-auto"
-  >
-    <button onclick={onClose} class="group">
-      <div
-        class="w-10 h-10 bg-black/40 rounded-full flex items-center justify-center border border-white/10 group-active:scale-95 transition-all"
-      >
-        <ChevronDown size={24} class="text-white" />
-      </div>
-    </button>
-  </div>
-
+  
   <!-- BOTTOM ACTION BAR - New Design -->
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div 
@@ -1796,6 +1799,36 @@
     }
   }
 
+  /* Porcentaje en línea (izquierda) */
+  .text-percentage-inline {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .text-percentage-value-inline {
+    font-size: 32px;
+    font-weight: 900;
+    color: white;
+    line-height: 1;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .text-percentage-label-inline {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+  
+  @media (max-width: 480px) {
+    .text-percentage-value-inline {
+      font-size: 28px;
+    }
+  }
+
   /* ========================================
      FLOATING MEDIA CARD (ESTILO TARJETA FLOTANTE)
      ======================================== */
@@ -1803,7 +1836,7 @@
   .floating-media-card {
     position: relative;
     width: 100%;
-    max-width: 92%;
+    max-width: 99%;
     aspect-ratio: 1 / 1;
     padding: 8px;
     background: white;
@@ -1849,6 +1882,7 @@
   .floating-glass-panel .option-card-inner {
     padding: 20px 24px;
     border-radius: 22px 22px 0 0;
+    align-items: flex-start;
   }
   
   /* Responsive */
