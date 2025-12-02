@@ -899,19 +899,16 @@
 
                   {#if hasVoted}
                     <div
-                      class="flex items-center gap-2 mt-2"
+                      class="option-percentage-voted-maximized"
                       in:fly={{ x: -20, duration: 500 }}
                     >
                       <span
-                        class="text-4xl font-bold text-white"
-                        style:color={opt.color}
+                        class="percentage-value-maximized"
+                        style="color: {opt.color};"
                       >
                         {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
                       </span>
-                      <span
-                        class="text-xs text-zinc-400 font-medium uppercase tracking-wider"
-                        >del total</span
-                      >
+                      <span class="percentage-subtitle-maximized">del total</span>
                     </div>
                   {/if}
                 </div>
@@ -1814,6 +1811,49 @@
 
   .maximized-view :global(.ring-white) {
     --tw-ring-color: rgba(255, 255, 255, 0.2) !important;
+  }
+
+  /* ========================================
+     PORCENTAJE DE VOTACIÓN - Estilo atractivo
+     ======================================== */
+  
+  .option-percentage-voted-maximized {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: 12px;
+  }
+
+  .percentage-value-maximized {
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 
+      0 4px 16px rgba(0, 0, 0, 0.6),
+      0 2px 6px rgba(0, 0, 0, 0.4);
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.4));
+    letter-spacing: -0.02em;
+  }
+
+  .percentage-subtitle-maximized {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Responsive */
+  @media (max-width: 480px) {
+    .percentage-value-maximized {
+      font-size: 48px;
+    }
+    
+    .percentage-subtitle-maximized {
+      font-size: 11px;
+    }
   }
 
   /* ========================================
