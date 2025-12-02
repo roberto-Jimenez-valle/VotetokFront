@@ -216,10 +216,11 @@
 		<!-- Logo y Toggle -->
 		<div class="transition-opacity duration-300 ease-in-out px-2 sm:px-4">
 			<div class="flex items-center justify-between h-8 sm:h-10 w-full">
-				<h1 
-					class="logo-text text-xl sm:text-3xl font-extrabold tracking-tight"
-					style="color: var(--neo-text, white);"
-				>VouTop</h1>
+				<img 
+					src="/logo.png" 
+					alt="VouTop" 
+					class="h-6 sm:h-8 w-auto"
+				/>
 				<div id="theme-toggle-slot"></div>
 			</div>
 		</div>

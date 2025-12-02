@@ -16,7 +16,7 @@
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "/favicon.png",
+      "src": "/logo.png",
       "sizes": "any",
       "type": "image/png",
       "purpose": "any maskable"
