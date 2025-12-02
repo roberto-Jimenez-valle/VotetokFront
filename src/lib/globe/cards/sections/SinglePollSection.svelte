@@ -4,6 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
+  import FriendsVotesModal from '$lib/components/FriendsVotesModal.svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -111,6 +112,9 @@
   
   // Estado para menú desplegable
   let isMoreMenuOpen: boolean = false;
+  
+  // Estado para modal de votos de amigos
+  let showFriendsVotesModal: boolean = false;
   
   // Formatear números grandes
   function formatCount(num: number | undefined): string {
@@ -1386,12 +1390,16 @@
               {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
               {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
               {#if filteredFriends.length > 0}
-                <div class="friend-avatars-maximized">
+                <button 
+                  class="friend-avatars-maximized friend-avatars-btn-mini"
+                  onclick={(e) => { e.stopPropagation(); if (userHasVoted) showFriendsVotesModal = true; }}
+                  disabled={!userHasVoted}
+                  aria-label={userHasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
+                >
                   {#each filteredFriends.slice(0, 3) as friend, i}
                     <div 
                       class="friend-avatar-wrapper" 
                       style="z-index: {10 - i};"
-                      title={userHasVoted ? friend.name : 'Vota para ver quién eligió esta opción'}
                     >
                       {#if userHasVoted}
                         <img 
@@ -1410,7 +1418,7 @@
                   {#if filteredFriends.length > 3}
                     <div class="more-friends-count">+{filteredFriends.length - 3}</div>
                   {/if}
-                </div>
+                </button>
               {/if}
             {/if}
           {/if}
@@ -1933,6 +1941,21 @@
     </div>
   </div>
 {/if}
+
+<!-- MODAL DE VOTOS DE AMIGOS -->
+<FriendsVotesModal 
+  bind:isOpen={showFriendsVotesModal}
+  pollTitle={poll.title || ''}
+  options={poll.options?.map((opt) => ({ 
+    id: opt.id || opt.key, 
+    key: opt.key, 
+    label: opt.label || opt.optionLabel, 
+    color: opt.color,
+    votes: opt.voteCount || opt.votes || 0
+  })) || []}
+  friendsByOption={poll.friendsByOption || {}}
+  onClose={() => showFriendsVotesModal = false}
+/>
 
 <style>
   /* Botón confirmar votos múltiples - Versión compacta */
@@ -3711,6 +3734,34 @@
     font-weight: 700;
     color: white;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Botón clickeable para avatares de amigos */
+  .friend-avatars-btn-mini {
+    padding: 4px 8px 4px 4px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .friend-avatars-btn-mini:not(:disabled):hover {
+    background: rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+  }
+
+  .friend-avatars-btn-mini:not(:disabled):active {
+    transform: scale(0.95);
+  }
+
+  .friend-avatars-btn-mini:disabled {
+    cursor: not-allowed;
+  }
+
+  .friend-avatars-btn-mini:not(:disabled):hover .friend-avatar-wrapper {
+    transform: translateY(-2px);
   }
 
   /* Contenedor principal de scroll horizontal */

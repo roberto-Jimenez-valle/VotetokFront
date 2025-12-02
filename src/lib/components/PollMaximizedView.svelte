@@ -33,6 +33,7 @@
   import { cubicOut } from "svelte/easing";
   import MediaEmbed from "./MediaEmbed.svelte";
   import AuthModal from "../AuthModal.svelte";
+  import FriendsVotesModal from "./FriendsVotesModal.svelte";
 
   // --- INTERFACES ---
   interface PollOption {
@@ -67,6 +68,7 @@
     name: string;
     username?: string;
     avatarUrl?: string | null;
+    optionKey?: string;
   }
 
   interface Props {
@@ -167,6 +169,26 @@
   let lastTapTime = 0;
   let transitionY = $state(100);
   let showAuthModal = $state(false);
+  let showFriendsVotesModal = $state(false);
+
+  // Debug: verificar friendsByOption
+  $effect(() => {
+    console.log('[PollMaximizedView] friendsByOption:', friendsByOption);
+    console.log('[PollMaximizedView] options IDs:', options.map(o => o.id));
+    console.log('[PollMaximizedView] friendsByOption keys:', Object.keys(friendsByOption || {}));
+  });
+
+  // Helper para obtener amigos de una opción (busca por múltiples claves)
+  function getFriendsForOption(optId: string): Friend[] {
+    if (!friendsByOption) return [];
+    // Intentar diferentes claves posibles
+    return friendsByOption[optId] || friendsByOption[`opt_${optId}`] || [];
+  }
+  
+  // Verificar si hay amigos en total
+  let hasFriendsVotes = $derived(
+    friendsByOption && Object.values(friendsByOption).some(arr => arr && arr.length > 0)
+  );
 
   let isScrollingProgrammatically = false;
 
@@ -766,37 +788,34 @@
                     {/if}
                     
                     <!-- Avatares de amigos en opciones de texto -->
-                    {#if friendsByOption && friendsByOption[opt.id] && friendsByOption[opt.id].length > 0}
-                      <div class="mt-4 flex items-center gap-2">
-                        {#each friendsByOption[opt.id].slice(0, 5) as friend, idx}
+                    {#if getFriendsForOption(opt.id).length > 0}
+                      {@const optFriends = getFriendsForOption(opt.id)}
+                      <button 
+                        class="friends-avatars-btn mt-4"
+                        onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
+                        aria-label="Ver votos de amigos"
+                      >
+                        {#each optFriends.slice(0, 5) as friend, idx}
                           <div 
-                            class="relative" 
+                            class="friend-avatar-item" 
                             style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
-                            title={friend.name}
                           >
-                            {#if hasVoted}
-                              <img 
-                                src={friend.avatarUrl || '/default-avatar.png'}
-                                alt={friend.name}
-                                class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg hover:scale-110 hover:z-50 transition-transform"
-                              />
-                            {:else}
-                              <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 shadow-lg"></div>
-                            {/if}
+                            <img 
+                              src={friend.avatarUrl || '/default-avatar.png'}
+                              alt={friend.name}
+                              class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                            />
                           </div>
                         {/each}
-                        {#if friendsByOption[opt.id].length > 5}
+                        {#if optFriends.length > 5}
                           <div 
                             class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
                             style="margin-left: -8px; z-index: 0;"
                           >
-                            <span class="text-white text-xs font-bold">+{friendsByOption[opt.id].length - 5}</span>
+                            <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
                           </div>
                         {/if}
-                        {#if !hasVoted}
-                          <span class="text-white/60 text-sm ml-2">🔒 Vota para ver quién votó</span>
-                        {/if}
-                      </div>
+                      </button>
                     {/if}
                   </div>
                 </div>
@@ -914,58 +933,34 @@
                 </div>
 
                 <!-- Avatares de amigos en lugar del círculo "i" -->
-                {#if friendsByOption && friendsByOption[opt.id] && friendsByOption[opt.id].length > 0}
-                  <div class="mt-4 flex items-center gap-2">
-                    {#each friendsByOption[opt.id].slice(0, 5) as friend, idx}
+                {#if getFriendsForOption(opt.id).length > 0}
+                  {@const optFriends2 = getFriendsForOption(opt.id)}
+                  <button 
+                    class="friends-avatars-btn mt-4 pointer-events-auto"
+                    onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
+                    aria-label="Ver votos de amigos"
+                  >
+                    {#each optFriends2.slice(0, 5) as friend, idx}
                       <div 
-                        class="relative" 
+                        class="friend-avatar-item" 
                         style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
-                        title={hasVoted ? friend.name : 'Vota para ver quién eligió esta opción'}
                       >
-                        {#if hasVoted}
-                          <img 
-                            src={friend.avatarUrl || '/default-avatar.png'}
-                            alt={friend.name}
-                            class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg hover:scale-110 hover:z-50 transition-transform"
-                          />
-                        {:else}
-                          <div class="w-8 h-8 rounded-full border-2 border-white/40 bg-white/10 flex items-center justify-center shadow-lg hover:scale-110 hover:z-50 transition-transform cursor-help">
-                            <span class="text-white text-sm font-bold">?</span>
-                          </div>
-                        {/if}
+                        <img 
+                          src={friend.avatarUrl || '/default-avatar.png'}
+                          alt={friend.name}
+                          class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                        />
                       </div>
                     {/each}
-                    {#if friendsByOption[opt.id].length > 5}
+                    {#if optFriends2.length > 5}
                       <div 
                         class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
                         style="margin-left: -8px; z-index: 0;"
                       >
-                        <span class="text-white text-xs font-bold">+{friendsByOption[opt.id].length - 5}</span>
+                        <span class="text-white text-xs font-bold">+{optFriends2.length - 5}</span>
                       </div>
                     {/if}
-                    {#if !hasVoted}
-                      <span
-                        class="text-[10px] font-mono uppercase tracking-widest text-white/60 ml-2"
-                      >
-                        Vota para descubrir
-                      </span>
-                    {/if}
-                  </div>
-                {:else if !hasVoted}
-                  <div
-                    class="mt-4 flex items-center gap-3 opacity-80 animate-pulse"
-                  >
-                    <div
-                      class="w-8 h-8 rounded-full border border-white/30 flex items-center justify-center"
-                    >
-                      <div class="w-1 h-4 bg-white rounded-full"></div>
-                    </div>
-                    <span
-                      class="text-[10px] font-mono uppercase tracking-widest text-white shadow-black drop-shadow-md"
-                    >
-                      Doble toque para votar
-                    </span>
-                  </div>
+                  </button>
                 {/if}
               </div>
             {/if}
@@ -1410,6 +1405,15 @@
 
   <!-- AUTH MODAL -->
   <AuthModal bind:isOpen={showAuthModal} />
+
+  <!-- FRIENDS VOTES MODAL -->
+  <FriendsVotesModal 
+    bind:isOpen={showFriendsVotesModal}
+    pollTitle={pollTitle}
+    options={options.map(opt => ({ id: opt.id, key: opt.id, label: opt.label, color: opt.color, votes: opt.votes }))}
+    {friendsByOption}
+    onClose={() => showFriendsVotesModal = false}
+  />
 </div>
 
 <style>
@@ -1811,6 +1815,38 @@
 
   .maximized-view :global(.ring-white) {
     --tw-ring-color: rgba(255, 255, 255, 0.2) !important;
+  }
+
+  /* ========================================
+     AVATARES DE AMIGOS - Clickeables
+     ======================================== */
+  
+  .friends-avatars-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: fit-content;
+  }
+
+  .friends-avatars-btn:hover {
+    filter: brightness(1.15);
+  }
+
+  .friends-avatars-btn:active {
+    filter: brightness(0.9);
+  }
+
+  .friend-avatar-item {
+    transition: filter 0.2s ease;
+  }
+  
+  .friends-avatars-btn:hover .friend-avatar-item img {
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
   }
 
   /* ========================================
