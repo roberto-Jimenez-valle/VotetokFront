@@ -796,21 +796,25 @@
                       </p>
                     {/if}
                     
-                    <!-- Porcentaje de votos en opciones de texto -->
-                    {#if hasVoted && totalVotes > 0}
-                      <div class="text-percentage-display" in:fly={{ y: 10, duration: 400 }}>
-                        <span class="text-percentage-value">
-                          {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
-                        </span>
-                        <span class="text-percentage-label">de los votos</span>
-                      </div>
-                    {/if}
-                    
-                    <!-- Avatares de amigos en opciones de texto -->
+                    <!-- Fila con porcentaje (izq) y avatares (der) - igual que en media -->
+                    <div class="w-full flex items-center justify-between mt-4">
+                      <!-- Porcentaje a la izquierda -->
+                      {#if hasVoted && totalVotes > 0}
+                        <div class="text-percentage-inline" in:fly={{ y: 10, duration: 400 }}>
+                          <span class="text-percentage-value-inline">
+                            {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
+                          </span>
+                          <span class="text-percentage-label-inline">de los votos</span>
+                        </div>
+                      {:else}
+                        <div></div>
+                      {/if}
+                      
+                      <!-- Avatares a la derecha -->
                       {#if getFriendsForOption(opt.id).length > 0}
                         {@const optFriends = getFriendsForOption(opt.id)}
                         <button 
-                          class="friends-avatars-btn mt-4"
+                          class="friends-avatars-btn pointer-events-auto"
                           onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
                           aria-label="Ver votos de amigos"
                         >
@@ -837,16 +841,17 @@
                         </button>
                       {/if}
                     </div>
+                    </div>
                   </div>
                 </div>
               {:else}
                 <!-- Media Content - Diseño tipo tarjeta flotante -->
                 <div 
-                  class="w-full h-full flex flex-col"
+                  class="w-full h-full grid grid-rows-[1fr_auto]"
                   style="background-color: {opt.color};"
                 >
                   <!-- Área superior con la tarjeta flotante -->
-                  <div class="flex-1 flex items-start justify-center px-4 pt-24">
+                  <div class="flex items-start justify-center px-1 pt-28 pb-4 overflow-hidden">
                     <div class="floating-media-card">
                       <div class="floating-media-inner">
                         {#if Math.abs(i - activeIndex) <= 1}
@@ -1836,8 +1841,8 @@
   .floating-media-card {
     position: relative;
     width: 100%;
-    max-width: 99%;
-    aspect-ratio: 1 / 1;
+    height: 100%;
+    max-height: 100%;
     padding: 8px;
     background: white;
     border-radius: 20px;
@@ -1863,10 +1868,6 @@
   
   /* Panel inferior glassmorphism */
   .floating-glass-panel {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
     display: flex;
     justify-content: center;
     padding: 0;
@@ -1887,11 +1888,6 @@
   
   /* Responsive */
   @media (max-width: 380px) {
-    .floating-media-card {
-      width: 90%;
-      max-width: 280px;
-    }
-    
     .floating-glass-panel .option-card-frame {
       border-radius: 20px 20px 0 0;
       padding-bottom: 60px;
@@ -1903,12 +1899,7 @@
     }
   }
   
-  @media (min-height: 800px) {
-    .floating-media-card {
-      max-width: 360px;
-    }
-  }
-
+  
   /* ========================================
      AVATARES DE AMIGOS - Clickeables
      ======================================== */
