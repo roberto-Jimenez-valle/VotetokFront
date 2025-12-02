@@ -728,12 +728,12 @@
             <div class="w-full h-full relative overflow-hidden">
               {#if type === "text"}
                 <div
-                  class="w-full h-full flex flex-col items-center justify-center px-8 py-16 text-center relative overflow-hidden"
+                  class="w-full h-full flex flex-col items-center justify-center px-6 py-16 text-center relative overflow-hidden"
                   style="background-color: {opt.color};"
                 >
-                  <div
-                    class="relative z-10 flex flex-col items-center gap-6 max-w-2xl w-full"
-                  >
+                  <!-- Marco decorativo para la opción -->
+                  <div class="option-card-frame">
+                    <div class="option-card-inner">
                     {#if !readOnly}
                       <textarea
                         class="text-5xl md:text-7xl font-bold text-white uppercase tracking-tighter leading-none break-words bg-transparent border-none outline-none w-full text-center resize-none overflow-auto placeholder-white/50"
@@ -745,7 +745,7 @@
                         rows="4"
                       ></textarea>
                       <button
-                        class="absolute top-8 right-8 w-10 h-10 rounded-full border-2 border-white/50 shadow-lg z-50 hover:scale-110 transition-transform"
+                        class="w-10 h-10 rounded-full border-2 border-white/50 shadow-lg z-50 hover:scale-110 transition-transform"
                         style:background-color={opt.color}
                         onclick={(e) => {
                           e.stopPropagation();
@@ -787,183 +787,136 @@
                       </p>
                     {/if}
                     
-                    <!-- Avatares de amigos en opciones de texto -->
-                    {#if getFriendsForOption(opt.id).length > 0}
-                      {@const optFriends = getFriendsForOption(opt.id)}
-                      <button 
-                        class="friends-avatars-btn mt-4"
-                        onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
-                        aria-label="Ver votos de amigos"
-                      >
-                        {#each optFriends.slice(0, 5) as friend, idx}
-                          <div 
-                            class="friend-avatar-item" 
-                            style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
-                          >
-                            <img 
-                              src={friend.avatarUrl || '/default-avatar.png'}
-                              alt={friend.name}
-                              class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
-                            />
-                          </div>
-                        {/each}
-                        {#if optFriends.length > 5}
-                          <div 
-                            class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
-                            style="margin-left: -8px; z-index: 0;"
-                          >
-                            <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
-                          </div>
-                        {/if}
-                      </button>
+                    <!-- Porcentaje de votos en opciones de texto -->
+                    {#if hasVoted && totalVotes > 0}
+                      <div class="text-percentage-display" in:fly={{ y: 10, duration: 400 }}>
+                        <span class="text-percentage-value">
+                          {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
+                        </span>
+                        <span class="text-percentage-label">de los votos</span>
+                      </div>
                     {/if}
+                    
+                    <!-- Avatares de amigos en opciones de texto -->
+                      {#if getFriendsForOption(opt.id).length > 0}
+                        {@const optFriends = getFriendsForOption(opt.id)}
+                        <button 
+                          class="friends-avatars-btn mt-4"
+                          onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
+                          aria-label="Ver votos de amigos"
+                        >
+                          {#each optFriends.slice(0, 5) as friend, idx}
+                            <div 
+                              class="friend-avatar-item" 
+                              style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
+                            >
+                              <img 
+                                src={friend.avatarUrl || '/default-avatar.png'}
+                                alt={friend.name}
+                                class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                              />
+                            </div>
+                          {/each}
+                          {#if optFriends.length > 5}
+                            <div 
+                              class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
+                              style="margin-left: -8px; z-index: 0;"
+                            >
+                              <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
+                            </div>
+                          {/if}
+                        </button>
+                      {/if}
+                    </div>
                   </div>
                 </div>
               {:else}
-                <!-- Media Content -->
-                {#if opt.imageUrl}
-                  <!-- Fondo borroso de la imagen (optimizado) -->
-                  {#if Math.abs(i - activeIndex) <= 1}
-                    <img
-                      src={opt.imageUrl}
-                      alt=""
-                      class="absolute inset-0 w-full h-full object-cover -z-10"
-                      style="filter: blur(30px); opacity: 0.5; will-change: transform;"
-                    />
-                  {/if}
-                {/if}
-                <div
-                  class="absolute inset-0 z-0 bg-black flex justify-center media-container"
-                  style="align-items: flex-start;"
+                <!-- Media Content - Diseño tipo tarjeta flotante -->
+                <div 
+                  class="w-full h-full flex flex-col"
+                  style="background-color: {opt.color};"
                 >
-                  {#if Math.abs(i - activeIndex) <= 1}
-                    <div class="media-wrapper">
-                      <MediaEmbed
-                        url={opt.imageUrl || ""}
-                        mode="full"
-                        width="100%"
-                        height="100%"
-                        autoplay={i === activeIndex}
-                      />
+                  <!-- Área superior con la tarjeta flotante -->
+                  <div class="flex-1 flex items-start justify-center px-4 pt-24">
+                    <div class="floating-media-card">
+                      <div class="floating-media-inner">
+                        {#if Math.abs(i - activeIndex) <= 1}
+                          <MediaEmbed
+                            url={opt.imageUrl || ""}
+                            mode="full"
+                            width="100%"
+                            height="100%"
+                            autoplay={i === activeIndex}
+                          />
+                        {:else}
+                          <div class="w-full h-full flex items-center justify-center bg-black/20">
+                            <span class="text-white/50">Cargando...</span>
+                          </div>
+                        {/if}
+                      </div>
                     </div>
-                  {:else}
-                    <!-- Placeholder para opciones lejanas -->
-                    <div class="w-full h-full flex items-center justify-center text-white/50">
-                      <span>Cargando...</span>
+                  </div>
+                  
+                  <!-- Panel inferior glassmorphism (mismo estilo que texto) -->
+                  <div class="floating-glass-panel">
+                    <div class="option-card-frame">
+                      <div class="option-card-inner">
+                        {#if opt.artist}
+                          <span class="text-sm font-bold uppercase tracking-widest text-white/60 bg-black/20 px-3 py-1 rounded-full">
+                            {opt.artist}
+                          </span>
+                        {/if}
+                        
+                        <h2 class="{opt.label.length > 40 ? 'text-2xl' : opt.label.length > 25 ? 'text-3xl' : 'text-4xl'} font-bold text-white uppercase tracking-tighter leading-none text-center">
+                          {opt.label}
+                        </h2>
+                        
+                        {#if hasVoted && totalVotes > 0}
+                          <div class="text-percentage-display">
+                            <span class="text-percentage-value">
+                              {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
+                            </span>
+                            <span class="text-percentage-label">de los votos</span>
+                          </div>
+                        {/if}
+                        
+                        <!-- Avatares de amigos -->
+                        {#if getFriendsForOption(opt.id).length > 0}
+                          {@const optFriends = getFriendsForOption(opt.id)}
+                          <button 
+                            class="friends-avatars-btn mt-2 pointer-events-auto"
+                            onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
+                            aria-label="Ver votos de amigos"
+                          >
+                            {#each optFriends.slice(0, 5) as friend, idx}
+                              <div 
+                                class="friend-avatar-item" 
+                                style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
+                              >
+                                <img 
+                                  src={friend.avatarUrl || '/default-avatar.png'}
+                                  alt={friend.name}
+                                  class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                                />
+                              </div>
+                            {/each}
+                            {#if optFriends.length > 5}
+                              <div 
+                                class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
+                                style="margin-left: -8px; z-index: 0;"
+                              >
+                                <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
+                              </div>
+                            {/if}
+                          </button>
+                        {/if}
+                      </div>
                     </div>
-                  {/if}
+                  </div>
                 </div>
-                <div
-                  class="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 pointer-events-none"
-                ></div>
               {/if}
             </div>
 
-            <!-- InfoOverlay -->
-            {#if type !== "text"}
-              <div
-                class="absolute bottom-0 left-0 w-full p-6 pb-20 z-40 pointer-events-none flex flex-col gap-2 max-w-[75%]"
-                style:opacity={i === activeIndex ? 1 : 0}
-                style:transition="opacity 0.3s"
-              >
-                <div
-                  class="flex flex-col items-start gap-1"
-                  in:fly={{ y: 20, duration: 500 }}
-                >
-                  {#if opt.artist}
-                    <span
-                      class="bg-white text-black text-[9px] font-bold uppercase px-2 py-0.5 tracking-widest rounded-sm"
-                    >
-                      {opt.artist}
-                    </span>
-                  {/if}
-                  {#if !readOnly}
-                    <button
-                      class="absolute -top-12 right-0 w-10 h-10 rounded-full border-2 border-white/50 shadow-lg z-50 hover:scale-110 transition-transform"
-                      style:background-color={opt.color}
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        onOpenColorPicker(opt.id);
-                      }}
-                      title="Cambiar color"
-                    ></button>
-                    <textarea
-                      class="text-5xl md:text-6xl font-bold text-white uppercase tracking-tighter leading-[0.9] break-words bg-transparent border-none outline-none w-full resize-none overflow-auto placeholder-white/50"
-                      placeholder="Opción {i + 1}"
-                      value={opt.label}
-                      oninput={(e) =>
-                        onLabelChange(opt.id, e.currentTarget.value)}
-                      onclick={(e) => e.stopPropagation()}
-                      rows="3"
-                    ></textarea>
-                  {:else}
-                    {@const textLength = opt.label.length}
-                    {@const fontSize = textLength > 80 ? 'text-3xl md:text-4xl' : textLength > 50 ? 'text-4xl md:text-5xl' : 'text-5xl md:text-6xl'}
-                    {@const shouldTruncate = textLength > 120}
-                    <h1
-                      class="{fontSize} font-bold text-white uppercase tracking-tighter leading-[0.9] break-words text-left pointer-events-auto"
-                      style={shouldTruncate && !expandedOptions[opt.id] ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; cursor: pointer;" : shouldTruncate ? "cursor: pointer;" : ""}
-                      onclick={() => {
-                        if (shouldTruncate) {
-                          expandedOptions[opt.id] = !expandedOptions[opt.id];
-                        }
-                      }}
-                      role={shouldTruncate ? "button" : undefined}
-                      tabindex={shouldTruncate ? 0 : undefined}
-                      aria-label={shouldTruncate ? (expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto") : undefined}
-                    >
-                      {opt.label}
-                    </h1>
-                  {/if}
-
-                  {#if hasVoted}
-                    <div
-                      class="option-percentage-voted-maximized"
-                      in:fly={{ x: -20, duration: 500 }}
-                    >
-                      <span
-                        class="percentage-value-maximized"
-                        style="color: {opt.color};"
-                      >
-                        {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
-                      </span>
-                      <span class="percentage-subtitle-maximized">del total</span>
-                    </div>
-                  {/if}
-                </div>
-
-                <!-- Avatares de amigos en lugar del círculo "i" -->
-                {#if getFriendsForOption(opt.id).length > 0}
-                  {@const optFriends2 = getFriendsForOption(opt.id)}
-                  <button 
-                    class="friends-avatars-btn mt-4 pointer-events-auto"
-                    onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
-                    aria-label="Ver votos de amigos"
-                  >
-                    {#each optFriends2.slice(0, 5) as friend, idx}
-                      <div 
-                        class="friend-avatar-item" 
-                        style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
-                      >
-                        <img 
-                          src={friend.avatarUrl || '/default-avatar.png'}
-                          alt={friend.name}
-                          class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
-                        />
-                      </div>
-                    {/each}
-                    {#if optFriends2.length > 5}
-                      <div 
-                        class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
-                        style="margin-left: -8px; z-index: 0;"
-                      >
-                        <span class="text-white text-xs font-bold">+{optFriends2.length - 5}</span>
-                      </div>
-                    {/if}
-                  </button>
-                {/if}
-              </div>
-            {/if}
           </div>
         {/each}
       </div>
@@ -1257,7 +1210,7 @@
     {/if}
 
     <!-- Barra de control principal -->
-    <div class="w-full flex items-center gap-3 h-16 px-4 bg-gradient-to-t from-black/90 via-black/70 to-transparent">
+    <div class="w-full flex items-center gap-3 h-14 px-12">
       
       <!-- A. ZONA FIJA (Acciones Principales) -->
       <div class="flex items-center gap-0 shrink-0">
@@ -1476,71 +1429,6 @@
     }
   }
 
-  /* Contenedor de medios - sistema flexible */
-  .media-container {
-    padding-top: 12vh; /* Espacio para el título */
-    padding-bottom: 20vh; /* Espacio para el texto de la opción */
-  }
-
-  /* Wrapper interno con tamaño controlado */
-  .media-wrapper {
-    width: 100%;
-    max-width: 100%;
-    height: auto;
-    max-height: 55vh; /* Máximo 55% de la altura de la pantalla */
-    aspect-ratio: 16 / 9; /* Mantener proporción de video */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Landscape (horizontal) - videos más grandes */
-  @media (orientation: landscape) {
-    .media-container {
-      padding-top: 8vh;
-      padding-bottom: 15vh;
-    }
-    
-    .media-wrapper {
-      max-height: 65vh;
-    }
-  }
-
-  /* Portrait (vertical) - balance entre título y texto */
-  @media (orientation: portrait) {
-    .media-container {
-      padding-top: 15vh;
-      padding-bottom: 25vh;
-    }
-    
-    .media-wrapper {
-      max-height: 45vh;
-    }
-  }
-
-  /* Pantallas pequeñas (móviles) */
-  @media (max-height: 700px) {
-    .media-container {
-      padding-top: 10vh;
-      padding-bottom: 15vh;
-    }
-    
-    .media-wrapper {
-      max-height: 50vh;
-    }
-  }
-
-  /* Pantallas muy pequeñas */
-  @media (max-height: 600px) {
-    .media-container {
-      padding-top: 8vh;
-      padding-bottom: 12vh;
-    }
-    
-    .media-wrapper {
-      max-height: 55vh;
-    }
-  }
 
   /* ========================================
      VOTE CHECK ANIMATION - Premium Style
@@ -1815,6 +1703,176 @@
 
   .maximized-view :global(.ring-white) {
     --tw-ring-color: rgba(255, 255, 255, 0.2) !important;
+  }
+
+  /* ========================================
+     MARCO DECORATIVO PARA OPCIONES DE TEXTO
+     ======================================== */
+  
+  .option-card-frame {
+    position: relative;
+    max-width: 90%;
+    width: 100%;
+    padding: 3px;
+    border-radius: 24px;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.4) 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.3) 100%
+    );
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  
+  .option-card-inner {
+    position: relative;
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 22px;
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  /* Botón de color dentro del card */
+  .option-card-inner button[title="Cambiar color"] {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+  
+  /* Responsive para móviles */
+  @media (max-width: 480px) {
+    .option-card-frame {
+      max-width: 95%;
+      padding: 2px;
+      border-radius: 20px;
+    }
+    
+    .option-card-inner {
+      padding: 24px 20px;
+      border-radius: 18px;
+      gap: 12px;
+    }
+  }
+  
+  /* Porcentaje en opciones de texto */
+  .text-percentage-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 16px;
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .text-percentage-value {
+    font-size: 42px;
+    font-weight: 900;
+    color: white;
+    line-height: 1;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .text-percentage-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 600;
+  }
+  
+  @media (max-width: 480px) {
+    .text-percentage-value {
+      font-size: 36px;
+    }
+  }
+
+  /* ========================================
+     FLOATING MEDIA CARD (ESTILO TARJETA FLOTANTE)
+     ======================================== */
+  
+  .floating-media-card {
+    position: relative;
+    width: 100%;
+    max-width: 92%;
+    aspect-ratio: 1 / 1;
+    padding: 8px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.3),
+      0 8px 20px rgba(0, 0, 0, 0.2);
+  }
+  
+  .floating-media-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #000;
+  }
+  
+  .floating-media-inner :global(img),
+  .floating-media-inner :global(video) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  /* Panel inferior glassmorphism */
+  .floating-glass-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    padding: 0;
+  }
+  
+  .floating-glass-panel .option-card-frame {
+    max-width: 100%;
+    width: 100%;
+    border-radius: 24px 24px 0 0;
+    padding-bottom: 70px;
+  }
+  
+  .floating-glass-panel .option-card-inner {
+    padding: 20px 24px;
+    border-radius: 22px 22px 0 0;
+  }
+  
+  /* Responsive */
+  @media (max-width: 380px) {
+    .floating-media-card {
+      width: 90%;
+      max-width: 280px;
+    }
+    
+    .floating-glass-panel .option-card-frame {
+      border-radius: 20px 20px 0 0;
+      padding-bottom: 60px;
+    }
+    
+    .floating-glass-panel .option-card-inner {
+      padding: 16px 20px;
+      border-radius: 18px 18px 0 0;
+    }
+  }
+  
+  @media (min-height: 800px) {
+    .floating-media-card {
+      max-width: 360px;
+    }
   }
 
   /* ========================================
