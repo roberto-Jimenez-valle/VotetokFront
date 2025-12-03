@@ -124,6 +124,9 @@
   // Estado del modal de autenticación
   let showAuthModal = $state(false);
   
+  // Estado de animación de éxito al publicar
+  let showSuccessAnimation = $state(false);
+  
   // Estado del tooltip de formato
   let showFormatTooltip = $state(false);
   let formatEditorContent = $state('');
@@ -824,13 +827,19 @@
             
       const result = await apiPost('/api/polls', pollData);
       
-            
+      // Mostrar animación de éxito
+      isSubmitting = false;
+      showSuccessAnimation = true;
+      
       // Emitir evento de éxito
       dispatch('created', result.data);
       
-      // Limpiar y cerrar
-      resetForm();
-      close();
+      // Esperar animación y cerrar
+      setTimeout(() => {
+        showSuccessAnimation = false;
+        resetForm();
+        close();
+      }, 1500);
       
     } catch (error: any) {
             errors.submit = error.message || 'Error al crear la encuesta. Inténtalo de nuevo.';
@@ -2403,6 +2412,22 @@
     extractUrlFromText={extractUrlFromText}
     getLabelWithoutUrl={getLabelWithoutUrl}
   />
+{/if}
+
+<!-- Overlay de éxito al publicar -->
+{#if showSuccessAnimation}
+  <div class="success-overlay" transition:fade={{ duration: 300 }}>
+    <div class="success-content">
+      <div class="success-icon">
+        <svg viewBox="0 0 52 52" class="checkmark">
+          <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+          <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+        </svg>
+      </div>
+      <h3 class="success-title">¡Encuesta publicada!</h3>
+      <p class="success-subtitle">Tu encuesta ya está disponible</p>
+    </div>
+  </div>
 {/if}
 
 <!-- Modal de Autenticación -->
@@ -5055,5 +5080,105 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  /* Overlay de éxito al publicar */
+  .success-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+    backdrop-filter: blur(8px);
+  }
+
+  .success-content {
+    text-align: center;
+    animation: successPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  @keyframes successPop {
+    0% {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .success-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+  }
+
+  .checkmark {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: block;
+    stroke-width: 2;
+    stroke: #10b981;
+    stroke-miterlimit: 10;
+    animation: fill 0.4s ease-in-out 0.4s forwards, scale 0.3s ease-in-out 0.9s both;
+  }
+
+  .checkmark-circle {
+    stroke-dasharray: 166;
+    stroke-dashoffset: 166;
+    stroke-width: 2;
+    stroke-miterlimit: 10;
+    stroke: #10b981;
+    fill: none;
+    animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+  }
+
+  .checkmark-check {
+    transform-origin: 50% 50%;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    stroke-width: 3;
+    animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+  }
+
+  @keyframes stroke {
+    100% {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes fill {
+    100% {
+      box-shadow: inset 0 0 0 100px rgba(16, 185, 129, 0.1);
+    }
+  }
+
+  @keyframes scale {
+    0%, 100% {
+      transform: none;
+    }
+    50% {
+      transform: scale3d(1.1, 1.1, 1);
+    }
+  }
+
+  .success-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+    margin: 0 0 8px 0;
+  }
+
+  .success-subtitle {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
   }
 </style>
