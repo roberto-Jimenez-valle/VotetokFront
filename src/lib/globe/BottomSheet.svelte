@@ -309,11 +309,31 @@
         );
 
         trendingPollsData = pollsWithFriends;
+        
+        // Cargar los votos del usuario para estas encuestas
+        await loadUserVotes(pollsWithFriends.map((p: any) => p.id));
       } else {
         trendingPollsData = [];
       }
     } catch (error) {
             trendingPollsData = [];
+    }
+  }
+  
+  // Función para cargar los votos del usuario
+  async function loadUserVotes(pollIds: number[]) {
+    if (pollIds.length === 0) return;
+    
+    try {
+      const { data } = await apiGet(`/api/polls/my-votes?pollIds=${pollIds.join(',')}`);
+      if (data && typeof data === 'object') {
+        // Combinar con los votos existentes
+        userVotes = { ...userVotes, ...data };
+        displayVotes = { ...displayVotes, ...data };
+        console.log('[BottomSheet] ✅ Votos del usuario cargados:', data);
+      }
+    } catch (error) {
+      console.error('[BottomSheet] Error cargando votos del usuario:', error);
     }
   }
 

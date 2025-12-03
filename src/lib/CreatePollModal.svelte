@@ -246,26 +246,8 @@
     return url ? label.replace(url, ' ').replace(/\s+/g, ' ').trim() : label;
   }
   
-  // Paginación - máximo 4 opciones por página como en BottomSheet
-  const ITEMS_PER_PAGE = 4;
-  
-  let totalPages = $derived(Math.ceil(options.length / ITEMS_PER_PAGE));
-  let paginatedOptions = $derived({
-    items: options.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE),
-    totalPages: totalPages,
-    hasNext: currentPage < totalPages - 1,
-    hasPrev: currentPage > 0
-  });
-  
-  // Variable derivada: cuando está maximizado, renderizar TODAS las opciones
-  let optionsToRender = $derived.by(() => {
-    if (!maximizedOption) {
-            return paginatedOptions.items;
-    }
-    
-    // En modo maximizado: renderizar TODAS las opciones para el slider horizontal
-        return options;
-  });
+  // Sin paginación - scroll horizontal como en SinglePollSection
+  let optionsToRender = $derived(options);
   
   // Función para cambiar acordeón activo
   function setActive(index: number) {
@@ -316,15 +298,14 @@
       imageUrl: ''
     }];
     
-    // Ir a la última página
-    const newPage = Math.ceil(options.length / ITEMS_PER_PAGE) - 1;
-    currentPage = newPage;
-    // Activar la nueva opción (última de la página)
-    const itemsInPage = options.slice(newPage * ITEMS_PER_PAGE, (newPage + 1) * ITEMS_PER_PAGE).length;
-    activeAccordionIndex = itemsInPage - 1;
+    // Activar la nueva opción (última)
+    activeAccordionIndex = options.length - 1;
     
-    // Enfocar el input de la nueva opción
+    // Scroll al final y enfocar el input
     setTimeout(() => {
+      if (gridRef) {
+        gridRef.scrollTo({ left: gridRef.scrollWidth, behavior: 'smooth' });
+      }
       const input = optionInputs[newId];
       if (input) {
         input.focus();
@@ -361,42 +342,17 @@
   function removeOption(id: string) {
     if (options.length <= 1) return;
     
-    // Encontrar el índice de la opción que se va a eliminar
     const optionIndex = options.findIndex(opt => opt.id === id);
     if (optionIndex === -1) return;
-    
-    // Calcular en qué página está la opción
-    const optionPage = Math.floor(optionIndex / ITEMS_PER_PAGE);
-    const optionIndexInPage = optionIndex % ITEMS_PER_PAGE;
-    
-    // Verificar si es la última opción de la página actual
-    const isLastInPage = optionIndexInPage === paginatedOptions.items.length - 1;
-    const isCurrentlyActive = activeAccordionIndex === optionIndexInPage && currentPage === optionPage;
     
     // Eliminar la opción
     options = options.filter(opt => opt.id !== id);
     
-    // Si era la última de la página y estaba activa, ir a la anterior
-    if (isLastInPage && isCurrentlyActive) {
-      const newTotalPages = Math.ceil(options.length / ITEMS_PER_PAGE);
-      
-      if (optionIndexInPage === 0 && currentPage > 0) {
-        // Era la única en la página, ir a la última de la página anterior
-        currentPage -= 1;
-        const itemsInPreviousPage = Math.min(ITEMS_PER_PAGE, options.length - (currentPage * ITEMS_PER_PAGE));
-        activeAccordionIndex = itemsInPreviousPage - 1;
-      } else if (optionIndexInPage > 0) {
-        // Ir a la anterior en la misma página
-        activeAccordionIndex = optionIndexInPage - 1;
-      } else if (currentPage >= newTotalPages && newTotalPages > 0) {
-        // La página actual ya no existe, ir a la última página
-        currentPage = newTotalPages - 1;
-        const itemsInLastPage = options.length % ITEMS_PER_PAGE || ITEMS_PER_PAGE;
-        activeAccordionIndex = itemsInLastPage - 1;
-      }
-    } else if (isCurrentlyActive && activeAccordionIndex !== null && activeAccordionIndex >= paginatedOptions.items.length - 1) {
-      // Ajustar el índice si ahora está fuera de rango
-      activeAccordionIndex = Math.max(0, paginatedOptions.items.length - 2);
+    // Ajustar el índice activo si es necesario
+    if (activeAccordionIndex !== null && activeAccordionIndex >= options.length) {
+      activeAccordionIndex = options.length - 1;
+    } else if (activeAccordionIndex === optionIndex) {
+      activeAccordionIndex = Math.max(0, optionIndex - 1);
     }
   }
   
@@ -1366,7 +1322,7 @@
   // Efecto: Pausar reproducción cuando cambias de opción activa o maximizada
   $effect(() => {
     // Ejecutar cuando cambia activeAccordionIndex o maximizedOption
-    const currentActive = maximizedOption || (activeAccordionIndex !== null ? paginatedOptions.items[activeAccordionIndex]?.id : null);
+    const currentActive = maximizedOption || (activeAccordionIndex !== null ? options[activeAccordionIndex]?.id : null);
     
     // Pequeño delay para asegurar que el DOM se actualice con las clases correctas
     if (typeof document !== 'undefined') {
@@ -1426,81 +1382,17 @@
       }
   
   function handlePointerMove(e: PointerEvent | TouchEvent) {
-    if (!gridRef) return;
-    if (touchStartX === 0 && touchStartY === 0) return; // No hay punto de inicio
+    // El scroll horizontal nativo maneja el movimiento
+    // Solo detectamos si hay drag para evitar clicks accidentales
+    if (touchStartX === 0 && touchStartY === 0) return;
     
     const touch = 'touches' in e ? e.touches[0] : e;
-    const deltaX = touch.clientX - touchStartX;
-    const deltaY = touch.clientY - touchStartY;
+    const deltaX = Math.abs(touch.clientX - touchStartX);
+    const deltaY = Math.abs(touch.clientY - touchStartY);
     
-    // Solo considerar drag si hay movimiento significativo
-    const hasMoved = Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10;
-    
-    if (hasMoved) {
-          }
-    
-    // Detectar si es movimiento horizontal (más horizontal que vertical) - threshold reducido a 50
-    if (hasMoved && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-            const target = e.target as HTMLElement;
-      
-      // Si el textarea/input tiene el foco activo, NO permitir swipe (dejar escribir)
-      if ((target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') && 
-          document.activeElement === target) {
-        return; // Dejar que el usuario escriba/seleccione
-      }
-      
-      e.preventDefault();
-      
-      // Si todas están minimizadas, activar la primera al hacer swipe
-      if (activeAccordionIndex === null) {
-        activeAccordionIndex = 0;
-        isDragging = false;
-        return;
-      }
-      
-      const currentIndex = activeAccordionIndex;
-      const totalCards = paginatedOptions.items.length;
-      const totalPages = Math.ceil(options.length / ITEMS_PER_PAGE);
-      
-      if (deltaX > 50) {
-        isDragging = true;
-                // Swipe derecha
-        if (currentIndex !== null && currentIndex > 0) {
-          // Card anterior en la misma página
-                    activeAccordionIndex = currentIndex - 1;
-          touchStartX = touch.clientX;
-          setTimeout(() => isDragging = false, 100);
-        } else if (currentIndex === 0 && currentPage > 0) {
-          // Página anterior
-                    pageTransitionDirection = 'right';
-          currentPage -= 1;
-          activeAccordionIndex = ITEMS_PER_PAGE - 1;
-          touchStartX = touch.clientX;
-          setTimeout(() => isDragging = false, 100);
-        } else {
-                    isDragging = false;
-        }
-      } else if (deltaX < -50) {
-        isDragging = true;
-                // Swipe izquierda
-        if (currentIndex !== null && currentIndex < totalCards - 1) {
-          // Card siguiente en la misma página
-                    activeAccordionIndex = currentIndex + 1;
-          touchStartX = touch.clientX;
-          setTimeout(() => isDragging = false, 100);
-        } else if (currentIndex === totalCards - 1 && currentPage < totalPages - 1) {
-          // Swipe izquierdo desde última card -> página siguiente
-                    pageTransitionDirection = 'left';
-          currentPage += 1;
-          activeAccordionIndex = 0;
-          touchStartX = touch.clientX;
-          setTimeout(() => isDragging = false, 100);
-        } else {
-                    isDragging = false;
-        }
-      }
+    if (deltaX > 10 || deltaY > 10) {
+      isDragging = true;
     }
-    // Si es más vertical o ambiguo, dejar que el scroll funcione normalmente
   }
   
   function handlePointerUp() {
@@ -1746,354 +1638,159 @@
             </div>
           {/if}
         
-        <!-- Grid de opciones con botón añadir integrado -->
+        <!-- Scroll horizontal de opciones (estilo SinglePollSection) -->
         <div class="vote-cards-container {maximizedOption ? 'maximized' : ''}">
             <div 
-              class="vote-cards-grid accordion fullwidth {activeAccordionIndex != null ? 'open' : ''} {maximizedOption ? 'has-maximized' : ''}"
-              style="--items: {optionsToRender.length}"
+              class="options-horizontal-scroll {maximizedOption ? 'has-maximized' : ''}"
               bind:this={gridRef}
             >
               {#each optionsToRender as option, index (option.id)}
-                {@const globalIndex = maximizedOption ? options.findIndex(opt => opt.id === option.id) : (currentPage * ITEMS_PER_PAGE + index)}
                 {@const pct = Math.round(100 / options.length)}
                 {@const detectedUrl = extractUrlFromText(option.label)}
-                <button 
-                type="button"
-                class="vote-card {activeAccordionIndex === index ? 'is-active' : ''} {activeAccordionIndex !== index ? 'collapsed' : ''} {maximizedOption === option.id ? 'is-maximized' : ''} {maximizedOption === option.id ? 'active-maximized' : ''}" 
-                style="--card-color: {option.color}; --fill-pct: {Math.max(0, Math.min(100, pct))}%; --fill-pct-val: {Math.max(0, Math.min(100, pct))}; --flex: {Math.max(0.5, pct / 10)}; {maximizedOption ? `--card-index: ${globalIndex}; --border-radius: ${globalIndex === 0 ? '16px 0 0 16px' : globalIndex === options.length - 1 ? '0 16px 16px 0' : '0'};` : ''}" 
-                onclick={() => {
-                  // MAXIMIZADO DESHABILITADO - Solo modo normal
-                  if (!isDragging) {
-                    setActive(index);
-                  }
-                }}
-                onpointerdown={(e) => {
-                  handlePointerDown(e);
-                }}
-                ontouchstart={(e) => {
-                  handlePointerDown(e as any);
-                }}
-                style:touch-action="pan-y"
-              >
-                <!-- Modo maximizado: SIEMPRE renderizar media-background -->
-                {#if maximizedOption}
-                  {@const isLoading = loadingPreviews.has(option.id)}
-                  {@const optionPreview = optionPreviews.get(option.id)}
-                  {@const savedUrl = optionUrls.get(option.id)}
-                  
-                  <div class="media-background" style="background-color: {option.color}20;">
-                    {#if isLoading}
-                      <div class="preview-loading">
-                        <div class="loading-spinner-small"></div>
-                      </div>
-                    {:else if optionPreview || savedUrl}
-                      <div
-                        role="button"
-                        tabindex="0"
-                        class="remove-preview-btn-maximized"
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          
-                          // Limpiar cachés
-                          loadingPreviews.delete(option.id);
-                          optionPreviews.delete(option.id);
-                          
-                          // Limpiar URL del label
-                          const urlInLabel = extractUrlFromText(option.label);
-                          if (urlInLabel) {
-                            option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
-                          }
-                          
-                          // Limpiar imageUrl
-                          option.imageUrl = '';
-                          
-                          // Limpiar URL del Map persistente
-                          optionUrls.delete(option.id);
-                          optionUrls = optionUrls;
-                          
-                          // Trigger reactivity
-                          options = [...options];
-                        }}
-                        onkeydown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          
-                          // Limpiar cachés
-                          loadingPreviews.delete(option.id);
-                          optionPreviews.delete(option.id);
-                          
-                          // Limpiar URL del label
-                          const urlInLabel = extractUrlFromText(option.label);
-                          if (urlInLabel) {
-                            option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
-                          }
-                          
-                          // Limpiar imageUrl
-                          option.imageUrl = '';
-                          
-                          // 🆕 Limpiar URL del Map persistente
-                          optionUrls.delete(option.id);
-                          optionUrls = optionUrls;
-                          
-                          // Trigger reactivity
-                          options = [...options];
-                        }
-                      }}
-                      title="Eliminar preview"
-                      aria-label="Eliminar preview"
-                    >
-                      <X class="w-4 h-4" />
-                    </div>
-                  
-                  <div 
-                    role="button"
-                    tabindex="-1"
-                    class="option-media-background {activePreviewOption === option.id ? 'interactive-mode' : ''} {maximizedOption === option.id ? 'is-maximized-bg' : ''}"
-                    onmouseenter={() => {
-                      if (!isTouchDevice && !maximizedOption) {
-                        activePreviewOption = option.id;
-                      }
-                    }}
-                    onmouseleave={() => {
-                      if (!isTouchDevice && !maximizedOption) {
-                        activePreviewOption = null;
-                      }
-                    }}
-                    onclick={(e) => {
-                      // No propagate en modo maximizado para permitir clicks en videos
-                      if (maximizedOption === option.id) {
-                        return;
-                      }
-                      e.stopPropagation();
-                      // En dispositivos táctiles, toggle con click
-                      if (isTouchDevice) {
-                        activePreviewOption = activePreviewOption === option.id ? null : option.id;
-                      }
-                    }}
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.stopPropagation();
-                      }
-                    }}
-                  >
-                    {#if isLoading}
-                      <div class="preview-loading">
-                        <Loader2 class="w-6 h-6 animate-spin" />
-                        <p class="text-sm">Cargando...</p>
-                      </div>
-                    {:else if optionPreview}
-                      <!-- Usar MediaEmbed para todos los previews, maneja tanto embeds como metadatos -->
-                      <MediaEmbed 
-                        url={optionPreview.url} 
-                        mode="full"
-                        on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
-                      />
-                    {:else if savedUrl}
-                      <!-- Usar URL del Map persistente -->
-                      <MediaEmbed 
-                        url={savedUrl} 
-                        mode="full"
-                        on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
-                      />
-                    {:else if detectedUrl || option.imageUrl}
-                      <!-- Fallback: MediaEmbed cuando no hay preview cacheado ni URL guardada -->
-                      <MediaEmbed 
-                        url={detectedUrl || option.imageUrl || ''} 
-                        mode="full"
-                        on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
-                      />
-                    {:else if maximizedOption}
-                      <!-- En maximizado sin preview, mostrar placeholder con color de la card -->
-                      <div class="preview-placeholder" style="background: {option.color}20;">
-                        <div class="placeholder-content">
-                          <ImageIcon class="w-12 h-12" style="color: {option.color};" />
-                          <p style="color: {option.color};">Sin preview</p>
-                        </div>
-                      </div>
-                    {/if}
-                    <div class="media-overlay {activePreviewOption === option.id || maximizedOption === option.id ? 'hidden' : ''}"></div>
-                  </div>
-                  {/if}
-                  </div>
-                {/if}
+                {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
+                {@const savedUrl = optionUrls.get(option.id)}
+                {@const optionPreview = optionPreviews.get(option.id)}
+                {@const hasMedia = detectedUrl || option.imageUrl || savedUrl || optionPreview}
                 
-                <div class="card-header {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
-                  {#if maximizedOption || activeAccordionIndex === index}
-                    {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
-                    <div class="char-counter">{labelWithoutUrl.length}/200</div>
+                <button 
+                  type="button"
+                  class="option-slide {activeAccordionIndex === index ? 'is-active' : ''}" 
+                  style="--card-color: {option.color};"
+                  onclick={() => {
+                    if (!isDragging) {
+                      setActive(index);
+                    }
+                  }}
+                >
+                  <!-- Fondo de color + media (estilo SinglePollSection) -->
+                  <div class="option-background-maximized" style="--option-color: {option.color};">
+                    <div class="noise-overlay"></div>
+                    
+                    <!-- MediaEmbed de fondo si hay imagen/video -->
+                    {#if hasMedia}
+                      <div class="media-embed-background">
+                        <MediaEmbed 
+                          url={optionPreview?.url || savedUrl || detectedUrl || option.imageUrl || ''} 
+                          mode="full"
+                          width="100%"
+                          height="100%"
+                          on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
+                        />
+                      </div>
+                      <div class="media-gradient-overlay"></div>
+                    {/if}
+                  </div>
+                  
+                  <!-- Contenido centrado (estilo SinglePollSection) -->
+                  <div class="option-content-maximized">
+                    <!-- Textarea editable centrado -->
                     <textarea
-                        class="question-title editable"
-                        class:rating-emoji={pollType === 'rating' && /^[\p{Emoji}\s]+$/u.test(option.label || '')}
-                        class:error={errors[`option_${option.id}`]}
-                        placeholder="Opción {globalIndex + 1}"
-                        value={labelWithoutUrl}
+                      class="option-label-edit"
+                      class:error={errors[`option_${option.id}`]}
+                      placeholder="Opción {index + 1}"
+                      value={labelWithoutUrl}
                       oninput={(e) => {
                         const newValue = (e.target as HTMLTextAreaElement).value;
                         const currentUrl = extractUrlFromText(option.label);
-                        
-                        // Si había URL, mantenerla al final; si no, solo el texto
                         if (currentUrl) {
                           option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
                         } else {
                           option.label = newValue;
                         }
-                        
-                        // Sincronizar el value del textarea solo si detectamos URL nueva o cambio de URL
-                        const textarea = e.target as HTMLTextAreaElement;
-                        const updatedUrl = extractUrlFromText(option.label);
-                        if (updatedUrl && updatedUrl !== currentUrl) {
-                          const newLabelWithoutUrl = option.label.replace(updatedUrl, '').trim();
-                          const cursorPos = textarea.selectionStart;
-                          textarea.value = newLabelWithoutUrl;
-                          textarea.setSelectionRange(cursorPos, cursorPos);
-                        }
-                      }}
-                      onpaste={(e) => {
-                        // Después de pegar, sincronizar el textarea solo si hay URL
-                        setTimeout(() => {
-                          const textarea = optionInputs[option.id];
-                          if (textarea) {
-                            const updatedUrl = extractUrlFromText(option.label);
-                            if (updatedUrl) {
-                              const newLabelWithoutUrl = option.label.replace(updatedUrl, '').trim();
-                              const cursorPos = textarea.selectionStart;
-                              textarea.value = newLabelWithoutUrl;
-                              textarea.setSelectionRange(cursorPos, cursorPos);
-                            }
-                          }
-                        }, 10);
                       }}
                       bind:this={optionInputs[option.id]}
                       maxlength="200"
-                      onpointerdown={(e) => {
-                        // No capturar eventos de swipe en el textarea para que se pueda escribir
-                        if (!maximizedOption) {
-                          handlePointerDown(e);
+                      onclick={(e) => e.stopPropagation()}
+                    ></textarea>
+                    
+                    <!-- Porcentaje grande -->
+                    <div class="option-percentage-display">
+                      <span class="percentage-value-large" style="color: {option.color}">
+                        {Math.round(pct)}%
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <!-- Contador de caracteres -->
+                  <div class="char-counter-absolute">{labelWithoutUrl.length}/200</div>
+                  
+                  <!-- Botón eliminar opción (solo si no es la primera) -->
+                  {#if index > 0}
+                    <div
+                      role="button"
+                      tabindex="0"
+                      class="remove-option-badge"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        removeOption(option.id);
+                      }}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeOption(option.id);
                         }
                       }}
-                      style:touch-action="pan-y"
-                      ></textarea>
-                    {#if errors[`option_${option.id}`]}
-                      <div class="option-error">
-                        <span class="error-icon">⚠️</span>
-                        <span class="error-text">{errors[`option_${option.id}`]}</span>
-                      </div>
-                    {/if}
-                  {/if}
-                </div>
-                <div class="card-content {activePreviewOption === option.id ? 'hidden-for-preview' : ''}">
-                  <div class="percentage-display {(maximizedOption === option.id || activeAccordionIndex === index) ? 'is-active' : ''}">
-                    <span
-                      class="percentage-large"
-                      style="font-size: {((maximizedOption === option.id || activeAccordionIndex === index)
-                        ? fontSizeForPct(pct)
-                        : Math.min(fontSizeForPct(pct), 21))}px"
+                      title="Eliminar opción"
                     >
-                      {Math.round(pct)}
-                    </span>
-                  </div>
-                </div>
-                {#if globalIndex > 0}
+                      <X class="w-4 h-4" />
+                    </div>
+                  {/if}
+                  
+                  <!-- Botón color picker -->
                   <div
                     role="button"
                     tabindex="0"
-                    class="remove-option-badge"
+                    class="color-picker-badge-absolute"
+                    style="background-color: {option.color}"
                     onclick={(e) => {
                       e.stopPropagation();
-                      removeOption(option.id);
+                      colorPickerOpenFor = option.id;
                     }}
                     onkeydown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         e.stopPropagation();
-                        removeOption(option.id);
+                        colorPickerOpenFor = option.id;
                       }
                     }}
-                    title="Eliminar"
+                    title="Cambiar color"
                   >
-                    <X class="w-3.5 h-3.5" />
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                    </svg>
                   </div>
-                {/if}
-                
-                <div
-                  role="button"
-                  tabindex="0"
-                  class="color-picker-badge-absolute"
-                  style="background-color: {option.color}"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    colorPickerOpenFor = option.id;
-                  }}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      colorPickerOpenFor = option.id;
-                    }
-                  }}
-                  title="Cambiar color"
-                  aria-label="Cambiar color"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                  </svg>
-                </div>
-                
-                <!-- Botón de búsqueda de GIFs - al lado del badge de color -->
-                <div
-                  role="button"
-                  tabindex="0"
-                  class="giphy-search-badge-bottom"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    openGiphyPicker(option.id);
-                  }}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
+                  
+                  <!-- Botón Giphy -->
+                  <div
+                    role="button"
+                    tabindex="0"
+                    class="giphy-search-badge-bottom"
+                    onclick={(e) => {
                       e.stopPropagation();
                       openGiphyPicker(option.id);
-                    }
-                  }}
-                  title="Buscar GIF en Giphy"
-                  aria-label="Buscar GIF en Giphy"
-                >
-                  <Sparkles class="w-4 h-4" />
-                </div>
-                
-                <!-- Botón de minimizar ELIMINADO - Ver MAXIMIZED_MODE_BACKUP.md -->
-             
-            </button>
+                    }}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openGiphyPicker(option.id);
+                      }
+                    }}
+                    title="Buscar GIF"
+                  >
+                    <Sparkles class="w-4 h-4" />
+                  </div>
+                </button>
               {/each}
             </div>
         </div>
         
         <!-- Navegación para card maximizada ELIMINADA - Ver MAXIMIZED_MODE_BACKUP.md -->
         
-        <!-- Contenedor para paginación y botón flotante -->
+        <!-- Contenedor para botones -->
         <div class="pagination-container">
-          <!-- Indicadores de paginación -->
-          <!-- Dots de paginación y botones en la misma línea -->
           <div class="cards-actions">
-            <!-- Dots de paginación por página (solo en modo normal) -->
-            {#if totalPages > 1 && !maximizedOption}
-              <div class="pagination-dots-inline">
-                {#each Array(totalPages) as _, pageIndex}
-                  <button 
-                    class="pagination-dot {pageIndex === currentPage ? 'active' : ''}"
-                    onclick={() => {
-                      pageTransitionDirection = pageIndex > currentPage ? 'left' : 'right';
-                      currentPage = pageIndex;
-                      activeAccordionIndex = 0;
-                    }}
-                    type="button"
-                    aria-label="Página {pageIndex + 1}"
-                  ></button>
-                {/each}
-              </div>
-            {/if}
-            
             <!-- Botones alineados a la derecha -->
             <div class="action-buttons">
             <!-- Botón de animar cards -->
@@ -2111,25 +1808,6 @@
                 {:else}
                   <Sparkles class="w-5 h-5" />
                 {/if}
-              </button>
-            {/if}
-            
-            <!-- Botón de maximizar -->
-            {#if activeAccordionIndex !== null && paginatedOptions.items[activeAccordionIndex]}
-              {@const activeOption = paginatedOptions.items[activeAccordionIndex]}
-              <button
-                type="button"
-                class="maximize-button"
-                style="border-color: {activeOption.color};"
-                onclick={() => {
-                  maximizedOption = activeOption.id;
-                }}
-                title="Vista maximizada"
-                aria-label="Maximizar opción"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
               </button>
             {/if}
             
@@ -2859,128 +2537,245 @@
     color: white;
   }
   
-  /* Contenedor de tarjetas con botón añadir */
+  /* Contenedor de tarjetas */
   .vote-cards-container {
     position: relative;
     display: flex;
     align-items: center;
   }
   
-  /* Grid de opciones - Estilo BottomSheet */
-  .vote-cards-grid {
-    flex: 0 1 auto;
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(min(180px, 45vw), 1fr);
-    gap: 12px;
-    padding-left: 1rem;
-    padding-right: 8px;
-    overflow-x: auto;
-    overflow-y: visible;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-    scroll-behavior: smooth;
+  /* Scroll horizontal estilo SinglePollSection */
+  .options-horizontal-scroll {
+    display: flex;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
+    scrollbar-width: none;
+    gap: 0;
+    height: 280px;
+    width: 100%;
   }
   
-  .vote-cards-grid::-webkit-scrollbar {
-    height: 4px;
+  .options-horizontal-scroll::-webkit-scrollbar {
+    display: none;
   }
   
-  .vote-cards-grid::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-  }
-  
-  .vote-cards-grid.accordion.fullwidth:not(.has-maximized) {
-    grid-template-columns: repeat(var(--items), 1fr);
-    transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  .vote-cards-grid.accordion.fullwidth.open:not(.has-maximized) {
-    grid-template-columns: var(--flex, 1) repeat(calc(var(--items) - 1), 0.3fr);
-  }
-  
-  .vote-card {
-    border-radius: 16px;
+  /* Cada slide/opción ocupa el 100% del ancho */
+  .option-slide {
+    flex-shrink: 0;
+    width: 100%;
+    height: 100%;
+    scroll-snap-align: start;
+    position: relative;
+    border-radius: 0;
+    overflow: hidden;
+    margin: 0;
+    background: #2a2c31;
     cursor: pointer;
-    will-change: transform, box-shadow, opacity;
-    transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
-                opacity 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
-                width 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
-                height 0.25s cubic-bezier(0.25, 0.1, 0.25, 1),
-                box-shadow 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
-    transform-origin: center center;
-    transform: scale(1);
-    opacity: 1;
+    transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
     border: none;
-    text-align: left;
+    text-align: center;
     padding: 0;
-    background: #2a2a2a;
     outline: none;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    position: relative;
+  }
+  
+  /* Fondo con color y gradiente */
+  .option-background-maximized {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      var(--option-color) 0%,
+      color-mix(in srgb, var(--option-color) 60%, #1a1a2e) 50%,
+      #1a1a2e 100%
+    );
+    z-index: 0;
+  }
+  
+  .noise-overlay {
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+  
+  .media-embed-background {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+  
+  .media-embed-background :global(img),
+  .media-embed-background :global(video),
+  .media-embed-background :global(iframe) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .media-gradient-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.4) 0%,
+      rgba(0, 0, 0, 0.1) 40%,
+      rgba(0, 0, 0, 0.6) 100%
+    );
     z-index: 2;
-    min-height: 240px;
-    --fill-window: 120px;
+    pointer-events: none;
   }
   
-  .vote-card.is-active {
-    min-height: 400px;
+  /* Contenido centrado */
+  .option-content-maximized {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px 20px;
+    gap: 16px;
   }
   
-  .vote-card.collapsed {
-    background: #252525;
+  /* Textarea editable */
+  .option-label-edit {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    text-align: center;
+    resize: none;
+    width: 100%;
+    max-width: 300px;
+    min-height: 60px;
+    max-height: 100px;
+    line-height: 1.3;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   }
   
-  /* Asegurar que las cards normales sean visibles */
-  .vote-cards-grid:not(.has-maximized) .vote-card {
-    display: flex !important;
-    flex-direction: column !important;
-    position: relative !important;
-    width: auto !important;
-    min-width: auto !important;
-    height: auto !important;
-    min-height: 240px !important;
-    max-height: none !important;
+  .option-label-edit::placeholder {
+    color: rgba(255, 255, 255, 0.5);
   }
   
-  .vote-card:not(.is-maximized):hover { 
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  .option-label-edit.error {
+    border: 2px solid #ef4444;
+    border-radius: 8px;
+    padding: 8px;
   }
   
-  /* ANULAR hover de translateY para maximizadas */
-  button.vote-card.is-maximized:hover {
-    transform: translate(-50%, -50%) scale(1) !important;
+  /* Porcentaje grande */
+  .option-percentage-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   
-  /* Eliminar COMPLETAMENTE hover cuando está maximizada */
-  button.vote-card.is-maximized,
-  button.vote-card.is-maximized:hover,
-  button.vote-card.is-active.is-maximized,
-  button.vote-card.is-active.is-maximized:hover,
-  .vote-cards-grid button.vote-card.is-maximized,
-  .vote-cards-grid button.vote-card.is-maximized:hover {
-    pointer-events: auto !important;
+  .percentage-value-large {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   }
   
-  button.vote-card.is-maximized:not(.accordion-transition),
-  button.vote-card.is-maximized:not(.accordion-transition):hover {
-    transform: translate(-50%, -50%) scale(1) !important;
+  /* Contador de caracteres */
+  .char-counter-absolute {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
   }
   
-  button.vote-card.is-maximized:hover {
-    box-shadow: 0 0 0 100vmax #000000, 0 0 60px var(--card-color) !important;
-    cursor: default !important;
+  /* Botón eliminar opción */
+  .remove-option-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: none;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
   }
   
-  .vote-card .card-header,
-  .vote-card .card-content {
+  .remove-option-badge:hover {
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    transform: scale(1.1);
+  }
+  
+  /* Botón color picker */
+  .color-picker-badge-absolute {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    color: white;
+    transition: all 0.2s ease;
+  }
+  
+  .color-picker-badge-absolute:hover {
+    transform: scale(1.15);
+  }
+  
+  /* Botón Giphy */
+  .giphy-search-badge-bottom {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(30, 30, 35, 0.9);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(147, 197, 253, 0.5);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s ease;
+  }
+  
+  .giphy-search-badge-bottom:hover {
+    background: rgba(147, 197, 253, 0.2);
+    border-color: rgba(147, 197, 253, 0.9);
+    transform: scale(1.15);
+  }
+  
+  .option-slide .card-header,
+  .option-slide .card-content {
     position: relative;
     z-index: 2;
     background: transparent;
@@ -2999,14 +2794,10 @@
     pointer-events: none;
   }
   
-  .vote-card.collapsed .card-header {
-    padding: 25px 16px 0 16px;
-  }
-  
-  .vote-card.is-active .card-header {
+  .card-header {
     flex: 1;
     padding-bottom: 0;
-    padding-top: 37px;
+    padding-top: 32px;
   }
   
   .question-title {
@@ -3056,14 +2847,8 @@
     min-height: 0;
   }
   
-  .vote-card.collapsed .question-title.editable {
-    overflow: hidden;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-  }
-  
-  .vote-card.is-active .question-title.editable {
+  /* Todas las cards muestran el textarea */
+  .question-title.editable {
     overflow-y: auto;
     overflow-x: hidden;
     height: 100%;
@@ -3134,11 +2919,8 @@
     position: relative;
   }
   
-  .vote-card.collapsed .card-content {
-    justify-content: center;
-  }
-  
-  .vote-card.is-active .card-content {
+  /* Todas las cards usan el mismo estilo de content */
+  .card-content {
     justify-content: flex-start;
     padding-top: 8px;
     gap: 8px;
@@ -3161,15 +2943,7 @@
     transition: opacity 0.2s ease;
   }
   
-  .vote-card.collapsed .card-content::before {
-    opacity: 1;
-  }
-  
-  .vote-card.is-maximized .card-content::before {
-    opacity: 1;
-  }
-  
-  .vote-card.is-active .card-content::before {
+  .option-slide .card-content::before {
     opacity: 1;
   }
   
@@ -3460,31 +3234,7 @@
     transform: scale(0.95);
   }
   
-  /* Ocultar preview y botón X en cards colapsadas */
-  .vote-card.collapsed .option-media-background {
-    display: none !important;
-  }
-  
-  .vote-card.collapsed .remove-option-preview-btn {
-    display: none !important;
-  }
-  
-  /* Botón X más grande y visible en modo maximizado */
-  .vote-card.is-maximized .remove-option-preview-btn {
-    display: flex !important;
-    z-index: 10 !important;
-    width: 40px !important;
-    height: 40px !important;
-    top: 60px !important;
-    right: 0 !important;
-    pointer-events: auto !important;
-    position: absolute !important;
-  }
-  
-  .vote-card.is-maximized .remove-option-preview-btn :global(svg) {
-    width: 20px !important;
-    height: 20px !important;
-  }
+  /* Botón X de preview removido - no se usa */
   
   /* Botón de búsqueda de GIFs - al lado del badge de color */
   .giphy-search-badge-bottom {
@@ -3508,7 +3258,8 @@
     pointer-events: auto;
   }
   
-  .vote-card.is-active .giphy-search-badge-bottom {
+  /* Todas las cards tienen el botón giphy igual */
+  .giphy-search-badge-bottom {
     left: auto;
     right: 60px;
     transform: translateX(0);
@@ -3517,12 +3268,8 @@
   .giphy-search-badge-bottom:hover {
     background: rgba(147, 197, 253, 0.2);
     border-color: rgba(147, 197, 253, 0.9);
-    transform: translateX(calc(-50% + 24px)) scale(1.15);
+    transform: scale(1.15);
     box-shadow: 0 3px 10px rgba(147, 197, 253, 0.4);
-  }
-  
-  .vote-card.is-active .giphy-search-badge-bottom:hover {
-    transform: translateX(0) scale(1.15);
   }
   
   .giphy-search-badge-bottom :global(svg) {
@@ -3531,11 +3278,7 @@
     color: rgba(255, 255, 255, 0.9);
   }
   
-  /* Ocultar en cards colapsadas - solo visible cuando está desplegada */
-  .vote-card.collapsed .giphy-search-badge-bottom {
-    display: none !important;
-  }
-  
+    
   /* LinkPreview en título principal */
   .main-media-preview :global(.link-preview) {
     width: 100%;

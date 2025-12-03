@@ -1796,33 +1796,35 @@
             </svg>
           </button>
 
-          <!-- Globo -->
-          <button 
-            class="mini-action-btn-secondary"
-            type="button"
-            title="Ver en el globo"
-            aria-label="Ver en el globo"
-            onclick={(e) => { e.stopPropagation(); handleOpenInGlobe(); }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-          </button>
+          <!-- Globo - Solo si ha votado -->
+          {#if pollVotedOption}
+            <button 
+              class="mini-action-btn-secondary"
+              type="button"
+              title="Ver en el globo"
+              aria-label="Ver en el globo"
+              onclick={(e) => { e.stopPropagation(); handleOpenInGlobe(); }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </button>
 
-          <!-- Gráfico -->
-          <button 
-            class="mini-action-btn-secondary"
-            type="button"
-            title="Ver estadísticas"
-            aria-label="Ver estadísticas"
-            onclick={(e) => { e.stopPropagation(); dispatch('goToChart', { pollId: poll.id.toString() }); }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-          </button>
+            <!-- Gráfico -->
+            <button 
+              class="mini-action-btn-secondary"
+              type="button"
+              title="Ver estadísticas"
+              aria-label="Ver estadísticas"
+              onclick={(e) => { e.stopPropagation(); dispatch('goToChart', { pollId: poll.id.toString() }); }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </button>
+          {/if}
 
           <!-- Compartir -->
           <button 
@@ -3736,19 +3738,17 @@
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
-  /* Botón clickeable para avatares de amigos */
+  /* Botón clickeable para avatares de amigos - Sin fondo */
   .friend-avatars-btn-mini {
-    padding: 4px 8px 4px 4px;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 20px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .friend-avatars-btn-mini:not(:disabled):hover {
-    background: rgba(0, 0, 0, 0.5);
-    border-color: rgba(255, 255, 255, 0.3);
     transform: scale(1.05);
   }
 
@@ -3757,7 +3757,8 @@
   }
 
   .friend-avatars-btn-mini:disabled {
-    cursor: not-allowed;
+    cursor: default;
+    opacity: 0.9;
   }
 
   .friend-avatars-btn-mini:not(:disabled):hover .friend-avatar-wrapper {
@@ -3939,7 +3940,7 @@
     font-weight: 600;
     font-family: monospace;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    color: var(--vote-color, #10b981);
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .mini-action-count.voted {

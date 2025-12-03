@@ -30,7 +30,6 @@
 		);
 	}
 
-	let showSplash = $state(true);
 	let showFullscreenBtn = $state(false);
 	let isFullscreen = $state(false);
 
@@ -211,15 +210,6 @@
 					}
 				}, 50);
 			}, 100);
-
-			// Ocultar splash después de la animación
-			const hideSplash = () => {
-				showSplash = false;
-			};
-
-			setTimeout(hideSplash, 2000);
-		} else {
-			showSplash = false;
 		}
 
 		// DESHABILITADO: Este código estaba bloqueando el scroll vertical
@@ -258,16 +248,6 @@
 	<!-- Página en construcción -->
 	<UnderConstruction />
 {:else}
-	{#if showSplash}
-		<div class="splash-screen">
-			<div class="splash-content">
-				<!-- Logo VouTop -->
-				<div class="logo-text">VouTop</div>
-				<!-- Barra de opciones eliminada: ya se muestra en BottomSheet -->
-			</div>
-		</div>
-	{/if}
-
 	<!-- Unified Theme Toggle movido a GlobeGL -->
 	<!-- <UnifiedThemeToggle 
 		on:palettechange={handlePaletteChange}
@@ -281,50 +261,5 @@
 {/if}
 
 <style>
-	.splash-screen {
-		position: fixed;
-		inset: 0;
-		background: #000000;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding-bottom: 20vh;
-		z-index: 999999;
-		animation: fadeOut 1s ease 1.5s forwards;
-	}
-
-	.splash-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 16px;
-	}
-
-	/* Logo VouTop */
-	.logo-text {
-		font-size: 32px;
-		font-weight: 700;
-		color: #c9d1d9;
-		letter-spacing: 1px;
-		animation: fadeInUp 1s ease-out;
-	}
-
-	/* Animaciones */
-	@keyframes fadeInUp {
-		from {
-			opacity: 0;
-			transform: translateY(20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	@keyframes fadeOut {
-		to {
-			opacity: 0;
-			pointer-events: none;
-		}
-	}
+	/* Estilos generales del layout */
 </style>

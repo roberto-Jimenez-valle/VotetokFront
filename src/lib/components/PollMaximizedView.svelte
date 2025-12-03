@@ -810,12 +810,12 @@
                         <div></div>
                       {/if}
                       
-                      <!-- Avatares a la derecha -->
+                      <!-- Avatares a la derecha - Solo si ha votado -->
                       {#if getFriendsForOption(opt.id).length > 0}
                         {@const optFriends = getFriendsForOption(opt.id)}
                         <button 
                           class="friends-avatars-btn pointer-events-auto"
-                          onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
+                          onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
                           aria-label="Ver votos de amigos"
                         >
                           {#each optFriends.slice(0, 5) as friend, idx}
@@ -823,11 +823,17 @@
                               class="friend-avatar-item" 
                               style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
                             >
-                              <img 
-                                src={friend.avatarUrl || '/default-avatar.png'}
-                                alt={friend.name}
-                                class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
-                              />
+                              {#if hasVoted}
+                                <img 
+                                  src={friend.avatarUrl || '/default-avatar.png'}
+                                  alt={friend.name}
+                                  class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                                />
+                              {:else}
+                                <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 flex items-center justify-center shadow-lg">
+                                  <span class="text-white/60 text-sm font-bold">?</span>
+                                </div>
+                              {/if}
                             </div>
                           {/each}
                           {#if optFriends.length > 5}
@@ -899,12 +905,12 @@
                             <div></div>
                           {/if}
                           
-                          <!-- Avatares a la derecha -->
+                          <!-- Avatares a la derecha - Solo si ha votado -->
                           {#if getFriendsForOption(opt.id).length > 0}
                             {@const optFriends = getFriendsForOption(opt.id)}
                             <button 
                               class="friends-avatars-btn pointer-events-auto"
-                              onclick={(e) => { e.stopPropagation(); showFriendsVotesModal = true; }}
+                              onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
                               aria-label="Ver votos de amigos"
                             >
                               {#each optFriends.slice(0, 5) as friend, idx}
@@ -912,11 +918,17 @@
                                   class="friend-avatar-item" 
                                   style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
                                 >
-                                  <img 
-                                    src={friend.avatarUrl || '/default-avatar.png'}
-                                    alt={friend.name}
-                                    class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
-                                  />
+                                  {#if hasVoted}
+                                    <img 
+                                      src={friend.avatarUrl || '/default-avatar.png'}
+                                      alt={friend.name}
+                                      class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                                    />
+                                  {:else}
+                                    <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 flex items-center justify-center shadow-lg">
+                                      <span class="text-white/60 text-sm font-bold">?</span>
+                                    </div>
+                                  {/if}
                                 </div>
                               {/each}
                               {#if optFriends.length > 5}
@@ -1225,7 +1237,8 @@
         
         <!-- Votar -->
         <button 
-          class="flex items-center gap-1.5 btn-press px-2 py-1.5 rounded-full transition-all select-none {hasVoted ? 'bg-emerald-400/10' : 'bg-transparent hover:bg-white/10'}"
+          class="flex items-center gap-1.5 btn-press px-2 py-1.5 rounded-full transition-all select-none hover:bg-white/10"
+          style="background-color: {hasVoted ? `${voteColor}1a` : 'transparent'}"
           onclick={() => {
             if (!hasVoted && readOnly) {
               if (!isAuthenticated) {
@@ -1275,23 +1288,25 @@
             <MoreVertical size={20} class="text-white icon-shadow" />
           </button>
 
-          <!-- Mundo -->
-          <button 
-            class="flex items-center shrink-0 opacity-80 hover:opacity-100 transition btn-press"
-            onclick={onOpenInGlobe}
-            aria-label="Ver en globo"
-          >
-            <Globe size={20} class="text-white icon-shadow" />
-          </button>
+          <!-- Mundo - Solo si ha votado -->
+          {#if hasVoted}
+            <button 
+              class="flex items-center shrink-0 opacity-80 hover:opacity-100 transition btn-press"
+              onclick={onOpenInGlobe}
+              aria-label="Ver en globo"
+            >
+              <Globe size={20} class="text-white icon-shadow" />
+            </button>
 
-          <!-- Gráfico (Pulso) -->
-          <button 
-            class="flex items-center shrink-0 opacity-80 hover:opacity-100 transition btn-press"
-            onclick={onGoToChart}
-            aria-label="Ver estadísticas"
-          >
-            <Activity size={22} class="text-white icon-shadow" />
-          </button>
+            <!-- Gráfico (Pulso) -->
+            <button 
+              class="flex items-center shrink-0 opacity-80 hover:opacity-100 transition btn-press"
+              onclick={onGoToChart}
+              aria-label="Ver estadísticas"
+            >
+              <Activity size={22} class="text-white icon-shadow" />
+            </button>
+          {/if}
 
           <!-- Share -->
           <button 
