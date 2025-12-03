@@ -3,11 +3,8 @@
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
-  import { apiPost, apiDelete } from '$lib/api/client';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import FriendsVotesModal from '$lib/components/FriendsVotesModal.svelte';
-  import CommentsModal from '$lib/components/CommentsModal.svelte';
-  import Portal from '$lib/components/Portal.svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -119,76 +116,26 @@
   // Estado para modal de votos de amigos
   let showFriendsVotesModal: boolean = false;
   
-  // Estado para modal de comentarios
-  let showCommentsModal: boolean = false;
-  
-  // Estado para repost
-  let hasReposted: boolean = false;
-  let repostCount: number = 0;
-  let isReposting: boolean = false;
-  
-  // Inicializar estado de repost desde poll
-  $: repostCount = poll?.repostCount || poll?.stats?.repostCount || 0;
-  $: hasReposted = poll?.hasReposted || false;
-  
-  // Estado para views
-  let viewCount: number = 0;
-  $: viewCount = poll?.viewCount || poll?.stats?.viewCount || poll?.stats?.totalViews || 0;
-  
-  // Estado para bookmark
-  let bookmarkCount: number = 0;
-  let isBookmarking: boolean = false;
-  $: bookmarkCount = poll?.bookmarkCount || poll?.stats?.bookmarkCount || 0;
-  $: hasBookmarked = poll?.hasBookmarked || false;
-
-  // Estado para hide/report
-  let isHiding: boolean = false;
-  let isReporting: boolean = false;
-  let showReportSuccess: boolean = false;
-
   // Estado para shares
   let shareCount: number = 0;
   let isSharing: boolean = false;
   $: shareCount = poll?.shareCount || poll?.stats?.shareCount || 0;
-
-  // Función para guardar/quitar bookmark
-  async function handleBookmark() {
-    if (!$currentUser) {
-      dispatch('openAuthModal');
-      return;
-    }
-
-    if (isBookmarking) return;
-    isBookmarking = true;
-
-    try {
-      const pollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
-
-      if (hasBookmarked) {
-        const result = await apiDelete(`/api/polls/${pollId}/bookmark`);
-        hasBookmarked = false;
-        bookmarkCount = result.bookmarkCount || Math.max(0, bookmarkCount - 1);
-      } else {
-        const result = await apiPost(`/api/polls/${pollId}/bookmark`, {});
-        hasBookmarked = true;
-        bookmarkCount = result.bookmarkCount || bookmarkCount + 1;
-      }
-    } catch (error: any) {
-      console.error('[Bookmark] Error:', error);
-    } finally {
-      isBookmarking = false;
-    }
+  
+  // Formatear números grandes
+  function formatCount(num: number | undefined): string {
+    if (!num) return "0";
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+    if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+    return num.toString();
   }
-
-  // Copiar enlace al portapapeles (con registro de share)
+  
+  // Copiar enlace al portapapeles
   async function copyPollLink() {
     try {
       const url = `${window.location.origin}/?poll=${poll.id}`;
       await navigator.clipboard.writeText(url);
-      showShareToast();
       isMoreMenuOpen = false;
-
-      // Registrar share en API
+      showShareToast();
       registerShare();
     } catch (err) {
       // Fallback
@@ -207,28 +154,29 @@
       document.body.removeChild(textarea);
     }
   }
-
+  
   // Registrar share en API
   async function registerShare() {
     if (isSharing) return;
     isSharing = true;
-
     try {
       const pollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
-      const result = await apiPost(`/api/polls/${pollId}/share`, {});
-      if (result.shareCount !== undefined) {
-        shareCount = result.shareCount;
-      } else {
-        shareCount++;
+      const response = await fetch(`/api/polls/${pollId}/share`, { method: 'POST' });
+      if (response.ok) {
+        const result = await response.json();
+        if (result.shareCount !== undefined) {
+          shareCount = result.shareCount;
+        } else {
+          shareCount++;
+        }
       }
     } catch (error) {
-      // Incrementar localmente si falla API
       shareCount++;
     } finally {
       isSharing = false;
     }
   }
-
+  
   // Cerrar menú al hacer clic fuera
   function handleMenuClickOutside(e: MouseEvent) {
     const target = e.target as HTMLElement;
@@ -236,12 +184,371 @@
       isMoreMenuOpen = false;
     }
   }
+  
+  // Swipe para cerrar bottom sheet
+  let sheetTouchStartY = 0;
+  let sheetCurrentY = 0;
+  let sheetTranslateY = 0;
+  let sheetElement: HTMLDivElement | null = null;
+  let canSwipeClose = false;
+  
+  function handleSheetTouchStart(e: TouchEvent) {
+    sheetTouchStartY = e.touches[0].clientY;
+    sheetCurrentY = sheetTouchStartY;
+    // Solo permitir swipe si el scroll está en la parte superior
+    canSwipeClose = sheetElement ? sheetElement.scrollTop <= 0 : true;
+  }
+  
+  function handleSheetTouchMove(e: TouchEvent) {
+    if (!canSwipeClose) return;
+    sheetCurrentY = e.touches[0].clientY;
+    const diff = sheetCurrentY - sheetTouchStartY;
+    if (diff > 0) {
+      sheetTranslateY = diff;
+      e.preventDefault(); // Prevenir scroll mientras arrastramos
+    }
+  }
+  
+  function handleSheetTouchEnd() {
+    if (sheetTranslateY > 80) {
+      isMoreMenuOpen = false;
+    }
+    sheetTranslateY = 0;
+    canSwipeClose = false;
+  }
+  
+  // Detectar cambio de página y actualizar dirección ANTES del render
+  $: if (currentPage !== lastPage) {
+    paginationDirection = currentPage > lastPage ? 'forward' : 'backward';
+        lastPage = currentPage;
+  }
+  
+  // Estado para gráfico histórico
+  let selectedTimeRange = '1m';
+  let historicalData: Array<{x: number, y: number, votes: number, date: Date}> = [];
+  let historicalDataByOption: Map<string, Array<{x: number, y: number, color: string, label: string}>> = new Map();
+  let isLoadingHistory = false;
+  let chartHoverData: {x: number, y: number, votes: number, date: Date} | null = null;
+  let chartSvgElement: SVGElement | null = null;
+  let pollOptions: Array<{optionKey: string, optionLabel: string, color: string}> = [];
+  
+  const timeRanges = [
+    { id: '1d', label: '1D', days: 1 },
+    { id: '5d', label: '5D', days: 5 },
+    { id: '1m', label: '1M', days: 30 },
+    { id: '6m', label: '6M', days: 180 },
+    { id: '1y', label: '1A', days: 365 }
+  ];
+  
+  // Cargar datos históricos cuando entramos en la vista de gráfico
+  $: if (currentPage === -1 && poll?.id) {
+        loadHistoricalData();
+  }
+  
+  async function loadHistoricalData() {
+    if (isLoadingHistory) return;
+    
+    isLoadingHistory = true;
+    try {
+      const days = timeRanges.find(r => r.id === selectedTimeRange)?.days || 30;
+      const response = await fetch(`/api/polls/${poll.id}/votes-history?days=${days}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      const result = await response.json();
+      const timeSeriesData = result.data || [];
+      const pollData = result.poll || {};
+      const meta = result.meta || {};
+      
+            
+      // DEBUG: Ver primeros 3 puntos
+            
+      if (timeSeriesData.length === 0) {
+                historicalData = [];
+        historicalDataByOption.clear();
+        return;
+      }
+      
+      // Guardar opciones de la encuesta
+      pollOptions = pollData.options || [];
+      
+      // Crear series por opción, asegurando datos en todos los períodos
+      const seriesByOption = new Map<string, Array<{x: number, y: number, color: string, label: string}>>();
+      
+      // Inicializar series vacías
+      pollOptions.forEach(option => {
+        seriesByOption.set(option.optionKey, []);
+      });
+      
+      // Llenar datos para cada opción en cada punto temporal
+      timeSeriesData.forEach((point: any) => {
+        const optionsData = point.optionsData  || [];
+        const optionsDataMap = new Map(optionsData.map((opt: any) => [opt.optionKey, opt]));
+        
+        // Asegurar que TODAS las opciones tengan un punto en este timestamp
+        pollOptions.forEach(option => {
+          const series = seriesByOption.get(option.optionKey);
+          const optData = optionsDataMap.get(option.optionKey) as { optionKey: string, votes: number } | undefined;
+          
+          if (series) {
+            series.push({
+              x: point.timestamp,
+              y: optData?.votes  || 0, // 0 si no hay votos en este período
+              color: option.color || '#3b82f6',
+              label: option.optionLabel
+            });
+          }
+        });
+      });
+      
+      historicalDataByOption = seriesByOption;
+      
+      // También mantener datos totales para referencia
+      historicalData = timeSeriesData.map((point: any) => ({
+        x: point.timestamp,
+        y: point.totalVotes,
+        votes: point.totalVotes,
+        date: new Date(point.timestamp)
+      }));
+      
+            
+    } catch (error) {
+            historicalData = [];
+    } finally {
+      isLoadingHistory = false;
+    }
+  }
+  
+  function changeTimeRange(rangeId: string) {
+    if (selectedTimeRange !== rangeId) {
+      selectedTimeRange = rangeId;
+      loadHistoricalData();
+    }
+  }
+  
+  // Crear path SVG desde los datos
+  function createChartPath(data: Array<{x: number, y: number}>, width: number, height: number): string {
+    if (!data || data.length === 0) {
+      return '';
+    }
+    
+    // Filtrar puntos inválidos
+    const validData = data.filter(d => 
+      d && 
+      typeof d.x === 'number' && !isNaN(d.x) && 
+      typeof d.y === 'number' && !isNaN(d.y)
+    );
+    
+    if (validData.length === 0) {
+            return '';
+    }
+    
+    const minY = Math.min(...validData.map(d => d.y));
+    const maxY = Math.max(...validData.map(d => d.y));
+    const rangeY = maxY - minY || 1;
+    
+    const points = validData.map((d, i) => {
+      const x = (i / Math.max(1, validData.length - 1)) * width;
+      const normalizedY = (d.y - minY) / rangeY;
+      const y = height - (normalizedY * (height - 20) + 10);
+      return `${x.toFixed(2)} ${y.toFixed(2)}`;
+    });
+    
+    return `M ${points.join(' L ')}`;
+  }
+  
+  // Manejar hover/touch en el gráfico
+  function handleChartInteraction(event: MouseEvent | TouchEvent) {
+    if (!chartSvgElement || historicalData.length === 0) return;
+    
+    event.preventDefault();
+    const rect = chartSvgElement.getBoundingClientRect();
+    const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+    const x = clientX - rect.left;
+    
+    // Calcular posición relativa (0 a 1)
+    const relativeX = Math.max(0, Math.min(1, x / rect.width));
+    
+    // Encontrar el punto de datos más cercano
+    const dataIndex = Math.round(relativeX * (historicalData.length - 1));
+    const dataPoint = historicalData[dataIndex];
+    
+    if (dataPoint) {
+      // Calcular la posición Y real del punto en el SVG
+      const minY = Math.min(...historicalData.map(d => d.y));
+      const maxY = Math.max(...historicalData.map(d => d.y));
+      const rangeY = maxY - minY || 1;
+      const normalizedY = (dataPoint.y - minY) / rangeY;
+      const svgY = 200 - (normalizedY * 180 + 10); // 200 es la altura, dejando padding
+      
+      chartHoverData = {
+        x: x, // Usar la posición real del mouse
+        y: dataPoint.y, // Valor real de los datos
+        votes: dataPoint.votes,
+        date: dataPoint.date
+      };
+      
+          }
+  }
+  
+  function clearChartHover() {
+    chartHoverData = null;
+  }
+  
+  // Title expansion state
+  export let pollTitleExpanded: Record<string, boolean> = {};
+  export let pollTitleTruncated: Record<string, boolean> = {};
+  export let pollTitleElements: Record<string, HTMLElement> = {};
+  
+  // Vote effect state (passed from parent)
+  export let voteEffectActive: boolean = false;
+  export let voteEffectPollId: string | null = null;
+  export let displayVotes: Record<string, string> = {};
+  export let voteClickX: number = 0;
+  export let voteClickY: number = 0;
+  export let voteIconX: number = 0;
+  export let voteIconY: number = 0;
+  export let voteEffectColor: string = '#10b981';
+  
+  // Profile modal state (bindable, controlled from +page.svelte)
+  export let isProfileModalOpen: boolean = false;
+  export let selectedProfileUserId: number | null = null;
+  
+  let pollGridRef: HTMLElement;
+  let voteIconElement: HTMLElement | null = null;
+  
+  // Trackear el texto de las opciones en edición para reactividad
+  let editingOptionLabels: Record<string, string> = {};
+  
+  // Helper functions
+  function normalizeTo100(values: number[]): number[] {
+    const total = values.reduce((sum, v) => sum + v, 0);
+    if (total === 0) return values.map(() => 0);
+    return values.map(v => (v / total) * 100);
+  }
+  
+  function formatNumber(num: number | undefined | null): string {
+    if (num === undefined || num === null || isNaN(num)) return '0';
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+    return num.toString();
+  }
+  
+  function getRelativeTime(minutesAgo: number): string {
+    if (minutesAgo < 60) return `${minutesAgo}min`;
+    if (minutesAgo < 1440) return `${Math.floor(minutesAgo / 60)}h`;
+    if (minutesAgo < 43200) return `${Math.floor(minutesAgo / 1440)}d`;
+    return `${Math.floor(minutesAgo / 525600)}a`;
+  }
+  
+  function fontSizeForPct(pct: number): number {
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+    
+    // Escala gradual más suave
+    // 0-20%: 20-25px
+    // 21-40%: 26-35px
+    // 41-60%: 36-42px
+    // 61-80%: 43-47px
+    // 81-100%: 48-50px
+    const size = 20 + (clamped * 0.3);  // De 20px a 50px de forma lineal
+    
+    return Math.max(20, Math.min(50, Math.round(size)));
+  }
+  
+  function getNormalizedOptions(poll: any) {
+    const opts = poll.options || [];
+    const values = opts.map((o: any) => Number(o.votes) || 0);
+    const norm = normalizeTo100(values);
+    return opts.map((o: any, i: number) => ({ ...o, pct: norm[i] }));
+  }
+  
+  function getPaginatedOptions(options: any[], page: number, perPage: number = OPTIONS_PER_PAGE) {
+    const start = page * perPage;
+    const end = start + perPage;
+    const items = options.slice(start, end);
+    return {
+      items,
+      totalPages: Math.ceil(options.length / perPage),
+      hasNext: end < options.length,
+      hasPrev: page > 0
+    };
+  }
+  
+  function isPollExpired(closedAt: Date | string | null | undefined): boolean {
+    if (!closedAt) return false;
+    return new Date(closedAt).getTime() < Date.now();
+  }
+  
+  function getTimeRemaining(closedAt: Date | string | null | undefined): string {
+    if (!closedAt) return '';
+    const now = Date.now();
+    const end = new Date(closedAt).getTime();
+    const diff = end - now;
+    if (diff <= 0) return 'Cerrada';
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+  
+  function getTimeRemainingColor(closedAt: Date | string | null | undefined): string {
+    if (!closedAt) return 'normal';
+    const now = Date.now();
+    const end = new Date(closedAt).getTime();
+    const diff = end - now;
+    const hours = diff / (1000 * 60 * 60);
+    if (hours <= 1) return 'critical';
+    if (hours <= 6) return 'warning';
+    return 'normal';
+  }
+  
+  function checkTruncation(element: HTMLElement | undefined): boolean {
+    if (!element) return false;
+    return element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight;
+  }
+  
+  // Reactive data
+  // NUNCA reordenar opciones para evitar confusión al usuario
+  // Las opciones mantienen su orden original siempre
+  $: sortedPollOptions = getNormalizedOptions(poll);
+  $: paginatedPoll = getPaginatedOptions(sortedPollOptions, currentPage);
+  $: isSingleOptionPoll = sortedPollOptions.length === 1;
+  $: isExpired = poll.closedAt ? isPollExpired(poll.closedAt) : false;
+  $: pollVotedOption = displayVotes[poll.id] || userVotes[poll.id];
+  $: votedOptionData = pollVotedOption ? poll.options.find((o: any) => o.key === pollVotedOption) : null;
+  
+  // Event handlers
+  function handleSetActive(index: number) {
+    dispatch('setActive', { pollId: poll.id, index });
+  }
+
+  // Detectar scroll y actualizar índice activo
+  function handleScrollChange() {
+    if (!pollGridRef) return;
+    
+    const scrollLeft = pollGridRef.scrollLeft;
+    const slideWidth = pollGridRef.children[0]?.clientWidth || 0;
+    
+    if (slideWidth === 0) return;
+    
+    // Calcular qué slide está más centrado
+    const newIndex = Math.round(scrollLeft / slideWidth);
+    
+    // Actualizar solo si cambió
+    if (newIndex !== activeAccordionIndex && newIndex >= 0 && newIndex < sortedPollOptions.length) {
+      handleSetActive(newIndex);
+    }
+  }
 
   // Función de compartir con Open Graph
   async function sharePoll(event: MouseEvent) {
     event.stopPropagation();
-
-    const shareUrl = `${window.location.origin}/?poll=${poll.id}`;
+    
+    const shareUrl = `${window.location.origin}/poll/${poll.id}`;
     const shareTitle = poll.question || poll.title;
     const shareText = poll.description || `Vota en esta encuesta: ${shareTitle}`;
 
@@ -253,11 +560,9 @@
           text: shareText,
           url: shareUrl
         });
-        // Registrar share si se completó correctamente
-        registerShare();
-      } catch (error) {
+              } catch (error) {
         if ((error as Error).name !== 'AbortError') {
-          // Fallback: copiar al portapapeles
+                    // Fallback: copiar al portapapeles
           copyToClipboard(shareUrl);
         }
       }
@@ -271,7 +576,6 @@
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(() => {
         showShareToast();
-        registerShare();
       }).catch(() => {
         // Fallback final
         fallbackCopyToClipboard(text);
@@ -292,7 +596,6 @@
     try {
       document.execCommand('copy');
       showShareToast();
-      registerShare();
     } catch (error) {
           }
     document.body.removeChild(textarea);
@@ -300,8 +603,7 @@
 
   let showShareToastFlag = false;
   let shareToastTimeout: any = null;
-
-  // ...
+  
   function showShareToast() {
     showShareToastFlag = true;
     if (shareToastTimeout) clearTimeout(shareToastTimeout);
@@ -571,7 +873,7 @@
         <!-- Indicadores de opciones (debajo del título) -->
         <div class="options-indicators">
           {#each sortedPollOptions as opt, idx}
-            {@const isCurrentOption = idx === (activeAccordionIndex ?? 0)}
+            {@const isCurrentOption = idx === activeAccordionIndex}
             {@const isPollVoted = poll.type === 'multiple'
               ? (multipleVotes[poll.id]?.includes(opt.key) || 
                  (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(opt.key))
@@ -605,7 +907,7 @@
             >
               <div
                 class="indicator-fill"
-                style="width: {hasVotedAny ? '100%' : (idx < (activeAccordionIndex ?? 0) ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {hasVotedAny ? opt.color : (isCurrentOption ? '#fff' : 'rgba(255, 255, 255, 0.2)')};"
+                style="width: {hasVotedAny ? '100%' : (activeAccordionIndex !== null && idx < activeAccordionIndex ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {hasVotedAny ? opt.color : (isCurrentOption ? '#fff' : 'rgba(255, 255, 255, 0.2)')};"
               ></div>
             </button>
           {/each}
@@ -1107,42 +1409,32 @@
               {/if}
             </div>
             
-            <!-- Contenido centrado (solo label) -->
-            <div class="option-content-maximized {option.imageUrl ? 'has-media' : ''}">
-              {#if option.imageUrl}
-                <!-- Layout cuando hay multimedia -->
-                <div class="label-side">
-                  <h2 class="option-label-compact" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word;">
-                    {option.label}
-                  </h2>
-                </div>
-              {:else}
-                <!-- Layout vertical cuando NO hay multimedia -->
-                <h2 class="option-label-maximized {fontSize}" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; word-break: break-word;">
-                  {option.label}
-                </h2>
-              {/if}
-            </div>
-            
-            <!-- Barra inferior: Porcentaje izquierda + Avatares derecha -->
-            {@const filteredFriends = poll.friendsByOption?.[option.key]?.filter((friend: any) => friend.id !== poll.user?.id) || []}
-            {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
-            <div class="option-bottom-bar">
-              <!-- Porcentaje a la izquierda -->
+            <!-- Contenido centrado (label + percentage) -->
+            <div class="option-content-maximized">
+              <!-- Label grande en uppercase con tamaño dinámico y truncamiento -->
+              <h2 class="option-label-maximized {fontSize}" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; word-break: break-word;">
+                {option.label}
+              </h2>
+              
+              <!-- Porcentaje grande si ha votado -->
               {#if pollVotedOption}
-                <div class="percentage-bottom-left">
-                  <span class="percentage-value-bottom" style="color: {option.color}">
+                <div class="option-percentage-voted">
+                  <span class="percentage-value-large" style="color: {option.color}">
                     {Math.round(displayPct)}%
                   </span>
+                  <span class="percentage-subtitle">del total</span>
                 </div>
-              {:else}
-                <div class="percentage-bottom-left"></div>
               {/if}
               
-              <!-- Avatares de amigos a la derecha -->
+            </div>
+            
+            <!-- Avatares de amigos (si hay) -->
+            {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
+              {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
+              {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
               {#if filteredFriends.length > 0}
                 <button 
-                  class="friend-avatars-bottom friend-avatars-btn-mini"
+                  class="friend-avatars-maximized friend-avatars-btn-mini"
                   onclick={(e) => { e.stopPropagation(); if (userHasVoted) showFriendsVotesModal = true; }}
                   disabled={!userHasVoted}
                   aria-label={userHasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
@@ -1171,7 +1463,7 @@
                   {/if}
                 </button>
               {/if}
-            </div>
+            {/if}
           {/if}
         </button>
       {/each}
@@ -1189,7 +1481,7 @@
   <!-- Tooltip de confirmación de voto -->
   {#if showVoteConfirmation}
     <div class="vote-confirmation-tooltip" style="--vote-color: {voteConfirmationColor}">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>
     </div>
@@ -1310,7 +1602,7 @@
           <!-- Comentarios -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; showCommentsModal = true; }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
           >
             <div class="mini-bottom-sheet-icon bg-white/10">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
@@ -1319,7 +1611,7 @@
             </div>
             <div class="mini-bottom-sheet-text">
               <span>Comentarios</span>
-              <p>Ver comentarios</p>
+              <p>0 comentarios</p>
             </div>
           </button>
 
@@ -1362,7 +1654,7 @@
           <!-- Compartir -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); sharePoll(e); }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; sharePoll(e); }}
           >
             <div class="mini-bottom-sheet-icon bg-blue-500/20">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
@@ -1381,12 +1673,11 @@
 
           <!-- Repostear -->
           <button 
-            class="mini-bottom-sheet-item {hasReposted ? 'active' : ''}"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleRepost(); }}
-            disabled={isReposting}
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
           >
-            <div class="mini-bottom-sheet-icon {hasReposted ? 'bg-green-500/40' : 'bg-green-500/20'}">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={hasReposted ? '#22c55e' : 'none'} stroke="#22c55e" stroke-width="2">
+            <div class="mini-bottom-sheet-icon bg-green-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
                 <path d="M17 1l4 4-4 4"/>
                 <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
                 <path d="M7 23l-4-4 4-4"/>
@@ -1394,25 +1685,24 @@
               </svg>
             </div>
             <div class="mini-bottom-sheet-text">
-              <span>{hasReposted ? 'Republicado' : 'Repostear'}</span>
-              <p>{formatCount(repostCount)} reposts</p>
+              <span>Repostear</span>
+              <p>0 reposts</p>
             </div>
           </button>
 
           <!-- Guardar -->
           <button 
-            class="mini-bottom-sheet-item {hasBookmarked ? 'active' : ''}"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleBookmark(); }}
-            disabled={isBookmarking}
+            class="mini-bottom-sheet-item"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
           >
-            <div class="mini-bottom-sheet-icon {hasBookmarked ? 'bg-yellow-500/40' : 'bg-yellow-500/20'}">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={hasBookmarked ? '#eab308' : 'none'} stroke="#eab308" stroke-width="2">
+            <div class="mini-bottom-sheet-icon bg-yellow-500/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
               </svg>
             </div>
             <div class="mini-bottom-sheet-text">
-              <span>{hasBookmarked ? 'Guardado' : 'Guardar'}</span>
-              <p>{formatCount(bookmarkCount)} guardados</p>
+              <span>Guardar</span>
+              <p>Añadir a guardados</p>
             </div>
           </button>
 
@@ -1438,8 +1728,7 @@
           <!-- No me interesa -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleHide(); }}
-            disabled={isHiding}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
           >
             <div class="mini-bottom-sheet-icon bg-gray-500/20">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
@@ -1456,8 +1745,7 @@
           <!-- Reportar -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleReport(); }}
-            disabled={isReporting}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
             style="padding-right: 10px;"
           >
             <div class="mini-bottom-sheet-icon bg-red-500/20">
@@ -1468,7 +1756,7 @@
               </svg>
             </div>
             <div class="mini-bottom-sheet-text">
-              <span>{showReportSuccess ? '✓ Reportado' : 'Reportar'}</span>
+              <span>Reportar</span>
               <p>Denunciar contenido</p>
             </div>
           </button>
@@ -1523,17 +1811,11 @@
         </button>
 
         <!-- Comentarios -->
-        <button 
-          class="mini-action-btn" 
-          type="button" 
-          title="Comentarios" 
-          aria-label="Comentarios"
-          onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
-        >
+        <button class="mini-action-btn" type="button" title="Comentarios" aria-label="Comentarios">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
           </svg>
-          <span class="mini-action-count">{formatCount(poll.stats?.commentsCount || poll.commentsCount || 0)}</span>
+          <span class="mini-action-count">0</span>
         </button>
 
       </div>
@@ -1602,25 +1884,18 @@
               <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
               <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
             </svg>
-            <span class="mini-action-count-secondary">{formatCount(shareCount)}</span>
+            <span class="mini-action-count-secondary">0</span>
           </button>
 
           <!-- Repostear -->
-          <button 
-            class="mini-action-btn-secondary {hasReposted ? 'active' : ''}" 
-            type="button" 
-            title={hasReposted ? 'Quitar repost' : 'Repostear'} 
-            aria-label="Repostear"
-            onclick={(e) => { e.stopPropagation(); handleRepost(); }}
-            disabled={isReposting}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill={hasReposted ? '#22c55e' : 'none'} stroke={hasReposted ? '#22c55e' : 'currentColor'} stroke-width="2">
+          <button class="mini-action-btn-secondary" type="button" title="Repostear" aria-label="Repostear">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17 1l4 4-4 4"/>
               <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
               <path d="M7 23l-4-4 4-4"/>
               <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
             </svg>
-            <span class="mini-action-count-secondary {hasReposted ? 'text-green-500' : ''}">{formatCount(repostCount)}</span>
+            <span class="mini-action-count-secondary">0</span>
           </button>
 
           <!-- Vistas -->
@@ -1629,22 +1904,15 @@
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
-            <span class="mini-action-count-secondary">{formatCount(viewCount)}</span>
+            <span class="mini-action-count-secondary">{formatCount(poll.stats?.totalViews || poll.totalViews)}</span>
           </button>
 
           <!-- Guardar -->
-          <button 
-            class="mini-action-btn-secondary {hasBookmarked ? 'active' : ''}" 
-            type="button" 
-            title={hasBookmarked ? 'Quitar guardado' : 'Guardar'} 
-            aria-label="Guardar"
-            onclick={(e) => { e.stopPropagation(); handleBookmark(); }}
-            disabled={isBookmarking}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill={hasBookmarked ? '#eab308' : 'none'} stroke={hasBookmarked ? '#eab308' : 'currentColor'} stroke-width="2">
+          <button class="mini-action-btn-secondary" type="button" title="Guardar" aria-label="Guardar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
-            <span class="mini-action-count-secondary {hasBookmarked ? 'text-yellow-500' : ''}">{formatCount(bookmarkCount)}</span>
+            <span class="mini-action-count-secondary">0</span>
           </button>
 
           <!-- Copiar enlace -->
@@ -1667,8 +1935,6 @@
             type="button"
             title="No me interesa"
             aria-label="No me interesa"
-            onclick={(e) => { e.stopPropagation(); handleHide(); }}
-            disabled={isHiding}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -1682,11 +1948,9 @@
             type="button"
             title="Reportar"
             aria-label="Reportar"
-            onclick={(e) => { e.stopPropagation(); handleReport(); }}
-            disabled={isReporting}
             style="padding-right: 10px;"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={showReportSuccess ? '#22c55e' : '#f87171'} stroke-width="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/>
               <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -1727,7 +1991,7 @@
 <FriendsVotesModal 
   bind:isOpen={showFriendsVotesModal}
   pollTitle={poll.title || ''}
-  options={poll.options?.map((opt: { id?: string; key: string; label?: string; optionLabel?: string; color?: string; voteCount?: number; votes?: number }) => ({ 
+  options={poll.options?.map((opt: any) => ({ 
     id: opt.id || opt.key, 
     key: opt.key, 
     label: opt.label || opt.optionLabel, 
@@ -1737,15 +2001,6 @@
   friendsByOption={poll.friendsByOption || {}}
   onClose={() => showFriendsVotesModal = false}
 />
-
-<!-- MODAL DE COMENTARIOS (via Portal para escapar del stacking context) -->
-<Portal>
-  <CommentsModal 
-    bind:isOpen={showCommentsModal}
-    pollId={poll.id}
-    pollTitle={poll.title || poll.question || ''}
-  />
-</Portal>
 
 <style>
   /* Botón confirmar votos múltiples - Versión compacta */
@@ -2554,21 +2809,6 @@
     animation: scaleIn 0.3s ease-out;
     word-wrap: break-word;
     white-space: pre-wrap;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-  }
-
-  .title-tooltip-content::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  .title-tooltip-content::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .title-tooltip-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
   }
   
   @keyframes scaleIn {
@@ -3362,49 +3602,6 @@
     height: 100%;
     text-align: center;
   }
-  
-  /* Cuando tiene multimedia, el contenido va abajo */
-  .option-content-maximized.has-media {
-    justify-content: flex-end;
-    padding-bottom: 16px;
-  }
-  
-  /* Layout horizontal para multimedia: porcentaje izq, texto der */
-  .media-content-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    gap: 12px;
-    padding: 0 8px;
-  }
-  
-  .percentage-side {
-    flex-shrink: 0;
-  }
-  
-  .percentage-value-compact {
-    font-size: 36px;
-    font-weight: 900;
-    line-height: 1;
-    /* color se aplica inline con style */
-  }
-  
-  .label-side {
-    flex: 1;
-    text-align: left;
-  }
-  
-  .option-label-compact {
-    font-size: 14px;
-    font-weight: 700;
-    color: white;
-    text-transform: uppercase;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-    margin: 0;
-  }
 
   /* Label grande en uppercase */
   .option-label-maximized {
@@ -3509,40 +3706,6 @@
       0 2px 4px rgba(0, 0, 0, 0.6),
       0 1px 2px rgba(0, 0, 0, 0.4);
     font-weight: 700;
-  }
-
-  /* Barra inferior con porcentaje y avatares */
-  .option-bottom-bar {
-    position: absolute;
-    bottom: 12px;
-    left: 12px;
-    right: 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    z-index: 10;
-    pointer-events: auto;
-  }
-  
-  .percentage-bottom-left {
-    display: flex;
-    align-items: center;
-    min-width: 60px;
-  }
-  
-  .percentage-value-bottom {
-    font-size: 28px;
-    font-weight: 900;
-    text-shadow: 
-      0 2px 8px rgba(0, 0, 0, 0.6),
-      0 1px 3px rgba(0, 0, 0, 0.4);
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-  }
-  
-  .friend-avatars-bottom {
-    display: flex;
-    align-items: center;
-    gap: 4px;
   }
 
   /* Avatares de amigos en diseño maximizado */
@@ -3863,21 +4026,6 @@
     box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.5);
     max-height: 60vh;
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-  }
-
-  .mini-bottom-sheet::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  .mini-bottom-sheet::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .mini-bottom-sheet::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
   }
 
   .mini-bottom-sheet-handle {
