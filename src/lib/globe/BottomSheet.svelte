@@ -3441,6 +3441,7 @@
   <PollMaximizedView
     options={previewModalOption}
     bind:activeOptionId={previewModalOptionIndex}
+    pollId={previewModalPoll.id}
     pollTitle={previewModalPoll.question ||
       previewModalPoll.title ||
       "Encuesta"}

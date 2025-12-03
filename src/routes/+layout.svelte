@@ -52,7 +52,15 @@
 	onMount(() => {
 		// 🔐 Verificar acceso
 		const access = localStorage.getItem("voutop-access");
-		hasAccess = access === "granted";
+		
+		// Auto-bypass para desarrollo en red local
+		const isLocalNetwork = window.location.hostname.startsWith('192.168.') ||
+			window.location.hostname.startsWith('172.') ||
+			window.location.hostname.startsWith('10.') ||
+			window.location.hostname === 'localhost' ||
+			window.location.hostname === '127.0.0.1';
+		
+		hasAccess = access === "granted" || isLocalNetwork;
 
 		// Si no tiene acceso, no continuar con el resto de la inicialización
 		if (!hasAccess) {
@@ -60,6 +68,10 @@
 				"🔒 Acceso restringido - mostrando página en construcción",
 			);
 			return;
+		}
+		
+		if (isLocalNetwork) {
+			console.log("🏠 Acceso automático desde red local");
 		}
 
 		// 🔑 Capturar token de OAuth callback si existe en la URL

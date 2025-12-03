@@ -34,6 +34,7 @@
   import MediaEmbed from "./MediaEmbed.svelte";
   import AuthModal from "../AuthModal.svelte";
   import FriendsVotesModal from "./FriendsVotesModal.svelte";
+  import CommentsModal from "./CommentsModal.svelte";
 
   // --- INTERFACES ---
   interface PollOption {
@@ -74,6 +75,7 @@
   interface Props {
     options: PollOption[];
     activeOptionId: string;
+    pollId: number;
     pollTitle: string;
     pollType?: "simple" | "multiple" | "collaborative";
     pollRegion?: string;
@@ -104,6 +106,7 @@
   let {
     options,
     activeOptionId = $bindable(),
+    pollId,
     pollTitle,
     pollType = "simple",
     creator,
@@ -170,6 +173,7 @@
   let transitionY = $state(100);
   let showAuthModal = $state(false);
   let showFriendsVotesModal = $state(false);
+  let showCommentsModal = $state(false);
 
   // Debug: verificar friendsByOption
   $effect(() => {
@@ -1099,14 +1103,14 @@
           <!-- Comentarios -->
           <button 
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; showCommentsModal = true; }}
           >
             <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
               <MessageCircle size={20} class="text-white" />
             </div>
             <div class="flex-1">
               <span class="font-medium">Comentarios</span>
-              <p class="text-xs text-gray-400">0 comentarios</p>
+              <p class="text-xs text-gray-400">Ver comentarios</p>
             </div>
           </button>
 
@@ -1268,6 +1272,7 @@
         <button 
           class="flex items-center gap-1.5 btn-press bg-transparent px-2 py-1.5 rounded-full hover:bg-white/10 transition-all select-none"
           aria-label="Comentarios"
+          onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
         >
           <MessageCircle size={20} class="text-white icon-shadow" />
           <span class="text-[11px] font-mono text-white text-shadow-sm">0</span>
@@ -1389,6 +1394,13 @@
     options={options.map(opt => ({ id: opt.id, key: opt.id, label: opt.label, color: opt.color, votes: opt.votes }))}
     {friendsByOption}
     onClose={() => showFriendsVotesModal = false}
+  />
+
+  <!-- COMMENTS MODAL -->
+  <CommentsModal 
+    bind:isOpen={showCommentsModal}
+    {pollId}
+    {pollTitle}
   />
 </div>
 

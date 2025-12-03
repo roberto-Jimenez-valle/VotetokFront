@@ -7,35 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ===============================================
-// USUARIOS
-// ===============================================
-
 model User {
-  id            Int       @id @default(autoincrement())
-  username      String    @unique
-  email         String    @unique
-  displayName   String    @map("display_name")
-  avatarUrl     String?   @map("avatar_url")
-  bio           String?
-  role          String    @default("user")
-  verified      Boolean   @default(false)
-  countryIso3   String?   @map("country_iso3")
-  subdivisionId String?   @map("subdivision_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  // Relaciones
-  polls             Poll[]            @relation("PollCreator")
-  createdOptions    PollOption[]      @relation("OptionCreator")
-  votes             Vote[]
-  interactions      PollInteraction[]
-  comments          Comment[]
-  featuredProfile   FeaturedUser?
-  followers         UserFollower[]    @relation("UserFollowers")
-  following         UserFollower[]    @relation("UserFollowing")
-  interests         UserInterest[]
-  hashtagFollows    UserHashtagFollow[]
+  id              Int                 @id @default(autoincrement())
+  username        String              @unique
+  email           String              @unique
+  displayName     String              @map("display_name")
+  avatarUrl       String?             @map("avatar_url")
+  bio             String?
+  role            String              @default("user")
+  verified        Boolean             @default(false)
+  countryIso3     String?             @map("country_iso3")
+  subdivisionId   String?             @map("subdivision_id")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  comments        Comment[]
+  featuredProfile FeaturedUser?
+  interactions    PollInteraction[]
+  createdOptions  PollOption[]        @relation("OptionCreator")
+  polls           Poll[]              @relation("PollCreator")
+  followers       UserFollower[]      @relation("UserFollowers")
+  following       UserFollower[]      @relation("UserFollowing")
+  hashtagFollows  UserHashtagFollow[]
+  interests       UserInterest[]
+  votes           Vote[]
 
   @@index([username])
   @@index([countryIso3])
@@ -43,35 +37,29 @@ model User {
   @@map("users")
 }
 
-// ===============================================
-// ENCUESTAS Y OPCIONES
-// ===============================================
-
 model Poll {
-  id             Int       @id @default(autoincrement())
-  userId         Int       @map("user_id")
+  id             Int               @id @default(autoincrement())
+  userId         Int               @map("user_id")
   title          String
   description    String?
   category       String?
-  imageUrl       String?   @map("image_url")  // Imagen de la encuesta (no avatar del usuario)
-  type           String    @default("poll")  // poll, multiple, collaborative, hashtag
-  status         String    @default("active")
-  isRell         Boolean   @default(false) @map("is_rell")  // Si es una republicación
-  originalPollId Int?      @map("original_poll_id")  // ID del poll original (si es rell)
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  closedAt       DateTime? @map("closed_at")
-
-  // Relaciones
-  user         User              @relation("PollCreator", fields: [userId], references: [id], onDelete: Cascade)
-  originalPoll Poll?             @relation("PollRells", fields: [originalPollId], references: [id], onDelete: SetNull)
-  rells        Poll[]            @relation("PollRells")  // Rells de este poll
-  options      PollOption[]
-  votes        Vote[]
-  interactions PollInteraction[]
-  comments     Comment[]
-  hashtags     PollHashtag[]
-  history      VoteHistory[]
+  imageUrl       String?           @map("image_url")
+  type           String            @default("poll")
+  status         String            @default("active")
+  isRell         Boolean           @default(false) @map("is_rell")
+  originalPollId Int?              @map("original_poll_id")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  closedAt       DateTime?         @map("closed_at")
+  comments       Comment[]
+  hashtags       PollHashtag[]
+  interactions   PollInteraction[]
+  options        PollOption[]
+  originalPoll   Poll?             @relation("PollRells", fields: [originalPollId], references: [id])
+  rells          Poll[]            @relation("PollRells")
+  user           User              @relation("PollCreator", fields: [userId], references: [id], onDelete: Cascade)
+  history        VoteHistory[]
+  votes          Vote[]
 
   @@index([userId])
   @@index([category])
@@ -80,76 +68,59 @@ model Poll {
   @@index([isRell])
   @@index([originalPollId])
   @@index([createdAt])
-  @@index([status, createdAt])  // Para queries ordenadas por fecha
+  @@index([status, createdAt])
   @@map("polls")
 }
 
 model PollOption {
-  id           Int      @id @default(autoincrement())
-  pollId       Int      @map("poll_id")
-  optionKey    String   @map("option_key")
-  optionLabel  String   @map("option_label")
+  id           Int           @id @default(autoincrement())
+  pollId       Int           @map("poll_id")
+  optionKey    String        @map("option_key")
+  optionLabel  String        @map("option_label")
   color        String
-  imageUrl     String?  @map("image_url")  // URL de imagen/video/preview para la opción
-  displayOrder Int      @default(0) @map("display_order")
-  createdById  Int?     @map("created_by_id")  // Avatar se obtiene desde createdBy.avatarUrl
-  createdAt    DateTime @default(now()) @map("created_at")
+  displayOrder Int           @default(0) @map("display_order")
+  createdById  Int?          @map("created_by_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  imageUrl     String?       @map("image_url")
+  createdBy    User?         @relation("OptionCreator", fields: [createdById], references: [id])
+  poll         Poll          @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  history      VoteHistory[]
+  votes        Vote[]
 
-  // Relaciones
-  poll      Poll          @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  createdBy User?         @relation("OptionCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  votes     Vote[]
-  history   VoteHistory[]
-
-  @@unique([pollId, optionKey])  // optionKey único por encuesta
+  @@unique([pollId, optionKey])
   @@index([pollId])
   @@index([createdById])
   @@index([pollId, displayOrder])
+  @@index([pollId, displayOrder], map: "idx_poll_options_poll_display")
   @@map("poll_options")
 }
 
-// ===============================================
-// VOTOS (Única fuente de verdad)
-// ===============================================
-
 model Vote {
-  id              Int      @id @default(autoincrement())
-  pollId          Int      @map("poll_id")
-  optionId        Int      @map("option_id")
-  userId          Int?     @map("user_id")
-  
-  // Geolocalización - FK a subdivisión más granular disponible
-  latitude        Float
-  longitude       Float
-  subdivisionId   Int?     @map("subdivision_id")  // FK a Subdivision (opcional si no se puede identificar)
-  
-  // Metadata
-  ipAddress       String?  @map("ip_address")
-  userAgent       String?  @map("user_agent")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id            Int          @id @default(autoincrement())
+  pollId        Int          @map("poll_id")
+  optionId      Int          @map("option_id")
+  userId        Int?         @map("user_id")
+  latitude      Float
+  longitude     Float
+  subdivisionId Int?         @map("subdivision_id")
+  ipAddress     String?      @map("ip_address")
+  userAgent     String?      @map("user_agent")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  option        PollOption   @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  poll          Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  subdivision   Subdivision? @relation(fields: [subdivisionId], references: [id], onDelete: Restrict)
+  user          User?        @relation(fields: [userId], references: [id])
 
-  // Relaciones
-  poll         Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  option       PollOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  subdivision  Subdivision? @relation(fields: [subdivisionId], references: [id], onDelete: Restrict)
-
-  // NO usar @@unique([pollId, userId]) porque impide votos anónimos múltiples
-  // La validación de "un voto por usuario" se hace en código (por userId o IP)
-  @@index([optionId])           // Query por opción
-  @@index([userId])             // Query por usuario
-  @@index([pollId])             // Query por encuesta
-  @@index([pollId, userId])     // Query para verificar voto existente
-  @@index([pollId, ipAddress])  // Query para verificar voto anónimo
-  @@index([subdivisionId])      // Query por subdivisión
-  @@index([latitude, longitude]) // Query geoespacial
-  @@index([createdAt])          // Query temporal
+  @@index([optionId])
+  @@index([userId])
+  @@index([pollId])
+  @@index([pollId, userId])
+  @@index([pollId, ipAddress])
+  @@index([subdivisionId])
+  @@index([latitude, longitude])
+  @@index([createdAt])
   @@map("votes")
 }
-
-// ===============================================
-// INTERACCIONES
-// ===============================================
 
 model PollInteraction {
   id              Int      @id @default(autoincrement())
@@ -157,9 +128,8 @@ model PollInteraction {
   userId          Int      @map("user_id")
   interactionType String   @map("interaction_type")
   createdAt       DateTime @default(now()) @map("created_at")
-
-  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  poll            Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([pollId, userId, interactionType])
   @@index([pollId])
@@ -176,11 +146,10 @@ model Comment {
   likesCount      Int       @default(0) @map("likes_count")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  poll          Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentComment Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies       Comment[] @relation("CommentReplies")
+  parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[] @relation("CommentReplies")
+  poll            Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([pollId])
   @@index([userId])
@@ -197,8 +166,7 @@ model FeaturedUser {
   featuredOrder  Int      @default(0) @map("featured_order")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("featured_users")
 }
@@ -208,9 +176,8 @@ model UserFollower {
   followerId  Int      @map("follower_id")
   followingId Int      @map("following_id")
   createdAt   DateTime @default(now()) @map("created_at")
-
-  follower  User @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  follower    User     @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@index([followerId])
@@ -219,15 +186,14 @@ model UserFollower {
 }
 
 model VoteHistory {
-  id         Int      @id @default(autoincrement())
-  pollId     Int      @map("poll_id")
-  optionId   Int      @map("option_id")
-  voteCount  Int      @map("vote_count")
+  id         Int        @id @default(autoincrement())
+  pollId     Int        @map("poll_id")
+  optionId   Int        @map("option_id")
+  voteCount  Int        @map("vote_count")
   percentage Float
-  recordedAt DateTime @default(now()) @map("recorded_at")
-
-  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  recordedAt DateTime   @default(now()) @map("recorded_at")
+  option     PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  poll       Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
 
   @@index([pollId])
   @@index([recordedAt])
@@ -235,39 +201,34 @@ model VoteHistory {
 }
 
 model Hashtag {
-  id         Int      @id @default(autoincrement())
-  tag        String   @unique
-  usageCount Int      @default(0) @map("usage_count")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  polls          PollHashtag[]
-  userFollows    UserHashtagFollow[]
+  id          Int                 @id @default(autoincrement())
+  tag         String              @unique
+  usageCount  Int                 @default(0) @map("usage_count")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  polls       PollHashtag[]
+  userFollows UserHashtagFollow[]
 
   @@map("hashtags")
 }
 
 model PollHashtag {
-  pollId    Int @map("poll_id")
-  hashtagId Int @map("hashtag_id")
-
-  poll    Poll    @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  hashtag Hashtag @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+  pollId    Int     @map("poll_id")
+  hashtagId Int     @map("hashtag_id")
+  hashtag   Hashtag @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+  poll      Poll    @relation(fields: [pollId], references: [id], onDelete: Cascade)
 
   @@id([pollId, hashtagId])
   @@map("poll_hashtags")
 }
 
-// Nuevas tablas para sistema de recomendaciones "Para ti"
-
 model UserInterest {
-  id         Int      @id @default(autoincrement())
-  userId     Int      @map("user_id")
-  category   String   // Categoría de interés
-  score      Float    @default(1.0) // Score de interés (aumenta con interacciones)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  category  String
+  score     Float    @default(1.0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, category])
   @@index([userId])
@@ -279,9 +240,8 @@ model UserHashtagFollow {
   userId    Int      @map("user_id")
   hashtagId Int      @map("hashtag_id")
   createdAt DateTime @default(now()) @map("created_at")
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  hashtag Hashtag @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+  hashtag   Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, hashtagId])
   @@index([userId])
@@ -289,51 +249,26 @@ model UserHashtagFollow {
   @@map("user_hashtag_follows")
 }
 
-// ===============================================
-// TABLA GEOGRÁFICA - SUBDIVISIONES JERÁRQUICAS
-// ===============================================
-
-// Subdivisiones de 3 niveles jerárquicos
-// Nivel 1: Estados/Comunidades Autónomas (ESP.1, USA.CA)
-// Nivel 2: Provincias/Condados (ESP.1.2, USA.CA.001)
-// Nivel 3: Municipios/Cities (ESP.1.2.3)
 model Subdivision {
-  id              Int      @id @default(autoincrement())
-  
-  subdivisionId   String   @unique @map("subdivision_id")  // ID jerárquico completo (ESP.1, ESP.1.2, ESP.1.2.3)
-  level           Int                                      // Nivel: 1, 2, 3
-  
-  // Identificación del nivel actual (IDs numéricos extraídos)
-  level1Id        String?  @map("level1_id")              // Número ID nivel 1: "1", "13"
-  level2Id        String?  @map("level2_id")              // Número ID nivel 2: "2", "28"
-  level3Id        String?  @map("level3_id")              // Número ID nivel 3
-  
-  // Nombres
-  name            String                                   // Nombre principal (name_1/2/3)
-  nameLocal       String?  @map("name_local")             // Nombre en idioma local (nl_name_1/2/3)
-  nameVariant     String?  @map("name_variant")           // Variantes del nombre (varname_1/2/3)
-  
-  // Tipo de subdivisión
-  typeEnglish     String?  @map("type_english")           // Tipo en inglés: "Autonomous Community" (engtype_1/2/3)
-  
-  // Códigos estándar internacionales
-  hasc            String?                                  // HASC code: ES.AN, ES.AN.AM (hasc_1/2/3)
-  iso             String?                                  // ISO code (solo nivel 1) (iso_1)
-  countryCode     String?  @map("country_code")           // Código numérico: 01, 04, 11 (cc_1/2/3)
-  
-  // Geolocalización
-  latitude        Float                                    // Latitud del centroide
-  longitude       Float                                    // Longitud del centroide
-  
-  // Indicador de último nivel disponible
-  isLowestLevel   Boolean  @default(false) @map("is_lowest_level")  // True si no tiene subniveles (puede tener votos directos)
-  
-  // Metadata
-  createdAt       DateTime @default(now()) @map("created_at")
-  
-  // Relación inversa
-  votes           Vote[]
-  
+  id            Int      @id @default(autoincrement())
+  subdivisionId String   @unique @map("subdivision_id")
+  level         Int
+  level1Id      String?  @map("level1_id")
+  level2Id      String?  @map("level2_id")
+  level3Id      String?  @map("level3_id")
+  name          String
+  nameLocal     String?  @map("name_local")
+  nameVariant   String?  @map("name_variant")
+  typeEnglish   String?  @map("type_english")
+  hasc          String?
+  iso           String?
+  countryCode   String?  @map("country_code")
+  latitude      Float
+  longitude     Float
+  createdAt     DateTime @default(now()) @map("created_at")
+  isLowestLevel Boolean  @default(false) @map("is_lowest_level")
+  votes         Vote[]
+
   @@index([level])
   @@index([subdivisionId])
   @@index([latitude, longitude])

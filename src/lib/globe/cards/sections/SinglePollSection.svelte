@@ -5,6 +5,7 @@
   import { currentUser } from '$lib/stores';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import FriendsVotesModal from '$lib/components/FriendsVotesModal.svelte';
+  import CommentsModal from '$lib/components/CommentsModal.svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -115,6 +116,9 @@
   
   // Estado para modal de votos de amigos
   let showFriendsVotesModal: boolean = false;
+  
+  // Estado para modal de comentarios
+  let showCommentsModal: boolean = false;
   
   // Formatear números grandes
   function formatCount(num: number | undefined): string {
@@ -1569,7 +1573,7 @@
           <!-- Comentarios -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; showCommentsModal = true; }}
           >
             <div class="mini-bottom-sheet-icon bg-white/10">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
@@ -1578,7 +1582,7 @@
             </div>
             <div class="mini-bottom-sheet-text">
               <span>Comentarios</span>
-              <p>0 comentarios</p>
+              <p>Ver comentarios</p>
             </div>
           </button>
 
@@ -1778,11 +1782,17 @@
         </button>
 
         <!-- Comentarios -->
-        <button class="mini-action-btn" type="button" title="Comentarios" aria-label="Comentarios">
+        <button 
+          class="mini-action-btn" 
+          type="button" 
+          title="Comentarios" 
+          aria-label="Comentarios"
+          onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
           </svg>
-          <span class="mini-action-count">0</span>
+          <span class="mini-action-count">{formatCount(poll.stats?.commentsCount || poll.commentsCount || 0)}</span>
         </button>
 
       </div>
@@ -1967,6 +1977,13 @@
   })) || []}
   friendsByOption={poll.friendsByOption || {}}
   onClose={() => showFriendsVotesModal = false}
+/>
+
+<!-- MODAL DE COMENTARIOS -->
+<CommentsModal 
+  bind:isOpen={showCommentsModal}
+  pollId={poll.id}
+  pollTitle={poll.title || poll.question || ''}
 />
 
 <style>
