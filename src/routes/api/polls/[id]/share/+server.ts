@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { prisma } from '$lib/prismaClient';
+import { prisma } from '$lib/server/prisma';
 
 /**
  * POST /api/polls/[id]/share
