@@ -830,7 +830,7 @@
         <!-- Indicadores de opciones (debajo del título) -->
         <div class="options-indicators">
           {#each sortedPollOptions as opt, idx}
-            {@const isCurrentOption = idx === activeAccordionIndex}
+            {@const isCurrentOption = idx === (activeAccordionIndex ?? 0)}
             {@const isPollVoted = poll.type === 'multiple'
               ? (multipleVotes[poll.id]?.includes(opt.key) || 
                  (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(opt.key))
@@ -864,7 +864,7 @@
             >
               <div
                 class="indicator-fill"
-                style="width: {hasVotedAny ? '100%' : (activeAccordionIndex !== null && idx < activeAccordionIndex ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {hasVotedAny ? opt.color : (isCurrentOption ? '#fff' : 'rgba(255, 255, 255, 0.2)')};"
+                style="width: {hasVotedAny ? '100%' : (idx < (activeAccordionIndex ?? 0) ? '100%' : (isCurrentOption ? '100%' : '0%'))}; background-color: {hasVotedAny ? opt.color : (isCurrentOption ? '#fff' : 'rgba(255, 255, 255, 0.2)')};"
               ></div>
             </button>
           {/each}
@@ -1366,32 +1366,42 @@
               {/if}
             </div>
             
-            <!-- Contenido centrado (label + percentage) -->
-            <div class="option-content-maximized">
-              <!-- Label grande en uppercase con tamaño dinámico y truncamiento -->
-              <h2 class="option-label-maximized {fontSize}" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; word-break: break-word;">
-                {option.label}
-              </h2>
-              
-              <!-- Porcentaje grande si ha votado -->
-              {#if pollVotedOption}
-                <div class="option-percentage-voted">
-                  <span class="percentage-value-large" style="color: {option.color}">
-                    {Math.round(displayPct)}%
-                  </span>
-                  <span class="percentage-subtitle">del total</span>
+            <!-- Contenido centrado (solo label) -->
+            <div class="option-content-maximized {option.imageUrl ? 'has-media' : ''}">
+              {#if option.imageUrl}
+                <!-- Layout cuando hay multimedia -->
+                <div class="label-side">
+                  <h2 class="option-label-compact" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word;">
+                    {option.label}
+                  </h2>
                 </div>
+              {:else}
+                <!-- Layout vertical cuando NO hay multimedia -->
+                <h2 class="option-label-maximized {fontSize}" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; word-break: break-word;">
+                  {option.label}
+                </h2>
               {/if}
-              
             </div>
             
-            <!-- Avatares de amigos (si hay) -->
-            {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
-              {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
-              {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
+            <!-- Barra inferior: Porcentaje izquierda + Avatares derecha -->
+            {@const filteredFriends = poll.friendsByOption?.[option.key]?.filter((friend: any) => friend.id !== poll.user?.id) || []}
+            {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
+            <div class="option-bottom-bar">
+              <!-- Porcentaje a la izquierda -->
+              {#if pollVotedOption}
+                <div class="percentage-bottom-left">
+                  <span class="percentage-value-bottom" style="color: {option.color}">
+                    {Math.round(displayPct)}%
+                  </span>
+                </div>
+              {:else}
+                <div class="percentage-bottom-left"></div>
+              {/if}
+              
+              <!-- Avatares de amigos a la derecha -->
               {#if filteredFriends.length > 0}
                 <button 
-                  class="friend-avatars-maximized friend-avatars-btn-mini"
+                  class="friend-avatars-bottom friend-avatars-btn-mini"
                   onclick={(e) => { e.stopPropagation(); if (userHasVoted) showFriendsVotesModal = true; }}
                   disabled={!userHasVoted}
                   aria-label={userHasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
@@ -1420,7 +1430,7 @@
                   {/if}
                 </button>
               {/if}
-            {/if}
+            </div>
           {/if}
         </button>
       {/each}
@@ -1438,7 +1448,7 @@
   <!-- Tooltip de confirmación de voto -->
   {#if showVoteConfirmation}
     <div class="vote-confirmation-tooltip" style="--vote-color: {voteConfirmationColor}">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>
     </div>
@@ -1611,7 +1621,7 @@
           <!-- Compartir -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; sharePoll(e); }}
+            onclick={(e) => { e.stopPropagation(); sharePoll(e); }}
           >
             <div class="mini-bottom-sheet-icon bg-blue-500/20">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
@@ -1948,7 +1958,7 @@
 <FriendsVotesModal 
   bind:isOpen={showFriendsVotesModal}
   pollTitle={poll.title || ''}
-  options={poll.options?.map((opt) => ({ 
+  options={poll.options?.map((opt: { id?: string; key: string; label?: string; optionLabel?: string; color?: string; voteCount?: number; votes?: number }) => ({ 
     id: opt.id || opt.key, 
     key: opt.key, 
     label: opt.label || opt.optionLabel, 
@@ -3559,6 +3569,49 @@
     height: 100%;
     text-align: center;
   }
+  
+  /* Cuando tiene multimedia, el contenido va abajo */
+  .option-content-maximized.has-media {
+    justify-content: flex-end;
+    padding-bottom: 16px;
+  }
+  
+  /* Layout horizontal para multimedia: porcentaje izq, texto der */
+  .media-content-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 12px;
+    padding: 0 8px;
+  }
+  
+  .percentage-side {
+    flex-shrink: 0;
+  }
+  
+  .percentage-value-compact {
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+    /* color se aplica inline con style */
+  }
+  
+  .label-side {
+    flex: 1;
+    text-align: left;
+  }
+  
+  .option-label-compact {
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    margin: 0;
+  }
 
   /* Label grande en uppercase */
   .option-label-maximized {
@@ -3663,6 +3716,40 @@
       0 2px 4px rgba(0, 0, 0, 0.6),
       0 1px 2px rgba(0, 0, 0, 0.4);
     font-weight: 700;
+  }
+
+  /* Barra inferior con porcentaje y avatares */
+  .option-bottom-bar {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+    pointer-events: auto;
+  }
+  
+  .percentage-bottom-left {
+    display: flex;
+    align-items: center;
+    min-width: 60px;
+  }
+  
+  .percentage-value-bottom {
+    font-size: 28px;
+    font-weight: 900;
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.6),
+      0 1px 3px rgba(0, 0, 0, 0.4);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+  
+  .friend-avatars-bottom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   /* Avatares de amigos en diseño maximizado */

@@ -708,13 +708,13 @@
 
   .linkedin-content {
     position: absolute;
-    top: 0;
+    bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
     padding: 8px 12px;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    justify-content: flex-end;
     text-align: center;
     align-items: center;
     min-width: 0;

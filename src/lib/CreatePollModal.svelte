@@ -10,8 +10,10 @@
   // Lazy load para romper dependencia circular y evitar stack overflow en build
   import GiphyPicker from '$lib/components/GiphyPicker.svelte';
   
-  // Componente dinámico para PollMaximizedView
+  // Componente dinámico para PollMaximizedView (solo para visualización)
   let PollMaximizedView = $state<any>(null);
+  // Componente para edición maximizada
+  import PollMaximizedEdit from '$lib/components/PollMaximizedEdit.svelte';
   import { giphyGifUrl } from '$lib/services/giphy';
   import { 
     extractUrls, 
@@ -123,6 +125,7 @@
   
   // Estado del tooltip de formato
   let showFormatTooltip = $state(false);
+  let formatEditorContent = $state('');
   
   // DEBUG: Monitorear el estado de currentUser
  
@@ -1074,37 +1077,44 @@
   function getTemplateFormat(): string {
     const lines: string[] = [];
     
-    lines.push('❓ Pregunta: [título de la encuesta]');
-    lines.push('');
-    lines.push('🖼️ Imagen o vídeo:');
-    lines.push('[URL o vacío]');
+    lines.push('❓ Pregunta: ¿Cuál es tu red social favorita?');
     lines.push('');
     lines.push('🧩 Opciones:');
-    lines.push('1️⃣ [Texto de opción 1] ([color])');
-    lines.push('[URL o vacío]');
-    lines.push('2️⃣ [Texto de opción 2] ([color])');
-    lines.push('[URL o vacío]');
-    lines.push('');
-    lines.push('🏷️ Etiquetas: [temas]');
-    lines.push('🗳️ Tipo de encuesta: [única / múltiple / rating / reacciones / colaborativa]');
-    lines.push('👥 Editores: [@usuario1, @usuario2, ...]');
-    lines.push('⏰ Tiempo: [ej. 3 días / hasta 30/10/2025]');
+    lines.push('1️⃣ VouTop (#8b5cf6)');
+    lines.push('https://voutop.com/logo.png');
+    lines.push('2️⃣ Instagram (#E1306C)');
+    lines.push('3️⃣ TikTok (#00f2ea)');
+    lines.push('4️⃣ Facebook (#1877F2)');
+    lines.push('5️⃣ YouTube (#ff0000)');
+    lines.push('... (añade más con el mismo formato)');
     
     return lines.join('\n');
   }
   
   // Copiar formato al portapapeles
   async function copyTemplateFormat() {
-    const template = getTemplateFormat();
     try {
-      await navigator.clipboard.writeText(template);
-      // Mostrar feedback visual
-      showFormatTooltip = false;
-      setTimeout(() => {
-        alert('✅ Formato copiado al portapapeles. Pégalo en cualquier IA para generar tu encuesta.');
-      }, 100);
+      await navigator.clipboard.writeText(formatEditorContent || getTemplateFormat());
     } catch (err) {
-          }
+      console.error('Error al copiar:', err);
+    }
+  }
+  
+  // Abrir editor de formato con el template
+  function openFormatEditor() {
+    formatEditorContent = getTemplateFormat();
+    showFormatTooltip = true;
+  }
+  
+  // Aplicar el formato editado a la encuesta
+  function applyFormatToPolll() {
+    if (!formatEditorContent.trim()) return;
+    
+    // Usar el parser existente
+    parsePrompt(formatEditorContent);
+    
+    // Cerrar el modal
+    showFormatTooltip = false;
   }
   
   // Detectar y parsear automáticamente al pegar en el título
@@ -1554,46 +1564,15 @@
               <div class="info-tooltip-container">
                 <button
                   class="info-btn"
-                  onclick={() => showFormatTooltip = !showFormatTooltip}
-                  title="Ver formato para IA"
-                  aria-label="Información sobre formato"
+                  onclick={openFormatEditor}
+                  title="Editor de formato rápido"
+                  aria-label="Abrir editor de formato rápido"
                   type="button"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
-                {#if showFormatTooltip}
-                  <div class="format-tooltip" transition:fade={{ duration: 150 }}>
-                    <div class="tooltip-header">
-                      <span class="tooltip-title">🤖 Formato para IA</span>
-                      <button 
-                        class="tooltip-close"
-                        onclick={() => showFormatTooltip = false}
-                        type="button"
-                        aria-label="Cerrar"
-                      >
-                        <X class="w-3 h-3" />
-                      </button>
-                    </div>
-                    <p class="tooltip-description">
-                      Copia este formato y úsalo en ChatGPT, Claude o cualquier IA para generar tu encuesta. Luego pega el resultado aquí.
-                    </p>
-                    <div class="tooltip-template">
-                      <code>{getTemplateFormat()}</code>
-                    </div>
-                    <button 
-                      class="copy-format-btn"
-                      onclick={copyTemplateFormat}
-                      type="button"
-                    >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      Copiar formato
-                    </button>
-                  </div>
-                {/if}
               </div>
             </div>
           </div>
@@ -1638,11 +1617,39 @@
             </div>
           {/if}
         
+        <!-- Indicadores de opciones (arriba de las cards) -->
+        <div class="options-indicators-top">
+          {#each options as opt, i}
+            <button 
+              class="option-indicator {activeAccordionIndex === i ? 'active' : ''}"
+              style="background-color: {activeAccordionIndex === i ? opt.color : 'rgba(255,255,255,0.2)'};"
+              onclick={() => {
+                activeAccordionIndex = i;
+                if (gridRef) {
+                  const slideWidth = gridRef.offsetWidth;
+                  gridRef.scrollTo({ left: slideWidth * i, behavior: 'smooth' });
+                }
+              }}
+              type="button"
+              aria-label="Ir a opción {i + 1}"
+            ></button>
+          {/each}
+        </div>
+        
         <!-- Scroll horizontal de opciones (estilo SinglePollSection) -->
         <div class="vote-cards-container {maximizedOption ? 'maximized' : ''}">
             <div 
               class="options-horizontal-scroll {maximizedOption ? 'has-maximized' : ''}"
               bind:this={gridRef}
+              onscroll={(e) => {
+                const container = e.target as HTMLElement;
+                const scrollLeft = container.scrollLeft;
+                const slideWidth = container.offsetWidth;
+                const newIndex = Math.round(scrollLeft / slideWidth);
+                if (newIndex !== activeAccordionIndex && newIndex >= 0 && newIndex < options.length) {
+                  activeAccordionIndex = newIndex;
+                }
+              }}
             >
               {#each optionsToRender as option, index (option.id)}
                 {@const pct = Math.round(100 / options.length)}
@@ -1652,13 +1659,21 @@
                 {@const optionPreview = optionPreviews.get(option.id)}
                 {@const hasMedia = detectedUrl || option.imageUrl || savedUrl || optionPreview}
                 
-                <button 
-                  type="button"
+                <div 
+                  role="button"
+                  tabindex="0"
                   class="option-slide {activeAccordionIndex === index ? 'is-active' : ''}" 
                   style="--card-color: {option.color};"
                   onclick={() => {
                     if (!isDragging) {
                       setActive(index);
+                    }
+                  }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      if (!isDragging) {
+                        setActive(index);
+                      }
                     }
                   }}
                 >
@@ -1681,107 +1696,142 @@
                     {/if}
                   </div>
                   
-                  <!-- Contenido centrado (estilo SinglePollSection) -->
-                  <div class="option-content-maximized">
-                    <!-- Textarea editable centrado -->
-                    <textarea
-                      class="option-label-edit"
-                      class:error={errors[`option_${option.id}`]}
-                      placeholder="Opción {index + 1}"
-                      value={labelWithoutUrl}
-                      oninput={(e) => {
-                        const newValue = (e.target as HTMLTextAreaElement).value;
-                        const currentUrl = extractUrlFromText(option.label);
-                        if (currentUrl) {
-                          option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
-                        } else {
-                          option.label = newValue;
-                        }
-                      }}
-                      bind:this={optionInputs[option.id]}
-                      maxlength="200"
-                      onclick={(e) => e.stopPropagation()}
-                    ></textarea>
-                    
-                    <!-- Porcentaje grande -->
-                    <div class="option-percentage-display">
-                      <span class="percentage-value-large" style="color: {option.color}">
-                        {Math.round(pct)}%
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <!-- Contador de caracteres -->
-                  <div class="char-counter-absolute">{labelWithoutUrl.length}/200</div>
-                  
-                  <!-- Botón eliminar opción (solo si no es la primera) -->
-                  {#if index > 0}
-                    <div
-                      role="button"
-                      tabindex="0"
-                      class="remove-option-badge"
+                  <!-- Botón para eliminar el media (fuera del contenedor de fondo) -->
+                  {#if hasMedia}
+                    <button
+                      type="button"
+                      class="remove-media-btn"
                       onclick={(e) => {
                         e.stopPropagation();
-                        removeOption(option.id);
-                      }}
-                      onkeydown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          removeOption(option.id);
+                        e.preventDefault();
+                        // Limpiar cachés
+                        loadingPreviews.delete(option.id);
+                        optionPreviews.delete(option.id);
+                        optionUrls.delete(option.id);
+                        optionUrls = optionUrls;
+                        
+                        // Limpiar URL del label
+                        const urlInLabel = extractUrlFromText(option.label);
+                        if (urlInLabel) {
+                          option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
                         }
+                        
+                        // Limpiar imageUrl
+                        option.imageUrl = '';
+                        
+                        // Trigger reactivity
+                        options = [...options];
                       }}
-                      title="Eliminar opción"
+                      title="Eliminar media"
+                      aria-label="Eliminar imagen o video"
                     >
                       <X class="w-4 h-4" />
-                    </div>
+                    </button>
                   {/if}
                   
-                  <!-- Botón color picker -->
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="color-picker-badge-absolute"
-                    style="background-color: {option.color}"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      colorPickerOpenFor = option.id;
-                    }}
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        colorPickerOpenFor = option.id;
-                      }
-                    }}
-                    title="Cambiar color"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                    </svg>
+                  <!-- Contenido centrado (estilo SinglePollSection) -->
+                  <div class="option-content-maximized {hasMedia ? 'has-media' : ''}">
+                    {#if hasMedia}
+                      <!-- Layout cuando hay multimedia -->
+                      <div class="label-side">
+                        <textarea
+                          class="option-label-edit compact"
+                          class:error={errors[`option_${option.id}`]}
+                          placeholder="Opción {index + 1}"
+                          value={labelWithoutUrl}
+                          oninput={(e) => {
+                            const newValue = (e.target as HTMLTextAreaElement).value;
+                            const currentUrl = extractUrlFromText(option.label);
+                            if (currentUrl) {
+                              option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
+                            } else {
+                              option.label = newValue;
+                            }
+                          }}
+                          bind:this={optionInputs[option.id]}
+                          maxlength="200"
+                          onclick={(e) => e.stopPropagation()}
+                        ></textarea>
+                      </div>
+                    {:else}
+                      <!-- Layout vertical cuando NO hay multimedia -->
+                      <textarea
+                        class="option-label-edit"
+                        class:error={errors[`option_${option.id}`]}
+                        placeholder="Opción {index + 1}"
+                        value={labelWithoutUrl}
+                        oninput={(e) => {
+                          const newValue = (e.target as HTMLTextAreaElement).value;
+                          const currentUrl = extractUrlFromText(option.label);
+                          if (currentUrl) {
+                            option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
+                          } else {
+                            option.label = newValue;
+                          }
+                        }}
+                        bind:this={optionInputs[option.id]}
+                        maxlength="200"
+                        onclick={(e) => e.stopPropagation()}
+                      ></textarea>
+                    {/if}
                   </div>
                   
-                  <!-- Botón Giphy -->
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="giphy-search-badge-bottom"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      openGiphyPicker(option.id);
-                    }}
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openGiphyPicker(option.id);
-                      }
-                    }}
-                    title="Buscar GIF"
-                  >
-                    <Sparkles class="w-4 h-4" />
+                  <!-- Barra de herramientas de edición -->
+                  <div class="edit-toolbar">
+                    <!-- Porcentaje a la izquierda -->
+                    <span class="percentage-value-toolbar" style="color: {option.color}">
+                      {Math.round(pct)}%
+                    </span>
+                    
+                    <!-- Botones de edición -->
+                    <div class="edit-buttons">
+                      <!-- Botón color picker -->
+                      <button
+                        type="button"
+                        class="edit-btn color-btn"
+                        style="background-color: {option.color}"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          colorPickerOpenFor = option.id;
+                        }}
+                        title="Cambiar color"
+                        aria-label="Cambiar color"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                      </button>
+                      
+                      <!-- Botón Giphy -->
+                      <button
+                        type="button"
+                        class="edit-btn giphy-btn"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          openGiphyPicker(option.id);
+                        }}
+                        title="Buscar GIF"
+                      >
+                        <Sparkles class="w-4 h-4" />
+                      </button>
+                      
+                      <!-- Botón eliminar opción (solo si no es la primera) -->
+                      {#if index > 0}
+                        <button
+                          type="button"
+                          class="edit-btn delete-btn"
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            removeOption(option.id);
+                          }}
+                          title="Eliminar opción"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      {/if}
+                    </div>
                   </div>
-                </button>
+                </div>
               {/each}
             </div>
         </div>
@@ -1793,41 +1843,60 @@
           <div class="cards-actions">
             <!-- Botones alineados a la derecha -->
             <div class="action-buttons">
-            <!-- Botón de animar cards -->
-            {#if options.some(opt => opt.label.trim() && !opt.imageUrl)}
-              <button
-                type="button"
-                class="animate-cards-button"
-                onclick={animateCardsWithGifs}
-                disabled={isAnimatingCards}
-                title={isAnimatingCards ? "Buscando GIFs..." : "Animar cards con GIFs"}
-                aria-label="Animar cards con GIFs"
-              >
-                {#if isAnimatingCards}
-                  <Loader2 class="w-5 h-5 animate-spin" />
-                {:else}
-                  <Sparkles class="w-5 h-5" />
-                {/if}
-              </button>
-            {/if}
-            
-            <!-- Botón de añadir opción -->
-            {#if options.length < 10}
-              {@const nextColor = COLORS[options.length % COLORS.length]}
-              <button
-                type="button"
-                class="add-option-floating-bottom"
-                style="border-color: {nextColor};"
-                onclick={addOption}
-                title="Añadir opción"
-                aria-label="Añadir nueva opción"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon lucide lucide-plus w-6 h-6">
-                  <path d="M5 12h14"></path>
-                  <path d="M12 5v14"></path>
-                </svg>
-              </button>
-            {/if}
+              <!-- Botón de animar cards -->
+              {#if options.some(opt => opt.label.trim() && !opt.imageUrl)}
+                <button
+                  type="button"
+                  class="animate-cards-button"
+                  onclick={animateCardsWithGifs}
+                  disabled={isAnimatingCards}
+                  title={isAnimatingCards ? "Buscando GIFs..." : "Animar cards con GIFs"}
+                  aria-label="Animar cards con GIFs"
+                >
+                  {#if isAnimatingCards}
+                    <Loader2 class="w-5 h-5 animate-spin" />
+                  {:else}
+                    <Sparkles class="w-5 h-5" />
+                  {/if}
+                </button>
+              {/if}
+              
+              <!-- Botón de maximizar -->
+              {#if activeAccordionIndex !== null && options[activeAccordionIndex]}
+                {@const activeOption = options[activeAccordionIndex]}
+                <button
+                  type="button"
+                  class="maximize-button"
+                  style="border-color: {activeOption.color};"
+                  onclick={() => {
+                    maximizedOption = activeOption.id;
+                  }}
+                  title="Vista maximizada"
+                  aria-label="Maximizar opción"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                </button>
+              {/if}
+              
+              <!-- Botón de añadir opción -->
+              {#if options.length < 10}
+                {@const nextColor = COLORS[options.length % COLORS.length]}
+                <button
+                  type="button"
+                  class="add-option-floating-bottom"
+                  style="border-color: {nextColor};"
+                  onclick={addOption}
+                  title="Añadir opción"
+                  aria-label="Añadir nueva opción"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
+                    <path d="M5 12h14"></path>
+                    <path d="M12 5v14"></path>
+                  </svg>
+                </button>
+              {/if}
             </div>
           </div>
         </div>
@@ -1925,7 +1994,7 @@
     role="button"
     tabindex="0"
     aria-label="Cerrar selector de color"
-    style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 150000; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);"
+    style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2147483647; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px);"
   >
     <div 
       class="color-picker-modal" 
@@ -2057,6 +2126,63 @@
           Seleccionar Color
         </button>
       </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Modal de Formato rápido (fuera del modal para z-index correcto) -->
+{#if showFormatTooltip}
+  <div 
+    class="format-tooltip-overlay"
+    onclick={() => showFormatTooltip = false}
+    role="presentation"
+  ></div>
+  <div class="format-tooltip" transition:fade={{ duration: 150 }}>
+    <div class="tooltip-header">
+      <span class="tooltip-title">📋 Formato rápido</span>
+      <button 
+        class="tooltip-close"
+        onclick={() => showFormatTooltip = false}
+        type="button"
+        aria-label="Cerrar"
+      >
+        <X class="w-3 h-3" />
+      </button>
+    </div>
+    <p class="tooltip-description">
+      Edita el formato y aplícalo directamente. <strong>Los emojis son necesarios.</strong>
+    </p>
+    <div class="tooltip-template">
+      <textarea
+        class="format-editor-textarea"
+        bind:value={formatEditorContent}
+        placeholder="Escribe o edita el formato aquí..."
+        rows="8"
+      ></textarea>
+    </div>
+    <div class="format-buttons">
+      <button 
+        class="copy-format-btn secondary"
+        onclick={copyTemplateFormat}
+        type="button"
+        title="Copiar al portapapeles"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        Copiar
+      </button>
+      <button 
+        class="copy-format-btn primary"
+        onclick={applyFormatToPolll}
+        type="button"
+        disabled={!formatEditorContent.trim()}
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+        Aplicar
+      </button>
     </div>
   </div>
 {/if}
@@ -2210,10 +2336,10 @@
   </div>
 {/if}
 
-<!-- Vista Maximizada (Componente Separado) -->
-{#if maximizedOption && isOpen && PollMaximizedView}
-  <PollMaximizedView
-    options={options}
+<!-- Vista Maximizada para Edición -->
+{#if maximizedOption && isOpen}
+  <PollMaximizedEdit
+    bind:options={options}
     bind:activeOptionId={maximizedOption}
     pollTitle={title}
     onClose={() => {
@@ -2229,12 +2355,51 @@
       const option = options.find(opt => opt.id === optionId);
       if (option) {
         option.label = newLabel;
-        options = options;
+        options = [...options];
       }
     }}
     onOpenColorPicker={(optionId: string) => {
       colorPickerOpenFor = optionId;
     }}
+    onOpenGiphyPicker={(optionId: string) => {
+      openGiphyPicker(optionId);
+    }}
+    onRemoveMedia={(optionId: string) => {
+      const option = options.find(opt => opt.id === optionId);
+      if (option) {
+        // Limpiar cachés
+        loadingPreviews.delete(optionId);
+        optionPreviews.delete(optionId);
+        optionUrls.delete(optionId);
+        optionUrls = optionUrls;
+        
+        // Limpiar URL del label
+        const urlInLabel = extractUrlFromText(option.label);
+        if (urlInLabel) {
+          option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
+        }
+        
+        // Limpiar imageUrl
+        option.imageUrl = '';
+        
+        // Trigger reactivity
+        options = [...options];
+      }
+    }}
+    onRemoveOption={(optionId: string) => {
+      removeOption(optionId);
+      // Si la opción eliminada era la activa, ir a la anterior
+      const idx = options.findIndex(o => o.id === optionId);
+      if (idx > 0) {
+        maximizedOption = options[idx - 1]?.id || options[0]?.id || null;
+      } else if (options.length > 0) {
+        maximizedOption = options[0]?.id || null;
+      } else {
+        maximizedOption = null;
+      }
+    }}
+    extractUrlFromText={extractUrlFromText}
+    getLabelWithoutUrl={getLabelWithoutUrl}
   />
 {/if}
 
@@ -2632,6 +2797,34 @@
     pointer-events: none;
   }
   
+  /* Botón para eliminar media */
+  .remove-media-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1000;
+    transition: all 0.2s ease;
+    pointer-events: auto !important;
+  }
+  
+  .remove-media-btn:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: scale(1.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    border-color: white;
+  }
+  
   /* Contenido centrado */
   .option-content-maximized {
     position: relative;
@@ -2643,6 +2836,38 @@
     flex: 1;
     padding: 40px 20px;
     gap: 16px;
+  }
+  
+  /* Cuando tiene multimedia, el contenido va abajo */
+  .option-content-maximized.has-media {
+    justify-content: flex-end;
+    padding-bottom: 16px;
+    padding-top: 20px;
+  }
+  
+  /* Layout horizontal para multimedia: porcentaje izq, texto der */
+  .media-content-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 12px;
+    padding: 0 8px;
+  }
+  
+  .percentage-side {
+    flex-shrink: 0;
+  }
+  
+  .percentage-value-compact {
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+  }
+  
+  .label-side {
+    flex: 1;
+    text-align: center;
   }
   
   /* Textarea editable */
@@ -2661,6 +2886,18 @@
     max-height: 100px;
     line-height: 1.3;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+  
+  /* Textarea compacto para multimedia */
+  .option-label-edit.compact {
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    min-height: 40px;
+    max-height: 60px;
+    max-width: 100%;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
   }
   
   .option-label-edit::placeholder {
@@ -2768,10 +3005,112 @@
     transition: all 0.2s ease;
   }
   
-  .giphy-search-badge-bottom:hover {
+  /* Barra de herramientas de edición */
+  .edit-toolbar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+    z-index: 10;
+  }
+  
+  .char-count {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  
+  .percentage-value-toolbar {
+    font-size: 24px;
+    font-weight: 900;
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.6),
+      0 1px 3px rgba(0, 0, 0, 0.4);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+  
+  .edit-buttons {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .edit-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: white;
+  }
+  
+  .edit-btn.color-btn {
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .edit-btn.giphy-btn {
+    background: rgba(30, 30, 35, 0.9);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(147, 197, 253, 0.5);
+  }
+  
+  .edit-btn.giphy-btn:hover {
     background: rgba(147, 197, 253, 0.2);
     border-color: rgba(147, 197, 253, 0.9);
-    transform: scale(1.15);
+  }
+  
+  .edit-btn.delete-btn {
+    background: var(--card-color, rgba(255, 255, 255, 0.2));
+    border-radius: 8px;
+  }
+  
+  .edit-btn.delete-btn:hover {
+    background: var(--card-color, rgba(255, 255, 255, 0.3));
+    filter: brightness(1.2);
+  }
+  
+  .edit-btn:hover {
+    transform: scale(1.1);
+  }
+  
+  /* Indicadores de opciones (arriba de las cards) */
+  .options-indicators-top {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+  }
+  
+  .option-indicator {
+    flex: 1;
+    max-width: 60px;
+    height: 4px;
+    border-radius: 2px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+  }
+  
+  .option-indicator:hover {
+    transform: scaleY(1.5);
+    opacity: 0.8;
+  }
+  
+  .option-indicator.active {
+    height: 5px;
   }
   
   .option-slide .card-header,
@@ -3396,7 +3735,7 @@
   .giphy-picker-overlay {
     position: fixed;
     inset: 0;
-    z-index: 35000;
+    z-index: 2147483647;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3597,7 +3936,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
-    z-index: 70000;
+    z-index: 999998;
     backdrop-filter: blur(8px);
   }
 
@@ -3625,7 +3964,7 @@
     right: 0;
     background: #0a0a0a;
     border-radius: 16px 16px 0 0;
-    z-index: 70001;
+    z-index: 999999;
     max-height: 70vh;
     display: flex;
     flex-direction: column;
@@ -3969,10 +4308,18 @@
     color: rgba(255, 255, 255, 0.95);
   }
   
+  .format-tooltip-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999998;
+  }
+  
   .format-tooltip {
     position: fixed;
-    top: 80px;
-    right: 20px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 380px;
     max-width: 90vw;
     background: rgba(20, 20, 25, 0.98);
@@ -3981,7 +4328,7 @@
     border-radius: 12px;
     padding: 1rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    z-index: 999999;
+    z-index: 9999999;
   }
   
   .tooltip-header {
@@ -4065,6 +4412,65 @@
   
   .copy-format-btn:active {
     transform: translateY(0);
+  }
+  
+  .copy-format-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .copy-format-btn:disabled:hover {
+    transform: none;
+  }
+  
+  .copy-format-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .copy-format-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  
+  .copy-format-btn.primary {
+    background: #10b981;
+  }
+  
+  .copy-format-btn.primary:hover {
+    background: #059669;
+  }
+  
+  .format-buttons {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .format-buttons .copy-format-btn {
+    flex: 1;
+  }
+  
+  .format-editor-textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: white;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  
+  .format-editor-textarea:focus {
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+  
+  .format-editor-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.4);
   }
   
   /* Option error styles */
