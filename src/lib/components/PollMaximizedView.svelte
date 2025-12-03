@@ -184,6 +184,28 @@
   let repostCount = $state(stats?.repostCount || 0);
   let isReposting = $state(false);
   
+  // Estado para views
+  let viewCount = $state(stats?.totalViews || 0);
+  
+  // Registrar visualización al montar
+  $effect(() => {
+    if (pollId) {
+      registerView();
+    }
+  });
+  
+  async function registerView() {
+    try {
+      const result = await apiPost(`/api/polls/${pollId}/view`, {});
+      if (result.viewCount !== undefined) {
+        viewCount = result.viewCount;
+      }
+    } catch (error) {
+      // Silenciar errores de view (no crítico)
+      console.debug('[View] Error registrando:', error);
+    }
+  }
+  
   // Función para republicar
   async function handleRepost() {
     if (!isAuthenticated) {
@@ -1377,7 +1399,7 @@
             aria-label="Vistas"
           >
             <Eye size={20} class="text-white icon-shadow" />
-            <span class="text-[11px] font-mono text-shadow-sm text-gray-300">{formatCount(stats?.totalViews)}</span>
+            <span class="text-[11px] font-mono text-shadow-sm text-gray-300">{formatCount(viewCount)}</span>
           </button>
 
           <!-- Bookmark -->
@@ -2124,5 +2146,27 @@
     .unmute-text {
       font-size: 12px;
     }
+  }
+
+  /* ========================================
+     SCROLLBAR PERSONALIZADO
+     ======================================== */
+  
+  :global(.overflow-y-auto) {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  :global(.overflow-y-auto)::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  :global(.overflow-y-auto)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  :global(.overflow-y-auto)::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
   }
 </style>

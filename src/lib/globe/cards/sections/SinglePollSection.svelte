@@ -131,6 +131,95 @@
   $: repostCount = poll?.repostCount || poll?.stats?.repostCount || 0;
   $: hasReposted = poll?.hasReposted || false;
   
+  // Estado para views
+  let viewCount: number = 0;
+  $: viewCount = poll?.viewCount || poll?.stats?.viewCount || poll?.stats?.totalViews || 0;
+  
+  // Estado para bookmark
+  let hasBookmarked: boolean = false;
+  let bookmarkCount: number = 0;
+  let isBookmarking: boolean = false;
+  $: bookmarkCount = poll?.bookmarkCount || poll?.stats?.bookmarkCount || 0;
+  $: hasBookmarked = poll?.hasBookmarked || false;
+  
+  // Estado para hide/report
+  let isHiding: boolean = false;
+  let isReporting: boolean = false;
+  let showReportSuccess: boolean = false;
+  
+  // Función para guardar/quitar bookmark
+  async function handleBookmark() {
+    if (!$currentUser) {
+      dispatch('openAuthModal');
+      return;
+    }
+    
+    if (isBookmarking) return;
+    isBookmarking = true;
+    
+    try {
+      const pollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+      
+      if (hasBookmarked) {
+        const result = await apiDelete(`/api/polls/${pollId}/bookmark`);
+        hasBookmarked = false;
+        bookmarkCount = result.bookmarkCount || Math.max(0, bookmarkCount - 1);
+      } else {
+        const result = await apiPost(`/api/polls/${pollId}/bookmark`, {});
+        hasBookmarked = true;
+        bookmarkCount = result.bookmarkCount || bookmarkCount + 1;
+      }
+    } catch (error: any) {
+      console.error('[Bookmark] Error:', error);
+    } finally {
+      isBookmarking = false;
+    }
+  }
+  
+  // Función para ocultar encuesta
+  async function handleHide() {
+    if (!$currentUser) {
+      dispatch('openAuthModal');
+      return;
+    }
+    
+    if (isHiding) return;
+    isHiding = true;
+    
+    try {
+      const pollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+      await apiPost(`/api/polls/${pollId}/hide`, {});
+      // Dispatch evento para que el padre elimine esta encuesta de la lista
+      dispatch('hidePoll', { pollId });
+    } catch (error: any) {
+      console.error('[Hide] Error:', error);
+    } finally {
+      isHiding = false;
+    }
+  }
+  
+  // Función para reportar
+  async function handleReport() {
+    if (!$currentUser) {
+      dispatch('openAuthModal');
+      return;
+    }
+    
+    if (isReporting) return;
+    isReporting = true;
+    
+    try {
+      const pollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+      await apiPost(`/api/polls/${pollId}/report`, { reason: 'inappropriate' });
+      showReportSuccess = true;
+      setTimeout(() => showReportSuccess = false, 3000);
+    } catch (error: any) {
+      console.error('[Report] Error:', error);
+    } finally {
+      isReporting = false;
+    }
+  }
+  
   // Función para republicar
   async function handleRepost() {
     if (!$currentUser) {
@@ -1707,17 +1796,18 @@
 
           <!-- Guardar -->
           <button 
-            class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            class="mini-bottom-sheet-item {hasBookmarked ? 'active' : ''}"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleBookmark(); }}
+            disabled={isBookmarking}
           >
-            <div class="mini-bottom-sheet-icon bg-yellow-500/20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2">
+            <div class="mini-bottom-sheet-icon {hasBookmarked ? 'bg-yellow-500/40' : 'bg-yellow-500/20'}">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={hasBookmarked ? '#eab308' : 'none'} stroke="#eab308" stroke-width="2">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
               </svg>
             </div>
             <div class="mini-bottom-sheet-text">
-              <span>Guardar</span>
-              <p>Añadir a guardados</p>
+              <span>{hasBookmarked ? 'Guardado' : 'Guardar'}</span>
+              <p>{formatCount(bookmarkCount)} guardados</p>
             </div>
           </button>
 
@@ -1743,7 +1833,8 @@
           <!-- No me interesa -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleHide(); }}
+            disabled={isHiding}
           >
             <div class="mini-bottom-sheet-icon bg-gray-500/20">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
@@ -1760,7 +1851,8 @@
           <!-- Reportar -->
           <button 
             class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleReport(); }}
+            disabled={isReporting}
             style="padding-right: 10px;"
           >
             <div class="mini-bottom-sheet-icon bg-red-500/20">
@@ -1771,7 +1863,7 @@
               </svg>
             </div>
             <div class="mini-bottom-sheet-text">
-              <span>Reportar</span>
+              <span>{showReportSuccess ? '✓ Reportado' : 'Reportar'}</span>
               <p>Denunciar contenido</p>
             </div>
           </button>
@@ -1932,15 +2024,22 @@
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
-            <span class="mini-action-count-secondary">{formatCount(poll.stats?.totalViews || poll.totalViews)}</span>
+            <span class="mini-action-count-secondary">{formatCount(viewCount)}</span>
           </button>
 
           <!-- Guardar -->
-          <button class="mini-action-btn-secondary" type="button" title="Guardar" aria-label="Guardar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button 
+            class="mini-action-btn-secondary {hasBookmarked ? 'active' : ''}" 
+            type="button" 
+            title={hasBookmarked ? 'Quitar guardado' : 'Guardar'} 
+            aria-label="Guardar"
+            onclick={(e) => { e.stopPropagation(); handleBookmark(); }}
+            disabled={isBookmarking}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill={hasBookmarked ? '#eab308' : 'none'} stroke={hasBookmarked ? '#eab308' : 'currentColor'} stroke-width="2">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
-            <span class="mini-action-count-secondary">0</span>
+            <span class="mini-action-count-secondary {hasBookmarked ? 'text-yellow-500' : ''}">{formatCount(bookmarkCount)}</span>
           </button>
 
           <!-- Copiar enlace -->
@@ -1963,6 +2062,8 @@
             type="button"
             title="No me interesa"
             aria-label="No me interesa"
+            onclick={(e) => { e.stopPropagation(); handleHide(); }}
+            disabled={isHiding}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -1976,9 +2077,11 @@
             type="button"
             title="Reportar"
             aria-label="Reportar"
+            onclick={(e) => { e.stopPropagation(); handleReport(); }}
+            disabled={isReporting}
             style="padding-right: 10px;"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={showReportSuccess ? '#22c55e' : '#f87171'} stroke-width="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/>
               <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -2846,6 +2949,21 @@
     animation: scaleIn 0.3s ease-out;
     word-wrap: break-word;
     white-space: pre-wrap;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  .title-tooltip-content::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .title-tooltip-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .title-tooltip-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
   }
   
   @keyframes scaleIn {
@@ -4140,6 +4258,21 @@
     box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.5);
     max-height: 60vh;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  .mini-bottom-sheet::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .mini-bottom-sheet::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .mini-bottom-sheet::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
   }
 
   .mini-bottom-sheet-handle {

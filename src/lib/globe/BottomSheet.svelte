@@ -397,9 +397,10 @@
               imageUrl: opt.imageUrl, // URL de preview (imagen/video/link)
             })),
             totalVotes: poll._count?.votes || 0, // Auto-calculado desde votos
-            totalViews: 0, // Campo legacy - no se usa
+            totalViews: poll._count?.interactions || 0, // Conteo de views desde interactions
             commentsCount: poll._count?.comments || 0, // Conteo de comentarios
             repostCount: poll._count?.interactions || 0, // Conteo de reposts (usa interactions)
+            viewCount: poll._count?.interactions || 0, // Alias para viewCount
             user: poll.user
               ? {
                   id: poll.user.id,

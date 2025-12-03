@@ -144,6 +144,25 @@
     overflow-y: auto;
     z-index: 100001;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  }
+
+  .auth-modal-sheet::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .auth-modal-sheet::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .auth-modal-sheet::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+  }
+
+  :global(html.dark) .auth-modal-sheet::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
   }
 
   :global(html.dark) .auth-modal-sheet {
