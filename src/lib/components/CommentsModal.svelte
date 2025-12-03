@@ -3,6 +3,7 @@
   import { X, Send, Heart, MessageCircle, MoreHorizontal, Trash2, Loader2 } from 'lucide-svelte';
   import { currentUser } from '$lib/stores/auth';
   import { apiGet, apiPost, apiDelete } from '$lib/api/client';
+  import AuthModal from '$lib/AuthModal.svelte';
   
   interface Comment {
     id: number;
@@ -39,6 +40,9 @@
   let submitting = $state(false);
   let error = $state<string | null>(null);
   let inputRef = $state<HTMLTextAreaElement | null>(null);
+  
+  // Auth modal
+  let showAuthModal = $state(false);
   
   // Swipe to close
   let touchStartY = 0;
@@ -352,12 +356,21 @@
           </button>
         </div>
       {:else}
-        <div class="login-prompt">
-          <p>Inicia sesión para comentar</p>
+        <div class="input-row login-row">
+          <button 
+            class="login-btn"
+            onclick={() => showAuthModal = true}
+            type="button"
+          >
+            Inicia sesión para comentar
+          </button>
         </div>
       {/if}
     </div>
   </div>
+  
+  <!-- Auth Modal -->
+  <AuthModal bind:isOpen={showAuthModal} />
 {/if}
 
 <style>
@@ -374,7 +387,8 @@
     bottom: 0;
     left: 0;
     right: 0;
-    max-height: 85vh;
+    max-height: 95vh;
+    height: 95vh;
     background: #1a1a1a;
     border-radius: 20px 20px 0 0;
     z-index: 99999;
@@ -653,11 +667,30 @@
     cursor: not-allowed;
   }
   
-  .login-prompt {
-    text-align: center;
-    padding: 16px;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 14px;
+  .login-row {
+    justify-content: center;
+  }
+  
+  .login-btn {
+    flex: 1;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: white;
+    font-weight: 600;
+    font-size: 15px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .login-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  }
+  
+  .login-btn:active {
+    transform: scale(0.98);
   }
   
   :global(.animate-spin) {

@@ -4,6 +4,7 @@
   import "$lib/styles/bottom-sheet.css"; // ✅ Ya está importado aquí globalmente
   import type { Poll } from "./types";
   import { currentUser } from "$lib/stores";
+  import { currentUser as authUser } from "$lib/stores/auth";
   import { apiGet, apiCall, apiPost, apiDelete } from "$lib/api/client";
 
   // Componentes de sección completos
@@ -397,6 +398,7 @@
             })),
             totalVotes: poll._count?.votes || 0, // Auto-calculado desde votos
             totalViews: 0, // Campo legacy - no se usa
+            commentsCount: poll._count?.comments || 0, // Conteo de comentarios
             user: poll.user
               ? {
                   id: poll.user.id,
@@ -434,6 +436,10 @@
 
       additionalPolls = uniquePolls;
       currentPollsPage = page;
+      
+      // Cargar los votos del usuario para estas encuestas
+      const newPollIds = transformedPolls.map((p: any) => Number(p.id));
+      await loadUserVotes(newPollIds);
     } catch (error) {
           } finally {
       isLoadingPolls = false;
@@ -852,9 +858,9 @@
   export const mainPollShares: number = 0;
   export const mainPollReposts: number = 0;
   // ID del usuario actual (para cargar amigos que votaron)
-  // Se obtiene del store currentUser - reactivo
+  // Se obtiene del store currentUser o authUser - reactivo
   let currentUserId: number | null = null;
-  $: currentUserId = $currentUser?.id || null;
+  $: currentUserId = $currentUser?.id || $authUser?.userId || null;
   // Amigos que han votado por opción (opcional)
   export const friendsByOption: Record<
     string,
@@ -1733,7 +1739,7 @@
 
             const result = await apiPost(`/api/polls/${numericPollId}/vote`, {
         optionId,
-        userId: $currentUser?.id || null,
+        userId: $currentUser?.id || $authUser?.userId || null,
         latitude,
         longitude,
         subdivisionId,
@@ -2002,7 +2008,7 @@
       const result = await apiPost(`/api/polls/${numericPollId}/options`, {
         label: label,
         color: color,
-        userId: $currentUser?.id || null,
+        userId: $currentUser?.id || $authUser?.userId || null,
       });
 
       // Actualizar la opción temporal con los datos del servidor
@@ -2053,7 +2059,7 @@
       const result = await apiPost(`/api/polls/${numericPollId}/options`, {
         label: option.label.trim(),
         color: option.color,
-        userId: $currentUser?.id || null,
+        userId: $currentUser?.id || $authUser?.userId || null,
       });
 
       // Actualizar la opción temporal con los datos del servidor
@@ -2121,7 +2127,7 @@
 
       const result = await apiPost(`/api/polls/${numericPollId}/options`, {
         label: newOptionLabel[pollId],
-        userId: $currentUser?.id || null,
+        userId: $currentUser?.id || $authUser?.userId || null,
       });
             // Actualizar la encuesta localmente
       const newOption = {
@@ -3458,6 +3464,8 @@
         previewModalPoll.stats?.totalVotes || previewModalPoll.totalVotes || 0,
       totalViews:
         previewModalPoll.stats?.totalViews || previewModalPoll.totalViews || 0,
+      commentsCount:
+        previewModalPoll.stats?.commentsCount || previewModalPoll.commentsCount || 0,
     }}
     friendsByOption={previewModalPoll.friendsByOption || {}}
     readOnly={true}

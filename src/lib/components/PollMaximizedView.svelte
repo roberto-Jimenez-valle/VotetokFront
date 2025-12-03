@@ -35,6 +35,7 @@
   import AuthModal from "../AuthModal.svelte";
   import FriendsVotesModal from "./FriendsVotesModal.svelte";
   import CommentsModal from "./CommentsModal.svelte";
+  import Portal from "./Portal.svelte";
 
   // --- INTERFACES ---
   interface PollOption {
@@ -62,6 +63,7 @@
   interface PollStats {
     totalVotes: number;
     totalViews: number;
+    commentsCount?: number;
   }
 
   interface Friend {
@@ -1275,7 +1277,7 @@
           onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
         >
           <MessageCircle size={20} class="text-white icon-shadow" />
-          <span class="text-[11px] font-mono text-white text-shadow-sm">0</span>
+          <span class="text-[11px] font-mono text-white text-shadow-sm">{stats?.commentsCount || 0}</span>
         </button>
 
       </div>

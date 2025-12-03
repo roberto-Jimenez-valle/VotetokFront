@@ -782,7 +782,7 @@
       
       // Preparar datos para enviar
       const pollData = {
-        userId: currentUserData?.userId || currentUserData?.id || undefined,
+        userId: 'userId' in currentUserData ? currentUserData.userId : currentUserData.id,
         title: title.trim(),
         description: description.trim() || undefined,
         category: category,
