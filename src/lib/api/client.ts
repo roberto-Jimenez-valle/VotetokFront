@@ -77,7 +77,8 @@ export async function apiCall(
     ...options,
     method,
     headers,
-    body: bodyString
+    body: bodyString,
+    credentials: 'include' // Incluir cookies de sesión
   })
 
   // Manejar errores comunes

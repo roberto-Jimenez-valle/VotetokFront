@@ -399,6 +399,7 @@
             totalVotes: poll._count?.votes || 0, // Auto-calculado desde votos
             totalViews: 0, // Campo legacy - no se usa
             commentsCount: poll._count?.comments || 0, // Conteo de comentarios
+            repostCount: poll._count?.interactions || 0, // Conteo de reposts (usa interactions)
             user: poll.user
               ? {
                   id: poll.user.id,
@@ -2959,6 +2960,7 @@
             }
           }}
           on:openprofile={(event) => dispatch("openprofile", event.detail)}
+          on:openAuthModal={() => showAuthModal = true}
         />
 
         <!-- Separador después de encuesta activa -->
@@ -3122,6 +3124,7 @@
           }}
           bind:isProfileModalOpen
           bind:selectedProfileUserId
+          on:openAuthModal={() => showAuthModal = true}
         />
       {/each}
 
@@ -3466,6 +3469,8 @@
         previewModalPoll.stats?.totalViews || previewModalPoll.totalViews || 0,
       commentsCount:
         previewModalPoll.stats?.commentsCount || previewModalPoll.commentsCount || 0,
+      repostCount:
+        previewModalPoll.stats?.repostCount || previewModalPoll.repostCount || 0,
     }}
     friendsByOption={previewModalPoll.friendsByOption || {}}
     readOnly={true}

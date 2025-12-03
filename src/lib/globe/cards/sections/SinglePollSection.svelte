@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
+  import { apiPost, apiDelete } from '$lib/api/client';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import FriendsVotesModal from '$lib/components/FriendsVotesModal.svelte';
   import CommentsModal from '$lib/components/CommentsModal.svelte';
@@ -120,6 +121,47 @@
   
   // Estado para modal de comentarios
   let showCommentsModal: boolean = false;
+  
+  // Estado para repost
+  let hasReposted: boolean = false;
+  let repostCount: number = 0;
+  let isReposting: boolean = false;
+  
+  // Inicializar estado de repost desde poll
+  $: repostCount = poll?.repostCount || poll?.stats?.repostCount || 0;
+  $: hasReposted = poll?.hasReposted || false;
+  
+  // Función para republicar
+  async function handleRepost() {
+    if (!$currentUser) {
+      dispatch('openAuthModal');
+      return;
+    }
+    
+    if (isReposting) return;
+    isReposting = true;
+    
+    try {
+      const pollId = typeof poll.id === 'string' ? parseInt(poll.id) : poll.id;
+      
+      if (hasReposted) {
+        // Eliminar repost
+        const result = await apiDelete(`/api/polls/${pollId}/repost`);
+        hasReposted = false;
+        repostCount = result.repostCount || Math.max(0, repostCount - 1);
+      } else {
+        // Crear repost
+        const result = await apiPost(`/api/polls/${pollId}/repost`, {});
+        hasReposted = true;
+        repostCount = result.repostCount || repostCount + 1;
+      }
+    } catch (error: any) {
+            console.error('[Repost] Error:', error);
+      // Mostrar error al usuario si es necesario
+    } finally {
+      isReposting = false;
+    }
+  }
   
   // Formatear números grandes
   function formatCount(num: number | undefined): string {
@@ -1645,11 +1687,12 @@
 
           <!-- Repostear -->
           <button 
-            class="mini-bottom-sheet-item"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            class="mini-bottom-sheet-item {hasReposted ? 'active' : ''}"
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleRepost(); }}
+            disabled={isReposting}
           >
-            <div class="mini-bottom-sheet-icon bg-green-500/20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+            <div class="mini-bottom-sheet-icon {hasReposted ? 'bg-green-500/40' : 'bg-green-500/20'}">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={hasReposted ? '#22c55e' : 'none'} stroke="#22c55e" stroke-width="2">
                 <path d="M17 1l4 4-4 4"/>
                 <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
                 <path d="M7 23l-4-4 4-4"/>
@@ -1657,8 +1700,8 @@
               </svg>
             </div>
             <div class="mini-bottom-sheet-text">
-              <span>Repostear</span>
-              <p>0 reposts</p>
+              <span>{hasReposted ? 'Republicado' : 'Repostear'}</span>
+              <p>{formatCount(repostCount)} reposts</p>
             </div>
           </button>
 
@@ -1866,14 +1909,21 @@
           </button>
 
           <!-- Repostear -->
-          <button class="mini-action-btn-secondary" type="button" title="Repostear" aria-label="Repostear">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button 
+            class="mini-action-btn-secondary {hasReposted ? 'active' : ''}" 
+            type="button" 
+            title={hasReposted ? 'Quitar repost' : 'Repostear'} 
+            aria-label="Repostear"
+            onclick={(e) => { e.stopPropagation(); handleRepost(); }}
+            disabled={isReposting}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill={hasReposted ? '#22c55e' : 'none'} stroke={hasReposted ? '#22c55e' : 'currentColor'} stroke-width="2">
               <path d="M17 1l4 4-4 4"/>
               <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
               <path d="M7 23l-4-4 4-4"/>
               <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
             </svg>
-            <span class="mini-action-count-secondary">0</span>
+            <span class="mini-action-count-secondary {hasReposted ? 'text-green-500' : ''}">{formatCount(repostCount)}</span>
           </button>
 
           <!-- Vistas -->

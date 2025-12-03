@@ -36,6 +36,7 @@
   import FriendsVotesModal from "./FriendsVotesModal.svelte";
   import CommentsModal from "./CommentsModal.svelte";
   import Portal from "./Portal.svelte";
+  import { apiPost, apiDelete } from '$lib/api/client';
 
   // --- INTERFACES ---
   interface PollOption {
@@ -64,6 +65,7 @@
     totalVotes: number;
     totalViews: number;
     commentsCount?: number;
+    repostCount?: number;
   }
 
   interface Friend {
@@ -176,6 +178,38 @@
   let showAuthModal = $state(false);
   let showFriendsVotesModal = $state(false);
   let showCommentsModal = $state(false);
+  
+  // Estado para repost
+  let hasReposted = $state(false);
+  let repostCount = $state(stats?.repostCount || 0);
+  let isReposting = $state(false);
+  
+  // Función para republicar
+  async function handleRepost() {
+    if (!isAuthenticated) {
+      showAuthModal = true;
+      return;
+    }
+    
+    if (isReposting) return;
+    isReposting = true;
+    
+    try {
+      if (hasReposted) {
+        const result = await apiDelete(`/api/polls/${pollId}/repost`);
+        hasReposted = false;
+        repostCount = result.repostCount || Math.max(0, repostCount - 1);
+      } else {
+        const result = await apiPost(`/api/polls/${pollId}/repost`, {});
+        hasReposted = true;
+        repostCount = result.repostCount || repostCount + 1;
+      }
+    } catch (error: any) {
+      console.error('[Repost] Error:', error);
+    } finally {
+      isReposting = false;
+    }
+  }
 
   // Debug: verificar friendsByOption
   $effect(() => {
@@ -1163,14 +1197,15 @@
           <!-- Repostear -->
           <button 
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; onRepost(); }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleRepost(); }}
+            disabled={isReposting}
           >
-            <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-              <Repeat2 size={20} class="text-green-400" />
+            <div class="w-10 h-10 rounded-full {hasReposted ? 'bg-green-500/40' : 'bg-green-500/20'} flex items-center justify-center">
+              <Repeat2 size={20} class={hasReposted ? 'text-green-300' : 'text-green-400'} />
             </div>
             <div class="flex-1">
-              <span class="font-medium">Repostear</span>
-              <p class="text-xs text-gray-400">0 reposts</p>
+              <span class="font-medium {hasReposted ? 'text-green-400' : ''}">{hasReposted ? 'Republicado' : 'Repostear'}</span>
+              <p class="text-xs text-gray-400">{formatCount(repostCount)} reposts</p>
             </div>
           </button>
 
@@ -1327,12 +1362,13 @@
 
           <!-- Retweet -->
           <button 
-            class="flex items-center gap-1.5 shrink-0 opacity-90 hover:opacity-100 transition btn-press"
-            onclick={onRepost}
-            aria-label="Repostear"
+            class="flex items-center gap-1.5 shrink-0 {hasReposted ? 'opacity-100' : 'opacity-90'} hover:opacity-100 transition btn-press"
+            onclick={handleRepost}
+            aria-label={hasReposted ? 'Quitar repost' : 'Repostear'}
+            disabled={isReposting}
           >
-            <Repeat2 size={20} class="text-white icon-shadow" />
-            <span class="text-[11px] font-mono text-gray-300 text-shadow-sm">0</span>
+            <Repeat2 size={20} class={hasReposted ? 'text-green-400 icon-shadow' : 'text-white icon-shadow'} />
+            <span class="text-[11px] font-mono text-shadow-sm {hasReposted ? 'text-green-400' : 'text-gray-300'}">{formatCount(repostCount)}</span>
           </button>
 
           <!-- Vistas -->

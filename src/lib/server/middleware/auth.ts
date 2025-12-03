@@ -7,23 +7,50 @@ import { error, type RequestEvent } from '@sveltejs/kit'
 import { verifyJWT, type JWTPayload } from '../auth/jwt'
 
 /**
- * Extraer token JWT del header Authorization (OPCIONAL)
+ * Extraer token JWT del header Authorization O de cookie httpOnly (OPCIONAL)
  * Retorna null si no hay token o es inválido
  */
 export async function extractAuthOptional(event: RequestEvent): Promise<JWTPayload | null> {
+  const path = event.url.pathname
+  const isRepostEndpoint = path.includes('/repost')
+  
+  // 1. Primero intentar del header Authorization
   const authHeader = event.request.headers.get('Authorization')
   
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null
+  if (authHeader?.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1]
+      const payload = await verifyJWT(token)
+      if (isRepostEndpoint) console.log('[Auth] ✅ Token de header válido, userId:', payload.userId)
+      return payload
+    } catch (err) {
+      if (isRepostEndpoint) console.log('[Auth] ⚠️ Token de header inválido:', err)
+      // Token de header inválido, seguir buscando en cookie
+    }
+  } else if (isRepostEndpoint) {
+    console.log('[Auth] ⚠️ No hay header Authorization')
   }
 
-  try {
-    const token = authHeader.split(' ')[1]
-    const payload = await verifyJWT(token)
-    return payload
-  } catch {
-    return null // Token inválido, tratar como anónimo
+  // 2. Si no hay header, buscar en cookie httpOnly
+  const cookieToken = event.cookies.get('voutop-auth-token')
+  
+  if (isRepostEndpoint) {
+    console.log('[Auth] 🍪 Cookie voutop-auth-token:', cookieToken ? `${cookieToken.substring(0, 20)}...` : 'NO EXISTE')
   }
+  
+  if (cookieToken) {
+    try {
+      const payload = await verifyJWT(cookieToken)
+      if (isRepostEndpoint) console.log('[Auth] ✅ Token de cookie válido, userId:', payload.userId)
+      return payload
+    } catch (err) {
+      if (isRepostEndpoint) console.log('[Auth] ❌ Token de cookie inválido:', err)
+      return null // Token de cookie inválido
+    }
+  }
+
+  if (isRepostEndpoint) console.log('[Auth] ❌ Sin autenticación')
+  return null
 }
 
 /**
