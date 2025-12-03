@@ -187,6 +187,12 @@
   // Estado para views
   let viewCount = $state(stats?.totalViews || 0);
   
+  // Estado para shares
+  let shareCount = $state((stats as any)?.shareCount || 0);
+  let isSharing = $state(false);
+  let showShareToast = $state(false);
+  let shareToastTimeout: any = null;
+  
   // Registrar visualización al montar
   $effect(() => {
     if (pollId) {
@@ -628,11 +634,80 @@
   // Copiar enlace al portapapeles
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const url = `${window.location.origin}/?poll=${pollId}`;
+      await navigator.clipboard.writeText(url);
       isMoreMenuOpen = false;
-      // Podríamos mostrar un toast aquí
+      showShareToastNotification();
+      registerShare();
     } catch (err) {
       console.error('Error copiando enlace:', err);
+      // Fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = `${window.location.origin}/?poll=${pollId}`;
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showShareToastNotification();
+        registerShare();
+      } catch (e) {}
+      document.body.removeChild(textarea);
+    }
+  }
+  
+  // Mostrar toast de enlace copiado
+  function showShareToastNotification() {
+    showShareToast = true;
+    if (shareToastTimeout) clearTimeout(shareToastTimeout);
+    shareToastTimeout = setTimeout(() => {
+      showShareToast = false;
+    }, 2000);
+  }
+  
+  // Registrar share en API
+  async function registerShare() {
+    if (isSharing) return;
+    isSharing = true;
+    
+    try {
+      const result = await apiPost(`/api/polls/${pollId}/share`, {});
+      if (result.shareCount !== undefined) {
+        shareCount = result.shareCount;
+      } else {
+        shareCount++;
+      }
+    } catch (error) {
+      // Incrementar localmente si falla API
+      shareCount++;
+    } finally {
+      isSharing = false;
+    }
+  }
+  
+  // Handler para compartir con Web Share API
+  async function handleShareAction() {
+    const shareUrl = `${window.location.origin}/?poll=${pollId}`;
+    const shareTitle = pollTitle || 'Encuesta';
+    const shareText = `Vota en esta encuesta: ${shareTitle}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl
+        });
+        registerShare();
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          copyLink();
+        }
+      }
+    } else {
+      copyLink();
     }
   }
 
@@ -1205,14 +1280,14 @@
           <!-- Compartir -->
           <button 
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleShare(); }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleShareAction(); }}
           >
             <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
               <Share2 size={20} class="text-blue-400" />
             </div>
             <div class="flex-1">
               <span class="font-medium">Compartir</span>
-              <p class="text-xs text-gray-400">0 compartidos</p>
+              <p class="text-xs text-gray-400">{formatCount(shareCount)} compartidos</p>
             </div>
           </button>
 
@@ -1463,6 +1538,16 @@
     {pollTitle}
   />
 </div>
+
+<!-- Toast de enlace copiado -->
+{#if showShareToast}
+  <div 
+    class="share-toast"
+    transition:fly={{ y: -20, duration: 300 }}
+  >
+    ✓ Enlace copiado
+  </div>
+{/if}
 
 <style>
   /* Hide scrollbar for Chrome, Safari and Opera */
@@ -2168,5 +2253,37 @@
   :global(.overflow-y-auto)::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
+  }
+
+  /* ========================================
+     TOAST DE ENLACE COPIADO
+     ======================================== */
+  
+  .share-toast {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4),
+                0 2px 8px rgba(16, 185, 129, 0.3);
+    z-index: 999999;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .share-toast {
+      top: 60px;
+      padding: 10px 20px;
+      font-size: 13px;
+    }
   }
 </style>
