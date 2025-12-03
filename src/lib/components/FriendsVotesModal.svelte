@@ -37,11 +37,29 @@
 
   const DEFAULT_AVATAR = '/default-avatar.png';
 
-  // Crear lista de todos los amigos con su voto
+  // Estado del filtro activo (null = todos)
+  let activeFilter = $state<string | null>(null);
+
+  // Contar total de amigos que votaron
+  let totalFriendsCount = $derived.by(() => {
+    let count = 0;
+    for (const opt of options) {
+      const optionFriends = friendsByOption[opt.id] || friendsByOption[opt.key] || [];
+      count += optionFriends.length;
+    }
+    return count;
+  });
+
+  // Crear lista de todos los amigos con su voto (filtrado)
   let allFriendsWithVotes = $derived.by(() => {
     const friends: Array<Friend & { option: PollOption }> = [];
     
     for (const opt of options) {
+      // Si hay filtro activo, solo incluir amigos de esa opción
+      if (activeFilter !== null && opt.id !== activeFilter && opt.key !== activeFilter) {
+        continue;
+      }
+      
       const optionFriends = friendsByOption[opt.id] || friendsByOption[opt.key] || [];
       for (const friend of optionFriends) {
         friends.push({
@@ -54,8 +72,13 @@
     return friends;
   });
 
+  function setFilter(optionId: string | null) {
+    activeFilter = optionId;
+  }
+
   function handleClose() {
     isOpen = false;
+    activeFilter = null; // Resetear filtro al cerrar
     onClose?.();
   }
 
@@ -69,6 +92,28 @@
     if (e.key === 'Escape') {
       handleClose();
     }
+  }
+
+  // Bloquear scroll del body cuando el modal está abierto
+  $effect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    
+    return () => {
+      document.body.style.overflow = '';
+    };
+  });
+
+  // Prevenir propagación del scroll
+  function handleWheel(e: WheelEvent) {
+    e.stopPropagation();
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    e.stopPropagation();
   }
 </script>
 
@@ -89,6 +134,8 @@
     <!-- Modal Content -->
     <div 
       class="modal-content"
+      onwheel={handleWheel}
+      ontouchmove={handleTouchMove}
       transition:fly={{ y: 300, duration: 300, easing: cubicOut }}
     >
       <!-- Handle -->
@@ -105,18 +152,36 @@
         </button>
       </div>
 
-      <!-- Options Summary -->
-      <div class="options-summary">
-        {#each options as opt}
-          {@const friends = friendsByOption[opt.id] || friendsByOption[opt.key] || []}
-          {#if friends.length > 0}
-            <div class="option-chip" style="--option-color: {opt.color}">
-              <span class="option-dot" style="background-color: {opt.color}"></span>
-              <span class="option-label">{opt.label}</span>
-              <span class="option-count">{friends.length}</span>
-            </div>
-          {/if}
-        {/each}
+      <!-- Options Summary (Horizontal Scroll) -->
+      <div class="options-scroll-container">
+        <div class="options-summary">
+          <!-- Tag "Todos" -->
+          <button 
+            class="option-chip" 
+            class:active={activeFilter === null}
+            onclick={() => setFilter(null)}
+            type="button"
+          >
+            <span class="option-label">Todos</span>
+            <span class="option-count">{totalFriendsCount}</span>
+          </button>
+          
+          {#each options as opt}
+            {@const friends = friendsByOption[opt.id] || friendsByOption[opt.key] || []}
+            {#if friends.length > 0}
+              <button 
+                class="option-chip" 
+                class:active={activeFilter === opt.id || activeFilter === opt.key}
+                onclick={() => setFilter(opt.id)}
+                type="button"
+              >
+                <span class="option-dot" style="background-color: {opt.color}"></span>
+                <span class="option-label">{opt.label}</span>
+                <span class="option-count">{friends.length}</span>
+              </button>
+            {/if}
+          {/each}
+        </div>
       </div>
 
       <!-- Friends List -->
@@ -138,17 +203,14 @@
               ></div>
             </div>
             
-            <div class="friend-info">
-              <span class="friend-name">{friend.name}</span>
-              <div class="friend-vote">
-                <span 
-                  class="friend-option-badge"
-                  style="background-color: {friend.option.color}20; color: {friend.option.color}; border-color: {friend.option.color}40"
-                >
-                  {friend.option.label}
-                </span>
-              </div>
-            </div>
+            <span class="friend-name">{friend.name}</span>
+            
+            <span 
+              class="friend-option-badge"
+              style="background-color: {friend.option.color}20; color: {friend.option.color}; border-color: {friend.option.color}40"
+            >
+              {friend.option.label}
+            </span>
           </div>
         {/each}
 
@@ -180,10 +242,11 @@
     max-height: 80vh;
     background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
     border-radius: 24px 24px 0 0;
-    padding: 12px 20px 32px;
-    overflow: hidden;
+    padding: 12px 0 2px;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: contain;
   }
 
   .modal-handle {
@@ -198,7 +261,8 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
+    padding: 0 20px;
   }
 
   .header-info {
@@ -243,13 +307,25 @@
     background: rgba(255, 255, 255, 0.2);
   }
 
+  .options-scroll-container {
+    flex-shrink: 0;
+    margin: 0 20px 16px 20px;
+    padding: 4px 0 16px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .options-scroll-container::-webkit-scrollbar {
+    display: none;
+  }
+
   .options-summary {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .option-chip {
@@ -260,13 +336,30 @@
     background: rgba(255, 255, 255, 0.05);
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .option-chip:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .option-chip.active {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
   }
 
   .option-dot {
     width: 8px;
     height: 8px;
+    min-width: 8px;
+    min-height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
+    display: inline-block;
   }
 
   .option-label {
@@ -289,11 +382,13 @@
 
   .friends-list {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding-right: 4px;
+    padding: 0 20px 12px 20px;
+    overscroll-behavior: contain;
   }
 
   .friends-list::-webkit-scrollbar {
@@ -313,7 +408,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px;
+    padding: 10px 12px;
     background: rgba(255, 255, 255, 0.03);
     border-radius: 16px;
     transition: background 0.2s;
@@ -347,36 +442,27 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   }
 
-  .friend-info {
-    flex: 1;
-    min-width: 0;
-  }
-
   .friend-name {
-    display: block;
+    flex: 1;
     font-size: 15px;
     font-weight: 600;
     color: white;
-    margin-bottom: 4px;
-  }
-
-  .friend-vote {
-    display: flex;
-    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .friend-option-badge {
-    display: inline-block;
-    font-size: 12px;
+    flex-shrink: 0;
+    font-size: 11px;
     font-weight: 600;
     padding: 4px 10px;
     border-radius: 12px;
     border: 1px solid;
-    max-width: 100%;
+    max-width: 140px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    position: static; /* Override any global positioning */
   }
 
   .empty-state {
