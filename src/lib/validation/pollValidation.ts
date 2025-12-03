@@ -17,7 +17,7 @@ export const DESCRIPTION_MAX_LENGTH = 500;
 // ========================================
 // OPCIONES
 // ========================================
-export const OPTIONS_MIN_COUNT = 2;
+export const OPTIONS_MIN_COUNT = 1;
 export const OPTIONS_MAX_COUNT = 10;
 export const OPTION_LABEL_MAX_LENGTH = 200;
 

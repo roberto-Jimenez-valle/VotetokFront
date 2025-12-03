@@ -2,7 +2,8 @@
   import { fade, fly } from 'svelte/transition';
   import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles, Search } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
-  import { currentUser } from '$lib/stores';
+  import { currentUser as storeUser } from '$lib/stores';
+  import { currentUser as authUser, isAuthenticated } from '$lib/stores/auth';
   import { apiPost } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
@@ -756,8 +757,9 @@
   // Submit del formulario
   async function handleSubmit() {
                         
-    // Verificar si el usuario está autenticado
-    if (!$currentUser) {
+    // Verificar si el usuario está autenticado (usar authUser que se sincroniza desde localStorage)
+    const currentUserData = $authUser || $storeUser;
+    if (!currentUserData) {
             showAuthModal = true;
             return;
     }
@@ -777,7 +779,7 @@
       
       // Preparar datos para enviar
       const pollData = {
-        userId: $currentUser?.id || undefined,
+        userId: currentUserData?.userId || currentUserData?.id || undefined,
         title: title.trim(),
         description: description.trim() || undefined,
         category: category,
