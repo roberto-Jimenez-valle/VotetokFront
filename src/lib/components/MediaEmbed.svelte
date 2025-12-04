@@ -99,6 +99,18 @@
       }
     }
 
+    // Para iframes de SoundCloud
+    if (processed.includes("soundcloud.com") || processed.includes("w.soundcloud.com")) {
+      // Agregar loading lazy al iframe
+      if (!processed.includes('loading="')) {
+        processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
+      // Asegurar que tenga allow para autoplay
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay"');
+      }
+    }
+
     // Para videos HTML5
     if (processed.includes("<video")) {
       if (autoplay && !processed.includes("autoplay")) {
@@ -202,6 +214,14 @@
           image: getProxiedImageUrl(url),
           url: url,
         };
+        loading = false;
+        return;
+      }
+
+      // Detectar SoundCloud directamente y generar embed
+      if (url.includes("soundcloud.com")) {
+        embedType = "SoundCloud";
+        embedHTML = `<iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false"></iframe>`;
         loading = false;
         return;
       }

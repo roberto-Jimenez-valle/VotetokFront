@@ -5,6 +5,7 @@
   import { currentUser } from '$lib/stores';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import FriendsVotesModal from '$lib/components/FriendsVotesModal.svelte';
+  import PollOptionCard from '$lib/components/PollOptionCard.svelte';
   
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -1095,7 +1096,7 @@
         
         <button
           class={`option-slide ${index === activeAccordionIndex ? 'is-active' : ''} ${isPollVoted ? 'voted' : ''}`}
-          style="scroll-snap-stop: always;" 
+          style="scroll-snap-stop: always; --option-border-color: {(displayVotes[poll.id] || userVotes[poll.id]) ? option.color : 'rgba(255, 255, 255, 0.15)'};" 
           type="button"
           aria-pressed={isPollVoted}
           aria-label={`Opción ${index + 1}: ${option.label}`}
@@ -1297,7 +1298,7 @@
               type="button"
               aria-label="Cerrar opción"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
@@ -1351,7 +1352,7 @@
               type="button"
               aria-label="Cambiar color"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
               </svg>
             </button>
@@ -1381,97 +1382,29 @@
               disabled={!editingOptionLabels[option.key] || !editingOptionLabels[option.key].trim()}
               aria-label="Publicar opción"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M20 6L9 17l-5-5"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </button>
           {:else}
-            <!-- Layout estilo PollMaximizedView (reducido) -->
-            {@const textLength = option.label.length}
-            {@const fontSize = textLength > 60 ? 'text-base' : textLength > 40 ? 'text-lg' : 'text-xl'}
+            <!-- Layout usando PollOptionCard unificado -->
+            {@const friendsForOption = (poll.friendsByOption?.[option.key] || []).filter((friend: any) => friend.id !== poll.user?.id)}
+            {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
             
-            <!-- Fondo de color + overlay de gradiente -->
-            <div class="option-background-maximized" style="--option-color: {option.color};">
-              <!-- Noise texture overlay -->
-              <div class="noise-overlay"></div>
-              
-              <!-- MediaEmbed de fondo (si hay imageUrl) -->
-              {#if option.imageUrl}
-                <div class="media-embed-background">
-                  <MediaEmbed 
-                    url={option.imageUrl} 
-                    mode="full"
-                    width="100%"
-                    height="100%"
-                  />
-                </div>
-                <div class="media-gradient-overlay"></div>
-              {/if}
-            </div>
-            
-            <!-- Degradado inferior para legibilidad -->
-            <div class="maximized-bottom-gradient"></div>
-            
-            <!-- Contenido en la parte inferior (label + línea + percentage) -->
-            <div class="option-content-maximized">
-              <!-- Label grande en uppercase con tamaño dinámico -->
-              <h2 class="option-label-maximized {fontSize}" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; word-break: break-word;">
-                {option.label}
-              </h2>
-              
-              <!-- Línea divisoria -->
-              <div class="maximized-divider-line" style="--divider-color: {option.color}"></div>
-              
-              <!-- Porcentaje grande si ha votado + avatares a la derecha -->
-              {#if pollVotedOption}
-                {@const friendsForOption = poll.friendsByOption?.[option.key] || []}
-                {@const filteredFriends = friendsForOption.filter((friend: any) => friend.id !== poll.user?.id)}
-                {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
-                
-                <div class="option-percentage-voted-bottom">
-                  <div class="percentage-info">
-                    <span class="percentage-value-large" style="color: {option.color}">
-                      {Math.round(displayPct)}%
-                    </span>
-                    <span class="percentage-subtitle">DE LOS VOTOS</span>
-                  </div>
-                  
-                  <!-- Avatares de amigos a la derecha -->
-                  {#if filteredFriends.length > 0}
-                    <button 
-                      class="friend-avatars-inline friend-avatars-btn-mini"
-                      onclick={(e) => { e.stopPropagation(); if (userHasVoted) showFriendsVotesModal = true; }}
-                      disabled={!userHasVoted}
-                      aria-label={userHasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
-                    >
-                      {#each filteredFriends.slice(0, 3) as friend, i}
-                        <div 
-                          class="friend-avatar-wrapper" 
-                          style="z-index: {10 - i};"
-                        >
-                          {#if userHasVoted}
-                            <img 
-                              class="friend-avatar-mini" 
-                              src={friend.avatarUrl || DEFAULT_AVATAR}
-                              alt={friend.name}
-                              loading="lazy"
-                            />
-                          {:else}
-                            <div class="friend-avatar-mystery">
-                              <span>?</span>
-                            </div>
-                          {/if}
-                        </div>
-                      {/each}
-                      {#if filteredFriends.length > 3}
-                        <div class="more-friends-count">+{filteredFriends.length - 3}</div>
-                      {/if}
-                    </button>
-                  {/if}
-                </div>
-              {/if}
-            </div>
-            
+            <PollOptionCard
+              label={option.label}
+              color={option.color}
+              imageUrl={option.imageUrl}
+              percentage={displayPct}
+              isVoted={pollVotedOption === option.key}
+              mode="view"
+              isActive={activeAccordionIndex === index}
+              friends={friendsForOption}
+              userHasVoted={userHasVoted}
+              showPercentageLabel={!!pollVotedOption}
+              onFriendsClick={() => { showFriendsVotesModal = true; }}
+              isClickable={false}
+            />
           {/if}
         </button>
       {/each}
@@ -2290,19 +2223,19 @@
     -webkit-backdrop-filter: blur(16px);
     border-left-color: rgba(255, 255, 255, 0.2);
     color: rgba(255, 255, 255, 0.95);
-   
     transform: translateX(2px);
   }
 
-  /* Layout para opciones nuevas colaborativas */
+  /* Layout para opciones nuevas colaborativas - Estilo action-bar */
   .remove-option-badge-top {
     position: absolute;
     top: 12px;
     right: 12px;
-    padding: 8px;
-    background: #000000;
-    border: none;
-    border-radius: 50%;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
     color: white;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -2310,12 +2243,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   }
 
   .remove-option-badge-top:hover {
-    background: #1a1a1a;
-    transform: scale(1.1);
+    background: rgba(239, 68, 68, 0.4);
+    border-color: rgba(239, 68, 68, 0.6);
+  }
+
+  .remove-option-badge-top:active {
+    transform: scale(0.95);
   }
 
   .card-header {
@@ -2408,7 +2344,7 @@
     height: 55%;
     max-height: 220px;
     max-width: 100%;
-    border-radius: 16px;
+    border-radius: 32px;
     overflow: hidden;
     z-index: 0;
     transition: all 0.3s ease;
@@ -2431,7 +2367,7 @@
     max-height: 100%;
     z-index: 10;
     cursor: zoom-out;
-    border-radius: 16px;
+    border-radius: 32px;
     pointer-events: auto;
   }
   
@@ -2901,75 +2837,73 @@
     box-shadow: none;
   }
 
-  /* Botones posicionados absolutamente para opciones en edición */
+  /* Botones posicionados absolutamente para opciones en edición - Estilo action-bar */
   .color-picker-badge-absolute {
     position: absolute;
     bottom: 16px;
     right: 60px;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.5);
+    padding: 8px 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 3;
-    padding: 0;
   }
 
   .color-picker-badge-absolute:hover {
-    border-color: rgba(255, 255, 255, 0.8);
-    transform: scale(1.1);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .color-picker-badge-absolute:active {
+    transform: scale(0.95);
   }
 
   .color-picker-badge-absolute svg {
-    width: 1rem;
-    height: 1rem;
+    width: 20px;
+    height: 20px;
     color: rgba(255, 255, 255, 0.9);
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
   }
 
   .publish-option-btn-absolute {
     position: absolute;
     bottom: 16px;
     right: 16px;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #10b981, #059669);
-    border: none;
+    padding: 8px 10px;
+    border-radius: 16px;
+    background: rgba(16, 185, 129, 0.3);
+    border: 1px solid rgba(16, 185, 129, 0.5);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
     color: white;
     z-index: 3;
-    padding: 0;
   }
 
   .publish-option-btn-absolute:hover:not(:disabled) {
-    background: linear-gradient(135deg, #059669, #047857);
-    transform: scale(1.1);
-    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.5);
+    background: rgba(16, 185, 129, 0.5);
+    border-color: rgba(16, 185, 129, 0.8);
+  }
+
+  .publish-option-btn-absolute:active:not(:disabled) {
+    transform: scale(0.95);
   }
 
   .publish-option-btn-absolute:disabled {
-    background: rgba(107, 114, 128, 0.3);
+    background: rgba(107, 114, 128, 0.2);
+    border-color: rgba(107, 114, 128, 0.3);
     cursor: not-allowed;
     opacity: 0.5;
-    box-shadow: none;
   }
 
   .publish-option-btn-absolute svg {
-    width: 1.125rem;
-    height: 1.125rem;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    width: 20px;
+    height: 20px;
   }
   
   /* Contenedor de información de votos */
@@ -3564,17 +3498,12 @@
     position: absolute;
     inset: 0;
     background-color: var(--option-color);
-    opacity: 0.7;
+    opacity: 1;
     z-index: 0;
   }
 
   .noise-overlay {
-    position: absolute;
-    inset: 0;
-    background-image: url('https://grainy-gradients.vercel.app/noise.svg');
-    opacity: 0.4;
-    mix-blend-mode: overlay;
-    pointer-events: none;
+    display: none;
   }
 
   .media-embed-background {
@@ -3584,36 +3513,12 @@
   }
 
   .media-gradient-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.3) 0%,
-      transparent 40%,
-      transparent 60%,
-      rgba(0, 0, 0, 0.4) 100%
-    );
-    z-index: 2;
-    pointer-events: none;
+    display: none;
   }
 
-  /* Degradado inferior para legibilidad */
+  /* Degradado inferior - desactivado para color plano */
   .maximized-bottom-gradient {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 70%;
-    background: linear-gradient(
-      to top,
-      rgba(0, 0, 0, 0.95) 0%,
-      rgba(0, 0, 0, 0.8) 25%,
-      rgba(0, 0, 0, 0.5) 50%,
-      rgba(0, 0, 0, 0.2) 75%,
-      transparent 100%
-    );
-    z-index: 2;
-    pointer-events: none;
+    display: none;
   }
 
   /* Contenido en la parte INFERIOR */
@@ -3631,22 +3536,20 @@
     text-align: left;
   }
 
-  /* Label grande en uppercase */
+  /* Label grande en uppercase - ESTILO UNIFICADO */
   .option-label-maximized {
-    /* font-size controlado por clases Tailwind dinámicas */
-    font-weight: 900;
+    font-size: 18px;
+    font-weight: 800;
     color: white;
     text-transform: uppercase;
-    letter-spacing: -0.03em;
-    line-height: 0.95;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
     text-shadow: 
-      0 3px 12px rgba(0, 0, 0, 0.7),
-      0 6px 24px rgba(0, 0, 0, 0.5),
+      0 2px 8px rgba(0, 0, 0, 0.6),
       0 1px 3px rgba(0, 0, 0, 0.8);
     word-wrap: break-word;
-    max-width: 90%;
+    max-width: 100%;
     margin: 0;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
   }
 
   /* Línea divisoria blanca fina */
@@ -3666,30 +3569,82 @@
     margin-top: 12px;
   }
 
-  .option-percentage-voted-bottom .percentage-info {
+  /* Porcentaje grande - ESTILO UNIFICADO */
+  .percentage-value-large {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.5),
+      0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Subtítulo del porcentaje - ESTILO UNIFICADO */
+  .percentage-subtitle {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  }
+
+  /* === LAYOUT VIDEO/SPOTIFY/SOUNDCLOUD MINI === */
+  .card-video-wrapper {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 32px;
+    overflow: hidden;
+  }
+
+  .card-video-area {
+    flex: 0 0 40%;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 28px 28px 0 0;
+    background: inherit;
+  }
+
+  .card-video-area :global(iframe),
+  .card-video-area :global(video),
+  .card-video-area :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .card-video-area :global(.media-embed-container),
+  .card-video-area :global(.embed-wrapper),
+  .card-video-area :global(div) {
+    background: inherit !important;
+  }
+
+  .card-video-bottom {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    justify-content: flex-end;
+    padding: 12px 16px 16px 16px;
+    gap: 6px;
+    background: transparent;
   }
 
-  .percentage-value-large {
-    font-size: 36px;
-    font-weight: 900;
-    line-height: 1;
-    text-shadow: 
-      0 3px 12px rgba(0, 0, 0, 0.5),
-      0 1px 4px rgba(0, 0, 0, 0.3);
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  .card-divider-line {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.3);
   }
 
-  .percentage-subtitle {
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.7);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 600;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  .card-bottom-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
   }
 
   /* Indicador "Doble toque para votar" */
@@ -3768,20 +3723,6 @@
     align-items: center;
     gap: -4px;
     margin-left: auto;
-  }
-
-  .friend-avatars-inline .friend-avatar-wrapper {
-    margin-left: -8px;
-  }
-
-  .friend-avatars-inline .friend-avatar-wrapper:first-child {
-    margin-left: 0;
-  }
-
-  .friend-avatars-inline .friend-avatar-mini {
-    width: 36px;
-    height: 36px;
-    border: 2px solid rgba(255, 255, 255, 0.5);
   }
 
   .friend-avatar-wrapper {
@@ -3869,10 +3810,6 @@
     opacity: 0.9;
   }
 
-  .friend-avatars-btn-mini:not(:disabled):hover .friend-avatar-wrapper {
-    transform: translateY(-2px);
-  }
-
   /* Contenedor principal de scroll horizontal */
   .poll-options-scroll-container {
     width: 100%;
@@ -3885,12 +3822,13 @@
   .options-horizontal-scroll {
     display: flex;
     overflow-x: scroll;
-    overflow-y: hidden;
+    overflow-y: visible;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none; /* Firefox */
-    gap: 0;
+    gap: 12px;
     height: 250px;
+    padding: 4px 12px;
   }
 
   .options-horizontal-scroll::-webkit-scrollbar {
@@ -3904,7 +3842,7 @@
     height: 100%;
     scroll-snap-align: start;
     position: relative;
-    border-radius: 0;
+    border-radius: 32px;
     overflow: hidden;
     margin: 0;
     background: #2a2c31;
@@ -3913,6 +3851,8 @@
     box-shadow: 
       0 4px 16px rgba(0, 0, 0, 0.3),
       0 2px 8px rgba(0, 0, 0, 0.2);
+    /* Borde con color de opción */
+    border: 2px solid var(--option-border-color, transparent);
   }
 
   .option-slide.is-active {
@@ -3948,22 +3888,23 @@
     }
 
 
+    /* Media query mantiene consistencia */
     .percentage-value-large {
-      font-size: 36px;
+      font-size: 32px;
     }
 
     .percentage-subtitle {
-      font-size: 11px;
+      font-size: 9px;
     }
 
     .options-horizontal-scroll {
-      height: 220px;
+      height: 230px;
     }
 
     .option-slide {
       width: 100%;
       margin: 0;
-      border-radius: 0;
+      border-radius: 32px;
     }
 
     .options-indicators {

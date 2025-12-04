@@ -48,7 +48,7 @@
     votes?: number;
     voted?: boolean;
     // Campos adicionales para el nuevo diseño (opcionales para compatibilidad)
-    type?: "youtube" | "vimeo" | "image" | "text" | "spotify";
+    type?: "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud";
     artist?: string;
     description?: string;
     youtubeId?: string;
@@ -482,7 +482,7 @@
   // --- DETECCIÓN DE TIPO DE MEDIA (SI NO VIENE EXPLÍCITO) ---
   function getMediaType(
     opt: PollOption,
-  ): "youtube" | "vimeo" | "image" | "text" | "spotify" {
+  ): "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" {
     if (opt.type) return opt.type;
     if (!opt.imageUrl) return "text";
     if (
@@ -492,6 +492,7 @@
       return "youtube";
     if (opt.imageUrl.includes("vimeo.com")) return "vimeo";
     if (opt.imageUrl.includes("spotify.com")) return "spotify";
+    if (opt.imageUrl.includes("soundcloud.com")) return "soundcloud";
     return "image";
   }
 
@@ -866,7 +867,7 @@
       >
         {#each options as opt, i (opt.id)}
           {@const type = getMediaType(opt)}
-          {@const isVideoType = type === 'youtube' || type === 'vimeo' || type === 'spotify' || (opt.imageUrl && /\.(mp4|webm|mov)([?#]|$)/i.test(opt.imageUrl)) || (opt.imageUrl && opt.imageUrl.includes('spotify.com'))}
+          {@const isVideoType = type === 'youtube' || type === 'vimeo' || type === 'spotify' || type === 'soundcloud' || (opt.imageUrl && /\.(mp4|webm|mov)([?#]|$)/i.test(opt.imageUrl)) || (opt.imageUrl && (opt.imageUrl.includes('spotify.com') || opt.imageUrl.includes('soundcloud.com')))}
           {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
           {@const isImageType = type === 'image' && !isGifType}
           <div
@@ -2378,7 +2379,7 @@
     position: relative;
     width: 100%;
     height: 100%;
-    border-radius: 24px;
+    border-radius: 32px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -2399,6 +2400,7 @@
     overflow: hidden;
     border: none;
     outline: none;
+    border-radius: 32px 32px 0 0;
   }
 
   .quote-decoration {
@@ -2438,6 +2440,8 @@
     width: 100%;
     height: 100%;
     padding: 4px;
+    border-radius: 32px;
+    overflow: hidden;
   }
 
   .card-video-area {
@@ -2445,7 +2449,7 @@
     position: relative;
     overflow: hidden;
     background: inherit;
-    border-radius: 20px;
+    border-radius: 28px;
   }
 
   .card-video-area :global(.media-embed),
@@ -2464,7 +2468,7 @@
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
-    border-radius: 20px !important;
+    border-radius: 28px !important;
   }
 
   /* Ocultar contenido extra en video */
@@ -2481,6 +2485,7 @@
     justify-content: flex-end;
     padding: 16px 16px 20px;
     gap: 8px;
+    border-radius: 0 0 28px 28px;
   }
 
   /* ========================================
@@ -2493,7 +2498,7 @@
     height: 100%;
     padding: 4px;
     background-color: var(--border-color);
-    border-radius: 24px;
+    border-radius: 32px;
   }
 
   /* Contenedor fullscreen para imagen */
@@ -2502,7 +2507,7 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    border-radius: 20px;
+    border-radius: 28px;
   }
 
   /* Imagen de fondo a pantalla completa */
@@ -2608,6 +2613,7 @@
     flex-direction: column;
     gap: 8px;
     padding: 14px 16px 20px;
+    border-radius: 0 0 32px 32px;
   }
 
   /* Línea divisoria en el borde inferior del área de contenido */

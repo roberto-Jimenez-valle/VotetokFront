@@ -112,10 +112,10 @@ export async function fetchMultiplePreviews(urls: string[]): Promise<Map<string,
 }
 
 /**
- * Detecta si una URL es de video embebible
+ * Detecta si una URL es de video/audio embebible
  */
 export function isEmbeddableVideo(url: string): boolean {
-  return /youtube\.com|youtu\.be|vimeo\.com|twitch\.tv/i.test(url);
+  return /youtube\.com|youtu\.be|vimeo\.com|twitch\.tv|spotify\.com|soundcloud\.com/i.test(url);
 }
 
 /**

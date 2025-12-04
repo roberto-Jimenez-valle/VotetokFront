@@ -1668,13 +1668,16 @@
                 {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
                 {@const savedUrl = optionUrls.get(option.id)}
                 {@const optionPreview = optionPreviews.get(option.id)}
+                {@const mediaUrl = optionPreview?.url || savedUrl || detectedUrl || option.imageUrl || ''}
                 {@const hasMedia = detectedUrl || option.imageUrl || savedUrl || optionPreview}
+                {@const isVideoType = mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be') || mediaUrl.includes('vimeo.com') || mediaUrl.includes('spotify.com') || mediaUrl.includes('soundcloud.com') || /\.(mp4|webm|mov)([?#]|$)/i.test(mediaUrl))}
+                {@const isImageType = hasMedia && !isVideoType}
                 
                 <div 
                   role="button"
                   tabindex="0"
                   class="option-slide {activeAccordionIndex === index ? 'is-active' : ''}" 
-                  style="--card-color: {option.color};"
+                  style="--card-color: {option.color}; --option-border-color: {option.color};"
                   onclick={() => {
                     if (!isDragging) {
                       setActive(index);
@@ -1688,65 +1691,48 @@
                     }
                   }}
                 >
-                  <!-- Fondo de color + media (estilo SinglePollSection) -->
-                  <div class="option-background-maximized" style="--option-color: {option.color};">
-                    <div class="noise-overlay"></div>
-                    
-                    <!-- MediaEmbed de fondo si hay imagen/video -->
-                    {#if hasMedia}
-                      <div class="media-embed-background">
+                  {#if isVideoType}
+                    <!-- === LAYOUT VIDEO/SPOTIFY/SOUNDCLOUD === -->
+                    <div class="card-video-wrapper" style="background-color: {option.color};">
+                      <!-- Área de video (55%) -->
+                      <div class="card-video-area">
                         <MediaEmbed 
-                          url={optionPreview?.url || savedUrl || detectedUrl || option.imageUrl || ''} 
+                          url={mediaUrl} 
                           mode="full"
                           width="100%"
                           height="100%"
                           on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
                         />
+                        
+                        <!-- Botón eliminar media -->
+                        <button
+                          type="button"
+                          class="remove-media-btn"
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            loadingPreviews.delete(option.id);
+                            optionPreviews.delete(option.id);
+                            optionUrls.delete(option.id);
+                            optionUrls = optionUrls;
+                            const urlInLabel = extractUrlFromText(option.label);
+                            if (urlInLabel) {
+                              option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
+                            }
+                            option.imageUrl = '';
+                            options = [...options];
+                          }}
+                          title="Eliminar media"
+                          aria-label="Eliminar media"
+                        >
+                          <X class="w-4 h-4" />
+                        </button>
                       </div>
-                      <div class="media-gradient-overlay"></div>
-                    {/if}
-                  </div>
-                  
-                  <!-- Botón para eliminar el media (fuera del contenedor de fondo) -->
-                  {#if hasMedia}
-                    <button
-                      type="button"
-                      class="remove-media-btn"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        // Limpiar cachés
-                        loadingPreviews.delete(option.id);
-                        optionPreviews.delete(option.id);
-                        optionUrls.delete(option.id);
-                        optionUrls = optionUrls;
-                        
-                        // Limpiar URL del label
-                        const urlInLabel = extractUrlFromText(option.label);
-                        if (urlInLabel) {
-                          option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
-                        }
-                        
-                        // Limpiar imageUrl
-                        option.imageUrl = '';
-                        
-                        // Trigger reactivity
-                        options = [...options];
-                      }}
-                      title="Eliminar media"
-                      aria-label="Eliminar imagen o video"
-                    >
-                      <X class="w-4 h-4" />
-                    </button>
-                  {/if}
-                  
-                  <!-- Contenido centrado (estilo SinglePollSection) -->
-                  <div class="option-content-maximized {hasMedia ? 'has-media' : ''}">
-                    {#if hasMedia}
-                      <!-- Layout cuando hay multimedia -->
-                      <div class="label-side">
+                      
+                      <!-- Contenido debajo del video -->
+                      <div class="card-video-bottom">
                         <textarea
-                          class="option-label-edit compact"
+                          class="option-label-video-edit"
                           class:error={errors[`option_${option.id}`]}
                           placeholder="Opción {index + 1}"
                           value={labelWithoutUrl}
@@ -1763,11 +1749,129 @@
                           maxlength="200"
                           onclick={(e) => e.stopPropagation()}
                         ></textarea>
+                        
+                        <!-- Línea divisoria -->
+                        <div class="maximized-divider-line"></div>
+                        
+                        <!-- Porcentaje y herramientas -->
+                        <div class="option-percentage-bottom">
+                          <div class="percentage-info">
+                            <span class="percentage-value-large" style="color: white">{Math.round(pct)}%</span>
+                            <span class="percentage-subtitle">DE LOS VOTOS</span>
+                          </div>
+                          <div class="edit-buttons-row">
+                            <button type="button" class="edit-btn color-btn" style="background-color: {option.color}" onclick={(e) => { e.stopPropagation(); colorPickerOpenFor = option.id; }} title="Cambiar color">
+                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+                            </button>
+                            <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); openGiphyPicker(option.id); }} title="Buscar GIF">
+                              <Sparkles class="w-4 h-4" />
+                            </button>
+                            {#if index > 0}
+                              <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); removeOption(option.id); }} title="Eliminar opción">
+                                <Trash2 class="w-4 h-4" />
+                              </button>
+                            {/if}
+                          </div>
+                        </div>
                       </div>
-                    {:else}
-                      <!-- Layout vertical cuando NO hay multimedia -->
+                    </div>
+                  {:else if isImageType}
+                  <!-- === LAYOUT IMAGEN/GIF (fondo completo con texto superpuesto) === -->
+                  <div class="option-background-maximized" style="--option-color: {option.color};">
+                    <div class="noise-overlay"></div>
+                    <div class="media-embed-background">
+                      <MediaEmbed 
+                        url={mediaUrl} 
+                        mode="full"
+                        width="100%"
+                        height="100%"
+                        on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
+                      />
+                    </div>
+                    <div class="media-gradient-overlay"></div>
+                  </div>
+                  
+                  <!-- Botón eliminar media -->
+                  <button
+                    type="button"
+                    class="remove-media-btn"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      loadingPreviews.delete(option.id);
+                      optionPreviews.delete(option.id);
+                      optionUrls.delete(option.id);
+                      optionUrls = optionUrls;
+                      const urlInLabel = extractUrlFromText(option.label);
+                      if (urlInLabel) {
+                        option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
+                      }
+                      option.imageUrl = '';
+                      options = [...options];
+                    }}
+                    title="Eliminar media"
+                    aria-label="Eliminar media"
+                  >
+                    <X class="w-4 h-4" />
+                  </button>
+                  
+                  <!-- Contenido superpuesto en la parte inferior -->
+                  <div class="option-content-bottom">
+                    <textarea
+                      class="option-label-maximized-edit"
+                      class:error={errors[`option_${option.id}`]}
+                      placeholder="Opción {index + 1}"
+                      value={labelWithoutUrl}
+                      oninput={(e) => {
+                        const newValue = (e.target as HTMLTextAreaElement).value;
+                        const currentUrl = extractUrlFromText(option.label);
+                        if (currentUrl) {
+                          option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
+                        } else {
+                          option.label = newValue;
+                        }
+                      }}
+                      bind:this={optionInputs[option.id]}
+                      maxlength="200"
+                      onclick={(e) => e.stopPropagation()}
+                    ></textarea>
+                    
+                    <div class="maximized-divider-line"></div>
+                    
+                    <div class="option-percentage-bottom">
+                      <div class="percentage-info">
+                        <span class="percentage-value-large" style="color: white">{Math.round(pct)}%</span>
+                        <span class="percentage-subtitle">DE LOS VOTOS</span>
+                      </div>
+                      <div class="edit-buttons-row">
+                        <button type="button" class="edit-btn color-btn" style="background-color: {option.color}" onclick={(e) => { e.stopPropagation(); colorPickerOpenFor = option.id; }} title="Cambiar color">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+                        </button>
+                        <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); openGiphyPicker(option.id); }} title="Buscar GIF">
+                          <Sparkles class="w-4 h-4" />
+                        </button>
+                        {#if index > 0}
+                          <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); removeOption(option.id); }} title="Eliminar opción">
+                            <Trash2 class="w-4 h-4" />
+                          </button>
+                        {/if}
+                      </div>
+                    </div>
+                  </div>
+                {:else}
+                  <!-- === LAYOUT TEXTO PURO (formato dividido) === -->
+                  <div class="card-video-wrapper" style="background-color: {option.color};">
+                    <!-- Área superior solo color -->
+                    <div class="card-video-area card-media-area">
+                      <div class="color-only-area">
+                        <div class="noise-overlay"></div>
+                      </div>
+                    </div>
+                    
+                    <!-- Contenido debajo -->
+                    <div class="card-video-bottom">
                       <textarea
-                        class="option-label-edit"
+                        class="option-label-video-edit"
                         class:error={errors[`option_${option.id}`]}
                         placeholder="Opción {index + 1}"
                         value={labelWithoutUrl}
@@ -1784,64 +1888,31 @@
                         maxlength="200"
                         onclick={(e) => e.stopPropagation()}
                       ></textarea>
-                    {/if}
-                  </div>
-                  
-                  <!-- Barra de herramientas de edición -->
-                  <div class="edit-toolbar">
-                    <!-- Porcentaje a la izquierda -->
-                    <span class="percentage-value-toolbar" style="color: {option.color}">
-                      {Math.round(pct)}%
-                    </span>
-                    
-                    <!-- Botones de edición -->
-                    <div class="edit-buttons">
-                      <!-- Botón color picker -->
-                      <button
-                        type="button"
-                        class="edit-btn color-btn"
-                        style="background-color: {option.color}"
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          colorPickerOpenFor = option.id;
-                        }}
-                        title="Cambiar color"
-                        aria-label="Cambiar color"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                        </svg>
-                      </button>
                       
-                      <!-- Botón Giphy -->
-                      <button
-                        type="button"
-                        class="edit-btn giphy-btn"
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          openGiphyPicker(option.id);
-                        }}
-                        title="Buscar GIF"
-                      >
-                        <Sparkles class="w-4 h-4" />
-                      </button>
+                      <div class="maximized-divider-line"></div>
                       
-                      <!-- Botón eliminar opción (solo si no es la primera) -->
-                      {#if index > 0}
-                        <button
-                          type="button"
-                          class="edit-btn delete-btn"
-                          onclick={(e) => {
-                            e.stopPropagation();
-                            removeOption(option.id);
-                          }}
-                          title="Eliminar opción"
-                        >
-                          <Trash2 class="w-4 h-4" />
-                        </button>
-                      {/if}
+                      <div class="option-percentage-bottom">
+                        <div class="percentage-info">
+                          <span class="percentage-value-large" style="color: white">{Math.round(pct)}%</span>
+                          <span class="percentage-subtitle">DE LOS VOTOS</span>
+                        </div>
+                        <div class="edit-buttons-row">
+                          <button type="button" class="edit-btn color-btn" style="background-color: {option.color}" onclick={(e) => { e.stopPropagation(); colorPickerOpenFor = option.id; }} title="Cambiar color">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+                          </button>
+                          <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); openGiphyPicker(option.id); }} title="Buscar GIF">
+                            <Sparkles class="w-4 h-4" />
+                          </button>
+                          {#if index > 0}
+                            <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); removeOption(option.id); }} title="Eliminar opción">
+                              <Trash2 class="w-4 h-4" />
+                            </button>
+                          {/if}
+                        </div>
+                      </div>
                     </div>
                   </div>
+                {/if}
                 </div>
               {/each}
             </div>
@@ -2740,13 +2811,14 @@
   .options-horizontal-scroll {
     display: flex;
     overflow-x: scroll;
-    overflow-y: hidden;
+    overflow-y: visible;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    gap: 0;
-    height: 280px;
+    gap: 12px;
+    height: 250px;
     width: 100%;
+    padding: 4px 12px;
   }
   
   .options-horizontal-scroll::-webkit-scrollbar {
@@ -2760,7 +2832,7 @@
     height: 100%;
     scroll-snap-align: start;
     position: relative;
-    border-radius: 0;
+    border-radius: 32px;
     overflow: hidden;
     margin: 0;
     background: #2a2c31;
@@ -2768,33 +2840,39 @@
     transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
-    border: none;
     text-align: center;
     padding: 0;
     outline: none;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
+    /* Borde con color de opción */
+    border: 2px solid var(--option-border-color, rgba(255, 255, 255, 0.15));
+    box-shadow: 
+      0 4px 16px rgba(0, 0, 0, 0.3),
+      0 2px 8px rgba(0, 0, 0, 0.2);
   }
   
-  /* Fondo con color y gradiente */
+  /* Fondo de opción estilo maximizado */
   .option-background-maximized {
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      135deg,
-      var(--option-color) 0%,
-      color-mix(in srgb, var(--option-color) 60%, #1a1a2e) 50%,
-      #1a1a2e 100%
-    );
+    border-radius: 0;
+    overflow: hidden;
+    z-index: 0;
+    background-color: transparent;
+  }
+  
+  .option-background-maximized::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--option-color);
+    opacity: 1;
     z-index: 0;
   }
   
   .noise-overlay {
-    position: absolute;
-    inset: 0;
-    opacity: 0.03;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)'/%3E%3C/svg%3E");
-    pointer-events: none;
+    display: none;
   }
   
   .media-embed-background {
@@ -2816,9 +2894,10 @@
     inset: 0;
     background: linear-gradient(
       180deg,
-      rgba(0, 0, 0, 0.4) 0%,
-      rgba(0, 0, 0, 0.1) 40%,
-      rgba(0, 0, 0, 0.6) 100%
+      rgba(0, 0, 0, 0.3) 0%,
+      transparent 40%,
+      transparent 60%,
+      rgba(0, 0, 0, 0.4) 100%
     );
     z-index: 2;
     pointer-events: none;
@@ -2852,6 +2931,113 @@
     border-color: white;
   }
   
+  /* ========================================
+     LAYOUT VIDEO/SPOTIFY/SOUNDCLOUD
+     ======================================== */
+  
+  .card-video-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: 4px;
+    border-radius: 32px;
+    overflow: hidden;
+  }
+  
+  .card-video-area {
+    flex: 0 0 40%;
+    position: relative;
+    overflow: hidden;
+    background: inherit;
+    border-radius: 28px 28px 0 0;
+  }
+  
+  .card-video-area :global(.media-embed),
+  .card-video-area :global(.embed-container) {
+    width: 100%;
+    height: 100%;
+  }
+  
+  .card-video-area :global(iframe) {
+    border-radius: 28px 28px 0 0;
+  }
+
+  .card-video-area :global(.media-embed-container),
+  .card-video-area :global(.embed-wrapper),
+  .card-video-area :global(div) {
+    background: inherit !important;
+  }
+  
+  /* Área solo color (cuando no hay media) */
+  .color-only-area {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: inherit;
+  }
+  
+  .color-only-area .noise-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.08;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+  
+  .card-video-bottom {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 16px 8px;
+    gap: 8px;
+  }
+  
+  .option-label-video-edit {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    resize: none;
+    width: 100%;
+    min-height: 36px;
+    max-height: 60px;
+  }
+  
+  .option-label-video-edit::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: none;
+  }
+  
+  .card-divider-line {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  .card-bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .percentage-value-video {
+    font-size: 24px;
+    font-weight: 900;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .edit-buttons-row {
+    display: flex;
+    gap: 8px;
+  }
+  
   /* Contenido centrado */
   .option-content-maximized {
     position: relative;
@@ -2865,11 +3051,105 @@
     gap: 16px;
   }
   
-  /* Cuando tiene multimedia, el contenido va abajo */
-  .option-content-maximized.has-media {
-    justify-content: flex-end;
-    padding-bottom: 16px;
-    padding-top: 20px;
+  /* Degradado inferior para legibilidad */
+  .maximized-bottom-gradient {
+    display: none;
+  }
+  
+  /* Contenido en la parte inferior */
+  .option-content-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding: 16px 20px 24px 20px;
+    text-align: left;
+  }
+  
+  /* Textarea editable estilo maximizado */
+  .option-label-maximized-edit {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 18px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+    text-shadow: 
+      0 3px 12px rgba(0, 0, 0, 0.7),
+      0 6px 24px rgba(0, 0, 0, 0.5),
+      0 1px 3px rgba(0, 0, 0, 0.8);
+    resize: none;
+    width: 100%;
+    min-height: 50px;
+    max-height: 80px;
+    overflow: hidden;
+  }
+  
+  .option-label-maximized-edit::placeholder {
+    color: rgba(255, 255, 255, 0.75);
+    text-transform: none;
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.6),
+      0 4px 16px rgba(0, 0, 0, 0.4),
+      0 1px 2px rgba(0, 0, 0, 0.7);
+  }
+  
+  .option-label-maximized-edit.error {
+    border: 2px solid #ef4444;
+    border-radius: 8px;
+    padding: 8px;
+  }
+  
+  /* Línea divisoria */
+  .maximized-divider-line {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.4);
+    margin: 8px 0;
+  }
+  
+  /* Porcentaje en la parte inferior */
+  .option-percentage-bottom {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+  }
+  
+  .option-percentage-bottom .percentage-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .option-percentage-bottom .percentage-value-large {
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 
+      0 3px 12px rgba(0, 0, 0, 0.5),
+      0 1px 4px rgba(0, 0, 0, 0.3);
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  }
+  
+  .percentage-subtitle {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   }
   
   /* Layout horizontal para multimedia: porcentaje izq, texto der */
@@ -3032,17 +3312,13 @@
     transition: all 0.2s ease;
   }
   
-  /* Barra de herramientas de edición */
+  /* Barra de herramientas de edición (abajo a la derecha) */
   .edit-toolbar {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: 16px;
+    right: 16px;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+    gap: 8px;
     z-index: 10;
   }
   
@@ -3098,13 +3374,14 @@
   }
   
   .edit-btn.delete-btn {
-    background: var(--card-color, rgba(255, 255, 255, 0.2));
-    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
   }
   
   .edit-btn.delete-btn:hover {
-    background: var(--card-color, rgba(255, 255, 255, 0.3));
-    filter: brightness(1.2);
+    background: rgba(239, 68, 68, 0.8);
+    border-color: rgba(239, 68, 68, 1);
   }
   
   .edit-btn:hover {

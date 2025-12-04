@@ -85,12 +85,13 @@
   });
 
   // Detectar tipo de media
-  function getMediaType(opt: PollOption): "youtube" | "vimeo" | "image" | "text" | "spotify" {
+  function getMediaType(opt: PollOption): "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" {
     const url = opt.imageUrl || extractUrlFromText(opt.label);
     if (!url) return "text";
     if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
     if (url.includes("vimeo.com")) return "vimeo";
     if (url.includes("spotify.com")) return "spotify";
+    if (url.includes("soundcloud.com")) return "soundcloud";
     return "image";
   }
 
@@ -141,7 +142,7 @@
           class="w-8 h-8 bg-black/40 rounded-full flex items-center justify-center border border-white/20 flex-shrink-0 pointer-events-auto transition-all hover:bg-black/60 active:scale-95"
           aria-label="Minimizar"
         >
-          <ChevronDown size={18} class="text-white" />
+          <ChevronDown size={22} strokeWidth={1.5} class="text-white" />
         </button>
       </div>
     </div>
@@ -157,6 +158,8 @@
       {@const type = getMediaType(opt)}
       {@const mediaUrl = getMediaUrl(opt)}
       {@const labelText = getLabelWithoutUrl(opt.label)}
+      {@const isVideoType = type === 'youtube' || type === 'vimeo' || type === 'spotify' || type === 'soundcloud' || (opt.imageUrl && /\.(mp4|webm|mov)([?#]|$)/i.test(opt.imageUrl)) || (opt.imageUrl && (opt.imageUrl.includes('spotify.com') || opt.imageUrl.includes('soundcloud.com')))}
+      {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
       
       <div
         class="w-full h-full flex-shrink-0 snap-center relative"
@@ -164,91 +167,91 @@
       >
         <!-- SlideContent -->
         <div class="w-full h-full relative overflow-hidden">
-          {#if type === "text"}
-            <!-- SOLO TEXTO - Igual que PollMaximizedView -->
-            <div
-              class="w-full h-full flex flex-col items-center justify-center px-6 py-16 text-center relative overflow-hidden"
-              style="background-color: {opt.color};"
-            >
-              <!-- Marco decorativo para la opción -->
-              <div class="option-card-frame">
-                <div class="option-card-inner">
-                  <textarea
-                    class="text-5xl md:text-7xl font-bold text-white uppercase tracking-tighter leading-none break-words bg-transparent border-none outline-none w-full text-center resize-none overflow-auto placeholder-white/50 pointer-events-auto"
-                    placeholder="Opción {i + 1}"
-                    value={labelText}
-                    oninput={(e) => {
-                      const newValue = e.currentTarget.value;
-                      const currentUrl = extractUrlFromText(opt.label);
-                      if (currentUrl) {
-                        onLabelChange(opt.id, newValue ? `${newValue} ${currentUrl}` : currentUrl);
-                      } else {
-                        onLabelChange(opt.id, newValue);
-                      }
-                    }}
-                    onclick={(e) => e.stopPropagation()}
-                    rows="4"
-                  ></textarea>
+          
+          <!-- CARD CONTAINER - Igual que PollMaximizedView -->
+          <div class="option-card-container">
+            <div class="option-card-rounded">
+              
+              {#if type === "text"}
+                <!-- === LAYOUT SOLO TEXTO === -->
+                <!-- Área principal con color de fondo y comillas -->
+                <div class="card-content-area" style="background-color: {opt.color};">
+                  <!-- Comillas decorativas -->
+                  <span class="quote-decoration quote-open">"</span>
+                  <span class="quote-decoration quote-close">"</span>
                   
-                  <!-- Contador de caracteres -->
-                  <div class="text-white/50 text-sm">
-                    {labelText.length}/200
+                  <!-- Texto editable centrado -->
+                  <div class="text-center-wrapper">
+                    <textarea
+                      class="{labelText.length > 60 ? 'text-3xl' : labelText.length > 40 ? 'text-4xl' : 'text-5xl'} font-bold text-white uppercase tracking-tighter leading-tight break-words text-center bg-transparent border-none outline-none w-full resize-none placeholder-white/50 pointer-events-auto"
+                      placeholder="Opción {i + 1}"
+                      value={labelText}
+                      oninput={(e) => {
+                        const newValue = e.currentTarget.value;
+                        const currentUrl = extractUrlFromText(opt.label);
+                        if (currentUrl) {
+                          onLabelChange(opt.id, newValue ? `${newValue} ${currentUrl}` : currentUrl);
+                        } else {
+                          onLabelChange(opt.id, newValue);
+                        }
+                      }}
+                      onclick={(e) => e.stopPropagation()}
+                      rows="4"
+                    ></textarea>
+                  </div>
+                  
+                  <!-- Línea divisoria en el borde inferior -->
+                  <div class="card-divider-line card-divider-bottom"></div>
+                </div>
+                
+                <!-- Barra inferior -->
+                <div class="card-footer-bar" style="background-color: {opt.color};">
+                  <div class="card-bottom-row">
+                    <span class="text-white/50 text-sm">{labelText.length}/200</span>
+                    <div class="flex gap-2">
+                      <!-- Color picker -->
+                      <button
+                        type="button"
+                        class="edit-btn color-btn"
+                        style:background-color={opt.color}
+                        onclick={(e) => { e.stopPropagation(); onOpenColorPicker(opt.id); }}
+                        aria-label="Cambiar color"
+                      >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                      </button>
+                      
+                      <!-- Giphy picker -->
+                      <button
+                        type="button"
+                        class="edit-btn giphy-btn"
+                        onclick={(e) => { e.stopPropagation(); onOpenGiphyPicker(opt.id); }}
+                        aria-label="Buscar GIF"
+                      >
+                        <Sparkles size={24} strokeWidth={1.5} />
+                      </button>
+                      
+                      <!-- Eliminar opción -->
+                      {#if options.length > 2 && i > 0}
+                        <button
+                          type="button"
+                          class="edit-btn delete-btn"
+                          onclick={(e) => { e.stopPropagation(); onRemoveOption(opt.id); }}
+                          aria-label="Eliminar opción"
+                        >
+                          <Trash2 size={24} strokeWidth={1.5} class="text-white" />
+                        </button>
+                      {/if}
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <!-- Barra de herramientas de edición -->
-              <div class="edit-toolbar">
-                <span class="text-white/60 text-sm">Opción {i + 1} de {options.length}</span>
-                <div class="flex gap-3">
-                  <!-- Color picker -->
-                  <button
-                    type="button"
-                    class="edit-btn color-btn"
-                    style:background-color={opt.color}
-                    onclick={(e) => { e.stopPropagation(); onOpenColorPicker(opt.id); }}
-                    aria-label="Cambiar color"
-                  >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                    </svg>
-                  </button>
-                  
-                  <!-- Giphy picker -->
-                  <button
-                    type="button"
-                    class="edit-btn giphy-btn"
-                    onclick={(e) => { e.stopPropagation(); onOpenGiphyPicker(opt.id); }}
-                    aria-label="Buscar GIF"
-                  >
-                    <Sparkles size={20} />
-                  </button>
-                  
-                  <!-- Eliminar opción -->
-                  {#if options.length > 2 && i > 0}
-                    <button
-                      type="button"
-                      class="edit-btn delete-btn"
-                      style:background-color={opt.color}
-                      onclick={(e) => { e.stopPropagation(); onRemoveOption(opt.id); }}
-                      aria-label="Eliminar opción"
-                    >
-                      <Trash2 size={20} class="text-white" />
-                    </button>
-                  {/if}
-                </div>
-              </div>
-            </div>
-          {:else}
-            <!-- MEDIA CONTENT - Diseño tipo tarjeta flotante igual que PollMaximizedView -->
-            <div 
-              class="w-full h-full grid grid-rows-[1fr_auto]"
-              style="background-color: {opt.color};"
-            >
-              <!-- Área superior con la tarjeta flotante -->
-              <div class="flex items-start justify-center px-1 pt-28 pb-4 overflow-hidden relative">
-                <div class="floating-media-card">
-                  <div class="floating-media-inner">
+                
+              {:else if isVideoType}
+                <!-- === LAYOUT VIDEO/SPOTIFY === -->
+                <div class="card-video-wrapper" style="background-color: {opt.color};">
+                  <!-- Área de video más alta -->
+                  <div class="card-video-area">
                     {#if Math.abs(i - activeIndex) <= 1}
                       <MediaEmbed
                         url={mediaUrl}
@@ -258,30 +261,27 @@
                         autoplay={i === activeIndex}
                       />
                     {:else}
-                      <div class="w-full h-full flex items-center justify-center bg-black/20">
+                      <div class="w-full h-full flex items-center justify-center bg-black">
                         <span class="text-white/50">Cargando...</span>
                       </div>
                     {/if}
+                    
+                    <!-- Botón eliminar media -->
+                    <button
+                      type="button"
+                      class="remove-media-btn"
+                      onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
+                      aria-label="Eliminar media"
+                    >
+                      <X size={24} strokeWidth={1.5} />
+                    </button>
                   </div>
-                </div>
-                
-                <!-- Botón eliminar media -->
-                <button
-                  type="button"
-                  class="remove-media-btn"
-                  onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
-                  aria-label="Eliminar media"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <!-- Panel inferior glassmorphism -->
-              <div class="floating-glass-panel">
-                <div class="option-card-frame">
-                  <div class="option-card-inner">
+                  
+                  <!-- Contenido debajo del video -->
+                  <div class="card-video-bottom">
+                    <!-- Label editable -->
                     <textarea
-                      class="text-3xl md:text-4xl font-bold text-white uppercase tracking-tighter leading-none break-words bg-transparent border-none outline-none w-full text-left resize-none overflow-auto placeholder-white/50 pointer-events-auto"
+                      class="{labelText.length > 40 ? 'text-xl' : labelText.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight bg-transparent border-none outline-none w-full resize-none placeholder-white/50 pointer-events-auto card-bottom-label"
                       placeholder="Opción {i + 1}"
                       value={labelText}
                       oninput={(e) => {
@@ -297,10 +297,13 @@
                       rows="2"
                     ></textarea>
                     
+                    <!-- Línea divisoria -->
+                    <div class="card-divider-line"></div>
+                    
                     <!-- Barra de herramientas -->
-                    <div class="w-full flex items-center justify-between mt-3">
+                    <div class="card-bottom-row">
                       <span class="text-white/50 text-sm">{labelText.length}/200</span>
-                      <div class="flex gap-3">
+                      <div class="flex gap-2">
                         <!-- Color picker -->
                         <button
                           type="button"
@@ -310,7 +313,7 @@
                           aria-label="Cambiar color"
                         >
                           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                           </svg>
                         </button>
                         
@@ -321,7 +324,7 @@
                           onclick={(e) => { e.stopPropagation(); onOpenGiphyPicker(opt.id); }}
                           aria-label="Buscar GIF"
                         >
-                          <Sparkles size={20} />
+                          <Sparkles size={24} strokeWidth={1.5} />
                         </button>
                         
                         <!-- Eliminar opción -->
@@ -329,20 +332,128 @@
                           <button
                             type="button"
                             class="edit-btn delete-btn"
-                            style:background-color={opt.color}
                             onclick={(e) => { e.stopPropagation(); onRemoveOption(opt.id); }}
                             aria-label="Eliminar opción"
                           >
-                            <Trash2 size={20} class="text-white" />
+                            <Trash2 size={24} strokeWidth={1.5} class="text-white" />
                           </button>
                         {/if}
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+                
+              {:else}
+                <!-- === LAYOUT GIF/IMAGEN === -->
+                <!-- Wrapper con borde del color de la opción -->
+                <div class="card-media-border" style="--border-color: {opt.color};">
+                  <!-- Imagen a pantalla completa con contenido overlay -->
+                  <div class="card-media-fullscreen">
+                    <!-- Imagen de fondo -->
+                    <div class="card-image-fullscreen">
+                      {#if Math.abs(i - activeIndex) <= 1}
+                        <MediaEmbed
+                          url={mediaUrl}
+                          mode="full"
+                          width="100%"
+                          height="100%"
+                          autoplay={i === activeIndex}
+                        />
+                      {:else}
+                        <div class="w-full h-full flex items-center justify-center bg-black">
+                          <span class="text-white/50">Cargando...</span>
+                        </div>
+                      {/if}
+                      
+                      <!-- Badge GIPHY -->
+                      {#if isGifType}
+                        <span class="giphy-badge-corner">GIPHY</span>
+                      {/if}
+                      
+                      <!-- Botón eliminar media -->
+                      <button
+                        type="button"
+                        class="remove-media-btn"
+                        onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
+                        aria-label="Eliminar media"
+                      >
+                        <X size={24} strokeWidth={1.5} />
+                      </button>
+                    </div>
+                    
+                    <!-- Degradado inferior -->
+                    <div class="card-bottom-gradient"></div>
+                    
+                    <!-- Contenido inferior: label + línea + herramientas -->
+                    <div class="card-bottom-content">
+                      <!-- Label editable -->
+                      <textarea
+                        class="{labelText.length > 40 ? 'text-xl' : labelText.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight bg-transparent border-none outline-none w-full resize-none placeholder-white/50 pointer-events-auto card-bottom-label"
+                        placeholder="Opción {i + 1}"
+                        value={labelText}
+                        oninput={(e) => {
+                          const newValue = e.currentTarget.value;
+                          const currentUrl = extractUrlFromText(opt.label);
+                          if (currentUrl) {
+                            onLabelChange(opt.id, newValue ? `${newValue} ${currentUrl}` : currentUrl);
+                          } else {
+                            onLabelChange(opt.id, newValue);
+                          }
+                        }}
+                        onclick={(e) => e.stopPropagation()}
+                        rows="2"
+                      ></textarea>
+                      
+                      <!-- Línea divisoria -->
+                      <div class="card-divider-line"></div>
+                      
+                      <!-- Barra de herramientas -->
+                      <div class="card-bottom-row">
+                        <span class="text-white/50 text-sm">{labelText.length}/200</span>
+                        <div class="flex gap-2">
+                          <!-- Color picker -->
+                          <button
+                            type="button"
+                            class="edit-btn color-btn"
+                            style:background-color={opt.color}
+                            onclick={(e) => { e.stopPropagation(); onOpenColorPicker(opt.id); }}
+                            aria-label="Cambiar color"
+                          >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                            </svg>
+                          </button>
+                          
+                          <!-- Giphy picker -->
+                          <button
+                            type="button"
+                            class="edit-btn giphy-btn"
+                            onclick={(e) => { e.stopPropagation(); onOpenGiphyPicker(opt.id); }}
+                            aria-label="Buscar GIF"
+                          >
+                            <Sparkles size={24} strokeWidth={1.5} />
+                          </button>
+                          
+                          <!-- Eliminar opción -->
+                          {#if options.length > 2 && i > 0}
+                            <button
+                              type="button"
+                              class="edit-btn delete-btn"
+                              onclick={(e) => { e.stopPropagation(); onRemoveOption(opt.id); }}
+                              aria-label="Eliminar opción"
+                            >
+                              <Trash2 size={24} strokeWidth={1.5} class="text-white" />
+                            </button>
+                          {/if}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {/if}
+              
             </div>
-          {/if}
+          </div>
         </div>
       </div>
     {/each}
@@ -366,204 +477,480 @@
   textarea {
     font-family: inherit;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+  
+  textarea::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  
+  textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  textarea::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
+  
+  textarea::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
   }
   
   textarea::placeholder {
     text-shadow: none;
   }
   
-  /* Marco decorativo para opciones */
-  .option-card-frame {
-    position: relative;
-    max-width: 90%;
-    width: 100%;
-    padding: 3px;
-    border-radius: 24px;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.4) 0%,
-      rgba(255, 255, 255, 0.1) 50%,
-      rgba(255, 255, 255, 0.3) 100%
-    );
-    box-shadow: 
-      0 8px 32px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  /* Scrollbar personalizada para contenedores multimedia */
+  .card-video-area,
+  .card-media-fullscreen,
+  .card-image-fullscreen,
+  .card-content-area {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   }
   
-  .option-card-inner {
+  .card-video-area::-webkit-scrollbar,
+  .card-media-fullscreen::-webkit-scrollbar,
+  .card-image-fullscreen::-webkit-scrollbar,
+  .card-content-area::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  
+  .card-video-area::-webkit-scrollbar-track,
+  .card-media-fullscreen::-webkit-scrollbar-track,
+  .card-image-fullscreen::-webkit-scrollbar-track,
+  .card-content-area::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .card-video-area::-webkit-scrollbar-thumb,
+  .card-media-fullscreen::-webkit-scrollbar-thumb,
+  .card-image-fullscreen::-webkit-scrollbar-thumb,
+  .card-content-area::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
+  
+  .card-video-area::-webkit-scrollbar-thumb:hover,
+  .card-media-fullscreen::-webkit-scrollbar-thumb:hover,
+  .card-image-fullscreen::-webkit-scrollbar-thumb:hover,
+  .card-content-area::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+  
+  /* También para iframes y embeds dentro */
+  .card-video-area :global(iframe),
+  .card-media-fullscreen :global(iframe) {
+    scrollbar-width: none;
+  }
+  
+  .card-video-area :global(iframe)::-webkit-scrollbar,
+  .card-media-fullscreen :global(iframe)::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Ocultar overflow en contenedores de embeds (Spotify, etc) */
+  .card-video-area :global(.media-embed),
+  .card-video-area :global(.embed-container),
+  .card-video-area :global(.spotify-embed),
+  .card-video-area :global([class*="spotify"]) {
+    overflow: hidden !important;
+    scrollbar-width: none !important;
+  }
+  
+  .card-video-area :global(.media-embed)::-webkit-scrollbar,
+  .card-video-area :global(.embed-container)::-webkit-scrollbar,
+  .card-video-area :global(.spotify-embed)::-webkit-scrollbar,
+  .card-video-area :global([class*="spotify"])::-webkit-scrollbar {
+    display: none !important;
+  }
+  
+  /* Forzar overflow hidden en todo el área de video */
+  .card-video-area,
+  .card-video-area * {
+    overflow: hidden !important;
+  }
+  
+  .card-video-area :global(*) {
+    scrollbar-width: none !important;
+  }
+  
+  .card-video-area :global(*)::-webkit-scrollbar {
+    display: none !important;
+  }
+  
+  /* ========================================
+     CARD CONTAINER - Igual que PollMaximizedView
+     ======================================== */
+
+  /* Contenedor que centra la card y deja espacio para header/footer */
+  .option-card-container {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 110px 12px 70px;
+  }
+
+  /* Card con bordes redondeados - igual para todos los tipos */
+  .option-card-rounded {
     position: relative;
-    background: rgba(0, 0, 0, 0.25);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-radius: 22px;
-    padding: 32px 28px;
+    width: 100%;
+    height: 100%;
+    border-radius: 32px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 16px;
+    background: transparent;
+    border: none;
   }
-  
-  /* Floating media card */
-  .floating-media-card {
+
+  /* ========================================
+     LAYOUT TEXTO - Color sólido + comillas
+     ======================================== */
+
+  .card-content-area {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: none;
+    outline: none;
+    border-radius: 32px 32px 0 0;
+  }
+
+  .quote-decoration {
+    position: absolute;
+    font-size: 120px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.1);
+    line-height: 1;
+    pointer-events: none;
+    font-family: Georgia, serif;
+  }
+
+  .quote-open {
+    top: 20px;
+    left: 20px;
+  }
+
+  .quote-close {
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .text-center-wrapper {
+    padding: 24px;
+    max-width: 90%;
+    z-index: 2;
+  }
+
+  /* ========================================
+     FOOTER BAR - Igual para todos
+     ======================================== */
+
+  .card-footer-bar {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px 20px;
+    border-radius: 0 0 32px 32px;
+  }
+
+  /* Línea divisoria en el borde inferior del área de contenido */
+  .card-divider-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+
+  /* ========================================
+     LAYOUT VIDEO - Video arriba, contenido abajo
+     ======================================== */
+
+  /* Wrapper con el color de la opción - borde fino */
+  .card-video-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: 4px;
+    border-radius: 32px;
+    overflow: hidden;
+  }
+
+  .card-video-area {
+    flex: 0 0 55%;
+    position: relative;
+    overflow: hidden;
+    background: inherit;
+    border-radius: 28px;
+  }
+
+  .card-video-area :global(.media-embed),
+  .card-video-area :global(.embed-container),
+  .card-video-area :global(.mini-card),
+  .card-video-area :global(.linkedin-card),
+  .card-video-area :global(.oembed-container) {
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  .card-video-area :global(iframe),
+  .card-video-area :global(video) {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 28px !important;
+  }
+
+  /* Ocultar contenido extra en video */
+  .card-video-area :global(.linkedin-content),
+  .card-video-area :global(.mini-card-content) {
+    display: none !important;
+  }
+
+  /* Contenedor inferior del video */
+  .card-video-bottom {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 16px 16px 20px;
+    gap: 8px;
+    border-radius: 0 0 28px 28px;
+  }
+
+  /* ========================================
+     LAYOUT GIF/IMAGEN - Fullscreen con overlay
+     ======================================== */
+
+  /* Wrapper con borde del color de la opción */
+  .card-media-border {
+    width: 100%;
+    height: 100%;
+    padding: 4px;
+    background-color: var(--border-color);
+    border-radius: 32px;
+  }
+
+  /* Contenedor fullscreen para imagen */
+  .card-media-fullscreen {
     position: relative;
     width: 100%;
     height: 100%;
-    max-height: 100%;
-    padding: 8px;
-    background: white;
-    border-radius: 20px;
-    box-shadow: 
-      0 20px 60px rgba(0, 0, 0, 0.3),
-      0 8px 20px rgba(0, 0, 0, 0.2);
-  }
-  
-  .floating-media-inner {
-    width: 100%;
-    height: 100%;
-    border-radius: 14px;
     overflow: hidden;
-    background: #000;
+    border-radius: 28px;
   }
-  
-  .floating-media-inner :global(img),
-  .floating-media-inner :global(video) {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+
+  /* Imagen de fondo a pantalla completa */
+  .card-image-fullscreen {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
   }
-  
-  /* Panel inferior glassmorphism */
-  .floating-glass-panel {
-    display: flex;
-    justify-content: center;
-    padding: 0;
+
+  .card-image-fullscreen :global(.media-embed),
+  .card-image-fullscreen :global(.embed-container) {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
   }
-  
-  .floating-glass-panel .option-card-frame {
-    max-width: 100%;
-    width: 100%;
-    border-radius: 24px 24px 0 0;
-    padding-bottom: 120px;
+
+  .card-image-fullscreen :global(img),
+  .card-image-fullscreen :global(video) {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
   }
-  
-  .floating-glass-panel .option-card-inner {
-    padding: 20px 24px 40px 24px;
-    border-radius: 22px 22px 0 0;
-    align-items: flex-start;
+
+  /* Badge GIPHY en esquina superior derecha */
+  .giphy-badge-corner {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    z-index: 10;
   }
-  
-  /* Barra de herramientas de edición */
-  .edit-toolbar {
+
+  /* Degradado inferior fuerte */
+  .card-bottom-gradient {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
+    height: 60%;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.75) 30%,
+      rgba(0, 0, 0, 0.4) 60%,
+      transparent 100%
+    );
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* Contenido inferior superpuesto */
+  .card-bottom-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    padding: 20px;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card-bottom-label {
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.7),
+      0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Línea divisoria blanca fina */
+  .card-divider-line {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  .card-bottom-row {
+    display: flex;
     align-items: center;
-    padding: 16px 24px;
-    padding-bottom: 80px;
-    background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%);
-    z-index: 10;
-    pointer-events: auto;
+    justify-content: space-between;
   }
   
-  /* Botones de edición */
+  /* Botones de edición - Estilo action-bar */
   .edit-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: 2px solid white;
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
     cursor: pointer;
     transition: all 0.2s ease;
     color: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
   }
   
   .edit-btn:hover {
-    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+  
+  .edit-btn:active {
+    transform: scale(0.95);
   }
   
   .edit-btn.color-btn {
-    /* Color se aplica con style */
+    border-color: rgba(255, 255, 255, 0.5);
   }
   
   .edit-btn.giphy-btn {
-    background: rgba(30, 30, 35, 0.9);
-    backdrop-filter: blur(10px);
-    border-color: rgba(147, 197, 253, 0.5);
+    background: rgba(30, 30, 35, 0.8);
+    border-color: rgba(147, 197, 253, 0.4);
   }
   
   .edit-btn.giphy-btn:hover {
     background: rgba(147, 197, 253, 0.2);
-    border-color: rgba(147, 197, 253, 0.9);
+    border-color: rgba(147, 197, 253, 0.8);
   }
   
   .edit-btn.delete-btn {
-    border-radius: 12px;
+    background: rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 0.5);
   }
   
   .edit-btn.delete-btn:hover {
-    filter: brightness(1.2);
+    background: rgba(239, 68, 68, 0.5);
+    border-color: rgba(239, 68, 68, 0.8);
   }
   
   /* Botón eliminar media */
   .remove-media-btn {
     position: absolute;
-    top: 100px;
+    top: 16px;
     right: 16px;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 12px;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 100;
+    z-index: 10;
     transition: all 0.2s ease;
     pointer-events: auto;
   }
   
   .remove-media-btn:hover {
-    background: rgba(0, 0, 0, 0.9);
-    transform: scale(1.1);
-    border-color: white;
+    background: rgba(239, 68, 68, 0.4);
+    border-color: rgba(239, 68, 68, 0.6);
+  }
+  
+  .remove-media-btn:active {
+    transform: scale(0.95);
   }
   
   /* Responsive */
   @media (max-width: 480px) {
-    .option-card-frame {
-      max-width: 95%;
-      padding: 2px;
-      border-radius: 20px;
+    .option-card-container {
+      padding: 100px 8px 60px;
     }
     
-    .option-card-inner {
-      padding: 24px 20px;
-      border-radius: 18px;
-      gap: 12px;
+    .quote-decoration {
+      font-size: 80px;
     }
     
-    .floating-glass-panel .option-card-frame {
-      border-radius: 20px 20px 0 0;
-      padding-bottom: 110px;
+    .quote-open {
+      top: 12px;
+      left: 12px;
+    }
+
+    .quote-close {
+      bottom: 12px;
+      right: 12px;
     }
     
-    .floating-glass-panel .option-card-inner {
-      padding: 16px 20px 36px 20px;
-      border-radius: 18px 18px 0 0;
+    .text-center-wrapper {
+      padding: 16px;
     }
     
-    .edit-btn {
-      width: 40px;
-      height: 40px;
+    .card-footer-bar {
+      padding: 12px 14px 16px;
+    }
+    
+    .card-bottom-content {
+      padding: 16px;
     }
   }
 </style>
