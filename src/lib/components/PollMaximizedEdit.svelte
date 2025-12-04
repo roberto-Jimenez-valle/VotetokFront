@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X, Sparkles, Trash2, ChevronDown } from "lucide-svelte";
   import { fade, fly } from "svelte/transition";
+  import { onMount } from "svelte";
   import MediaEmbed from "./MediaEmbed.svelte";
 
   // --- INTERFACES ---
@@ -46,6 +47,27 @@
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
   let scrollContainer: HTMLElement | null = null;
   let isScrollingProgrammatically = false;
+
+  // Manejar botón atrás del navegador
+  onMount(() => {
+    history.pushState({ modal: 'maximizedEdit' }, '');
+    
+    const handlePopState = () => {
+      onClose();
+    };
+    
+    const handleCloseModals = () => {
+      onClose();
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
+    };
+  });
 
   // --- LÓGICA DE SCROLL ---
   function handleScroll() {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
   import { X, User, Settings, LogOut, Shield, HelpCircle, Bell, Moon, Sun, Globe } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { currentUser } from '$lib/stores';
   import { logout } from '$lib/stores/auth';
   
@@ -38,6 +38,40 @@
   function closeModal() {
     isOpen = false;
   }
+  
+  // Manejar botón atrás del navegador
+  let historyPushed = false;
+  
+  $effect(() => {
+    if (isOpen && !historyPushed) {
+      history.pushState({ modal: 'myProfile' }, '');
+      historyPushed = true;
+    } else if (!isOpen) {
+      historyPushed = false;
+    }
+  });
+  
+  onMount(() => {
+    const handlePopState = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    const handleCloseModals = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
+    };
+  });
   
   function handleAvatarError(e: Event) {
     const target = e.target as HTMLImageElement;

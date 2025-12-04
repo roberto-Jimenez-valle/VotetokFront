@@ -367,6 +367,40 @@
     searchQuery = '';
     searchResults = { polls: [], users: [] };
   }
+  
+  // Manejar botón atrás del navegador
+  let historyPushed = false;
+  
+  $effect(() => {
+    if (isOpen && !historyPushed) {
+      history.pushState({ modal: 'search' }, '');
+      historyPushed = true;
+    } else if (!isOpen) {
+      historyPushed = false;
+    }
+  });
+  
+  onMount(() => {
+    const handlePopState = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    const handleCloseModals = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
+    };
+  });
 </script>
 
 {#if isOpen}

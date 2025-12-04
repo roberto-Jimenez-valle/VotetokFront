@@ -67,6 +67,40 @@
     }, 300);
   }
   
+  // Manejar botón atrás del navegador
+  let historyPushed = false;
+  
+  $effect(() => {
+    if (isOpen && !historyPushed) {
+      history.pushState({ modal: 'profile' }, '');
+      historyPushed = true;
+    } else if (!isOpen) {
+      historyPushed = false;
+    }
+  });
+  
+  onMount(() => {
+    const handlePopState = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    const handleCloseModals = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
+    };
+  });
+  
   // Cargar datos del usuario cuando se abre el modal o cambia el userId
   $effect(() => {
     if (isOpen && userId) {

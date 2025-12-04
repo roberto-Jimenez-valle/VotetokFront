@@ -14,6 +14,7 @@
     MoreHorizontal,
     X,
     ChevronDown,
+    ChevronRight,
     Check,
     MessageCircle,
     MoreVertical,
@@ -192,6 +193,34 @@
     if (pollId) {
       registerView();
     }
+  });
+  
+  // Manejar botón atrás del navegador
+  let historyPushed = false;
+  
+  // Agregar entrada al historial cuando se monta (el componente solo existe cuando está visible)
+  onMount(() => {
+    history.pushState({ modal: 'maximized' }, '');
+    historyPushed = true;
+    
+    const handlePopState = () => {
+      if (historyPushed) {
+        historyPushed = false;
+        onClose();
+      }
+    };
+    
+    const handleCloseModals = () => {
+      onClose();
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
+    };
   });
   
   async function registerView() {
@@ -425,52 +454,9 @@
     }
   }
 
-  // Handle share with Web Share API
+  // Handle share with Web Share API - redirige a handleShareAction
   async function handleShare() {
-    console.log("[PollMaximizedView] Share button clicked");
-
-    try {
-      // Check if Web Share API is supported
-      if (navigator.share) {
-        console.log(
-          "[PollMaximizedView] Web Share API supported, opening share dialog",
-        );
-        await navigator.share({
-          title: pollTitle,
-          text: `Vota en esta encuesta: ${pollTitle}`,
-          url: window.location.href,
-        });
-        console.log("[PollMaximizedView] Share successful");
-      } else {
-        console.log(
-          "[PollMaximizedView] Web Share API not supported, using clipboard fallback",
-        );
-        // Fallback: copy to clipboard
-        await navigator.clipboard.writeText(window.location.href);
-        alert("Enlace copiado al portapapeles");
-      }
-    } catch (error: any) {
-      // User cancelled or error occurred
-      if (error.name === "AbortError") {
-        console.log("[PollMaximizedView] User cancelled share");
-      } else {
-        console.error("[PollMaximizedView] Error sharing:", error);
-        // Try clipboard as fallback
-        try {
-          await navigator.clipboard.writeText(window.location.href);
-          alert("Enlace copiado al portapapeles");
-        } catch (clipboardError) {
-          console.error(
-            "[PollMaximizedView] Clipboard also failed:",
-            clipboardError,
-          );
-          alert("No se pudo compartir. URL: " + window.location.href);
-        }
-      }
-    }
-
-    // Also call the parent's onShare if provided
-    onShare();
+    await handleShareAction();
   }
 
   // --- DETECCIÓN DE TIPO DE MEDIA (SI NO VIENE EXPLÍCITO) ---
@@ -629,7 +615,7 @@
   // Copiar enlace al portapapeles
   async function copyLink() {
     try {
-      const url = `${window.location.origin}/?poll=${pollId}`;
+      const url = `https://voutop.com/?poll=${pollId}`;
       await navigator.clipboard.writeText(url);
       isMoreMenuOpen = false;
       showShareToastNotification();
@@ -638,7 +624,7 @@
       console.error('Error copiando enlace:', err);
       // Fallback
       const textarea = document.createElement('textarea');
-      textarea.value = `${window.location.origin}/?poll=${pollId}`;
+      textarea.value = `https://voutop.com/?poll=${pollId}`;
       textarea.style.position = 'fixed';
       textarea.style.top = '0';
       textarea.style.left = '-9999px';
@@ -682,27 +668,36 @@
     }
   }
   
-  // Handler para compartir con Web Share API
+  // Handler para compartir - copia texto formateado al portapapeles
   async function handleShareAction() {
-    const shareUrl = `${window.location.origin}/?poll=${pollId}`;
+    const shareUrl = `https://voutop.com/?poll=${pollId}`;
     const shareTitle = pollTitle || 'Encuesta';
-    const shareText = `Vota en esta encuesta: ${shareTitle}`;
+    
+    // Emojis de números para las opciones
+    const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
+    
+    // Crear texto con formato bonito
+    const optionLabels = options.slice(0, 6).map((opt, i) => `${numberEmojis[i]} ${opt.label}`).join('\n');
+    const shareText = `❓${shareTitle}\n\n🧩 Opciones:\n${optionLabels}\n\n🗳️ ¡Vota ahora!\n${shareUrl}`;
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: shareTitle,
-          text: shareText,
-          url: shareUrl
-        });
-        registerShare();
-      } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-          copyLink();
-        }
-      }
-    } else {
-      copyLink();
+    // Copiar directamente al portapapeles (más confiable que Web Share API)
+    try {
+      await navigator.clipboard.writeText(shareText);
+      showShareToastNotification();
+      registerShare();
+    } catch {
+      // Fallback con textarea
+      const textarea = document.createElement('textarea');
+      textarea.value = shareText;
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showShareToastNotification();
+      registerShare();
     }
   }
 
@@ -840,7 +835,7 @@
               class="w-8 h-8 bg-black/40 rounded-full flex items-center justify-center border border-white/20 flex-shrink-0 pointer-events-auto transition-all hover:bg-black/60 active:scale-95"
               aria-label="Minimizar"
             >
-              <ChevronDown size={18} class="text-white" />
+              <ChevronRight size={18} class="text-white" />
             </button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
   import { X, Bell, Heart, MessageCircle, UserPlus, TrendingUp, Check } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import UserProfileModal from '$lib/UserProfileModal.svelte';
   
   const dispatch = createEventDispatcher();
@@ -121,6 +121,40 @@
   function closeModal() {
     isOpen = false;
   }
+  
+  // Manejar botón atrás del navegador
+  let historyPushed = false;
+  
+  $effect(() => {
+    if (isOpen && !historyPushed) {
+      history.pushState({ modal: 'notifications' }, '');
+      historyPushed = true;
+    } else if (!isOpen) {
+      historyPushed = false;
+    }
+  });
+  
+  onMount(() => {
+    const handlePopState = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    const handleCloseModals = () => {
+      if (isOpen) {
+        closeModal();
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
+    };
+  });
   
   function markAllAsRead() {
     // Lógica para marcar todas como leídas

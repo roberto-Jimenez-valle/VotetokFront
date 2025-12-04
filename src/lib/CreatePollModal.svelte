@@ -1152,6 +1152,18 @@
     }
   }
   
+  // Manejar botón atrás del navegador
+  let historyPushed = false;
+  
+  $effect(() => {
+    if (isOpen && !historyPushed) {
+      history.pushState({ modal: 'createPoll' }, '');
+      historyPushed = true;
+    } else if (!isOpen) {
+      historyPushed = false;
+    }
+  });
+  
   // Detectar si es dispositivo táctil al montar el componente
   onMount(() => {
     // Lazy load PollMaximizedView para evitar dependencia circular (async)
@@ -1160,6 +1172,23 @@
     });
     
     isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // Listener para botón atrás
+    const handlePopState = () => {
+      if (isOpen) {
+        isOpen = false;
+        historyPushed = false;
+      }
+    };
+    
+    const handleCloseModals = () => {
+      if (isOpen) {
+        isOpen = false;
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
     
     // Agregar listeners globales para AMBOS modos
     const handleGlobalMove = (e: TouchEvent | PointerEvent) => {
@@ -1181,6 +1210,8 @@
         
     // Cleanup
     return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
       document.removeEventListener('pointermove', handleGlobalMove);
       document.removeEventListener('pointerup', handleGlobalEnd);
       document.removeEventListener('touchmove', handleGlobalMove);

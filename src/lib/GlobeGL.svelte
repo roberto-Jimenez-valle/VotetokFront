@@ -9590,6 +9590,24 @@
       sheetCtrl?.setState("expanded");
     } catch {}
   }}
+  on:requestCollapse={() => {
+    SHEET_STATE = "peek";
+    try {
+      sheetCtrl?.setState("peek");
+    } catch {}
+  }}
+  on:requestPeek={() => {
+    SHEET_STATE = "peek";
+    try {
+      sheetCtrl?.setState("peek");
+    } catch {}
+  }}
+  on:requestHide={() => {
+    SHEET_STATE = "hidden";
+    try {
+      sheetCtrl?.setState("hidden");
+    } catch {}
+  }}
   on:close={() => {
     SHEET_STATE = "hidden";
   }}

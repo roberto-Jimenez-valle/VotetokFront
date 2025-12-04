@@ -183,6 +183,17 @@
 
   // Actualizar tiempos cada minuto
   let timeUpdateInterval: number | undefined;
+  
+  // Control de historial para el estado expandido
+  let sheetHistoryPushed = false;
+  
+  // Detectar cuando el bottomsheet se expande para agregar entrada al historial
+  $: if (state === "expanded" && !sheetHistoryPushed) {
+    history.pushState({ bottomSheet: 'expanded' }, '');
+    sheetHistoryPushed = true;
+  } else if (state !== "expanded") {
+    sheetHistoryPushed = false;
+  }
 
   onMount(() => {
     // Actualizar cada 60 segundos
@@ -1084,6 +1095,9 @@
     openprofile: { userId: number };
     vote: { option: string; pollId?: string };
     requestExpand: void;
+    requestCollapse: void;
+    requestPeek: void;
+    requestHide: void;
     polldropdownstatechange: { open: boolean };
   }>();
 
@@ -1252,8 +1266,32 @@
     document.addEventListener("touchmove", handleGlobalMove, { passive: true });
     document.addEventListener("pointerup", handleGlobalEnd);
     document.addEventListener("touchend", handleGlobalEnd);
+    
+    // Manejar botón atrás del navegador para cerrar modales y colapsar bottomsheet
+    const handlePopState = () => {
+      // Cerrar preview modal primero
+      if (showPreviewModal) {
+        showPreviewModal = false;
+        return;
+      }
+      // Cerrar bottomsheet completamente si está expandido
+      if (state === "expanded") {
+        dispatch("requestHide");
+      }
+    };
+    
+    const handleCloseModals = () => {
+      if (showPreviewModal) {
+        showPreviewModal = false;
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('closeModals', handleCloseModals);
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('closeModals', handleCloseModals);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener(
         "webkitfullscreenchange",
