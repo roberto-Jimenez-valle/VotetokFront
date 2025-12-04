@@ -319,17 +319,10 @@
       </div>
     </div>
   {:else}
-    <!-- === LAYOUT TEXTO PURO (formato dividido) === -->
-    <div class="card-video-wrapper" style="background-color: {color};">
-      <!-- Área superior solo color -->
-      <div class="card-video-area card-color-only">
-        <div class="color-only-area">
-          <div class="noise-overlay"></div>
-        </div>
-      </div>
-      
-      <!-- Contenido debajo -->
-      <div class="card-video-bottom">
+    <!-- === LAYOUT TEXTO PURO (sin área superior) === -->
+    <div class="card-text-only" style="background-color: {color};">
+      <div class="noise-overlay"></div>
+      <div class="card-text-content">
         {#if mode === 'edit'}
           <textarea
             class="option-label-edit"
@@ -478,25 +471,35 @@
     flex-direction: column;
   }
   
-  /* Área solo color (texto puro) */
-  .card-color-only {
-    background: inherit;
-  }
-  
-  .color-only-area {
+  /* Layout texto puro (sin área superior) */
+  .card-text-only {
+    position: relative;
     width: 100%;
     height: 100%;
-    position: relative;
-    background: inherit;
+    border-radius: 32px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
   }
   
-  .color-only-area .noise-overlay {
+  .card-text-only > .noise-overlay {
     position: absolute;
     inset: 0;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
     opacity: 0.08;
     mix-blend-mode: overlay;
     pointer-events: none;
+    z-index: 0;
+  }
+  
+  .card-text-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
   }
   
   /* ========================================
@@ -660,11 +663,12 @@
   }
   
   /* Texto puro puede tener múltiples líneas */
-  .card-color-only + .card-video-bottom .option-label-view {
+  .card-text-content .option-label-view {
     white-space: normal;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   
   .option-label-edit {

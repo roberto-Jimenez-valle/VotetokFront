@@ -8,6 +8,7 @@
   import AuthModal from '$lib/AuthModal.svelte';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import LinkPreview from '$lib/components/LinkPreview.svelte';
+  import PollOptionCard from '$lib/components/PollOptionCard.svelte';
   // Lazy load para romper dependencia circular y evitar stack overflow en build
   import GiphyPicker from '$lib/components/GiphyPicker.svelte';
   

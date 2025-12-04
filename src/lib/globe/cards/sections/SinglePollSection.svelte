@@ -3855,13 +3855,6 @@
     border: 2px solid var(--option-border-color, transparent);
   }
 
-  .option-slide.is-active {
-    transform: scale(1.02);
-    box-shadow: 
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      0 4px 16px rgba(0, 0, 0, 0.3),
-      inset 0 0 0 2px rgba(255, 255, 255, 0.1);
-  }
 
   .option-slide:active {
     transform: scale(0.98);
