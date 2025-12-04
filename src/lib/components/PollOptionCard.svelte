@@ -110,6 +110,10 @@
   }
 
   const displayLabel = $derived(getLabelWithoutUrl(label));
+  
+  // Color neutro cuando no ha votado (solo en modo view)
+  const NEUTRAL_COLOR = '#3a3d42';
+  const displayColor = $derived(mode === 'edit' || userHasVoted ? color : NEUTRAL_COLOR);
 </script>
 
 <div 
@@ -121,7 +125,7 @@
   class:is-voted={isVoted}
   class:is-active={isActive}
   class:is-clickable={isClickable && mode === 'view'}
-  style="--option-color: {color};"
+  style="--option-color: {displayColor};"
   role={isClickable && mode === 'view' ? 'button' : undefined}
   tabindex={isClickable && mode === 'view' ? 0 : undefined}
   onclick={isClickable && mode === 'view' ? onClick : undefined}
@@ -130,7 +134,7 @@
 >
   {#if isVideoType}
     <!-- === LAYOUT VIDEO/SPOTIFY/SOUNDCLOUD === -->
-    <div class="card-video-wrapper" style="background-color: {color};">
+    <div class="card-video-wrapper" style="background-color: {displayColor};">
       <!-- Área de video (55%) -->
       <div class="card-video-area">
         <MediaEmbed 
@@ -320,7 +324,7 @@
     </div>
   {:else}
     <!-- === LAYOUT TEXTO PURO (sin área superior) === -->
-    <div class="card-text-only" style="background-color: {color};">
+    <div class="card-text-only" style="background-color: {displayColor};">
       <div class="noise-overlay"></div>
       <div class="card-text-content">
         {#if mode === 'edit'}

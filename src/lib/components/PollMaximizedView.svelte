@@ -147,6 +147,9 @@
   // Si no ha votado, mostrar el color de la opción activa
   let voteColor = $state('#10b981');
   
+  // Color neutro para opciones antes de votar
+  const NEUTRAL_COLOR = '#3a3d42';
+  
   $effect(() => {
     if (hasVoted) {
       // Buscar la opción que el usuario votó
@@ -884,7 +887,7 @@
                   {#if type === "text"}
                     <!-- === LAYOUT SOLO TEXTO === -->
                     <!-- Área principal con color de fondo y comillas -->
-                    <div class="card-content-area" style="background-color: {opt.color};">
+                    <div class="card-content-area" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
                       <!-- Comillas decorativas -->
                       <span class="quote-decoration quote-open">"</span>
                       <span class="quote-decoration quote-close">"</span>
@@ -901,7 +904,7 @@
                     </div>
                     
                     <!-- Barra inferior -->
-                    <div class="card-footer-bar" style="background-color: {opt.color};">
+                    <div class="card-footer-bar" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
                       <div class="card-bottom-row">
                         {#if hasVoted && totalVotes > 0}
                           <div class="card-percentage">
@@ -948,7 +951,7 @@
                   {:else if isVideoType}
                     <!-- === LAYOUT VIDEO === -->
                     <!-- Card con color de fondo de la opción -->
-                    <div class="card-video-wrapper" style="background-color: {opt.color};">
+                    <div class="card-video-wrapper" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
                       <!-- Área de video más alta -->
                       <div class="card-video-area">
                         {#if Math.abs(i - activeIndex) <= 1}
@@ -1024,7 +1027,7 @@
                   {:else}
                     <!-- === LAYOUT GIF/IMAGEN === -->
                     <!-- Wrapper con borde del color de la opción -->
-                    <div class="card-media-border" style="--border-color: {opt.color};">
+                    <div class="card-media-border" style="--border-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
                       <!-- Imagen a pantalla completa con contenido overlay -->
                       <div class="card-media-fullscreen">
                         <!-- Imagen de fondo -->

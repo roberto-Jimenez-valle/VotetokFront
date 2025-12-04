@@ -1096,7 +1096,7 @@
         
         <button
           class={`option-slide ${index === activeAccordionIndex ? 'is-active' : ''} ${isPollVoted ? 'voted' : ''}`}
-          style="scroll-snap-stop: always; --option-border-color: {(displayVotes[poll.id] || userVotes[poll.id]) ? option.color : 'rgba(255, 255, 255, 0.15)'};" 
+          style="scroll-snap-stop: always; --option-border-color: {(displayVotes[poll.id] || userVotes[poll.id]) ? option.color : 'transparent'};" 
           type="button"
           aria-pressed={isPollVoted}
           aria-label={`Opción ${index + 1}: ${option.label}`}
