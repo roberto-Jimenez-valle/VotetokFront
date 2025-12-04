@@ -1409,61 +1409,69 @@
               {/if}
             </div>
             
-            <!-- Contenido centrado (label + percentage) -->
+            <!-- Degradado inferior para legibilidad -->
+            <div class="maximized-bottom-gradient"></div>
+            
+            <!-- Contenido en la parte inferior (label + línea + percentage) -->
             <div class="option-content-maximized">
-              <!-- Label grande en uppercase con tamaño dinámico y truncamiento -->
+              <!-- Label grande en uppercase con tamaño dinámico -->
               <h2 class="option-label-maximized {fontSize}" style="display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; word-break: break-word;">
                 {option.label}
               </h2>
               
-              <!-- Porcentaje grande si ha votado -->
+              <!-- Línea divisoria -->
+              <div class="maximized-divider-line" style="--divider-color: {option.color}"></div>
+              
+              <!-- Porcentaje grande si ha votado + avatares a la derecha -->
               {#if pollVotedOption}
-                <div class="option-percentage-voted">
-                  <span class="percentage-value-large" style="color: {option.color}">
-                    {Math.round(displayPct)}%
-                  </span>
-                  <span class="percentage-subtitle">del total</span>
+                {@const friendsForOption = poll.friendsByOption?.[option.key] || []}
+                {@const filteredFriends = friendsForOption.filter((friend: any) => friend.id !== poll.user?.id)}
+                {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
+                
+                <div class="option-percentage-voted-bottom">
+                  <div class="percentage-info">
+                    <span class="percentage-value-large" style="color: {option.color}">
+                      {Math.round(displayPct)}%
+                    </span>
+                    <span class="percentage-subtitle">DE LOS VOTOS</span>
+                  </div>
+                  
+                  <!-- Avatares de amigos a la derecha -->
+                  {#if filteredFriends.length > 0}
+                    <button 
+                      class="friend-avatars-inline friend-avatars-btn-mini"
+                      onclick={(e) => { e.stopPropagation(); if (userHasVoted) showFriendsVotesModal = true; }}
+                      disabled={!userHasVoted}
+                      aria-label={userHasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
+                    >
+                      {#each filteredFriends.slice(0, 3) as friend, i}
+                        <div 
+                          class="friend-avatar-wrapper" 
+                          style="z-index: {10 - i};"
+                        >
+                          {#if userHasVoted}
+                            <img 
+                              class="friend-avatar-mini" 
+                              src={friend.avatarUrl || DEFAULT_AVATAR}
+                              alt={friend.name}
+                              loading="lazy"
+                            />
+                          {:else}
+                            <div class="friend-avatar-mystery">
+                              <span>?</span>
+                            </div>
+                          {/if}
+                        </div>
+                      {/each}
+                      {#if filteredFriends.length > 3}
+                        <div class="more-friends-count">+{filteredFriends.length - 3}</div>
+                      {/if}
+                    </button>
+                  {/if}
                 </div>
               {/if}
-              
             </div>
             
-            <!-- Avatares de amigos (si hay) -->
-            {#if poll.friendsByOption?.[option.key] && poll.friendsByOption[option.key].length > 0}
-              {@const filteredFriends = poll.friendsByOption[option.key].filter((friend: any) => friend.id !== poll.user?.id)}
-              {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
-              {#if filteredFriends.length > 0}
-                <button 
-                  class="friend-avatars-maximized friend-avatars-btn-mini"
-                  onclick={(e) => { e.stopPropagation(); if (userHasVoted) showFriendsVotesModal = true; }}
-                  disabled={!userHasVoted}
-                  aria-label={userHasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
-                >
-                  {#each filteredFriends.slice(0, 3) as friend, i}
-                    <div 
-                      class="friend-avatar-wrapper" 
-                      style="z-index: {10 - i};"
-                    >
-                      {#if userHasVoted}
-                        <img 
-                          class="friend-avatar-mini" 
-                          src={friend.avatarUrl || DEFAULT_AVATAR}
-                          alt={friend.name}
-                          loading="lazy"
-                        />
-                      {:else}
-                        <div class="friend-avatar-mystery">
-                          <span>?</span>
-                        </div>
-                      {/if}
-                    </div>
-                  {/each}
-                  {#if filteredFriends.length > 3}
-                    <div class="more-friends-count">+{filteredFriends.length - 3}</div>
-                  {/if}
-                </button>
-              {/if}
-            {/if}
           {/if}
         </button>
       {/each}
@@ -3589,18 +3597,38 @@
     pointer-events: none;
   }
 
-  /* Contenido centrado */
+  /* Degradado inferior para legibilidad */
+  .maximized-bottom-gradient {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70%;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.8) 25%,
+      rgba(0, 0, 0, 0.5) 50%,
+      rgba(0, 0, 0, 0.2) 75%,
+      transparent 100%
+    );
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* Contenido en la parte INFERIOR */
   .option-content-maximized {
-    position: relative;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     z-index: 3;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 24px 16px;
-    height: 100%;
-    text-align: center;
+    align-items: flex-start;
+    gap: 0;
+    padding: 16px 20px 24px 20px;
+    text-align: left;
   }
 
   /* Label grande en uppercase */
@@ -3621,17 +3649,32 @@
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
   }
 
-  /* Porcentaje cuando ha votado */
-  .option-percentage-voted {
+  /* Línea divisoria blanca fina */
+  .maximized-divider-line {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.4);
+    margin: 8px 0;
+  }
+
+  /* Porcentaje cuando ha votado - posicionado abajo del label */
+  .option-percentage-voted-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 12px;
+  }
+
+  .option-percentage-voted-bottom .percentage-info {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    margin-top: 8px;
+    align-items: flex-start;
+    gap: 2px;
   }
 
   .percentage-value-large {
-    font-size: 42px;
+    font-size: 36px;
     font-weight: 900;
     line-height: 1;
     text-shadow: 
@@ -3641,11 +3684,11 @@
   }
 
   .percentage-subtitle {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.8);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-weight: 700;
+    letter-spacing: 0.1em;
+    font-weight: 600;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   }
 
@@ -3708,7 +3751,7 @@
     font-weight: 700;
   }
 
-  /* Avatares de amigos en diseño maximizado */
+  /* Avatares de amigos en diseño maximizado (posición absoluta) */
   .friend-avatars-maximized {
     position: absolute;
     bottom: 16px;
@@ -3717,6 +3760,28 @@
     align-items: center;
     gap: 4px;
     z-index: 10;
+  }
+
+  /* Avatares de amigos inline (junto al porcentaje) */
+  .friend-avatars-inline {
+    display: flex;
+    align-items: center;
+    gap: -4px;
+    margin-left: auto;
+  }
+
+  .friend-avatars-inline .friend-avatar-wrapper {
+    margin-left: -8px;
+  }
+
+  .friend-avatars-inline .friend-avatar-wrapper:first-child {
+    margin-left: 0;
+  }
+
+  .friend-avatars-inline .friend-avatar-mini {
+    width: 36px;
+    height: 36px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
   }
 
   .friend-avatar-wrapper {

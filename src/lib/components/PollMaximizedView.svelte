@@ -866,137 +866,90 @@
       >
         {#each options as opt, i (opt.id)}
           {@const type = getMediaType(opt)}
+          {@const isVideoType = type === 'youtube' || type === 'vimeo' || type === 'spotify' || (opt.imageUrl && /\.(mp4|webm|mov)([?#]|$)/i.test(opt.imageUrl)) || (opt.imageUrl && opt.imageUrl.includes('spotify.com'))}
+          {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
+          {@const isImageType = type === 'image' && !isGifType}
           <div
             class="w-full h-full flex-shrink-0 snap-center relative"
             style="scroll-snap-stop: always;"
           >
             <!-- SlideContent -->
             <div class="w-full h-full relative overflow-hidden">
-              {#if type === "text"}
-                <div
-                  class="w-full h-full flex flex-col items-center justify-center px-6 py-16 text-center relative overflow-hidden"
-                  style="background-color: {opt.color};"
-                >
-                  <!-- Marco decorativo para la opción -->
-                  <div class="option-card-frame">
-                    <div class="option-card-inner">
-                    {#if !readOnly}
-                      <textarea
-                        class="text-5xl md:text-7xl font-bold text-white uppercase tracking-tighter leading-none break-words bg-transparent border-none outline-none w-full text-center resize-none overflow-auto placeholder-white/50"
-                        placeholder="Opción {i + 1}"
-                        value={opt.label}
-                        oninput={(e) =>
-                          onLabelChange(opt.id, e.currentTarget.value)}
-                        onclick={(e) => e.stopPropagation()}
-                        rows="4"
-                      ></textarea>
-                      <button
-                        class="w-10 h-10 rounded-full border-2 border-white/50 shadow-lg z-50 hover:scale-110 transition-transform"
-                        style:background-color={opt.color}
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          onOpenColorPicker(opt.id);
-                        }}
-                        title="Cambiar color"
-                      ></button>
-                    {:else}
-                      {@const textLength = opt.label.length}
-                      {@const fontSize = textLength > 60 ? 'text-4xl md:text-5xl' : textLength > 40 ? 'text-5xl md:text-6xl' : 'text-5xl md:text-7xl'}
-                      {@const shouldTruncate = textLength > 100}
-                      <h1 
-                        class="{fontSize} font-bold text-white uppercase tracking-tighter leading-none break-words text-center w-full"
-                        style={shouldTruncate && !expandedOptions[opt.id] ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden; cursor: pointer;" : shouldTruncate ? "cursor: pointer;" : ""}
-                        onclick={() => {
-                          if (shouldTruncate) {
-                            expandedOptions[opt.id] = !expandedOptions[opt.id];
-                          }
-                        }}
-                        role={shouldTruncate ? "button" : undefined}
-                        tabindex={shouldTruncate ? 0 : undefined}
-                        aria-label={shouldTruncate ? (expandedOptions[opt.id] ? "Contraer texto" : "Expandir texto") : undefined}
-                      >
-                        {opt.label}
-                      </h1>
-                    {/if}
-                    {#if opt.artist}
-                      <span
-                        class="text-sm font-bold uppercase tracking-widest text-white/60 bg-black/20 px-3 py-1 rounded-full"
-                      >
-                        {opt.artist}
-                      </span>
-                    {/if}
-                    {#if opt.description}
-                      <p
-                        class="text-xl text-white/80 font-serif italic leading-relaxed mt-4 max-w-sm"
-                      >
-                        "{opt.description}"
-                      </p>
-                    {/if}
-                    
-                    <!-- Fila con porcentaje (izq) y avatares (der) - igual que en media -->
-                    <div class="w-full flex items-center justify-between mt-4">
-                      <!-- Porcentaje a la izquierda -->
-                      {#if hasVoted && totalVotes > 0}
-                        <div class="text-percentage-inline" in:fly={{ y: 10, duration: 400 }}>
-                          <span class="text-percentage-value-inline">
-                            {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
-                          </span>
-                          <span class="text-percentage-label-inline">de los votos</span>
-                        </div>
-                      {:else}
-                        <div></div>
-                      {/if}
+              
+              <!-- CARD CONTAINER - Igual para todos los tipos -->
+              <div class="option-card-container">
+                <div class="option-card-rounded">
+                  
+                  {#if type === "text"}
+                    <!-- === LAYOUT SOLO TEXTO === -->
+                    <!-- Área principal con color de fondo y comillas -->
+                    <div class="card-content-area" style="background-color: {opt.color};">
+                      <!-- Comillas decorativas -->
+                      <span class="quote-decoration quote-open">"</span>
+                      <span class="quote-decoration quote-close">"</span>
                       
-                      <!-- Avatares a la derecha - Solo si ha votado -->
-                      {#if getFriendsForOption(opt.id).length > 0}
-                        {@const optFriends = getFriendsForOption(opt.id)}
-                        <button 
-                          class="friends-avatars-btn pointer-events-auto"
-                          onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
-                          aria-label="Ver votos de amigos"
-                        >
-                          {#each optFriends.slice(0, 5) as friend, idx}
-                            <div 
-                              class="friend-avatar-item" 
-                              style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
+                      <!-- Texto centrado -->
+                      <div class="text-center-wrapper">
+                        <h1 class="{opt.label.length > 60 ? 'text-3xl' : opt.label.length > 40 ? 'text-4xl' : 'text-5xl'} font-bold text-white uppercase tracking-tighter leading-tight break-words text-center">
+                          {opt.label}
+                        </h1>
+                      </div>
+                      
+                      <!-- Línea divisoria en el borde inferior -->
+                      <div class="card-divider-line card-divider-bottom"></div>
+                    </div>
+                    
+                    <!-- Barra inferior -->
+                    <div class="card-footer-bar" style="background-color: {opt.color};">
+                      <div class="card-bottom-row">
+                        {#if hasVoted && totalVotes > 0}
+                          <div class="card-percentage">
+                            <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
+                            <span class="card-percentage-label">DE LOS VOTOS</span>
+                          </div>
+                        {:else}
+                          <div></div>
+                        {/if}
+                        
+                        <!-- Avatares de amigos -->
+                        <div class="card-avatars-group">
+                          {#if getFriendsForOption(opt.id).length > 0}
+                            <button 
+                              class="friends-avatars-stack"
+                              onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
+                              disabled={!hasVoted}
+                              type="button"
+                              aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
                             >
-                              {#if hasVoted}
-                                <img 
-                                  src={friend.avatarUrl || '/default-avatar.png'}
-                                  alt={friend.name}
-                                  class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
-                                />
-                              {:else}
-                                <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 flex items-center justify-center shadow-lg">
-                                  <span class="text-white/60 text-sm font-bold">?</span>
-                                </div>
+                              {#each getFriendsForOption(opt.id).slice(0, 3) as friend, idx}
+                                {#if hasVoted}
+                                  <img 
+                                    class="friend-avatar-stacked" 
+                                    style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
+                                    src={friend.avatarUrl || '/default-avatar.png'}
+                                    alt={friend.name || 'Amigo'}
+                                  />
+                                {:else}
+                                  <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
+                                    <span>?</span>
+                                  </div>
+                                {/if}
+                              {/each}
+                              {#if getFriendsForOption(opt.id).length > 3}
+                                <span class="friends-more-count">+{getFriendsForOption(opt.id).length - 3}</span>
                               {/if}
-                            </div>
-                          {/each}
-                          {#if optFriends.length > 5}
-                            <div 
-                              class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
-                              style="margin-left: -8px; z-index: 0;"
-                            >
-                              <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
-                            </div>
+                            </button>
                           {/if}
-                        </button>
-                      {/if}
+                        </div>
+                      </div>
                     </div>
-                    </div>
-                  </div>
-                </div>
-              {:else}
-                <!-- Media Content - Diseño tipo tarjeta flotante -->
-                <div 
-                  class="w-full h-full grid grid-rows-[1fr_auto]"
-                  style="background-color: {opt.color};"
-                >
-                  <!-- Área superior con la tarjeta flotante -->
-                  <div class="flex items-start justify-center px-1 pt-28 pb-4 overflow-hidden">
-                    <div class="floating-media-card">
-                      <div class="floating-media-inner">
+                    
+                  {:else if isVideoType}
+                    <!-- === LAYOUT VIDEO === -->
+                    <!-- Card con color de fondo de la opción -->
+                    <div class="card-video-wrapper" style="background-color: {opt.color};">
+                      <!-- Área de video más alta -->
+                      <div class="card-video-area">
                         {#if Math.abs(i - activeIndex) <= 1}
                           <MediaEmbed
                             url={opt.imageUrl || ""}
@@ -1006,84 +959,157 @@
                             autoplay={i === activeIndex}
                           />
                         {:else}
-                          <div class="w-full h-full flex items-center justify-center bg-black/20">
+                          <div class="w-full h-full flex items-center justify-center bg-black">
                             <span class="text-white/50">Cargando...</span>
                           </div>
                         {/if}
                       </div>
-                    </div>
-                  </div>
-                  
-                  <!-- Panel inferior glassmorphism (mismo estilo que texto) -->
-                  <div class="floating-glass-panel">
-                    <div class="option-card-frame">
-                      <div class="option-card-inner">
-                        {#if opt.artist}
-                          <span class="text-sm font-bold uppercase tracking-widest text-white/60 bg-black/20 px-3 py-1 rounded-full">
-                            {opt.artist}
-                          </span>
-                        {/if}
-                        
-                        <h2 class="{opt.label.length > 40 ? 'text-2xl' : opt.label.length > 25 ? 'text-3xl' : 'text-4xl'} font-bold text-white uppercase tracking-tighter leading-none text-left w-full">
+                      
+                      <!-- Contenido debajo del video -->
+                      <div class="card-video-bottom">
+                        <!-- Label -->
+                        <h2 class="{opt.label.length > 40 ? 'text-xl' : opt.label.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight card-bottom-label">
                           {opt.label}
                         </h2>
                         
-                        <!-- Fila con porcentaje (izq) y avatares (der) -->
-                        <div class="w-full flex items-center justify-between mt-3">
-                          <!-- Porcentaje a la izquierda -->
+                        <!-- Línea divisoria -->
+                        <div class="card-divider-line"></div>
+                        
+                        <!-- Footer con porcentaje y avatares -->
+                        <div class="card-bottom-row">
                           {#if hasVoted && totalVotes > 0}
-                            <div class="text-percentage-inline">
-                              <span class="text-percentage-value-inline">
-                                {Math.round(((opt.votes || 0) / totalVotes) * 100)}%
-                              </span>
-                              <span class="text-percentage-label-inline">de los votos</span>
+                            <div class="card-percentage">
+                              <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
+                              <span class="card-percentage-label">DE LOS VOTOS</span>
                             </div>
                           {:else}
                             <div></div>
                           {/if}
                           
-                          <!-- Avatares a la derecha - Solo si ha votado -->
-                          {#if getFriendsForOption(opt.id).length > 0}
-                            {@const optFriends = getFriendsForOption(opt.id)}
-                            <button 
-                              class="friends-avatars-btn pointer-events-auto"
-                              onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
-                              aria-label="Ver votos de amigos"
-                            >
-                              {#each optFriends.slice(0, 5) as friend, idx}
-                                <div 
-                                  class="friend-avatar-item" 
-                                  style="margin-left: {idx > 0 ? '-8px' : '0'}; z-index: {10 - idx};"
-                                >
+                          <!-- Avatares de amigos -->
+                          <div class="card-avatars-group">
+                            {#if getFriendsForOption(opt.id).length > 0}
+                              <button 
+                                class="friends-avatars-stack"
+                                onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
+                                disabled={!hasVoted}
+                                type="button"
+                                aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
+                              >
+                                {#each getFriendsForOption(opt.id).slice(0, 3) as friend, idx}
                                   {#if hasVoted}
                                     <img 
+                                      class="friend-avatar-stacked" 
+                                      style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
                                       src={friend.avatarUrl || '/default-avatar.png'}
-                                      alt={friend.name}
-                                      class="w-8 h-8 rounded-full border-2 border-white/50 object-cover shadow-lg"
+                                      alt={friend.name || 'Amigo'}
                                     />
                                   {:else}
-                                    <div class="w-8 h-8 rounded-full border-2 border-white/30 bg-white/10 flex items-center justify-center shadow-lg">
-                                      <span class="text-white/60 text-sm font-bold">?</span>
+                                    <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
+                                      <span>?</span>
                                     </div>
                                   {/if}
-                                </div>
-                              {/each}
-                              {#if optFriends.length > 5}
-                                <div 
-                                  class="w-8 h-8 rounded-full border-2 border-white/40 bg-black/80 flex items-center justify-center shadow-lg"
-                                  style="margin-left: -8px; z-index: 0;"
-                                >
-                                  <span class="text-white text-xs font-bold">+{optFriends.length - 5}</span>
-                                </div>
-                              {/if}
-                            </button>
-                          {/if}
+                                {/each}
+                                {#if getFriendsForOption(opt.id).length > 3}
+                                  <span class="friends-more-count">+{getFriendsForOption(opt.id).length - 3}</span>
+                                {/if}
+                              </button>
+                            {/if}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                    
+                  {:else}
+                    <!-- === LAYOUT GIF/IMAGEN === -->
+                    <!-- Wrapper con borde del color de la opción -->
+                    <div class="card-media-border" style="--border-color: {opt.color};">
+                      <!-- Imagen a pantalla completa con contenido overlay -->
+                      <div class="card-media-fullscreen">
+                        <!-- Imagen de fondo -->
+                        <div class="card-image-fullscreen">
+                        {#if Math.abs(i - activeIndex) <= 1}
+                          <MediaEmbed
+                            url={opt.imageUrl || ""}
+                            mode="full"
+                            width="100%"
+                            height="100%"
+                            autoplay={i === activeIndex}
+                          />
+                        {:else}
+                          <div class="w-full h-full flex items-center justify-center bg-black">
+                            <span class="text-white/50">Cargando...</span>
+                          </div>
+                        {/if}
+                        
+                        <!-- Badge GIPHY -->
+                        {#if isGifType}
+                          <span class="giphy-badge-corner">GIPHY</span>
+                        {/if}
+                      </div>
+                      
+                      <!-- Degradado inferior -->
+                      <div class="card-bottom-gradient"></div>
+                      
+                      <!-- Contenido inferior: label + línea + porcentaje + avatar -->
+                      <div class="card-bottom-content">
+                        <!-- Label -->
+                        <h2 class="{opt.label.length > 40 ? 'text-xl' : opt.label.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight card-bottom-label">
+                          {opt.label}
+                        </h2>
+                        
+                        <!-- Línea divisoria -->
+                        <div class="card-divider-line"></div>
+                        
+                        <!-- Fila: Porcentaje a la izquierda, avatar a la derecha -->
+                        <div class="card-bottom-row">
+                          {#if hasVoted && totalVotes > 0}
+                            <div class="card-percentage">
+                              <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
+                              <span class="card-percentage-label">DE LOS VOTOS</span>
+                            </div>
+                          {:else}
+                            <div></div>
+                          {/if}
+                          
+                          <!-- Avatares de amigos -->
+                          <div class="card-avatars-group">
+                            {#if getFriendsForOption(opt.id).length > 0}
+                              <button 
+                                class="friends-avatars-stack"
+                                onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
+                                disabled={!hasVoted}
+                                type="button"
+                                aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
+                              >
+                                {#each getFriendsForOption(opt.id).slice(0, 3) as friend, idx}
+                                  {#if hasVoted}
+                                    <img 
+                                      class="friend-avatar-stacked" 
+                                      style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
+                                      src={friend.avatarUrl || '/default-avatar.png'}
+                                      alt={friend.name || 'Amigo'}
+                                    />
+                                  {:else}
+                                    <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
+                                      <span>?</span>
+                                    </div>
+                                  {/if}
+                                {/each}
+                                {#if getFriendsForOption(opt.id).length > 3}
+                                  <span class="friends-more-count">+{getFriendsForOption(opt.id).length - 3}</span>
+                                {/if}
+                              </button>
+                            {/if}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    </div>
+                  {/if}
+                  
                 </div>
-              {/if}
+              </div>
             </div>
 
           </div>
@@ -1368,15 +1394,14 @@
     {/if}
 
     <!-- Barra de control principal -->
-    <div class="w-full flex items-center gap-3 h-14 px-12">
+    <div class="w-full flex items-center gap-3 h-14 px-4 bg-transparent">
       
       <!-- A. ZONA FIJA (Acciones Principales) -->
-      <div class="flex items-center gap-0 shrink-0">
+      <div class="flex items-center gap-1 shrink-0">
         
         <!-- Votar -->
         <button 
-          class="flex items-center gap-1.5 btn-press px-2 py-1.5 rounded-full transition-all select-none hover:bg-white/10"
-          style="background-color: {hasVoted ? `${voteColor}1a` : 'transparent'}"
+          class="action-bar-btn"
           onclick={() => {
             if (!hasVoted && readOnly) {
               if (!isAuthenticated) {
@@ -1394,123 +1419,120 @@
           aria-label="Votar"
         >
           {#if hasVoted}
-            <SquareCheck size={20} class="icon-shadow vote-icon-beat" style="color: {voteColor}" />
-            <span class="text-xs font-mono font-bold text-shadow-sm" style="color: {voteColor}">{formatCount(stats?.totalVotes)}</span>
+            <SquareCheck size={26} strokeWidth={1.5} style="color: {voteColor}" />
           {:else}
-            <Square size={20} class="text-white icon-shadow" />
-            <span class="text-xs font-mono font-bold text-white text-shadow-sm">{formatCount(stats?.totalVotes)}</span>
+            <Square size={26} strokeWidth={1.5} class="text-white/80" />
           {/if}
+          <span class="action-bar-count" class:voted={hasVoted} style={hasVoted ? `color: ${voteColor}` : ''}>{formatCount(stats?.totalVotes)}</span>
         </button>
  
         <!-- Mensajes -->
         <button 
-          class="flex items-center gap-1.5 btn-press bg-transparent px-2 py-1.5 rounded-full hover:bg-white/10 transition-all select-none"
+          class="action-bar-btn"
           aria-label="Comentarios"
           onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
         >
-          <MessageCircle size={20} class="text-white icon-shadow" />
-          <span class="text-[11px] font-mono text-white text-shadow-sm">{stats?.commentsCount || 0}</span>
+          <MessageCircle size={26} strokeWidth={1.5} class="text-white/80" />
+          <span class="action-bar-count">{stats?.commentsCount || 0}</span>
         </button>
 
       </div>
 
       <!-- B. ZONA SCROLLABLE (Acciones Secundarias) -->
-      <div class="overflow-x-auto hide-scrollbar scroll-mask-right">
-        <div class="flex items-center gap-3 pr-24">
+      <div class="overflow-x-auto hide-scrollbar scroll-mask-right flex-1">
+        <div class="flex items-center gap-1 pr-24">
           
           <!-- Menú (3 puntos) -->
           <button 
-            class="flex items-center justify-center shrink-0 btn-press opacity-60 hover:opacity-100 transition"
+            class="action-bar-btn"
             onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = !isMoreMenuOpen; }}
             aria-label="Más opciones"
           >
-            <MoreVertical size={20} class="text-white icon-shadow" />
+            <MoreVertical size={26} strokeWidth={1.5} class="text-white/80" />
           </button>
 
           <!-- Mundo - Solo si ha votado -->
           {#if hasVoted}
             <button 
-              class="flex items-center shrink-0 opacity-80 hover:opacity-100 transition btn-press"
+              class="action-bar-btn"
               onclick={onOpenInGlobe}
               aria-label="Ver en globo"
             >
-              <Globe size={20} class="text-white icon-shadow" />
+              <Globe size={26} strokeWidth={1.5} class="text-white/80" />
             </button>
 
             <!-- Gráfico (Pulso) -->
             <button 
-              class="flex items-center shrink-0 opacity-80 hover:opacity-100 transition btn-press"
+              class="action-bar-btn"
               onclick={onGoToChart}
               aria-label="Ver estadísticas"
             >
-              <Activity size={22} class="text-white icon-shadow" />
+              <Activity size={26} strokeWidth={1.5} class="text-white/80" />
             </button>
           {/if}
 
           <!-- Share -->
           <button 
-            class="flex items-center gap-1.5 shrink-0 opacity-90 hover:opacity-100 transition btn-press"
+            class="action-bar-btn"
             onclick={handleShare}
             aria-label="Compartir"
           >
-            <Share2 size={20} class="text-white icon-shadow" />
-            <span class="text-[11px] font-mono text-gray-300 text-shadow-sm">0</span>
+            <Share2 size={26} strokeWidth={1.5} class="text-white/80" />
+            <span class="action-bar-count">{formatCount(shareCount)}</span>
           </button>
 
           <!-- Retweet -->
           <button 
-            class="flex items-center gap-1.5 shrink-0 {hasReposted ? 'opacity-100' : 'opacity-90'} hover:opacity-100 transition btn-press"
+            class="action-bar-btn {hasReposted ? 'reposted' : ''}"
             onclick={handleRepost}
             aria-label={hasReposted ? 'Quitar repost' : 'Repostear'}
             disabled={isReposting}
           >
-            <Repeat2 size={20} class={hasReposted ? 'text-green-400 icon-shadow' : 'text-white icon-shadow'} />
-            <span class="text-[11px] font-mono text-shadow-sm {hasReposted ? 'text-green-400' : 'text-gray-300'}">{formatCount(repostCount)}</span>
+            <Repeat2 size={26} strokeWidth={1.5} class={hasReposted ? 'text-green-400' : 'text-white/80'} />
+            <span class="action-bar-count" class:reposted={hasReposted}>{formatCount(repostCount)}</span>
           </button>
 
           <!-- Vistas -->
           <button 
-            class="flex items-center gap-1.5 shrink-0 opacity-80 hover:opacity-100 transition btn-press"
+            class="action-bar-btn"
             aria-label="Vistas"
           >
-            <Eye size={20} class="text-white icon-shadow" />
-            <span class="text-[11px] font-mono text-shadow-sm text-gray-300">{formatCount(viewCount)}</span>
+            <Eye size={26} strokeWidth={1.5} class="text-white/80" />
+            <span class="action-bar-count">{formatCount(viewCount)}</span>
           </button>
 
           <!-- Bookmark -->
           <button 
-            class="flex items-center gap-1.5 shrink-0 opacity-80 hover:opacity-100 transition btn-press"
+            class="action-bar-btn"
             onclick={onBookmark}
             aria-label="Guardar"
           >
-            <Bookmark size={20} class="text-white icon-shadow" />
-            <span class="text-[11px] font-mono text-shadow-sm text-gray-300">0</span>
+            <Bookmark size={26} strokeWidth={1.5} class="text-white/80" />
           </button>
 
           <!-- Copiar enlace -->
           <button 
-            class="flex items-center shrink-0 opacity-60 hover:opacity-100 transition btn-press"
+            class="action-bar-btn"
             onclick={copyLink}
             aria-label="Copiar enlace"
           >
-            <Link size={18} class="text-white icon-shadow" />
+            <Link size={26} strokeWidth={1.5} class="text-white/80" />
           </button>
 
           <!-- No me interesa -->
           <button 
-            class="flex items-center shrink-0 opacity-60 hover:opacity-100 transition btn-press"
+            class="action-bar-btn"
             aria-label="No me interesa"
           >
-            <EyeOff size={18} class="text-white icon-shadow" />
+            <EyeOff size={26} strokeWidth={1.5} class="text-white/80" />
           </button>
 
           <!-- Reportar -->
           <button 
-            class="flex items-center shrink-0 opacity-60 hover:opacity-100 transition btn-press"
+            class="action-bar-btn"
             aria-label="Reportar"
-            style="padding-right: 10px;"
           >
-            <Flag size={18} class="text-red-400 icon-shadow" />
+            <Flag size={26} strokeWidth={1.5} class="text-red-400/80" />
           </button>
 
         </div>
@@ -1550,6 +1572,52 @@
 {/if}
 
 <style>
+  /* ========================================
+     ACTION BAR - Iconos grandes estilo línea
+     ======================================== */
+  .action-bar-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .action-bar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .action-bar-btn:active {
+    transform: scale(0.95);
+  }
+
+  .action-bar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .action-bar-count {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+
+  .action-bar-count.voted,
+  .action-bar-count.reposted {
+    font-weight: 600;
+  }
+
+  .action-bar-count.reposted {
+    color: #4ade80;
+  }
+
   /* Hide scrollbar for Chrome, Safari and Opera */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -2284,6 +2352,503 @@
       top: 60px;
       padding: 10px 20px;
       font-size: 13px;
+    }
+  }
+
+  /* ========================================
+     NUEVOS LAYOUTS MAXIMIZED (Imágenes de referencia)
+     ======================================== */
+
+  /* ========================================
+     CARD CONTAINER - Estructura unificada
+     ======================================== */
+
+  /* Contenedor que centra la card y deja espacio para header/footer */
+  .option-card-container {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 110px 12px 70px;
+  }
+
+  /* Card con bordes redondeados - igual para todos los tipos */
+  .option-card-rounded {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 24px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+    border: none;
+  }
+
+  /* ========================================
+     LAYOUT TEXTO - Color sólido + comillas
+     ======================================== */
+
+  .card-content-area {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: none;
+    outline: none;
+  }
+
+  .quote-decoration {
+    position: absolute;
+    font-size: 120px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.1);
+    line-height: 1;
+    pointer-events: none;
+    font-family: Georgia, serif;
+  }
+
+  .quote-open {
+    top: 20px;
+    left: 20px;
+  }
+
+  .quote-close {
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .text-center-wrapper {
+    padding: 24px;
+    max-width: 90%;
+    z-index: 2;
+  }
+
+  /* ========================================
+     LAYOUT VIDEO - Video arriba, contenido abajo
+     ======================================== */
+
+  /* Wrapper con el color de la opción - borde fino */
+  .card-video-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: 4px;
+  }
+
+  .card-video-area {
+    flex: 0 0 55%;
+    position: relative;
+    overflow: hidden;
+    background: inherit;
+    border-radius: 20px;
+  }
+
+  .card-video-area :global(.media-embed),
+  .card-video-area :global(.embed-container),
+  .card-video-area :global(.mini-card),
+  .card-video-area :global(.linkedin-card),
+  .card-video-area :global(.oembed-container) {
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  .card-video-area :global(iframe),
+  .card-video-area :global(video) {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 20px !important;
+  }
+
+  /* Ocultar contenido extra en video */
+  .card-video-area :global(.linkedin-content),
+  .card-video-area :global(.mini-card-content) {
+    display: none !important;
+  }
+
+  /* Contenedor inferior del video */
+  .card-video-bottom {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 16px 16px 20px;
+    gap: 8px;
+  }
+
+  /* ========================================
+     LAYOUT GIF/IMAGEN - Fullscreen con overlay
+     ======================================== */
+
+  /* Wrapper con borde del color de la opción */
+  .card-media-border {
+    width: 100%;
+    height: 100%;
+    padding: 4px;
+    background-color: var(--border-color);
+    border-radius: 24px;
+  }
+
+  /* Contenedor fullscreen para imagen */
+  .card-media-fullscreen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 20px;
+  }
+
+  /* Imagen de fondo a pantalla completa */
+  .card-image-fullscreen {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  .card-image-fullscreen :global(.media-embed),
+  .card-image-fullscreen :global(.embed-container) {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .card-image-fullscreen :global(img),
+  .card-image-fullscreen :global(video) {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  /* Ocultar el contenido extra de MediaEmbed */
+  .card-image-fullscreen :global(.linkedin-content),
+  .card-image-fullscreen :global(.mini-card-content) {
+    display: none !important;
+  }
+
+  /* Badge GIPHY en esquina superior derecha */
+  .giphy-badge-corner {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    z-index: 10;
+  }
+
+  /* Degradado inferior fuerte */
+  .card-bottom-gradient {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.75) 30%,
+      rgba(0, 0, 0, 0.4) 60%,
+      transparent 100%
+    );
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* Contenido inferior superpuesto */
+  .card-bottom-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card-bottom-label {
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.7),
+      0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Línea divisoria blanca fina */
+  .card-divider-line {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  .card-bottom-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ========================================
+     FOOTER BAR - Igual para todos
+     ======================================== */
+
+  .card-footer-bar {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px 20px;
+  }
+
+  /* Línea divisoria en el borde inferior del área de contenido */
+  .card-divider-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+
+  .card-percentage {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .card-percentage-value {
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+    color: white;
+    text-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.5),
+      0 4px 16px rgba(0, 0, 0, 0.3);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+
+  .card-percentage-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  }
+
+  .card-creator-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Grupo de avatares (creador + amigos) */
+  .card-avatars-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Stack de avatares de amigos */
+  .friends-avatars-stack {
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .friends-avatars-stack:hover {
+    transform: scale(1.05);
+  }
+
+  .friend-avatar-stacked {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    object-fit: cover;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Avatar misterioso cuando no ha votado */
+  .friend-avatar-mystery {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .friend-avatar-mystery span {
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  .friends-avatars-stack:disabled {
+    cursor: default;
+    opacity: 0.9;
+  }
+
+  .friends-more-count {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: -8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ========================================
+     RESPONSIVE
+     ======================================== */
+
+  @media (max-width: 480px) {
+    .option-card-container {
+      padding: 100px 10px 60px;
+    }
+
+    .option-card-rounded {
+      border-radius: 12px;
+    }
+
+    .quote-decoration {
+      font-size: 80px;
+    }
+
+    .card-footer-bar {
+      padding: 12px 14px;
+    }
+
+    .card-percentage-value {
+      font-size: 24px;
+    }
+
+    .card-creator-avatar {
+      width: 36px;
+      height: 36px;
+    }
+  }
+
+  /* === ELEMENTOS COMUNES === */
+  .maximized-footer {
+    position: absolute;
+    bottom: 70px;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 10;
+  }
+
+  .percentage-section-max {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .percentage-big-max {
+    font-size: 42px;
+    font-weight: 900;
+    color: white;
+    line-height: 1;
+    text-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+  }
+
+  .percentage-label-max {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .creator-avatar-max {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.9);
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Responsive */
+  @media (max-width: 480px) {
+    .decorative-quote-max {
+      font-size: 100px;
+    }
+
+    .quote-open-max {
+      top: 50px;
+      left: 16px;
+    }
+
+    .quote-close-max {
+      bottom: 90px;
+      right: 16px;
+    }
+
+    .video-area-max {
+      flex: 0 0 50%;
+      margin: 6px;
+    }
+
+    .video-content-max {
+      padding: 16px 20px 90px;
+    }
+
+    .media-area-max {
+      margin: 6px 6px 0;
+    }
+
+    .media-footer-max {
+      padding: 12px 20px 90px;
+    }
+
+    .maximized-footer {
+      bottom: 60px;
+      padding: 0 20px;
+    }
+
+    .percentage-big-max {
+      font-size: 32px;
+    }
+
+    .creator-avatar-max {
+      width: 42px;
+      height: 42px;
     }
   }
 </style>
