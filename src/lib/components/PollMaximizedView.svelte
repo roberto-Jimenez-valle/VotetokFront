@@ -157,20 +157,11 @@
       if (votedOption) {
         voteColor = votedOption.color || '#10b981';
       } else {
-        // Fallback: usar la opción activa
-        const index = options.findIndex((o) => o.id === activeOptionId);
-        if (index !== -1 && options[index]) {
-          voteColor = options[index].color || '#10b981';
-        }
-      }
-    } else {
-      // Si no ha votado, usar el color de la opción activa
-      const index = options.findIndex((o) => o.id === activeOptionId);
-      if (index !== -1 && options[index]) {
-        voteColor = options[index].color || '#10b981';
-      } else {
         voteColor = '#10b981';
       }
+    } else {
+      // Si no ha votado, usar blanco
+      voteColor = '#ffffff';
     }
   });
 
@@ -1563,17 +1554,14 @@
     {pollId}
     {pollTitle}
   />
+  
+  <!-- Toast de enlace copiado -->
+  {#if showShareToast}
+    <div class="share-toast-fixed">
+      ✓ Enlace copiado
+    </div>
+  {/if}
 </div>
-
-<!-- Toast de enlace copiado -->
-{#if showShareToast}
-  <div 
-    class="share-toast"
-    transition:fly={{ y: -20, duration: 300 }}
-  >
-    ✓ Enlace copiado
-  </div>
-{/if}
 
 <style>
   /* ========================================
@@ -2331,7 +2319,7 @@
      TOAST DE ENLACE COPIADO
      ======================================== */
   
-  .share-toast {
+  .share-toast-fixed {
     position: fixed;
     top: 80px;
     left: 50%;
@@ -2349,10 +2337,22 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    animation: toast-in 0.3s ease-out;
+  }
+  
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   }
 
   @media (max-width: 640px) {
-    .share-toast {
+    .share-toast-fixed {
       top: 60px;
       padding: 10px 20px;
       font-size: 13px;
