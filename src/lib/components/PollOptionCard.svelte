@@ -137,13 +137,6 @@
 
   // --- FUNCIONES PARA MODO COMPACTO ---
   
-  // Extraer ID de video de YouTube
-  function getYouTubeId(url: string): string | null {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  }
-
   // Placeholder por defecto según plataforma
   function getDefaultThumbnail(type: string): string {
     const placeholders: Record<string, string> = {
@@ -167,60 +160,13 @@
   let fetchedThumbnail = $state<string | null>(null);
   let thumbnailLoading = $state(false);
 
-  // Obtener thumbnail real - usa URLs directas cuando es posible, sino link-preview API
+  // Obtener thumbnail real - TODAS las plataformas pasan por el backend
   async function fetchRealThumbnail(url: string, type: string): Promise<string> {
     try {
-      // YouTube: URL de imagen directa (no necesita API)
-      if (type === 'youtube') {
-        const id = getYouTubeId(url);
-        return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : getDefaultThumbnail(type);
-      }
-
-      // Dailymotion: URL de thumbnail directa
-      if (type === 'dailymotion') {
-        const videoMatch = url.match(/video\/([a-z0-9]+)/i) || url.match(/dai\.ly\/([a-z0-9]+)/i);
-        if (videoMatch) {
-          return `https://www.dailymotion.com/thumbnail/video/${videoMatch[1]}`;
-        }
-      }
-
-      // Deezer: El backend maneja la API (CORS bloqueado en frontend)
-      // Se usa el fallback link-preview API más abajo
-
-      // Vimeo: API oEmbed directa (funciona sin CORS)
-      if (type === 'vimeo') {
-        const response = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.thumbnail_url) return data.thumbnail_url;
-        }
-      }
-
-      // Spotify: API oEmbed directa (funciona sin CORS)
-      if (type === 'spotify') {
-        const response = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.thumbnail_url) return data.thumbnail_url;
-        }
-      }
-
-      // SoundCloud: API oEmbed directa
-      if (type === 'soundcloud') {
-        const response = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.thumbnail_url) return data.thumbnail_url;
-        }
-      }
-
-      // Para plataformas sin API directa accesible, usar backend link-preview
-      // TikTok, Deezer, Twitter, Apple Music, Bandcamp, Twitch - todos via backend
-      console.log('[PollOptionCard] 📡 Fetching from link-preview for:', type, url);
+      console.log('[PollOptionCard] 📡 Fetching thumbnail for:', type, url);
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
       if (response.ok) {
         const result = await response.json();
-        console.log('[PollOptionCard] 📦 link-preview response:', result);
         const data = result.data || result;
         // Prioridad: imageProxied > image > thumbnailUrl
         const thumbnail = data.imageProxied || data.image || data.thumbnailUrl || data.thumbnail_url;
