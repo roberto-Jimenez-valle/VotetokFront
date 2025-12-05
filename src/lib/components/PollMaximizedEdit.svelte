@@ -287,17 +287,19 @@
                 <div class="card-video-wrapper {isMusicType ? 'is-music' : ''}" style="background-color: {opt.color};">
                   <!-- Área de video/música -->
                   <div class="card-video-area {isMusicType ? 'is-music' : ''}">
-                    {#if Math.abs(i - activeIndex) <= 1}
-                      <MediaEmbed
-                        url={mediaUrl}
-                        mode="full"
-                        width="100%"
-                        height="100%"
-                        autoplay={false}
-                      />
+                    {#if i === activeIndex}
+                      {#key `video-edit-${opt.id}-${activeIndex}`}
+                        <MediaEmbed
+                          url={mediaUrl}
+                          mode="full"
+                          width="100%"
+                          height="100%"
+                          autoplay={true}
+                        />
+                      {/key}
                     {:else}
                       <div class="w-full h-full flex items-center justify-center bg-black">
-                        <span class="text-white/50">Cargando...</span>
+                        <span class="text-white/50"></span>
                       </div>
                     {/if}
                     
@@ -386,17 +388,19 @@
                   <div class="card-media-fullscreen">
                     <!-- Imagen de fondo -->
                     <div class="card-image-fullscreen">
-                      {#if Math.abs(i - activeIndex) <= 1}
-                        <MediaEmbed
-                          url={mediaUrl}
-                          mode="full"
-                          width="100%"
-                          height="100%"
-                          autoplay={false}
-                        />
+                      {#if i === activeIndex}
+                        {#key `media-edit-${opt.id}-${activeIndex}`}
+                          <MediaEmbed
+                            url={mediaUrl}
+                            mode="full"
+                            width="100%"
+                            height="100%"
+                            autoplay={isVideoType}
+                          />
+                        {/key}
                       {:else}
                         <div class="w-full h-full flex items-center justify-center bg-black">
-                          <span class="text-white/50">Cargando...</span>
+                          <span class="text-white/50"></span>
                         </div>
                       {/if}
                       
