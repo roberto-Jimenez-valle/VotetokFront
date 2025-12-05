@@ -25,8 +25,7 @@
   let loading: boolean = $state(true);
   let error: boolean = $state(false);
 
-  // Procesar embedHTML para agregar autoplay
-  // Procesar embedHTML para agregar autoplay y limpiar UI
+  // Procesar embedHTML para agregar/quitar autoplay y limpiar UI
   function processEmbedHTML(html: string): string {
     if (!html) return "";
 
@@ -38,17 +37,22 @@
       processed.includes("youtu.be")
     ) {
       processed = processed.replace(/src="([^"]+)"/, (match, url) => {
-        const separator = url.includes("?") ? "&" : "?";
-        // Parámetros para controles y API - mute=1 es crítico para iOS autoplay
-        // disableCastApi=1 elimina errores de consola de chrome-extension://invalid/
+        // Limpiar parámetros de autoplay/mute existentes
+        let cleanUrl = url
+          .replace(/[&?]autoplay=[01]/gi, '')
+          .replace(/[&?]mute=[01]/gi, '')
+          .replace(/[&?]muted=[01]/gi, '');
+        
+        const separator = cleanUrl.includes("?") ? "&" : "?";
+        // Parámetros para controles y API
         let params =
           "controls=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&fs=0&disablekb=1&playsinline=1&enablejsapi=1&disableCastApi=1";
 
         if (autoplay) {
-          params += "&autoplay=1&mute=1"; // mute=1 necesario para iOS
+          params += "&autoplay=1&mute=1"; // mute=1 necesario para iOS autoplay
         }
 
-        return `src="${url}${separator}${params}"`;
+        return `src="${cleanUrl}${separator}${params}"`;
       });
       
       // Agregar atributos allow y loading lazy al iframe para iOS y rendimiento
@@ -63,14 +67,20 @@
     // Para iframes de Vimeo
     if (processed.includes("player.vimeo.com")) {
       processed = processed.replace(/src="([^"]+)"/, (match, url) => {
-        const separator = url.includes("?") ? "&" : "?";
+        // Limpiar parámetros de autoplay/mute existentes
+        let cleanUrl = url
+          .replace(/[&?]autoplay=[01]/gi, '')
+          .replace(/[&?]mute=[01]/gi, '')
+          .replace(/[&?]muted=[01]/gi, '');
+        
+        const separator = cleanUrl.includes("?") ? "&" : "?";
         let params = "controls=1&byline=0&portrait=0&title=0";
 
         if (autoplay) {
           params += "&autoplay=1&muted=1"; // muted=1 necesario para iOS
         }
 
-        return `src="${url}${separator}${params}"`;
+        return `src="${cleanUrl}${separator}${params}"`;
       });
       
       // Agregar atributos allow y loading lazy al iframe
@@ -85,12 +95,15 @@
     // Para iframes de Spotify
     if (processed.includes("open.spotify.com/embed")) {
       processed = processed.replace(/src="([^"]+)"/, (match, url) => {
-        // Spotify usa autoplay como parámetro
-        if (autoplay && !url.includes("autoplay=1")) {
-          const separator = url.includes("?") ? "&" : "?";
-          return `src="${url}${separator}autoplay=1"`;
+        // Limpiar parámetros de autoplay existentes
+        let cleanUrl = url.replace(/[&?]autoplay=[01]/gi, '');
+        
+        // Solo agregar autoplay si está habilitado
+        if (autoplay) {
+          const separator = cleanUrl.includes("?") ? "&" : "?";
+          return `src="${cleanUrl}${separator}autoplay=1"`;
         }
-        return match;
+        return `src="${cleanUrl}"`;
       });
       
       // Agregar loading lazy al iframe
@@ -132,6 +145,20 @@
     // Agregar loading="lazy" a cualquier iframe restante (ej: otros embeds)
     if (processed.includes("<iframe") && !processed.includes('loading="')) {
       processed = processed.replace(/<iframe/g, '<iframe loading="lazy"');
+    }
+
+    // LIMPIEZA FINAL: Si autoplay está desactivado, eliminar TODOS los rastros de autoplay/mute
+    if (!autoplay) {
+      // Limpiar de URLs dentro de src=""
+      processed = processed.replace(/([?&])autoplay=[01]/gi, '$1');
+      processed = processed.replace(/([?&])mute=[01]/gi, '$1');
+      processed = processed.replace(/([?&])muted=[01]/gi, '$1');
+      processed = processed.replace(/([?&])auto_play=(true|false|[01])/gi, '$1');
+      // Limpiar parámetros vacíos que quedan (ej: ?& o &&)
+      processed = processed.replace(/\?&/g, '?');
+      processed = processed.replace(/&&+/g, '&');
+      processed = processed.replace(/&"/g, '"');
+      processed = processed.replace(/\?"/g, '"');
     }
 
     return processed;

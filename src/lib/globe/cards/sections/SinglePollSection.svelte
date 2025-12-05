@@ -1404,6 +1404,7 @@
               showPercentageLabel={!!pollVotedOption}
               onFriendsClick={() => { showFriendsVotesModal = true; }}
               isClickable={false}
+              compact={activeAccordionIndex !== index}
             />
           {/if}
         </button>

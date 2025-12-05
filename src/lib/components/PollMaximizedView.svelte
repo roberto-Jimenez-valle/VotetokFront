@@ -1108,20 +1108,6 @@
     </div>
   {/key}
 
-  <!-- BOTÓN DE ACTIVAR SONIDO - Solo visible cuando es video y está muteado -->
-  {#if currentOptionIsVideo && isMuted}
-    <button
-      class="unmute-button"
-      onclick={unmuteCurrentVideo}
-      transition:scale={{ duration: 200, easing: cubicOut }}
-      aria-label="Activar sonido"
-    >
-      <div class="unmute-icon-wrapper">
-        <VolumeX size={48} class="text-white" />
-      </div>
-      <span class="unmute-text">Toca para activar sonido</span>
-    </button>
-  {/if}
 
   <!-- VOTE CHECK ANIMATION -->
   {#if showLikeAnim}

@@ -280,7 +280,7 @@
                         mode="full"
                         width="100%"
                         height="100%"
-                        autoplay={i === activeIndex}
+                        autoplay={false}
                       />
                     {:else}
                       <div class="w-full h-full flex items-center justify-center bg-black">
@@ -379,7 +379,7 @@
                           mode="full"
                           width="100%"
                           height="100%"
-                          autoplay={i === activeIndex}
+                          autoplay={false}
                         />
                       {:else}
                         <div class="w-full h-full flex items-center justify-center bg-black">
