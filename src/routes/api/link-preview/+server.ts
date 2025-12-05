@@ -72,13 +72,25 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
   const cached = cache.get(cacheKey);
   const now = Date.now();
   
+  // Plataformas que necesitan thumbnail - no usar cache si no tiene imagen
+  const needsThumbnail = targetUrl.includes('tiktok.com') || 
+                         targetUrl.includes('twitter.com') || 
+                         targetUrl.includes('x.com') ||
+                         targetUrl.includes('twitch.tv');
+  
   if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-    console.log('[Link Preview] Cache hit:', targetUrl);
-    return json({
-      success: true,
-      data: cached.data,
-      cached: true
-    });
+    // Si es una plataforma que necesita thumbnail y el cache no tiene imagen, ignorar cache
+    if (needsThumbnail && !cached.data.image && !cached.data.imageProxied) {
+      console.log('[Link Preview] Cache invalidated (no image):', targetUrl);
+      cache.delete(cacheKey);
+    } else {
+      console.log('[Link Preview] Cache hit:', targetUrl);
+      return json({
+        success: true,
+        data: cached.data,
+        cached: true
+      });
+    }
   }
   
   try {
@@ -214,55 +226,111 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
     }
   }
   
-  // TikTok - usar oEmbed API directamente (CORS no aplica en server)
+  // TikTok - usar Open Graph (oEmbed devuelve 400)
   if (urlObj.hostname.includes('tiktok.com')) {
-    console.log('[Link Preview] 🎵 Detectado TikTok, usando oEmbed API...');
+    console.log('[Link Preview] 🎵 Detectado TikTok, obteniendo Open Graph...');
     try {
-      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(targetUrl)}`;
-      const response = await fetch(oembedUrl, {
-        headers: { 'User-Agent': 'VouTop-LinkPreview/1.0' }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept': 'text/html'
+        }
       });
+      
+      clearTimeout(timeoutId);
+      console.log('[Link Preview] TikTok response status:', response.status);
+      
       if (response.ok) {
-        const data = await response.json();
-        console.log('[Link Preview] ✅ TikTok oEmbed response:', { title: data.title, hasThumb: !!data.thumbnail_url });
-        if (data.thumbnail_url) {
+        const html = await response.text();
+        // Extraer og:image
+        const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+        const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+        
+        if (ogImage?.[1]) {
+          console.log('[Link Preview] ✅ TikTok Open Graph image found:', ogImage[1]);
           return {
             url: targetUrl,
-            title: data.title || 'TikTok',
-            description: data.author_name || '',
-            image: data.thumbnail_url,
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(data.thumbnail_url)}`,
+            title: ogTitle?.[1] || 'TikTok',
+            description: '',
+            image: ogImage[1],
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
             siteName: 'TikTok',
             domain: 'tiktok.com',
-            type: 'oembed',
+            type: 'opengraph',
             providerName: 'TikTok',
             isSafe: true,
             nsfwScore: 0
           };
+        } else {
+          console.log('[Link Preview] ⚠️ TikTok no tiene og:image en HTML');
         }
       }
     } catch (err) {
-      console.warn('[Link Preview] TikTok oEmbed failed:', err);
+      console.warn('[Link Preview] TikTok Open Graph error:', err);
     }
   }
   
-  // Twitter/X - usar oEmbed API directamente
+  // Twitter/X - obtener Open Graph directamente (oEmbed no tiene thumbnail)
   if (urlObj.hostname.includes('twitter.com') || urlObj.hostname.includes('x.com')) {
-    console.log('[Link Preview] 🐦 Detectado Twitter, usando oEmbed API...');
+    console.log('[Link Preview] 🐦 Detectado Twitter, obteniendo Open Graph...');
     try {
-      const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(targetUrl)}`;
-      const response = await fetch(oembedUrl, {
-        headers: { 'User-Agent': 'VouTop-LinkPreview/1.0' }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      // Intentar con vxtwitter que es más confiable para Open Graph
+      const vxUrl = targetUrl.replace('twitter.com', 'vxtwitter.com').replace('x.com', 'vxtwitter.com');
+      console.log('[Link Preview] Twitter usando vxtwitter:', vxUrl);
+      
+      const response = await fetch(vxUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept': 'text/html'
+        }
       });
+      
+      clearTimeout(timeoutId);
+      console.log('[Link Preview] Twitter response status:', response.status);
+      
       if (response.ok) {
-        const data = await response.json();
-        console.log('[Link Preview] ✅ Twitter oEmbed response:', { author: data.author_name, hasHtml: !!data.html });
-        // Twitter oEmbed no devuelve thumbnail, intentar extraer del HTML o usar Open Graph
+        const html = await response.text();
+        console.log('[Link Preview] Twitter HTML length:', html.length);
+        // Extraer og:image
+        const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+        const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+        
+        if (ogImage?.[1]) {
+          console.log('[Link Preview] ✅ Twitter Open Graph image found:', ogImage[1]);
+          return {
+            url: targetUrl,
+            title: ogTitle?.[1] || 'Twitter',
+            description: '',
+            image: ogImage[1],
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            siteName: 'Twitter',
+            domain: 'twitter.com',
+            type: 'opengraph',
+            providerName: 'Twitter',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        } else {
+          console.log('[Link Preview] ⚠️ Twitter/vxtwitter no tiene og:image');
+        }
+      } else {
+        console.log('[Link Preview] ❌ Twitter/vxtwitter response not ok:', response.status);
       }
     } catch (err) {
-      console.warn('[Link Preview] Twitter oEmbed failed:', err);
+      console.warn('[Link Preview] Twitter Open Graph error:', err);
     }
-    // Fallback a Open Graph para obtener imagen
     return null;
   }
   

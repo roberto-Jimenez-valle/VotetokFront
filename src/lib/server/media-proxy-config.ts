@@ -94,12 +94,22 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     'twimg.com',
     'x.com',
     
-    // TikTok
+    // TikTok - todos los subdominios de CDN
     'tiktokcdn.com',
     'tiktok.com',
     'p16-sign-va.tiktokcdn.com',
     'p16-sign-sg.tiktokcdn.com',
     'p77-sign-va.tiktokcdn.com',
+    'p16-sign.tiktokcdn-us.com',
+    'p19-sign.tiktokcdn-us.com',
+    'v16-webapp.tiktok.com',
+    'v19-webapp.tiktok.com',
+    
+    // Twitter/X - CDN de imágenes
+    'pbs.twimg.com',
+    'abs.twimg.com',
+    'video.twimg.com',
+    'ton.twimg.com',
     
     // Spotify
     'scdn.co',

@@ -38,17 +38,8 @@ export const OEMBED_PROVIDERS: OEmbedProvider[] = [
     maxHeight: 720
   },
   
-  // Twitter/X
-  {
-    name: 'Twitter',
-    urlPatterns: [
-      /^https?:\/\/(?:www\.)?(twitter|x)\.com\/[^/]+\/status\/\d+/,
-      /^https?:\/\/(?:www\.)?x\.com\/[^/]+\/status\/\d+/, // x.com explícito
-      /^https?:\/\/(?:mobile\.)?(twitter|x)\.com\/[^/]+\/status\/\d+/ // mobile variant
-    ],
-    endpoint: 'https://publish.twitter.com/oembed',
-    maxWidth: 550
-  },
+  // Twitter/X - Manejado especialmente en link-preview/+server.ts
+  // El oEmbed de Twitter no devuelve thumbnail, se usa Open Graph en fetchSpecialPlatformData
   
   // Spotify
   {
@@ -95,18 +86,8 @@ export const OEMBED_PROVIDERS: OEmbedProvider[] = [
     maxWidth: 658
   },
   
-  // TikTok (mejorado con más variantes)
-  {
-    name: 'TikTok',
-    urlPatterns: [
-      /^https?:\/\/(?:www\.)?tiktok\.com\/@[^/]+\/video\/\d+/,
-      /^https?:\/\/(?:vm|vt|m)\.tiktok\.com\/.+/,
-      /^https?:\/\/(?:www\.)?tiktok\.com\/t\/.+/
-    ],
-    endpoint: 'https://www.tiktok.com/oembed',
-    maxWidth: 325,
-    maxHeight: 730
-  },
+  // TikTok - Manejado especialmente en link-preview/+server.ts
+  // El oEmbed de TikTok es inestable (400/404), se maneja en fetchSpecialPlatformData
   
   // Twitch - Sin oEmbed público, usar Open Graph fallback
   // Se deja comentado porque requiere autenticación
