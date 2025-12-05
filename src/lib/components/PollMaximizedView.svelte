@@ -143,28 +143,20 @@
   let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
   
-  // Usar $state con $effect para evitar problemas con análisis estático
-  // Si el usuario ya votó, mostrar el color de la opción votada
-  // Si no ha votado, mostrar el color de la opción activa
-  let voteColor = $state('#10b981');
-  
   // Color neutro para opciones antes de votar
   const NEUTRAL_COLOR = '#3a3d42';
   
-  $effect(() => {
+  // Calcular el color del voto directamente (sin $effect para evitar flash)
+  const getVoteColor = () => {
     if (hasVoted) {
-      // Buscar la opción que el usuario votó
       const votedOption = options.find((o) => o.voted === true);
-      if (votedOption) {
-        voteColor = votedOption.color || '#10b981';
-      } else {
-        voteColor = '#10b981';
-      }
-    } else {
-      // Si no ha votado, usar blanco
-      voteColor = '#ffffff';
+      return votedOption?.color || '#ffffff';
     }
-  });
+    return '#ffffff';
+  };
+  
+  // Usar $derived para que se recalcule reactivamente
+  let voteColor = $derived(getVoteColor());
 
   let scrollContainer: HTMLElement | null = null;
   let showLikeAnim = $state(false);
@@ -1616,17 +1608,17 @@
   }
 
   /* Forzar iconos SVG a ser blancos en todos los temas */
-  .action-bar-btn :global(svg) {
-    color: rgba(255, 255, 255, 0.8) !important;
-    stroke: currentColor !important;
+  .action-bar-btn :global(svg:not([style*="color"])) {
+    color: rgba(255, 255, 255, 0.8);
+    stroke: currentColor;
   }
 
   .action-bar-btn:hover {
     background: rgba(255, 255, 255, 0.1);
   }
   
-  .action-bar-btn:hover :global(svg) {
-    color: rgba(255, 255, 255, 1) !important;
+  .action-bar-btn:hover :global(svg:not([style*="color"])) {
+    color: rgba(255, 255, 255, 1);
   }
 
   .action-bar-btn:active {
