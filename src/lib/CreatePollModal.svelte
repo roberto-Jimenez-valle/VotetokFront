@@ -2688,6 +2688,27 @@
     box-shadow: 
       0 4px 16px rgba(0, 0, 0, 0.3),
       0 2px 8px rgba(0, 0, 0, 0.2);
+    /* Ocultar scrollbars */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .option-slide::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  
+  .option-slide *,
+  .option-slide *::-webkit-scrollbar {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  
+  .option-slide *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
   
   /* Fondo de opción estilo maximizado */

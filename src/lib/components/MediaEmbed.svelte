@@ -760,12 +760,15 @@
   
   .media-embed::-webkit-scrollbar,
   .media-embed *::-webkit-scrollbar {
-    display: none;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
   
   .media-embed * {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    overflow: hidden;
   }
 
   .preview-mode {
@@ -820,6 +823,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+    /* Ocultar scrollbars */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .embed-container::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   .embed-container :global(iframe),
@@ -828,11 +841,13 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+    overflow: hidden;
   }
   
-  /* Optimización para iOS */
+  /* Ocultar scrollbars en iframes */
   .embed-container :global(iframe) {
-    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .mini-card {

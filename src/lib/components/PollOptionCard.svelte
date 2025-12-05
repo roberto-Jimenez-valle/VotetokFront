@@ -625,12 +625,23 @@
   /* Ocultar scrollbars en todos los contenedores internos */
   .poll-option-card *,
   .poll-option-card *::-webkit-scrollbar {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
   }
   
   .poll-option-card *::-webkit-scrollbar {
-    display: none;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  
+  /* Forzar overflow hidden en contenedores que podrían tener scroll */
+  .poll-option-card :global(iframe),
+  .poll-option-card :global(video),
+  .poll-option-card :global(.media-embed),
+  .poll-option-card :global(.embed-container),
+  .poll-option-card :global(.oembed-container) {
+    overflow: hidden !important;
   }
   
   .poll-option-card.is-clickable {

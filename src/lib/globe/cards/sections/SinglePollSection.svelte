@@ -3865,6 +3865,27 @@
       0 2px 8px rgba(0, 0, 0, 0.2);
     /* Borde con color de opción */
     border: 2px solid var(--option-border-color, transparent);
+    /* Ocultar scrollbars */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .option-slide::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  
+  .option-slide *,
+  .option-slide *::-webkit-scrollbar {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  
+  .option-slide *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 
 

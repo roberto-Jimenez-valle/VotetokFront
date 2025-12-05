@@ -326,6 +326,22 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
         
         if (mediaUrl) {
           console.log('[Link Preview] ✅ X image found:', mediaUrl);
+          
+          // Generar embed HTML usando fxtwitter para videos
+          let embedHtml: string | undefined;
+          const hasVideo = tweet?.media?.videos?.length > 0;
+          
+          if (hasVideo && tweet?.media?.videos?.[0]?.url) {
+            // Video directo de fxtwitter
+            const videoUrl = tweet.media.videos[0].url;
+            console.log('[Link Preview] 🎬 X video URL:', videoUrl);
+            embedHtml = `<video src="${videoUrl}" controls playsinline style="width:100%;height:100%;object-fit:contain;background:#000;border-radius:12px;" poster="${mediaUrl}"></video>`;
+          } else {
+            // Para tweets con imágenes, usar iframe de fxtwitter
+            const fxUrl = targetUrl.replace('twitter.com', 'fxtwitter.com').replace('x.com', 'fxtwitter.com');
+            embedHtml = `<iframe src="${fxUrl}" style="width:100%;height:100%;border:none;border-radius:12px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+          }
+          
           return {
             url: targetUrl,
             title: tweet?.text?.substring(0, 100) || 'X',
@@ -335,6 +351,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             siteName: 'X',
             domain: 'x.com',
             type: 'oembed',
+            embedHtml: embedHtml,
             providerName: 'X',
             isSafe: true,
             nsfwScore: 0

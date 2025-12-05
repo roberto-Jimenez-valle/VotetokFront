@@ -97,8 +97,14 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     // Twitter/X - todos los subdominios
     '*.twimg.com',
     '*.x.com',
+    '*.twitter.com',
+    '*.fxtwitter.com',
+    '*.video.twimg.com',
     'twimg.com',
     'x.com',
+    'twitter.com',
+    'fxtwitter.com',
+    'video.twimg.com',
     
     // TikTok - todos los CDNs globales
     '*.tiktok.com',
