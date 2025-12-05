@@ -333,14 +333,18 @@
         <!-- Línea divisoria -->
         <div class="card-divider-line"></div>
         
-        <!-- Footer - PORCENTAJE SIEMPRE VISIBLE -->
+        <!-- Footer - PORCENTAJE SOLO SI HA VOTADO -->
         <div class="card-bottom-row">
-          <div class="card-percentage">
-            <span class="percentage-value">{Math.round(percentage)}%</span>
-            {#if hasVoted && mode === 'view'}
-              <span class="percentage-label">DE LOS VOTOS</span>
-            {/if}
-          </div>
+          {#if userHasVoted}
+            <div class="card-percentage">
+              <span class="percentage-value">{Math.round(percentage)}%</span>
+              {#if showPercentageLabel && mode === 'view'}
+                <span class="percentage-label">DE LOS VOTOS</span>
+              {/if}
+            </div>
+          {:else}
+            <div class="card-percentage-placeholder"></div>
+          {/if}
           
           {#if mode === 'edit'}
             <div class="edit-buttons">
@@ -434,10 +438,16 @@
         <div class="divider-line"></div>
         
         <div class="option-footer">
-          <div class="percentage-display">
-            <span class="percentage-value">{Math.round(percentage)}%</span>
-            <span class="percentage-label">DE LOS VOTOS</span>
-          </div>
+          {#if userHasVoted}
+            <div class="percentage-display">
+              <span class="percentage-value">{Math.round(percentage)}%</span>
+              {#if showPercentageLabel}
+                <span class="percentage-label">DE LOS VOTOS</span>
+              {/if}
+            </div>
+          {:else}
+            <div class="percentage-display-placeholder"></div>
+          {/if}
           
           {#if mode === 'edit'}
             <div class="edit-buttons">
@@ -501,10 +511,16 @@
         <div class="card-divider-line"></div>
         
         <div class="card-bottom-row">
-          <div class="card-percentage">
-            <span class="percentage-value">{Math.round(percentage)}%</span>
-            <span class="percentage-label">DE LOS VOTOS</span>
-          </div>
+          {#if userHasVoted}
+            <div class="card-percentage">
+              <span class="percentage-value">{Math.round(percentage)}%</span>
+              {#if showPercentageLabel}
+                <span class="percentage-label">DE LOS VOTOS</span>
+              {/if}
+            </div>
+          {:else}
+            <div class="card-percentage-placeholder"></div>
+          {/if}
           
           {#if mode === 'edit'}
             <div class="edit-buttons">

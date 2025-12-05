@@ -44,9 +44,9 @@
           .replace(/[&?]muted=[01]/gi, '');
         
         const separator = cleanUrl.includes("?") ? "&" : "?";
-        // Parámetros para controles y API
+        // Parámetros para controles y API (fs=1 habilita fullscreen)
         let params =
-          "controls=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&fs=0&disablekb=1&playsinline=1&enablejsapi=1&disableCastApi=1";
+          "controls=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&fs=1&disablekb=1&playsinline=1&enablejsapi=1&disableCastApi=1";
 
         if (autoplay) {
           params += "&autoplay=1&mute=1"; // mute=1 necesario para iOS autoplay
