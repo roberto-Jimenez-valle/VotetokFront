@@ -2663,10 +2663,10 @@
     height: 100%;
     scroll-snap-align: start;
     position: relative;
-    border-radius: 32px;
+    border-radius: 29px;
     overflow: hidden;
     margin: 0;
-    background: #2a2c31;
+    background: transparent;
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;

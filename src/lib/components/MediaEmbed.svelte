@@ -728,19 +728,6 @@
             }
           }}
         />
-
-        <!-- Texto GIPHY dentro del contenedor de la imagen -->
-        <button
-          class="linkedin-content"
-          onclick={() => window.open(metadata.url, "_blank")}
-          type="button"
-          aria-label={`Abrir ${metadata.title}`}
-        >
-          <h4>{url.includes("giphy") ? "GIPHY" : metadata.title}</h4>
-          {#if metadata.description && !url.includes("giphy")}
-            <p>{metadata.description}</p>
-          {/if}
-        </button>
       </div>
     </div>
   {/if}

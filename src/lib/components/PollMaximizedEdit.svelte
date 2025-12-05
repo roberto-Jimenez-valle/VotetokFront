@@ -404,11 +404,6 @@
                         </div>
                       {/if}
                       
-                      <!-- Badge GIPHY -->
-                      {#if isGifType}
-                        <span class="giphy-badge-corner">GIPHY</span>
-                      {/if}
-                      
                       <!-- Botón eliminar media -->
                       <button
                         type="button"
@@ -419,6 +414,11 @@
                         <X size={24} strokeWidth={1.5} />
                       </button>
                     </div>
+                    
+                    <!-- Badge GIPHY -->
+                    {#if isGifType}
+                      <img src="/logoGIPHY.png" alt="GIPHY" class="giphy-badge-corner" />
+                    {/if}
                     
                     <!-- Degradado inferior -->
                     <div class="card-bottom-gradient"></div>
@@ -835,19 +835,20 @@
     object-fit: cover !important;
   }
 
-  /* Badge GIPHY en esquina superior derecha */
+  /* Badge GIPHY logo en esquina superior derecha */
   .giphy-badge-corner {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    background: rgba(0, 0, 0, 0.6);
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    z-index: 10;
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    padding: 5px;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 50%;
+    object-fit: contain;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    pointer-events: none;
   }
 
   /* Degradado inferior fuerte */

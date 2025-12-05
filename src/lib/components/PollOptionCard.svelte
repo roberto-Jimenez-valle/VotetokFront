@@ -437,8 +437,14 @@
               {autoplay}
             />
           {/if}
+          
         </div>
         <div class="media-gradient-overlay"></div>
+        
+        <!-- Badge GIPHY en esquina superior derecha -->
+        {#if isGifType}
+          <img src="/logoGIPHY.png" alt="GIPHY" class="giphy-badge" />
+        {/if}
       </div>
       
       {#if mode === 'edit'}
@@ -607,11 +613,11 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    border-radius: 32px;
+    border-radius: 29px;
     overflow: hidden;
     border: none;
     padding: 0;
-    background: transparent;
+    background: #1a1a1a;
     text-align: left;
     /* Ocultar scrollbars */
     scrollbar-width: none;
@@ -785,12 +791,7 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    transition: transform 0.2s ease;
     z-index: 10;
-  }
-  
-  .poll-option-card:hover .platform-badge {
-    transform: scale(1.1);
   }
   
   .platform-badge svg {
@@ -798,6 +799,23 @@
     height: 14px;
     color: white;
   }
+  
+  /* Badge GIPHY logo en esquina superior derecha */
+  .giphy-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 50%;
+    object-fit: contain;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    z-index: 20;
+    pointer-events: none;
+  }
+  
   
   .card-video-bottom {
     flex: 1;
@@ -879,6 +897,15 @@
     inset: 0;
     background-color: var(--option-color);
     opacity: 0.7;
+  }
+  
+  /* En modo edit, fondo oscuro sin color de opción visible */
+  .poll-option-card.edit .option-background {
+    background-color: #1a1a1a;
+  }
+  
+  .poll-option-card.edit .option-background::before {
+    display: none;
   }
   
   .noise-overlay {
@@ -1051,7 +1078,7 @@
     position: absolute;
     top: 12px;
     right: 12px;
-    z-index: 10;
+    z-index: 20;
     width: 32px;
     height: 32px;
     border-radius: 50%;

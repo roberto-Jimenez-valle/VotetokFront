@@ -356,56 +356,26 @@
     justify-content: space-between;
     padding: 16px;
     min-height: 180px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: none;
     border-radius: 16px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease;
     text-align: left;
     width: 100%;
     overflow: hidden;
-  }
-
-  .vote-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--card-color);
-    opacity: 0.15;
-    transition: opacity 0.3s ease;
-    z-index: 0;
-  }
-
-  .vote-card:hover:not(:disabled)::before {
-    opacity: 0.25;
+    box-shadow: none;
+    background: rgba(0, 0, 0, 0.4);
   }
 
   .vote-card:hover:not(:disabled) {
-    /* NO colorear borde en hover, solo transformar */
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
   }
 
   .vote-card.voted {
-    /* Borde coloreado PERMANENTE después de votar */
-    border: 3px solid var(--card-color) !important;
-    border-color: var(--card-color) !important;
-    background: rgba(255,255,255,0.12) !important;
-    box-shadow: 0 0 0 2px var(--card-color) !important;
+    /* Fondo más visible cuando ya votaste */
+    background: rgba(0, 0, 0, 0.5);
   }
   
-  .vote-card.voted:hover {
-    /* Mantener borde coloreado en hover cuando ya votaste */
-    border: 3px solid var(--card-color) !important;
-    border-color: var(--card-color) !important;
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--card-color) !important;
-  }
-  
-  /* Mantener el gradiente de color visible en tarjetas votadas */
-  .vote-card.voted::before {
-    opacity: 0.25 !important;
-  }
-
   .vote-card:disabled {
     opacity: 0.6;
     cursor: not-allowed;

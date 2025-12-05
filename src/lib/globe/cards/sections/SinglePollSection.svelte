@@ -1096,7 +1096,7 @@
         
         <button
           class={`option-slide ${index === activeAccordionIndex ? 'is-active' : ''} ${isPollVoted ? 'voted' : ''}`}
-          style="scroll-snap-stop: always; --option-border-color: {(displayVotes[poll.id] || userVotes[poll.id]) ? option.color : 'transparent'};" 
+          style="scroll-snap-stop: always; --option-border-color: {(displayVotes[poll.id] || userVotes[poll.id]) ? option.color : '#555'};" 
           type="button"
           aria-pressed={isPollVoted}
           aria-label={`Opción ${index + 1}: ${option.label}`}
@@ -3873,12 +3873,12 @@
     border-radius: 32px;
     overflow: hidden;
     margin: 0;
-    background: #2a2c31;
+    background: transparent;
     cursor: pointer;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    /* Sin borde ni sombra */
+    /* Borde siempre visible con el color de la opción */
     box-shadow: none;
-    border: none;
+    border: 3px solid var(--option-border-color, transparent);
     /* Ocultar scrollbars */
     scrollbar-width: none;
     -ms-overflow-style: none;

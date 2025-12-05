@@ -858,8 +858,9 @@
         onclick={handleClick}
         onkeydown={handleKeyDown}
         tabindex="0"
-        role="region"
+        role="listbox"
         aria-label="Opciones de encuesta"
+        aria-activedescendant={options[activeIndex]?.id ? `option-${options[activeIndex].id}` : undefined}
       >
         {#each options as opt, i (opt.id)}
           {@const type = getMediaType(opt)}
@@ -868,15 +869,18 @@
           {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
           {@const isImageType = type === 'image' && !isGifType}
           <div
+            id="option-{opt.id}"
             class="w-full h-full flex-shrink-0 snap-center relative"
             style="scroll-snap-stop: always;"
+            role="option"
+            aria-selected={i === activeIndex}
           >
             <!-- SlideContent -->
             <div class="w-full h-full relative overflow-hidden">
               
               <!-- CARD CONTAINER - Igual para todos los tipos -->
               <div class="option-card-container">
-                <div class="option-card-rounded">
+                <div class="option-card-rounded" style="--option-color: {hasVoted ? opt.color : '#555'};">
                   
                   {#if type === "text"}
                     <!-- === LAYOUT SOLO TEXTO === -->
@@ -1044,11 +1048,12 @@
                           </div>
                         {/if}
                         
-                        <!-- Badge GIPHY -->
-                        {#if isGifType}
-                          <span class="giphy-badge-corner">GIPHY</span>
-                        {/if}
                       </div>
+                      
+                      <!-- Badge GIPHY -->
+                      {#if isGifType}
+                        <img src="/logoGIPHY.png" alt="GIPHY" class="giphy-badge-corner" />
+                      {/if}
                       
                       <!-- Degradado inferior -->
                       <div class="card-bottom-gradient"></div>
@@ -2599,19 +2604,20 @@
     display: none !important;
   }
 
-  /* Badge GIPHY en esquina superior derecha */
+  /* Badge GIPHY logo en esquina superior derecha */
   .giphy-badge-corner {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    background: rgba(0, 0, 0, 0.6);
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    z-index: 10;
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    padding: 5px;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 50%;
+    object-fit: contain;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    pointer-events: none;
   }
 
   /* Degradado inferior fuerte */
