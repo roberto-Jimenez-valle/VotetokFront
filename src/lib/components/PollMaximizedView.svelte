@@ -864,6 +864,7 @@
         {#each options as opt, i (opt.id)}
           {@const type = getMediaType(opt)}
           {@const isVideoType = type !== 'image' && type !== 'text'}
+          {@const isMusicType = ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
           {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
           {@const isImageType = type === 'image' && !isGifType}
           <div
@@ -944,9 +945,9 @@
                   {:else if isVideoType}
                     <!-- === LAYOUT VIDEO === -->
                     <!-- Card con color de fondo de la opción -->
-                    <div class="card-video-wrapper" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                      <!-- Área de video más alta -->
-                      <div class="card-video-area">
+                    <div class="card-video-wrapper {isMusicType ? 'is-music' : ''}" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
+                      <!-- Área de video/música -->
+                      <div class="card-video-area {isMusicType ? 'is-music' : ''}">
                         {#if Math.abs(i - activeIndex) <= 1}
                           <MediaEmbed
                             url={opt.imageUrl || ""}
@@ -2441,6 +2442,17 @@
     overflow: hidden;
     background: inherit;
     border-radius: 28px;
+  }
+  
+  /* Plataformas de música - mismo espacio que Spotify */
+  .card-video-area.is-music {
+    flex: 0 0 45%;
+    min-height: 152px;
+    max-height: 240px;
+  }
+  
+  .card-video-wrapper.is-music .card-video-bottom {
+    flex: 1;
   }
 
   .card-video-area :global(.media-embed),

@@ -92,10 +92,10 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), MEDIA_PROXY_CONFIG.timeout);
     
-    // 7. Fetch del recurso externo
+    // 7. Fetch del recurso externo con headers específicos por plataforma
     const response = await fetch(targetUrl, {
       signal: controller.signal,
-      headers: getSecureFetchHeaders(),
+      headers: getSecureFetchHeaders(targetUrl),
       redirect: 'follow' // Seguir redirects 301/302
     });
     

@@ -90,70 +90,109 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     'preview.redd.it',
     'external-preview.redd.it',
     
-    // Twitter/X adicionales
+    // ============================================
+    // PLATAFORMAS MULTIMEDIA - TODOS LOS SUBDOMINIOS
+    // ============================================
+    
+    // Twitter/X - todos los subdominios
+    '*.twimg.com',
+    '*.x.com',
     'twimg.com',
     'x.com',
     
-    // TikTok - todos los subdominios de CDN
-    'tiktokcdn.com',
+    // TikTok - todos los CDNs globales
+    '*.tiktok.com',
+    '*.tiktokcdn.com',
+    '*.tiktokcdn-eu.com',
+    '*.tiktokcdn-us.com',
+    '*.tiktokv.com',
     'tiktok.com',
-    'p16-sign-va.tiktokcdn.com',
-    'p16-sign-sg.tiktokcdn.com',
-    'p77-sign-va.tiktokcdn.com',
-    'p16-sign.tiktokcdn-us.com',
-    'p19-sign.tiktokcdn-us.com',
-    'v16-webapp.tiktok.com',
-    'v19-webapp.tiktok.com',
+    'tiktokcdn.com',
+    'tiktokcdn-eu.com',
+    'tiktokcdn-us.com',
     
-    // Twitter/X - CDN de imágenes
-    'pbs.twimg.com',
-    'abs.twimg.com',
-    'video.twimg.com',
-    'ton.twimg.com',
+    // Twitch - todos los subdominios
+    '*.twitch.tv',
+    '*.ttvnw.net',
+    '*.jtvnw.net',
+    'twitch.tv',
+    'ttvnw.net',
+    'jtvnw.net',
     
-    // Spotify
-    'scdn.co',
-    'i.scdn.co',
+    // Spotify - todos los CDNs
+    '*.spotify.com',
+    '*.spotifycdn.com',
+    '*.scdn.co',
     'spotify.com',
+    'spotifycdn.com',
+    'scdn.co',
     
-    // SoundCloud
+    // SoundCloud - todos los subdominios
+    '*.soundcloud.com',
+    '*.sndcdn.com',
+    'soundcloud.com',
     'sndcdn.com',
-    'i1.sndcdn.com',
     
-    // Deezer
+    // YouTube - todos los subdominios
+    '*.youtube.com',
+    '*.ytimg.com',
+    '*.googlevideo.com',
+    'youtube.com',
+    'ytimg.com',
+    
+    // Vimeo - todos los subdominios
+    '*.vimeo.com',
+    '*.vimeocdn.com',
+    'vimeo.com',
+    'vimeocdn.com',
+    
+    // Dailymotion - todos los subdominios
+    '*.dailymotion.com',
+    '*.dmcdn.net',
+    'dailymotion.com',
+    'dmcdn.net',
+    
+    // Deezer - todos los subdominios
+    '*.deezer.com',
+    '*.dzcdn.net',
+    'deezer.com',
     'dzcdn.net',
-    'cdn-images.dzcdn.net',
-    'e-cdns-images.dzcdn.net',
     
-    // Apple Music
+    // Apple Music - todos los subdominios
+    '*.apple.com',
+    '*.mzstatic.com',
+    'apple.com',
     'mzstatic.com',
-    'is1-ssl.mzstatic.com',
-    'is2-ssl.mzstatic.com',
-    'is3-ssl.mzstatic.com',
-    'is4-ssl.mzstatic.com',
-    'is5-ssl.mzstatic.com',
     
-    // Bandcamp
+    // Bandcamp - todos los subdominios
+    '*.bandcamp.com',
+    '*.bcbits.com',
+    'bandcamp.com',
     'bcbits.com',
-    'f4.bcbits.com',
     
-    // Discord
-    'cdn.discordapp.com',
-    'media.discordapp.net',
+    // Discord - todos los subdominios
+    '*.discordapp.com',
+    '*.discordapp.net',
+    '*.discord.com',
+    'discordapp.com',
+    'discord.com',
     
-    // Tenor (GIFs)
+    // Tenor (GIFs) - todos los subdominios
+    '*.tenor.com',
     'tenor.com',
-    'media.tenor.com',
     
-    // Imgur adicionales
-    'i.stack.imgur.com',
+    // Imgur - todos los subdominios
+    '*.imgur.com',
+    'imgur.com',
     
-    // Wikipedia/Wikimedia adicionales
+    // Wikipedia/Wikimedia - todos los subdominios
+    '*.wikimedia.org',
+    '*.wikipedia.org',
     'wikimedia.org',
     'wikipedia.org',
     
     // Otros servicios
-    'railway.com',
+    '*.railway.app',
     'railway.app'
   ],
   
@@ -290,13 +329,38 @@ export function sanitizeIframeUrl(url: string): string {
 
 /**
  * Obtiene headers seguros para el fetch
+ * @param url - URL del recurso para determinar headers específicos
  */
-export function getSecureFetchHeaders(): HeadersInit {
-  return {
-    'User-Agent': 'VouTop-MediaProxy/1.0 (https://voutop.app)',
-    'Accept': 'image/*,video/*,audio/*',
-    'Accept-Language': 'en-US,en;q=0.5',
+export function getSecureFetchHeaders(url?: string): HeadersInit {
+  const baseHeaders: Record<string, string> = {
+    'Accept': 'image/*,video/*,audio/*,*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache'
   };
+  
+  // Headers específicos por plataforma
+  if (url) {
+    const hostname = new URL(url).hostname.toLowerCase();
+    
+    // TikTok necesita User-Agent de navegador y Referer
+    if (hostname.includes('tiktok')) {
+      baseHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+      baseHeaders['Referer'] = 'https://www.tiktok.com/';
+      baseHeaders['Origin'] = 'https://www.tiktok.com';
+    }
+    // Spotify CDN puede requerir headers similares
+    else if (hostname.includes('spotify') || hostname.includes('scdn.co')) {
+      baseHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+      baseHeaders['Referer'] = 'https://open.spotify.com/';
+    }
+    // Default User-Agent para otros servicios
+    else {
+      baseHeaders['User-Agent'] = 'Mozilla/5.0 (compatible; VouTopBot/1.0; +https://voutop.app)';
+    }
+  } else {
+    baseHeaders['User-Agent'] = 'Mozilla/5.0 (compatible; VouTopBot/1.0; +https://voutop.app)';
+  }
+  
+  return baseHeaders;
 }
