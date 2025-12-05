@@ -109,8 +109,8 @@
 
   // Tipos derivados
   const mediaType = $derived(getMediaType(imageUrl));
-  // TODAS las plataformas de media muestran thumbnail fullscreen (como imágenes)
-  const isThumbnailPlatform = $derived(['youtube', 'vimeo', 'dailymotion', 'tiktok', 'twitch', 'twitter', 'applemusic', 'deezer', 'bandcamp', 'spotify', 'soundcloud', 'video'].includes(mediaType));
+  // Plataformas de media que muestran thumbnail fullscreen (excluye video directo)
+  const isThumbnailPlatform = $derived(['youtube', 'vimeo', 'dailymotion', 'tiktok', 'twitch', 'twitter', 'applemusic', 'deezer', 'bandcamp', 'spotify', 'soundcloud'].includes(mediaType));
   // Para compatibilidad
   const isVideoType = $derived(false); // Ya no usamos el layout compacto de video
   const isGifType = $derived(mediaType === 'gif');
@@ -146,7 +146,7 @@
       soundcloud: 'https://placehold.co/320x180/ff5500/white?text=SoundCloud',
       tiktok: 'https://placehold.co/320x180/000000/white?text=TikTok',
       twitch: 'https://placehold.co/320x180/9146FF/white?text=Twitch',
-      twitter: 'https://placehold.co/320x180/1DA1F2/white?text=Twitter',
+      twitter: 'https://placehold.co/320x180/000000/white?text=X',
       applemusic: 'https://placehold.co/320x180/FC3C44/white?text=Apple+Music',
       deezer: 'https://placehold.co/320x180/FEAA2D/white?text=Deezer',
       dailymotion: 'https://placehold.co/320x180/0066DC/white?text=Dailymotion',
@@ -208,7 +208,7 @@
     soundcloud: '#ff5500',
     tiktok: '#000000',
     twitch: '#9146FF',
-    twitter: '#1DA1F2',
+    twitter: '#000000', // X (antes Twitter) usa negro
     applemusic: '#FC3C44',
     deezer: '#FEAA2D',
     dailymotion: '#0066DC',
@@ -613,6 +613,24 @@
     padding: 0;
     background: transparent;
     text-align: left;
+    /* Ocultar scrollbars */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .poll-option-card::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Ocultar scrollbars en todos los contenedores internos */
+  .poll-option-card *,
+  .poll-option-card *::-webkit-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .poll-option-card *::-webkit-scrollbar {
+    display: none;
   }
   
   .poll-option-card.is-clickable {
@@ -642,15 +660,20 @@
   }
   
   .card-video-area :global(.media-embed),
-  .card-video-area :global(.embed-container) {
+  .card-video-area :global(.embed-container),
+  .card-video-area :global(.oembed-container) {
     width: 100% !important;
     height: 100% !important;
+    background: inherit !important;
   }
   
-  .card-video-area :global(iframe) {
+  .card-video-area :global(iframe),
+  .card-video-area :global(video) {
     border-radius: 28px !important;
     width: 100% !important;
     height: 100% !important;
+    object-fit: contain !important;
+    /* El espacio vacío (letterbox) mostrará el color del padre */
   }
   
   .card-video-area :global(.media-embed-container),

@@ -226,9 +226,198 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
     }
   }
   
-  // TikTok - usar Open Graph (oEmbed devuelve 400)
-  if (urlObj.hostname.includes('tiktok.com')) {
-    console.log('[Link Preview] 🎵 Detectado TikTok, obteniendo Open Graph...');
+  // TikTok - usar oEmbed API
+  if (urlObj.hostname.includes('tiktok.com') || urlObj.hostname.includes('vm.tiktok.com')) {
+    console.log('[Link Preview] 🎵 Detectado TikTok, usando oEmbed API...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(targetUrl)}`;
+      console.log('[Link Preview] TikTok oEmbed URL:', oembedUrl);
+      
+      const response = await fetch(oembedUrl, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('[Link Preview] TikTok oEmbed status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Link Preview] TikTok oEmbed data:', { 
+          title: data.title, 
+          author: data.author_name,
+          thumbnail: data.thumbnail_url 
+        });
+        
+        if (data.thumbnail_url) {
+          console.log('[Link Preview] ✅ TikTok thumbnail found:', data.thumbnail_url);
+          return {
+            url: targetUrl,
+            title: data.title || 'TikTok',
+            description: data.author_name || '',
+            image: data.thumbnail_url,
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(data.thumbnail_url)}`,
+            siteName: 'TikTok',
+            domain: 'tiktok.com',
+            type: 'oembed',
+            providerName: 'TikTok',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        } else {
+          console.log('[Link Preview] ⚠️ TikTok oEmbed no tiene thumbnail_url');
+        }
+      }
+    } catch (err) {
+      console.warn('[Link Preview] TikTok oEmbed error:', err);
+    }
+    return null;
+  }
+  
+  // X (antes Twitter) - usar API de fxtwitter directamente (más rápido y confiable)
+  if (urlObj.hostname.includes('twitter.com') || urlObj.hostname.includes('x.com')) {
+    console.log('[Link Preview] 🐦 Detectado X, usando API fxtwitter...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos
+      
+      // Usar directamente la API JSON (más rápida que HTML)
+      const pathname = new URL(targetUrl).pathname;
+      const apiUrl = `https://api.fxtwitter.com${pathname}`;
+      console.log('[Link Preview] X API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        signal: controller.signal,
+        headers: { 
+          'Accept': 'application/json',
+          'User-Agent': 'VoteTok/1.0'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('[Link Preview] X API status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const tweet = data.tweet;
+        
+        console.log('[Link Preview] X API data:', { 
+          hasMedia: !!tweet?.media,
+          photos: tweet?.media?.photos?.length || 0,
+          videos: tweet?.media?.videos?.length || 0,
+          author: tweet?.author?.name
+        });
+        
+        // Buscar imagen: fotos > videos thumbnail > avatar del autor
+        let mediaUrl = null;
+        if (tweet?.media?.photos?.[0]?.url) {
+          mediaUrl = tweet.media.photos[0].url;
+        } else if (tweet?.media?.videos?.[0]?.thumbnail_url) {
+          mediaUrl = tweet.media.videos[0].thumbnail_url;
+        } else if (tweet?.author?.avatar_url) {
+          // Fallback: usar avatar del autor si no hay media
+          mediaUrl = tweet.author.avatar_url.replace('_normal', '_400x400');
+        }
+        
+        if (mediaUrl) {
+          console.log('[Link Preview] ✅ X image found:', mediaUrl);
+          return {
+            url: targetUrl,
+            title: tweet?.text?.substring(0, 100) || 'X',
+            description: tweet?.author?.name || '',
+            image: mediaUrl,
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(mediaUrl)}`,
+            siteName: 'X',
+            domain: 'x.com',
+            type: 'oembed',
+            providerName: 'X',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        } else {
+          console.log('[Link Preview] ⚠️ X API no tiene media');
+        }
+      } else {
+        console.log('[Link Preview] ❌ X API response not ok:', response.status);
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.warn('[Link Preview] X API timeout (15s)');
+      } else {
+        console.warn('[Link Preview] X error:', err.message);
+      }
+    }
+    return null;
+  }
+  
+  // Twitch - extraer thumbnail de clips o canales
+  if (urlObj.hostname.includes('twitch.tv') || urlObj.hostname.includes('clips.twitch.tv')) {
+    console.log('[Link Preview] 🎮 Detectado Twitch, obteniendo thumbnail...');
+    
+    // Para clips, extraer el slug y construir URL de thumbnail
+    const clipMatch = targetUrl.match(/(?:clips\.twitch\.tv\/|twitch\.tv\/\w+\/clip\/)([A-Za-z0-9_-]+)/);
+    if (clipMatch) {
+      const clipSlug = clipMatch[1];
+      console.log('[Link Preview] Twitch clip detectado, slug:', clipSlug);
+      
+      // Intentar obtener el thumbnail del clip via Open Graph
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        
+        const clipUrl = `https://clips.twitch.tv/${clipSlug}`;
+        const response = await fetch(clipUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+            'Accept': 'text/html'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const html = await response.text();
+          // Twitch clips usan twitter:image
+          const twitterImage = html.match(/<meta\s+(?:property|name)=["']twitter:image["']\s+content=["']([^"']+)["']/i) ||
+                               html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']twitter:image["']/i);
+          const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                          html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+          const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                          html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+          
+          const imageUrl = twitterImage?.[1] || ogImage?.[1];
+          
+          if (imageUrl) {
+            console.log('[Link Preview] ✅ Twitch clip image found:', imageUrl);
+            return {
+              url: targetUrl,
+              title: ogTitle?.[1] || 'Twitch Clip',
+              description: '',
+              image: imageUrl,
+              imageProxied: `/api/media-proxy?url=${encodeURIComponent(imageUrl)}`,
+              siteName: 'Twitch',
+              domain: 'twitch.tv',
+              type: 'opengraph',
+              providerName: 'Twitch',
+              isSafe: true,
+              nsfwScore: 0
+            };
+          } else {
+            console.log('[Link Preview] ⚠️ Twitch clip no tiene imagen, HTML preview:', html.substring(0, 1000));
+          }
+        }
+      } catch (err) {
+        console.warn('[Link Preview] Twitch clip error:', err);
+      }
+    }
+    
+    // Para canales/videos, intentar Open Graph normal
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -236,107 +425,52 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
       const response = await fetch(targetUrl, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
           'Accept': 'text/html'
         }
       });
       
       clearTimeout(timeoutId);
-      console.log('[Link Preview] TikTok response status:', response.status);
       
       if (response.ok) {
         const html = await response.text();
-        // Extraer og:image
+        const twitterImage = html.match(/<meta\s+(?:property|name)=["']twitter:image["']\s+content=["']([^"']+)["']/i) ||
+                             html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']twitter:image["']/i);
         const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
                         html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
         const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
                         html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
         
-        if (ogImage?.[1]) {
-          console.log('[Link Preview] ✅ TikTok Open Graph image found:', ogImage[1]);
-          return {
-            url: targetUrl,
-            title: ogTitle?.[1] || 'TikTok',
-            description: '',
-            image: ogImage[1],
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
-            siteName: 'TikTok',
-            domain: 'tiktok.com',
-            type: 'opengraph',
-            providerName: 'TikTok',
-            isSafe: true,
-            nsfwScore: 0
-          };
-        } else {
-          console.log('[Link Preview] ⚠️ TikTok no tiene og:image en HTML');
-        }
-      }
-    } catch (err) {
-      console.warn('[Link Preview] TikTok Open Graph error:', err);
-    }
-  }
-  
-  // Twitter/X - obtener Open Graph directamente (oEmbed no tiene thumbnail)
-  if (urlObj.hostname.includes('twitter.com') || urlObj.hostname.includes('x.com')) {
-    console.log('[Link Preview] 🐦 Detectado Twitter, obteniendo Open Graph...');
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      
-      // Intentar con vxtwitter que es más confiable para Open Graph
-      const vxUrl = targetUrl.replace('twitter.com', 'vxtwitter.com').replace('x.com', 'vxtwitter.com');
-      console.log('[Link Preview] Twitter usando vxtwitter:', vxUrl);
-      
-      const response = await fetch(vxUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-          'Accept': 'text/html'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      console.log('[Link Preview] Twitter response status:', response.status);
-      
-      if (response.ok) {
-        const html = await response.text();
-        console.log('[Link Preview] Twitter HTML length:', html.length);
-        // Extraer og:image
-        const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
-                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
-        const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
-                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+        const imageUrl = twitterImage?.[1] || ogImage?.[1];
         
-        if (ogImage?.[1]) {
-          console.log('[Link Preview] ✅ Twitter Open Graph image found:', ogImage[1]);
+        if (imageUrl) {
+          console.log('[Link Preview] ✅ Twitch image found:', imageUrl);
           return {
             url: targetUrl,
-            title: ogTitle?.[1] || 'Twitter',
+            title: ogTitle?.[1] || 'Twitch',
             description: '',
-            image: ogImage[1],
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
-            siteName: 'Twitter',
-            domain: 'twitter.com',
+            image: imageUrl,
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(imageUrl)}`,
+            siteName: 'Twitch',
+            domain: 'twitch.tv',
             type: 'opengraph',
-            providerName: 'Twitter',
+            providerName: 'Twitch',
             isSafe: true,
             nsfwScore: 0
           };
         } else {
-          console.log('[Link Preview] ⚠️ Twitter/vxtwitter no tiene og:image');
+          console.log('[Link Preview] ⚠️ Twitch no tiene imagen, HTML preview:', html.substring(0, 1000));
         }
-      } else {
-        console.log('[Link Preview] ❌ Twitter/vxtwitter response not ok:', response.status);
       }
     } catch (err) {
-      console.warn('[Link Preview] Twitter Open Graph error:', err);
+      console.warn('[Link Preview] Twitch error:', err);
     }
     return null;
   }
   
-  // Twitch - intentar Open Graph y extraer thumbnail
-  if (urlObj.hostname.includes('twitch.tv') || urlObj.hostname.includes('clips.twitch.tv')) {
-    console.log('[Link Preview] 🎮 Detectado Twitch, obteniendo Open Graph...');
+  // Apple Music - usar Open Graph
+  if (urlObj.hostname.includes('music.apple.com')) {
+    console.log('[Link Preview] 🍎 Detectado Apple Music, obteniendo Open Graph...');
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -353,38 +487,78 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
       
       if (response.ok) {
         const html = await response.text();
-        // Extraer og:image
         const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
                         html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
         const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
                         html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
         
         if (ogImage?.[1]) {
-          console.log('[Link Preview] ✅ Twitch Open Graph image found:', ogImage[1]);
+          console.log('[Link Preview] ✅ Apple Music Open Graph image found:', ogImage[1]);
           return {
             url: targetUrl,
-            title: ogTitle?.[1] || 'Twitch',
+            title: ogTitle?.[1] || 'Apple Music',
             description: '',
             image: ogImage[1],
             imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
-            siteName: 'Twitch',
-            domain: 'twitch.tv',
+            siteName: 'Apple Music',
+            domain: 'music.apple.com',
             type: 'opengraph',
-            providerName: 'Twitch',
+            providerName: 'Apple Music',
             isSafe: true,
             nsfwScore: 0
           };
         }
       }
     } catch (err) {
-      console.warn('[Link Preview] Twitch Open Graph failed:', err);
+      console.warn('[Link Preview] Apple Music Open Graph failed:', err);
     }
     return null;
   }
   
-  // Apple Music - usar Open Graph
-  if (urlObj.hostname.includes('music.apple.com')) {
-    console.log('[Link Preview] 🍎 Detectado Apple Music, usando Open Graph...');
+  // Bandcamp - usar Open Graph
+  if (urlObj.hostname.includes('bandcamp.com')) {
+    console.log('[Link Preview] 🎸 Detectado Bandcamp, obteniendo Open Graph...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const html = await response.text();
+        const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+        const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+        
+        if (ogImage?.[1]) {
+          console.log('[Link Preview] ✅ Bandcamp Open Graph image found:', ogImage[1]);
+          return {
+            url: targetUrl,
+            title: ogTitle?.[1] || 'Bandcamp',
+            description: '',
+            image: ogImage[1],
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            siteName: 'Bandcamp',
+            domain: 'bandcamp.com',
+            type: 'opengraph',
+            providerName: 'Bandcamp',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[Link Preview] Bandcamp Open Graph failed:', err);
+    }
     return null;
   }
   

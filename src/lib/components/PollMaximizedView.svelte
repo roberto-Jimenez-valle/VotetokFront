@@ -2450,16 +2450,24 @@
   .card-video-area :global(.oembed-container) {
     width: 100% !important;
     height: 100% !important;
-    background: transparent !important;
-    background-color: transparent !important;
+    background: inherit !important;
+    background-color: inherit !important;
+  }
+  
+  /* Contenedor de iframe/video hereda el color */
+  .card-video-area :global(.embed-container > div),
+  .card-video-area :global(.oembed-container > div),
+  .card-video-area :global(.media-embed > div) {
+    background: inherit !important;
   }
 
   .card-video-area :global(iframe),
   .card-video-area :global(video) {
     width: 100% !important;
     height: 100% !important;
-    object-fit: cover !important;
+    object-fit: contain !important;
     border-radius: 28px !important;
+    /* El iframe tiene su propio fondo, pero el espacio vacío mostrará el color del padre */
   }
 
   /* Ocultar contenido extra en video */

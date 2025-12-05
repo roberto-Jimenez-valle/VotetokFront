@@ -2634,14 +2634,16 @@
     align-items: center;
   }
   
-  /* Scroll horizontal estilo SinglePollSection */
+  /* Scroll horizontal estilo SearchModal (scrollbar fino) */
   .options-horizontal-scroll {
     display: flex;
     overflow-x: scroll;
     overflow-y: visible;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    /* Scrollbar fino estilo SearchModal */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
     gap: 12px;
     height: 250px;
     width: 100%;
@@ -2649,7 +2651,16 @@
   }
   
   .options-horizontal-scroll::-webkit-scrollbar {
-    display: none;
+    height: 4px;
+  }
+  
+  .options-horizontal-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .options-horizontal-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
   }
   
   /* Cada slide/opción ocupa el 100% del ancho */

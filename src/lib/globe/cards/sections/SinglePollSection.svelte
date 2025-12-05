@@ -3815,25 +3815,36 @@
   .poll-options-scroll-container {
     width: 100%;
     margin: 0;
-    padding: 0;
+    padding-left: 10px;
     background: transparent;
   }
 
-  /* Scroll horizontal estilo PollMaximizedView */
+  /* Scroll horizontal estilo SearchModal (scrollbar fino) */
   .options-horizontal-scroll {
     display: flex;
     overflow-x: scroll;
     overflow-y: visible;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Firefox */
+    /* Scrollbar fino estilo SearchModal */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
     gap: 12px;
     height: 250px;
     padding: 4px 12px;
   }
 
   .options-horizontal-scroll::-webkit-scrollbar {
-    display: none; /* Chrome/Safari */
+    height: 4px;
+  }
+  
+  .options-horizontal-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .options-horizontal-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
   }
 
   /* Cada slide/opción ocupa el 100% del ancho */

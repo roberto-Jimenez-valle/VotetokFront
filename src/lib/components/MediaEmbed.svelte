@@ -753,6 +753,19 @@
     overflow: hidden;
     background: #000000;
     display: block;
+    /* Ocultar scrollbars */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .media-embed::-webkit-scrollbar,
+  .media-embed *::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .media-embed * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .preview-mode {
