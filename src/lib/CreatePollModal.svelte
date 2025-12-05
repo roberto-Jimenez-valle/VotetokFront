@@ -1697,17 +1697,11 @@
               {#each optionsToRender as option, index (option.id)}
                 {@const pct = Math.round(100 / options.length)}
                 {@const detectedUrl = extractUrlFromText(option.label)}
-                {@const labelWithoutUrl = getLabelWithoutUrl(option.label)}
                 {@const savedUrl = optionUrls.get(option.id)}
-                {@const optionPreview = optionPreviews.get(option.id)}
-                {@const mediaUrl = optionPreview?.url || savedUrl || detectedUrl || option.imageUrl || ''}
-                {@const hasMedia = detectedUrl || option.imageUrl || savedUrl || optionPreview}
-                {@const isVideoType = mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be') || mediaUrl.includes('vimeo.com') || mediaUrl.includes('spotify.com') || mediaUrl.includes('soundcloud.com') || /\.(mp4|webm|mov)([?#]|$)/i.test(mediaUrl))}
-                {@const isImageType = hasMedia && !isVideoType}
+                {@const mediaUrl = savedUrl || detectedUrl || option.imageUrl || ''}
                 
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div 
-                  role="button"
-                  tabindex="0"
                   class="option-slide {activeAccordionIndex === index ? 'is-active' : ''}" 
                   style="--card-color: {option.color}; --option-border-color: {option.color};"
                   onclick={() => {
@@ -1715,121 +1709,24 @@
                       setActive(index);
                     }
                   }}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      if (!isDragging) {
-                        setActive(index);
-                      }
-                    }
-                  }}
                 >
-                  {#if isVideoType}
-                    <!-- === LAYOUT VIDEO/SPOTIFY/SOUNDCLOUD === -->
-                    <div class="card-video-wrapper" style="background-color: {option.color};">
-                      <!-- Área de video (55%) -->
-                      <div class="card-video-area">
-                        <MediaEmbed 
-                          url={mediaUrl} 
-                          mode="full"
-                          width="100%"
-                          height="100%"
-                          on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
-                        />
-                        
-                        <!-- Botón eliminar media -->
-                        <button
-                          type="button"
-                          class="remove-media-btn"
-                          onclick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            loadingPreviews.delete(option.id);
-                            optionPreviews.delete(option.id);
-                            optionUrls.delete(option.id);
-                            optionUrls = optionUrls;
-                            const urlInLabel = extractUrlFromText(option.label);
-                            if (urlInLabel) {
-                              option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
-                            }
-                            option.imageUrl = '';
-                            options = [...options];
-                          }}
-                          title="Eliminar media"
-                          aria-label="Eliminar media"
-                        >
-                          <X class="w-4 h-4" />
-                        </button>
-                      </div>
-                      
-                      <!-- Contenido debajo del video -->
-                      <div class="card-video-bottom">
-                        <textarea
-                          class="option-label-video-edit"
-                          class:error={errors[`option_${option.id}`]}
-                          placeholder="Opción {index + 1}"
-                          value={labelWithoutUrl}
-                          oninput={(e) => {
-                            const newValue = (e.target as HTMLTextAreaElement).value;
-                            const currentUrl = extractUrlFromText(option.label);
-                            if (currentUrl) {
-                              option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
-                            } else {
-                              option.label = newValue;
-                            }
-                          }}
-                          bind:this={optionInputs[option.id]}
-                          maxlength="200"
-                          onclick={(e) => e.stopPropagation()}
-                        ></textarea>
-                        
-                        <!-- Línea divisoria -->
-                        <div class="maximized-divider-line"></div>
-                        
-                        <!-- Porcentaje y herramientas -->
-                        <div class="option-percentage-bottom">
-                          <div class="percentage-info">
-                            <span class="percentage-value-large" style="color: white">{Math.round(pct)}%</span>
-                            <span class="percentage-subtitle">DE LOS VOTOS</span>
-                          </div>
-                          <div class="edit-buttons-row">
-                            <button type="button" class="edit-btn color-btn" style="background-color: {option.color}" onclick={(e) => { e.stopPropagation(); colorPickerOpenFor = option.id; }} title="Cambiar color">
-                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
-                            </button>
-                            <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); openGiphyPicker(option.id); }} title="Buscar GIF">
-                              <Sparkles class="w-4 h-4" />
-                            </button>
-                            {#if index > 0}
-                              <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); removeOption(option.id); }} title="Eliminar opción">
-                                <Trash2 class="w-4 h-4" />
-                              </button>
-                            {/if}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  {:else if isImageType}
-                  <!-- === LAYOUT IMAGEN/GIF (fondo completo con texto superpuesto) === -->
-                  <div class="option-background-maximized" style="--option-color: {option.color};">
-                    <div class="noise-overlay"></div>
-                    <div class="media-embed-background">
-                      <MediaEmbed 
-                        url={mediaUrl} 
-                        mode="full"
-                        width="100%"
-                        height="100%"
-                        on:imageerror={(e) => handleImageLoadError(option.id, option.label, e.detail.url)}
-                      />
-                    </div>
-                    <div class="media-gradient-overlay"></div>
-                  </div>
-                  
-                  <!-- Botón eliminar media -->
-                  <button
-                    type="button"
-                    class="remove-media-btn"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
+                  <!-- Usar PollOptionCard directamente como en SinglePollSection -->
+                  <PollOptionCard
+                    label={option.label}
+                    color={option.color}
+                    imageUrl={mediaUrl}
+                    percentage={pct}
+                    mode="edit"
+                    isActive={activeAccordionIndex === index}
+                    optionIndex={index}
+                    showRemoveOption={index > 0}
+                    onLabelChange={(newLabel) => {
+                      option.label = newLabel;
+                      options = [...options];
+                    }}
+                    onColorPickerOpen={() => { colorPickerOpenFor = option.id; }}
+                    onGiphyPickerOpen={() => { openGiphyPicker(option.id); }}
+                    onRemoveMedia={() => {
                       loadingPreviews.delete(option.id);
                       optionPreviews.delete(option.id);
                       optionUrls.delete(option.id);
@@ -1841,110 +1738,8 @@
                       option.imageUrl = '';
                       options = [...options];
                     }}
-                    title="Eliminar media"
-                    aria-label="Eliminar media"
-                  >
-                    <X class="w-4 h-4" />
-                  </button>
-                  
-                  <!-- Contenido superpuesto en la parte inferior -->
-                  <div class="option-content-bottom">
-                    <textarea
-                      class="option-label-maximized-edit"
-                      class:error={errors[`option_${option.id}`]}
-                      placeholder="Opción {index + 1}"
-                      value={labelWithoutUrl}
-                      oninput={(e) => {
-                        const newValue = (e.target as HTMLTextAreaElement).value;
-                        const currentUrl = extractUrlFromText(option.label);
-                        if (currentUrl) {
-                          option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
-                        } else {
-                          option.label = newValue;
-                        }
-                      }}
-                      bind:this={optionInputs[option.id]}
-                      maxlength="200"
-                      onclick={(e) => e.stopPropagation()}
-                    ></textarea>
-                    
-                    <div class="maximized-divider-line"></div>
-                    
-                    <div class="option-percentage-bottom">
-                      <div class="percentage-info">
-                        <span class="percentage-value-large" style="color: white">{Math.round(pct)}%</span>
-                        <span class="percentage-subtitle">DE LOS VOTOS</span>
-                      </div>
-                      <div class="edit-buttons-row">
-                        <button type="button" class="edit-btn color-btn" style="background-color: {option.color}" onclick={(e) => { e.stopPropagation(); colorPickerOpenFor = option.id; }} title="Cambiar color">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
-                        </button>
-                        <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); openGiphyPicker(option.id); }} title="Buscar GIF">
-                          <Sparkles class="w-4 h-4" />
-                        </button>
-                        {#if index > 0}
-                          <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); removeOption(option.id); }} title="Eliminar opción">
-                            <Trash2 class="w-4 h-4" />
-                          </button>
-                        {/if}
-                      </div>
-                    </div>
-                  </div>
-                {:else}
-                  <!-- === LAYOUT TEXTO PURO (formato dividido) === -->
-                  <div class="card-video-wrapper" style="background-color: {option.color};">
-                    <!-- Área superior solo color -->
-                    <div class="card-video-area card-media-area">
-                      <div class="color-only-area">
-                        <div class="noise-overlay"></div>
-                      </div>
-                    </div>
-                    
-                    <!-- Contenido debajo -->
-                    <div class="card-video-bottom">
-                      <textarea
-                        class="option-label-video-edit"
-                        class:error={errors[`option_${option.id}`]}
-                        placeholder="Opción {index + 1}"
-                        value={labelWithoutUrl}
-                        oninput={(e) => {
-                          const newValue = (e.target as HTMLTextAreaElement).value;
-                          const currentUrl = extractUrlFromText(option.label);
-                          if (currentUrl) {
-                            option.label = newValue ? `${newValue} ${currentUrl}` : currentUrl;
-                          } else {
-                            option.label = newValue;
-                          }
-                        }}
-                        bind:this={optionInputs[option.id]}
-                        maxlength="200"
-                        onclick={(e) => e.stopPropagation()}
-                      ></textarea>
-                      
-                      <div class="maximized-divider-line"></div>
-                      
-                      <div class="option-percentage-bottom">
-                        <div class="percentage-info">
-                          <span class="percentage-value-large" style="color: white">{Math.round(pct)}%</span>
-                          <span class="percentage-subtitle">DE LOS VOTOS</span>
-                        </div>
-                        <div class="edit-buttons-row">
-                          <button type="button" class="edit-btn color-btn" style="background-color: {option.color}" onclick={(e) => { e.stopPropagation(); colorPickerOpenFor = option.id; }} title="Cambiar color">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
-                          </button>
-                          <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); openGiphyPicker(option.id); }} title="Buscar GIF">
-                            <Sparkles class="w-4 h-4" />
-                          </button>
-                          {#if index > 0}
-                            <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); removeOption(option.id); }} title="Eliminar opción">
-                              <Trash2 class="w-4 h-4" />
-                            </button>
-                          {/if}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                {/if}
+                    onRemoveOption={() => { removeOption(option.id); }}
+                  />
                 </div>
               {/each}
             </div>
@@ -2933,6 +2728,41 @@
     );
     z-index: 2;
     pointer-events: none;
+  }
+  
+  /* Badge de plataforma */
+  .platform-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+  }
+  
+  .platform-badge svg {
+    width: 14px;
+    height: 14px;
+    color: white;
+  }
+  
+  /* Thumbnail fullscreen para plataformas de media */
+  .thumbnail-fullscreen {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  
+  .thumbnail-placeholder {
+    position: absolute;
+    inset: 0;
   }
   
   /* Botón para eliminar media */
