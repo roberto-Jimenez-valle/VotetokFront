@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Sparkles, Trash2, ChevronDown } from "lucide-svelte";
+  import { X, Sparkles, Trash2, ChevronRight } from "lucide-svelte";
   import { fade, fly } from "svelte/transition";
   import { onMount } from "svelte";
   import MediaEmbed from "./MediaEmbed.svelte";
@@ -162,7 +162,7 @@
     <div class="w-full px-4 py-4 z-40 relative">
       <div class="flex items-start gap-3">
         <textarea
-          class="font-serif italic text-xl md:text-2xl leading-tight flex-1 bg-transparent border-none outline-none text-white placeholder-white/50 resize-none pointer-events-auto"
+          class="font-serif italic text-xl md:text-2xl leading-tight flex-1 bg-transparent border-none outline-none text-gray-300 placeholder-gray-400 resize-none pointer-events-auto"
           placeholder="Escribe tu pregunta..."
           value={pollTitle}
           oninput={(e) => onTitleChange(e.currentTarget.value)}
@@ -173,10 +173,10 @@
         <!-- Botón minimizar -->
         <button 
           onclick={onClose} 
-          class="w-8 h-8 bg-black/40 rounded-full flex items-center justify-center border border-white/20 flex-shrink-0 pointer-events-auto transition-all hover:bg-black/60 active:scale-95"
+          class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 pointer-events-auto border border-gray-400"
           aria-label="Minimizar"
         >
-          <ChevronDown size={22} strokeWidth={1.5} class="text-white" />
+          <ChevronRight size={22} strokeWidth={2} class="text-gray-300" />
         </button>
       </div>
     </div>
