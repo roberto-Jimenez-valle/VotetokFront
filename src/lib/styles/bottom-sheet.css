@@ -1,5 +1,42 @@
 /* BottomSheet Styles */
 
+/* OCULTAR SCROLLBARS en todas las cards mini */
+.poll-bar-option-item,
+.poll-bar-option-item *,
+.vote-card,
+.vote-card *,
+.mini-card,
+.mini-card *,
+.linkedin-card,
+.linkedin-card * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.poll-bar-option-item::-webkit-scrollbar,
+.poll-bar-option-item *::-webkit-scrollbar,
+.vote-card::-webkit-scrollbar,
+.vote-card *::-webkit-scrollbar,
+.mini-card::-webkit-scrollbar,
+.mini-card *::-webkit-scrollbar,
+.linkedin-card::-webkit-scrollbar,
+.linkedin-card *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.poll-bar-option-item iframe,
+.vote-card iframe,
+.mini-card iframe,
+.linkedin-card iframe,
+.media-embed,
+.embed-container {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  max-width: 100% !important;
+}
+
   /* Sheet drag area */
   .sheet-drag-area {
     cursor: grab;

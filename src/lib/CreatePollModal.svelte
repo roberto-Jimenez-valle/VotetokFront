@@ -2634,16 +2634,16 @@
     align-items: center;
   }
   
-  /* Scroll horizontal estilo SearchModal (scrollbar fino) */
+  /* Scroll horizontal estilo SearchModal (scrollbar oculto) */
   .options-horizontal-scroll {
     display: flex;
-    overflow-x: scroll;
+    overflow-x: auto;
     overflow-y: visible;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    /* Scrollbar fino estilo SearchModal */
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    /* Ocultar scrollbar */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     gap: 12px;
     height: 250px;
     width: 100%;
@@ -2651,16 +2651,9 @@
   }
   
   .options-horizontal-scroll::-webkit-scrollbar {
-    height: 4px;
-  }
-  
-  .options-horizontal-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .options-horizontal-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    display: none;
+    width: 0;
+    height: 0;
   }
   
   /* Cada slide/opción ocupa el 100% del ancho */
@@ -2683,11 +2676,9 @@
     outline: none;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    /* Borde con color de opción */
-    border: 2px solid var(--option-border-color, rgba(255, 255, 255, 0.15));
-    box-shadow: 
-      0 4px 16px rgba(0, 0, 0, 0.3),
-      0 2px 8px rgba(0, 0, 0, 0.2);
+    /* Sin borde ni sombra */
+    border: none;
+    box-shadow: none;
     /* Ocultar scrollbars */
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -2709,6 +2700,17 @@
     display: none !important;
     width: 0 !important;
     height: 0 !important;
+  }
+  
+  /* Ocultar scroll en iframes y embeds dentro de option-slide */
+  .option-slide iframe,
+  .option-slide :global(.media-embed),
+  .option-slide :global(.embed-container),
+  .option-slide :global(.mini-card),
+  .option-slide :global(.linkedin-card) {
+    overflow: hidden !important;
+    overflow-x: hidden !important;
+    max-width: 100% !important;
   }
   
   /* Fondo de opción estilo maximizado */

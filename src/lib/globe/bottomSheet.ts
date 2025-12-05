@@ -51,7 +51,7 @@ export class BottomSheetController {
     }
     else if (state === 'peek') {
       // En peek, el sheet se muestra un poco arriba del nav
-      this.y = containerH - this.bottomBarPx - 100; // 100px arriba del nav
+      this.y = containerH - this.bottomBarPx - 140; // 140px arriba del nav (antes 100px)
     }
     else if (state === 'collapsed') this.y = containerH * (1 - this.collapsedVisibleRatio);
     else this.y = 0; // expanded: completamente hasta arriba

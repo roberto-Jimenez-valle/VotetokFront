@@ -750,12 +750,15 @@
   .media-embed {
     position: relative;
     border-radius: 0;
-    overflow: hidden;
+    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
     background: #000000;
     display: block;
-    /* Ocultar scrollbars */
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    /* Ocultar scrollbars agresivamente */
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    max-width: 100%;
   }
   
   .media-embed::-webkit-scrollbar,
@@ -763,12 +766,17 @@
     display: none !important;
     width: 0 !important;
     height: 0 !important;
+    background: transparent !important;
   }
   
-  .media-embed * {
+  .media-embed *,
+  .media-embed *::before,
+  .media-embed *::after {
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
-    overflow: hidden;
+    overflow: hidden !important;
+    overflow-x: hidden !important;
+    max-width: 100%;
   }
 
   .preview-mode {

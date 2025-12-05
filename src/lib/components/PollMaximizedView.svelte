@@ -1381,12 +1381,10 @@
       </div>
     {/if}
 
-    <!-- Barra de control principal -->
-    <div class="w-full flex items-center gap-3 h-14 px-4 bg-transparent">
-      
-      <!-- A. ZONA FIJA (Acciones Principales) -->
-      <div class="flex items-center gap-1 shrink-0">
-        
+    <!-- Barra de control principal - Vote/Comments fijos + scroll desde Menu -->
+    <div class="action-bar-container">
+      <!-- Zona fija: Vote, Comments -->
+      <div class="action-bar-fixed">
         <!-- Votar -->
         <button 
           class="action-bar-btn"
@@ -1409,53 +1407,50 @@
           {#if hasVoted}
             <SquareCheck size={26} strokeWidth={1.5} style="color: {voteColor}" />
           {:else}
-            <Square size={26} strokeWidth={1.5} class="text-white/80" />
+            <Square size={26} strokeWidth={1.5} />
           {/if}
           <span class="action-bar-count" class:voted={hasVoted} style={hasVoted ? `color: ${voteColor}` : ''}>{formatCount(stats?.totalVotes)}</span>
         </button>
- 
+
         <!-- Mensajes -->
         <button 
           class="action-bar-btn"
           aria-label="Comentarios"
           onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
         >
-          <MessageCircle size={26} strokeWidth={1.5} class="text-white/80" />
+          <MessageCircle size={26} strokeWidth={1.5} />
           <span class="action-bar-count">{stats?.commentsCount || 0}</span>
         </button>
-
       </div>
 
-      <!-- B. ZONA SCROLLABLE (Acciones Secundarias) -->
-      <div class="overflow-x-auto hide-scrollbar scroll-mask-right flex-1">
-        <div class="flex items-center gap-1 pr-24">
-          
+      <!-- Zona scroll: desde Menu (3 puntos) en adelante -->
+      <div class="action-bar-scroll hide-scrollbar">
+        <div class="action-bar-content">
           <!-- Menú (3 puntos) -->
           <button 
             class="action-bar-btn"
             onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = !isMoreMenuOpen; }}
             aria-label="Más opciones"
           >
-            <MoreVertical size={26} strokeWidth={1.5} class="text-white/80" />
+            <MoreVertical size={26} strokeWidth={1.5} />
           </button>
 
-          <!-- Mundo - Solo si ha votado -->
+          <!-- Mundo y Estadísticas - Solo si ha votado (ANTES de Share) -->
           {#if hasVoted}
             <button 
               class="action-bar-btn"
               onclick={onOpenInGlobe}
               aria-label="Ver en globo"
             >
-              <Globe size={26} strokeWidth={1.5} class="text-white/80" />
+              <Globe size={26} strokeWidth={1.5} />
             </button>
 
-            <!-- Gráfico (Pulso) -->
             <button 
               class="action-bar-btn"
               onclick={onGoToChart}
               aria-label="Ver estadísticas"
             >
-              <Activity size={26} strokeWidth={1.5} class="text-white/80" />
+              <Activity size={26} strokeWidth={1.5} />
             </button>
           {/if}
 
@@ -1465,7 +1460,7 @@
             onclick={handleShare}
             aria-label="Compartir"
           >
-            <Share2 size={26} strokeWidth={1.5} class="text-white/80" />
+            <Share2 size={26} strokeWidth={1.5} />
             <span class="action-bar-count">{formatCount(shareCount)}</span>
           </button>
 
@@ -1476,7 +1471,7 @@
             aria-label={hasReposted ? 'Quitar repost' : 'Repostear'}
             disabled={isReposting}
           >
-            <Repeat2 size={26} strokeWidth={1.5} class={hasReposted ? 'text-green-400' : 'text-white/80'} />
+            <Repeat2 size={26} strokeWidth={1.5} class={hasReposted ? 'text-green-400' : ''} />
             <span class="action-bar-count" class:reposted={hasReposted}>{formatCount(repostCount)}</span>
           </button>
 
@@ -1485,7 +1480,7 @@
             class="action-bar-btn"
             aria-label="Vistas"
           >
-            <Eye size={26} strokeWidth={1.5} class="text-white/80" />
+            <Eye size={26} strokeWidth={1.5} />
             <span class="action-bar-count">{formatCount(viewCount)}</span>
           </button>
 
@@ -1495,7 +1490,7 @@
             onclick={onBookmark}
             aria-label="Guardar"
           >
-            <Bookmark size={26} strokeWidth={1.5} class="text-white/80" />
+            <Bookmark size={26} strokeWidth={1.5} />
           </button>
 
           <!-- Copiar enlace -->
@@ -1504,7 +1499,7 @@
             onclick={copyLink}
             aria-label="Copiar enlace"
           >
-            <Link size={26} strokeWidth={1.5} class="text-white/80" />
+            <Link size={26} strokeWidth={1.5} />
           </button>
 
           <!-- No me interesa -->
@@ -1512,7 +1507,7 @@
             class="action-bar-btn"
             aria-label="No me interesa"
           >
-            <EyeOff size={26} strokeWidth={1.5} class="text-white/80" />
+            <EyeOff size={26} strokeWidth={1.5} />
           </button>
 
           <!-- Reportar -->
@@ -1520,12 +1515,11 @@
             class="action-bar-btn"
             aria-label="Reportar"
           >
-            <Flag size={26} strokeWidth={1.5} class="text-red-400/80" />
+            <Flag size={26} strokeWidth={1.5} class="text-red-400" />
           </button>
 
         </div>
       </div>
-
     </div>
   </div>
 
@@ -1558,13 +1552,53 @@
 
 <style>
   /* ========================================
+     ACTION BAR - Contenedor centrado con ancho máximo
+     ======================================== */
+  .action-bar-container {
+    width: 100%;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+  }
+
+  .action-bar-fixed {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+  }
+
+  .action-bar-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    /* Ancho máximo para el scroll */
+    max-width: 160px;
+  }
+
+  .action-bar-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .action-bar-content {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: max-content;
+  }
+
+  /* ========================================
      ACTION BAR - Iconos grandes estilo línea
      ======================================== */
   .action-bar-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 10px;
+    gap: 4px;
+    padding: 8px;
     background: transparent;
     border: none;
     border-radius: 20px;
@@ -1572,10 +1606,22 @@
     transition: all 0.2s ease;
     flex-shrink: 0;
     white-space: nowrap;
+    /* Forzar color blanco en todos los temas */
+    color: rgba(255, 255, 255, 0.8) !important;
+  }
+
+  /* Forzar iconos SVG a ser blancos en todos los temas */
+  .action-bar-btn :global(svg) {
+    color: rgba(255, 255, 255, 0.8) !important;
+    stroke: currentColor !important;
   }
 
   .action-bar-btn:hover {
     background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .action-bar-btn:hover :global(svg) {
+    color: rgba(255, 255, 255, 1) !important;
   }
 
   .action-bar-btn:active {
@@ -1588,9 +1634,9 @@
   }
 
   .action-bar-count {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.7) !important;
     font-family: system-ui, -apple-system, sans-serif;
   }
 

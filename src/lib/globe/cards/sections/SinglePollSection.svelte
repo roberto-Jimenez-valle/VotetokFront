@@ -1707,12 +1707,10 @@
       </div>
     {/if}
 
-    <!-- Barra de control -->
-    <div class="mini-control-bar">
-      
-      <!-- A. ZONA FIJA (Acciones Principales) -->
+    <!-- Barra de control - Vote/Comments fijos + scroll desde Menu -->
+    <div class="mini-control-bar-new">
+      <!-- Zona fija: Vote, Comments -->
       <div class="mini-fixed-actions">
-        
         <!-- Votar -->
         <button 
           bind:this={voteIconElement}
@@ -1759,32 +1757,30 @@
           </svg>
           <span class="mini-action-count">0</span>
         </button>
-
       </div>
 
-      <!-- B. ZONA SCROLLABLE (Acciones Secundarias) -->
-      <div class="mini-scroll-actions">
-        <div class="mini-scroll-inner">
-          
+      <!-- Zona scroll: desde Menu (3 puntos) en adelante -->
+      <div class="mini-scroll-actions-new hide-scrollbar">
+        <div class="mini-scroll-content">
           <!-- Menú (3 puntos) -->
           <button 
-            class="mini-action-btn-secondary mini-more-btn-scroll" 
+            class="mini-action-btn" 
             type="button" 
             title="Más opciones"
             aria-label="Más opciones"
             onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = !isMoreMenuOpen; }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="5" r="2"/>
               <circle cx="12" cy="12" r="2"/>
               <circle cx="12" cy="19" r="2"/>
             </svg>
           </button>
 
-          <!-- Globo - Solo si ha votado -->
+          <!-- Globo y Estadísticas - Solo si ha votado (ANTES de Share) -->
           {#if pollVotedOption}
             <button 
-              class="mini-action-btn-secondary"
+              class="mini-action-btn"
               type="button"
               title="Ver en el globo"
               aria-label="Ver en el globo"
@@ -1797,9 +1793,8 @@
               </svg>
             </button>
 
-            <!-- Gráfico -->
             <button 
-              class="mini-action-btn-secondary"
+              class="mini-action-btn"
               type="button"
               title="Ver estadísticas"
               aria-label="Ver estadísticas"
@@ -1813,7 +1808,7 @@
 
           <!-- Compartir -->
           <button 
-            class="mini-action-btn-secondary"
+            class="mini-action-btn"
             type="button"
             title="Compartir"
             aria-label="Compartir"
@@ -1826,7 +1821,7 @@
               <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
               <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
             </svg>
-            <span class="mini-action-count-secondary">0</span>
+            <span class="mini-action-count">0</span>
           </button>
 
           <!-- Repostear -->
@@ -2165,17 +2160,45 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
-  /* Vote cards con background sólido */
+  /* Vote cards con background sólido - OCULTAR SCROLL AGRESIVAMENTE */
   :global(.vote-card) {
     background: #2a2c31 !important;
+    overflow: hidden !important;
     overflow-x: hidden !important;
     overflow-y: hidden !important;
+    max-width: 100%;
   }
 
   :global(.vote-card.collapsed) {
     background: #2a2c31 !important;
+    overflow: hidden !important;
     overflow-x: hidden !important;
     overflow-y: hidden !important;
+    max-width: 100%;
+  }
+
+  /* Ocultar scrollbars en TODOS los elementos dentro de vote-card */
+  :global(.vote-card *),
+  :global(.vote-card *::before),
+  :global(.vote-card *::after) {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  
+  :global(.vote-card *::-webkit-scrollbar) {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  
+  :global(.vote-card iframe),
+  :global(.vote-card .media-embed),
+  :global(.vote-card .embed-container),
+  :global(.vote-card .linkedin-card),
+  :global(.vote-card .mini-card) {
+    overflow: hidden !important;
+    overflow-x: hidden !important;
+    max-width: 100% !important;
   }
 
   /* Contenedor de tarjetas con botón añadir */
@@ -3819,32 +3842,25 @@
     background: transparent;
   }
 
-  /* Scroll horizontal estilo SearchModal (scrollbar fino) */
+  /* Scroll horizontal estilo SearchModal (scrollbar oculto) */
   .options-horizontal-scroll {
     display: flex;
-    overflow-x: scroll;
+    overflow-x: auto;
     overflow-y: visible;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    /* Scrollbar fino estilo SearchModal */
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    /* Ocultar scrollbar */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     gap: 12px;
     height: 250px;
     padding: 4px 12px;
   }
 
   .options-horizontal-scroll::-webkit-scrollbar {
-    height: 4px;
-  }
-  
-  .options-horizontal-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .options-horizontal-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   /* Cada slide/opción ocupa el 100% del ancho */
@@ -3860,11 +3876,9 @@
     background: #2a2c31;
     cursor: pointer;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 
-      0 4px 16px rgba(0, 0, 0, 0.3),
-      0 2px 8px rgba(0, 0, 0, 0.2);
-    /* Borde con color de opción */
-    border: 2px solid var(--option-border-color, transparent);
+    /* Sin borde ni sombra */
+    box-shadow: none;
+    border: none;
     /* Ocultar scrollbars */
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -3945,7 +3959,7 @@
   }
 
   /* ========================================
-     MINI ACTION BAR - Nuevo Diseño
+     MINI ACTION BAR - Vote/Comments fijos + scroll desde Menu
      ======================================== */
   
   .mini-action-bar {
@@ -3954,11 +3968,14 @@
     background: transparent;
   }
 
-  .mini-control-bar {
+  /* Nuevo layout: contenedor centrado con ancho máximo */
+  .mini-control-bar-new {
+    width: 100%;
+    height: 44px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    height: 40px;
+    justify-content: center;
+    background: transparent;
   }
 
   .mini-fixed-actions {
@@ -3966,6 +3983,35 @@
     align-items: center;
     gap: 0;
     flex-shrink: 0;
+  }
+
+  .mini-scroll-actions-new {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    /* Ancho máximo para el scroll */
+    max-width: 155px;
+  }
+
+  .mini-scroll-actions-new::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mini-scroll-content {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: max-content;
+  }
+
+  /* Layout anterior (deprecado pero mantenido por compatibilidad) */
+  .mini-control-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
   }
 
   .mini-action-btn {
