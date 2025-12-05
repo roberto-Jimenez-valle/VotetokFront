@@ -266,9 +266,51 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
     return null;
   }
   
-  // Twitch - usar Open Graph (no tiene oEmbed público sin auth)
+  // Twitch - intentar Open Graph y extraer thumbnail
   if (urlObj.hostname.includes('twitch.tv') || urlObj.hostname.includes('clips.twitch.tv')) {
-    console.log('[Link Preview] 🎮 Detectado Twitch, usando Open Graph...');
+    console.log('[Link Preview] 🎮 Detectado Twitch, obteniendo Open Graph...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const html = await response.text();
+        // Extraer og:image
+        const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+        const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+        
+        if (ogImage?.[1]) {
+          console.log('[Link Preview] ✅ Twitch Open Graph image found:', ogImage[1]);
+          return {
+            url: targetUrl,
+            title: ogTitle?.[1] || 'Twitch',
+            description: '',
+            image: ogImage[1],
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            siteName: 'Twitch',
+            domain: 'twitch.tv',
+            type: 'opengraph',
+            providerName: 'Twitch',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[Link Preview] Twitch Open Graph failed:', err);
+    }
     return null;
   }
   

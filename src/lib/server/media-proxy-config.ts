@@ -140,7 +140,11 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     
     // Wikipedia/Wikimedia adicionales
     'wikimedia.org',
-    'wikipedia.org'
+    'wikipedia.org',
+    
+    // Otros servicios
+    'railway.com',
+    'railway.app'
   ],
   
   // Tipos MIME permitidos
