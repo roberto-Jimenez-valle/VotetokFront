@@ -50,6 +50,7 @@
     optionIndex?: number;
     isClickable?: boolean;
     compact?: boolean;  // Modo compacto: muestra thumbnail con icono en vez de iframe
+    size?: 'normal' | 'maximized';  // Tamaño: normal para grid, maximized para fullscreen
   }
 
   let {
@@ -77,7 +78,8 @@
     autoplay = false,
     optionIndex = 0,
     isClickable = true,
-    compact = false
+    compact = false,
+    size = 'normal'
   }: Props = $props();
 
   // --- DETECCIÓN DE TIPO DE MEDIA ---
@@ -246,6 +248,7 @@
   class:is-voted={isVoted}
   class:is-active={isActive}
   class:is-clickable={isClickable && mode === 'view'}
+  class:size-maximized={size === 'maximized'}
   style="--option-color: {displayColor};"
   role={isClickable && mode === 'view' ? 'button' : undefined}
   tabindex={isClickable && mode === 'view' ? 0 : undefined}
@@ -1024,5 +1027,62 @@
     margin-left: 4px;
     font-size: 12px;
     color: rgba(255, 255, 255, 0.7);
+  }
+
+  /* ========================================
+     TAMAÑO MAXIMIZADO (fullscreen)
+     ======================================== */
+  
+  .poll-option-card.size-maximized {
+    position: relative;
+    inset: auto;
+    width: 100vw;
+    height: 100%;
+    border-radius: 0;
+    flex-shrink: 0;
+  }
+  
+  .size-maximized .card-video-wrapper {
+    border-radius: 0;
+    padding: 0;
+  }
+  
+  .size-maximized .card-video-area {
+    flex: 0 0 60%;
+    border-radius: 0;
+  }
+  
+  .size-maximized .card-video-bottom {
+    padding: 16px 20px 12px;
+  }
+  
+  .size-maximized .option-label-view {
+    font-size: 24px;
+  }
+  
+  .size-maximized .percentage-value {
+    font-size: 48px;
+  }
+  
+  .size-maximized .card-media-wrapper {
+    border-radius: 0;
+  }
+  
+  .size-maximized .compact-video-thumbnail {
+    border-radius: 0;
+  }
+  
+  .size-maximized .card-text-only {
+    border-radius: 0;
+  }
+  
+  .size-maximized .card-text-content {
+    padding: 24px;
+  }
+  
+  .size-maximized .card-text-content .option-label-view {
+    font-size: 32px;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
   }
 </style>
