@@ -460,19 +460,26 @@
   }
 
   // --- DETECCIÓN DE TIPO DE MEDIA (SI NO VIENE EXPLÍCITO) ---
-  function getMediaType(
-    opt: PollOption,
-  ): "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" {
-    if (opt.type) return opt.type;
+  type MediaType = "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" | "tiktok" | "twitch" | "twitter" | "applemusic" | "deezer" | "dailymotion" | "bandcamp";
+  
+  function getMediaType(opt: PollOption): MediaType {
+    if (opt.type) return opt.type as MediaType;
     if (!opt.imageUrl) return "text";
-    if (
-      opt.imageUrl.includes("youtube.com") ||
-      opt.imageUrl.includes("youtu.be")
-    )
-      return "youtube";
-    if (opt.imageUrl.includes("vimeo.com")) return "vimeo";
-    if (opt.imageUrl.includes("spotify.com")) return "spotify";
-    if (opt.imageUrl.includes("soundcloud.com")) return "soundcloud";
+    const url = opt.imageUrl.toLowerCase();
+    // Video platforms
+    if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
+    if (url.includes("vimeo.com")) return "vimeo";
+    if (url.includes("tiktok.com") || url.includes("vm.tiktok.com")) return "tiktok";
+    if (url.includes("twitch.tv")) return "twitch";
+    if (url.includes("dailymotion.com") || url.includes("dai.ly")) return "dailymotion";
+    // Social
+    if (url.includes("twitter.com") || url.includes("x.com")) return "twitter";
+    // Audio platforms
+    if (url.includes("spotify.com")) return "spotify";
+    if (url.includes("soundcloud.com")) return "soundcloud";
+    if (url.includes("music.apple.com")) return "applemusic";
+    if (url.includes("deezer.com")) return "deezer";
+    if (url.includes("bandcamp.com")) return "bandcamp";
     return "image";
   }
 
@@ -856,7 +863,7 @@
       >
         {#each options as opt, i (opt.id)}
           {@const type = getMediaType(opt)}
-          {@const isVideoType = type === 'youtube' || type === 'vimeo' || type === 'spotify' || type === 'soundcloud' || (opt.imageUrl && /\.(mp4|webm|mov)([?#]|$)/i.test(opt.imageUrl)) || (opt.imageUrl && (opt.imageUrl.includes('spotify.com') || opt.imageUrl.includes('soundcloud.com')))}
+          {@const isVideoType = type !== 'image' && type !== 'text'}
           {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
           {@const isImageType = type === 'image' && !isGifType}
           <div
@@ -946,7 +953,7 @@
                             mode="full"
                             width="100%"
                             height="100%"
-                            autoplay={i === activeIndex}
+                            autoplay={false}
                           />
                         {:else}
                           <div class="w-full h-full flex items-center justify-center bg-black">
@@ -1024,7 +1031,7 @@
                             mode="full"
                             width="100%"
                             height="100%"
-                            autoplay={i === activeIndex}
+                            autoplay={false}
                           />
                         {:else}
                           <div class="w-full h-full flex items-center justify-center bg-black">

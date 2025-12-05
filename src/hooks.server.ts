@@ -129,7 +129,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         "font-src 'self' data: https:",
         "connect-src 'self' https: http: ws: wss:",
         "media-src 'self' https: http: blob: data:",
-        "frame-src 'self' https://www.youtube.com https://open.spotify.com https://player.vimeo.com https://soundcloud.com https://www.tiktok.com",
+        "frame-src 'self' https://www.youtube.com https://open.spotify.com https://player.vimeo.com https://soundcloud.com https://www.tiktok.com https://player.twitch.tv https://clips.twitch.tv https://www.dailymotion.com https://embed.music.apple.com https://widget.deezer.com https://*.bandcamp.com",
         "worker-src 'self' blob:",
         "child-src 'self' blob: https:",
         "object-src 'none'",

@@ -108,16 +108,13 @@ export const OEMBED_PROVIDERS: OEmbedProvider[] = [
     maxHeight: 730
   },
   
-  // Twitch
-  {
-    name: 'Twitch',
-    urlPatterns: [
-      /^https?:\/\/(?:www\.)?twitch\.tv\/videos\/\d+/,
-      /^https?:\/\/(?:www\.)?twitch\.tv\/[^/]+\/clip\/.+/,
-      /^https?:\/\/clips\.twitch\.tv\/.+/
-    ],
-    endpoint: 'https://api.twitch.tv/v5/oembed'
-  },
+  // Twitch - Sin oEmbed público, usar Open Graph fallback
+  // Se deja comentado porque requiere autenticación
+  // {
+  //   name: 'Twitch',
+  //   urlPatterns: [...],
+  //   endpoint: 'https://api.twitch.tv/v5/oembed' // Requiere Client-ID header
+  // },
   
   // Reddit
   {
@@ -259,6 +256,24 @@ export const OEMBED_PROVIDERS: OEmbedProvider[] = [
       /^https?:\/\/coub\.com\/view\/.+/
     ],
     endpoint: 'https://coub.com/api/oembed.json'
+  },
+  
+  // Deezer - Sin oEmbed público, usar Open Graph fallback
+  // La API de Deezer pública se usa directamente en el frontend
+  
+  // Apple Music - Sin oEmbed público, usar Open Graph fallback
+  // Apple no tiene endpoint oEmbed público
+  
+  // Bandcamp
+  {
+    name: 'Bandcamp',
+    urlPatterns: [
+      /^https?:\/\/[^.]+\.bandcamp\.com\/(track|album)\/.+/,
+      /^https?:\/\/bandcamp\.com\/[^/]+/
+    ],
+    endpoint: 'https://bandcamp.com/oembed',
+    maxWidth: 400,
+    maxHeight: 120
   }
 ];
 

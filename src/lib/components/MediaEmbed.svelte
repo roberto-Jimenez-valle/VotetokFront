@@ -114,13 +114,64 @@
 
     // Para iframes de SoundCloud
     if (processed.includes("soundcloud.com") || processed.includes("w.soundcloud.com")) {
-      // Agregar loading lazy al iframe
       if (!processed.includes('loading="')) {
         processed = processed.replace('<iframe', '<iframe loading="lazy"');
       }
-      // Asegurar que tenga allow para autoplay
       if (!processed.includes('allow="')) {
         processed = processed.replace('<iframe', '<iframe allow="autoplay"');
+      }
+    }
+
+    // Para iframes de TikTok
+    if (processed.includes("tiktok.com")) {
+      processed = processed.replace(/src="([^"]+)"/, (match, url) => {
+        let cleanUrl = url.replace(/[&?]autoplay=[01]/gi, '');
+        if (!autoplay) {
+          return `src="${cleanUrl}"`;
+        }
+        const separator = cleanUrl.includes("?") ? "&" : "?";
+        return `src="${cleanUrl}${separator}autoplay=1"`;
+      });
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay; encrypted-media; fullscreen"');
+      }
+      if (!processed.includes('loading="')) {
+        processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
+    }
+
+    // Para iframes de Twitch
+    if (processed.includes("twitch.tv") || processed.includes("player.twitch.tv")) {
+      processed = processed.replace(/src="([^"]+)"/, (match, url) => {
+        let cleanUrl = url.replace(/[&?]autoplay=(true|false)/gi, '');
+        const separator = cleanUrl.includes("?") ? "&" : "?";
+        const autoplayParam = autoplay ? 'true' : 'false';
+        return `src="${cleanUrl}${separator}autoplay=${autoplayParam}&muted=false"`;
+      });
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay; fullscreen"');
+      }
+      if (!processed.includes('loading="')) {
+        processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
+    }
+
+    // Para iframes de Dailymotion
+    if (processed.includes("dailymotion.com")) {
+      processed = processed.replace(/src="([^"]+)"/, (match, url) => {
+        let cleanUrl = url.replace(/[&?]autoplay=[01]/gi, '').replace(/[&?]mute=[01]/gi, '');
+        const separator = cleanUrl.includes("?") ? "&" : "?";
+        let params = "ui-start-screen-info=0&controls=1";
+        if (autoplay) {
+          params += "&autoplay=1&mute=1";
+        }
+        return `src="${cleanUrl}${separator}${params}"`;
+      });
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay; fullscreen; picture-in-picture"');
+      }
+      if (!processed.includes('loading="')) {
+        processed = processed.replace('<iframe', '<iframe loading="lazy"');
       }
     }
 
@@ -253,7 +304,94 @@
         return;
       }
 
-      // TODOS los enlaces pasan por el sistema oEmbed/link-preview centralizado
+      // Detectar TikTok y generar embed
+      if (url.includes("tiktok.com") || url.includes("vm.tiktok.com")) {
+        embedType = "TikTok";
+        const videoId = url.match(/video\/(\d+)/)?.[1] || '';
+        if (videoId) {
+          embedHTML = `<iframe src="https://www.tiktok.com/embed/v2/${videoId}" width="100%" height="100%" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
+          loading = false;
+          return;
+        }
+        // Si no encontramos videoId, usar oEmbed
+        await fetchMetadata(url);
+        return;
+      }
+
+      // Detectar Twitch y generar embed
+      if (url.includes("twitch.tv")) {
+        embedType = "Twitch";
+        const channelMatch = url.match(/twitch\.tv\/([^\/\?]+)/);
+        const videoMatch = url.match(/twitch\.tv\/videos\/(\d+)/);
+        const clipMatch = url.match(/twitch\.tv\/[^\/]+\/clip\/([^\/\?]+)/) || url.match(/clips\.twitch\.tv\/([^\/\?]+)/);
+        
+        if (clipMatch) {
+          embedHTML = `<iframe src="https://clips.twitch.tv/embed?clip=${clipMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+        } else if (videoMatch) {
+          embedHTML = `<iframe src="https://player.twitch.tv/?video=${videoMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+        } else if (channelMatch) {
+          embedHTML = `<iframe src="https://player.twitch.tv/?channel=${channelMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+        }
+        loading = false;
+        return;
+      }
+
+      // Detectar Twitter/X y generar embed
+      if (url.includes("twitter.com") || url.includes("x.com")) {
+        embedType = "Twitter";
+        // Twitter requiere script externo, usar oEmbed
+        await fetchMetadata(url);
+        return;
+      }
+
+      // Detectar Apple Music y generar embed
+      if (url.includes("music.apple.com")) {
+        embedType = "Apple Music";
+        // Convertir URL a embed URL
+        const embedUrl = url.replace("music.apple.com", "embed.music.apple.com");
+        embedHTML = `<iframe src="${embedUrl}" width="100%" height="175" frameborder="0" allow="autoplay; encrypted-media" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation" style="border-radius: 12px;"></iframe>`;
+        loading = false;
+        return;
+      }
+
+      // Detectar Deezer y generar embed
+      if (url.includes("deezer.com")) {
+        embedType = "Deezer";
+        const trackMatch = url.match(/track\/(\d+)/);
+        const albumMatch = url.match(/album\/(\d+)/);
+        const playlistMatch = url.match(/playlist\/(\d+)/);
+        
+        if (trackMatch) {
+          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/track/${trackMatch[1]}" width="100%" height="130" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe>`;
+        } else if (albumMatch) {
+          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/album/${albumMatch[1]}" width="100%" height="300" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe>`;
+        } else if (playlistMatch) {
+          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/playlist/${playlistMatch[1]}" width="100%" height="300" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe>`;
+        }
+        loading = false;
+        return;
+      }
+
+      // Detectar Dailymotion y generar embed
+      if (url.includes("dailymotion.com") || url.includes("dai.ly")) {
+        embedType = "Dailymotion";
+        const videoMatch = url.match(/video\/([a-z0-9]+)/i) || url.match(/dai\.ly\/([a-z0-9]+)/i);
+        if (videoMatch) {
+          embedHTML = `<iframe src="https://www.dailymotion.com/embed/video/${videoMatch[1]}" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+        }
+        loading = false;
+        return;
+      }
+
+      // Detectar Bandcamp y generar embed
+      if (url.includes("bandcamp.com")) {
+        embedType = "Bandcamp";
+        // Bandcamp requiere oEmbed para obtener el ID correcto
+        await fetchMetadata(url);
+        return;
+      }
+
+      // TODOS los demás enlaces pasan por el sistema oEmbed/link-preview centralizado
       await fetchMetadata(url);
     } catch (err) {
       console.error("[MediaEmbed] Error generating embed:", err);

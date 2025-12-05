@@ -84,7 +84,19 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
   try {
     console.log('[Link Preview] 🔍 Fetching metadata for:', targetUrl);
     
-    // 4. Intentar oEmbed primero
+    // 4a. Manejo especial para plataformas sin oEmbed público
+    const specialData = await fetchSpecialPlatformData(targetUrl);
+    if (specialData) {
+      cache.set(cacheKey, { data: specialData, timestamp: now });
+      cleanCache();
+      return json({
+        success: true,
+        data: specialData,
+        cached: false
+      });
+    }
+    
+    // 4b. Intentar oEmbed primero
     const oembedProvider = findOEmbedProvider(targetUrl);
     console.log('[Link Preview] oEmbed provider found:', oembedProvider ? oembedProvider.name : 'NONE');
     
@@ -150,6 +162,124 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
     });
   }
 };
+
+/**
+ * Manejo especial para plataformas sin oEmbed público (Deezer, Twitch, etc.)
+ */
+async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewData | null> {
+  const urlObj = new URL(targetUrl);
+  
+  // Deezer - usar su API pública
+  if (urlObj.hostname.includes('deezer.com')) {
+    console.log('[Link Preview] 🎵 Detectado Deezer, usando API pública...');
+    const trackMatch = targetUrl.match(/track\/(\d+)/);
+    const albumMatch = targetUrl.match(/album\/(\d+)/);
+    const playlistMatch = targetUrl.match(/playlist\/(\d+)/);
+    
+    try {
+      let apiUrl = '';
+      if (trackMatch) {
+        apiUrl = `https://api.deezer.com/track/${trackMatch[1]}`;
+      } else if (albumMatch) {
+        apiUrl = `https://api.deezer.com/album/${albumMatch[1]}`;
+      } else if (playlistMatch) {
+        apiUrl = `https://api.deezer.com/playlist/${playlistMatch[1]}`;
+      }
+      
+      if (apiUrl) {
+        const response = await fetch(apiUrl);
+        if (response.ok) {
+          const data = await response.json();
+          const image = data.cover_big || data.cover_medium || data.album?.cover_big || data.album?.cover_medium || data.picture_big;
+          
+          console.log('[Link Preview] ✅ Deezer API response:', { title: data.title, hasImage: !!image });
+          
+          return {
+            url: targetUrl,
+            title: data.title || 'Deezer',
+            description: data.artist?.name || data.description || '',
+            image: image,
+            imageProxied: image ? `/api/media-proxy?url=${encodeURIComponent(image)}` : undefined,
+            siteName: 'Deezer',
+            domain: 'deezer.com',
+            type: 'oembed',
+            providerName: 'Deezer',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[Link Preview] Deezer API failed:', err);
+    }
+  }
+  
+  // TikTok - usar oEmbed API directamente (CORS no aplica en server)
+  if (urlObj.hostname.includes('tiktok.com')) {
+    console.log('[Link Preview] 🎵 Detectado TikTok, usando oEmbed API...');
+    try {
+      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(targetUrl)}`;
+      const response = await fetch(oembedUrl, {
+        headers: { 'User-Agent': 'VouTop-LinkPreview/1.0' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Link Preview] ✅ TikTok oEmbed response:', { title: data.title, hasThumb: !!data.thumbnail_url });
+        if (data.thumbnail_url) {
+          return {
+            url: targetUrl,
+            title: data.title || 'TikTok',
+            description: data.author_name || '',
+            image: data.thumbnail_url,
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(data.thumbnail_url)}`,
+            siteName: 'TikTok',
+            domain: 'tiktok.com',
+            type: 'oembed',
+            providerName: 'TikTok',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[Link Preview] TikTok oEmbed failed:', err);
+    }
+  }
+  
+  // Twitter/X - usar oEmbed API directamente
+  if (urlObj.hostname.includes('twitter.com') || urlObj.hostname.includes('x.com')) {
+    console.log('[Link Preview] 🐦 Detectado Twitter, usando oEmbed API...');
+    try {
+      const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(targetUrl)}`;
+      const response = await fetch(oembedUrl, {
+        headers: { 'User-Agent': 'VouTop-LinkPreview/1.0' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Link Preview] ✅ Twitter oEmbed response:', { author: data.author_name, hasHtml: !!data.html });
+        // Twitter oEmbed no devuelve thumbnail, intentar extraer del HTML o usar Open Graph
+      }
+    } catch (err) {
+      console.warn('[Link Preview] Twitter oEmbed failed:', err);
+    }
+    // Fallback a Open Graph para obtener imagen
+    return null;
+  }
+  
+  // Twitch - usar Open Graph (no tiene oEmbed público sin auth)
+  if (urlObj.hostname.includes('twitch.tv') || urlObj.hostname.includes('clips.twitch.tv')) {
+    console.log('[Link Preview] 🎮 Detectado Twitch, usando Open Graph...');
+    return null;
+  }
+  
+  // Apple Music - usar Open Graph
+  if (urlObj.hostname.includes('music.apple.com')) {
+    console.log('[Link Preview] 🍎 Detectado Apple Music, usando Open Graph...');
+    return null;
+  }
+  
+  return null;
+}
 
 /**
  * Fetch metadatos vía oEmbed

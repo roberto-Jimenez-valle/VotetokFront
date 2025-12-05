@@ -83,12 +83,25 @@
   }: Props = $props();
 
   // --- DETECCIÓN DE TIPO DE MEDIA ---
-  function getMediaType(url: string): 'youtube' | 'vimeo' | 'spotify' | 'soundcloud' | 'video' | 'gif' | 'image' | 'text' {
+  type MediaPlatform = 'youtube' | 'vimeo' | 'spotify' | 'soundcloud' | 'tiktok' | 'twitch' | 'twitter' | 'applemusic' | 'deezer' | 'dailymotion' | 'bandcamp' | 'video' | 'gif' | 'image' | 'text';
+  
+  function getMediaType(url: string): MediaPlatform {
     if (!url) return 'text';
+    // Video platforms
     if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
     if (url.includes('vimeo.com')) return 'vimeo';
+    if (url.includes('tiktok.com') || url.includes('vm.tiktok.com')) return 'tiktok';
+    if (url.includes('twitch.tv')) return 'twitch';
+    if (url.includes('dailymotion.com') || url.includes('dai.ly')) return 'dailymotion';
+    // Social
+    if (url.includes('twitter.com') || url.includes('x.com')) return 'twitter';
+    // Audio platforms
     if (url.includes('spotify.com')) return 'spotify';
     if (url.includes('soundcloud.com')) return 'soundcloud';
+    if (url.includes('music.apple.com')) return 'applemusic';
+    if (url.includes('deezer.com')) return 'deezer';
+    if (url.includes('bandcamp.com')) return 'bandcamp';
+    // Direct media
     if (/\.(mp4|webm|mov)([?#]|$)/i.test(url)) return 'video';
     if (url.includes('giphy.com') || url.includes('tenor.com') || /\.gif([?#]|$)/i.test(url)) return 'gif';
     return 'image';
@@ -96,7 +109,7 @@
 
   // Tipos derivados
   const mediaType = $derived(getMediaType(imageUrl));
-  const isVideoType = $derived(['youtube', 'vimeo', 'spotify', 'soundcloud', 'video'].includes(mediaType));
+  const isVideoType = $derived(['youtube', 'vimeo', 'spotify', 'soundcloud', 'tiktok', 'twitch', 'twitter', 'applemusic', 'deezer', 'dailymotion', 'bandcamp', 'video'].includes(mediaType));
   const isGifType = $derived(mediaType === 'gif');
   const isImageType = $derived(mediaType === 'image');
   const isTextOnly = $derived(mediaType === 'text');
@@ -135,6 +148,13 @@
       vimeo: 'https://placehold.co/320x180/1ab7ea/white?text=Vimeo',
       spotify: 'https://placehold.co/320x180/1DB954/white?text=Spotify',
       soundcloud: 'https://placehold.co/320x180/ff5500/white?text=SoundCloud',
+      tiktok: 'https://placehold.co/320x180/000000/white?text=TikTok',
+      twitch: 'https://placehold.co/320x180/9146FF/white?text=Twitch',
+      twitter: 'https://placehold.co/320x180/1DA1F2/white?text=Twitter',
+      applemusic: 'https://placehold.co/320x180/FC3C44/white?text=Apple+Music',
+      deezer: 'https://placehold.co/320x180/FEAA2D/white?text=Deezer',
+      dailymotion: 'https://placehold.co/320x180/0066DC/white?text=Dailymotion',
+      bandcamp: 'https://placehold.co/320x180/1DA0C3/white?text=Bandcamp',
       video: 'https://placehold.co/320x180/333/white?text=Video'
     };
     return placeholders[type] || placeholders.video;
@@ -144,56 +164,70 @@
   let fetchedThumbnail = $state<string | null>(null);
   let thumbnailLoading = $state(false);
 
-  // Obtener thumbnail real desde oEmbed APIs específicas
+  // Obtener thumbnail real - usa URLs directas cuando es posible, sino link-preview API
   async function fetchRealThumbnail(url: string, type: string): Promise<string> {
     try {
-      // YouTube: usar directamente la URL de imagen
+      // YouTube: URL de imagen directa (no necesita API)
       if (type === 'youtube') {
         const id = getYouTubeId(url);
         return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : getDefaultThumbnail(type);
       }
 
-      // Spotify: usar su oEmbed API directamente
-      if (type === 'spotify') {
-        const response = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.thumbnail_url) {
-            return data.thumbnail_url;
-          }
+      // Dailymotion: URL de thumbnail directa
+      if (type === 'dailymotion') {
+        const videoMatch = url.match(/video\/([a-z0-9]+)/i) || url.match(/dai\.ly\/([a-z0-9]+)/i);
+        if (videoMatch) {
+          return `https://www.dailymotion.com/thumbnail/video/${videoMatch[1]}`;
         }
       }
 
-      // SoundCloud: usar su oEmbed API
-      if (type === 'soundcloud') {
-        const response = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.thumbnail_url) {
-            return data.thumbnail_url;
-          }
-        }
-      }
+      // Deezer: El backend maneja la API (CORS bloqueado en frontend)
+      // Se usa el fallback link-preview API más abajo
 
-      // Vimeo: usar su oEmbed API
+      // Vimeo: API oEmbed directa (funciona sin CORS)
       if (type === 'vimeo') {
         const response = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`);
         if (response.ok) {
           const data = await response.json();
-          if (data.thumbnail_url) {
-            return data.thumbnail_url;
-          }
+          if (data.thumbnail_url) return data.thumbnail_url;
         }
       }
 
-      // Fallback: usar link-preview API
+      // Spotify: API oEmbed directa (funciona sin CORS)
+      if (type === 'spotify') {
+        const response = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.thumbnail_url) return data.thumbnail_url;
+        }
+      }
+
+      // SoundCloud: API oEmbed directa
+      if (type === 'soundcloud') {
+        const response = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.thumbnail_url) return data.thumbnail_url;
+        }
+      }
+
+      // Para plataformas sin API directa accesible, usar backend link-preview
+      // TikTok, Deezer, Twitter, Apple Music, Bandcamp, Twitch - todos via backend
+      console.log('[PollOptionCard] 📡 Fetching from link-preview for:', type, url);
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
       if (response.ok) {
         const result = await response.json();
+        console.log('[PollOptionCard] 📦 link-preview response:', result);
         const data = result.data || result;
-        if (data.image || data.imageProxied) {
-          return data.imageProxied || data.image;
+        // Prioridad: imageProxied > image > thumbnailUrl
+        const thumbnail = data.imageProxied || data.image || data.thumbnailUrl || data.thumbnail_url;
+        if (thumbnail) {
+          console.log('[PollOptionCard] ✅ Thumbnail found:', thumbnail);
+          return thumbnail;
         }
+        console.log('[PollOptionCard] ⚠️ No thumbnail in response');
+      } else {
+        console.warn('[PollOptionCard] ❌ link-preview failed:', response.status);
       }
     } catch (err) {
       console.warn('[PollOptionCard] Error fetching thumbnail:', err);
@@ -222,6 +256,13 @@
     vimeo: '#1ab7ea',
     spotify: '#1DB954',
     soundcloud: '#ff5500',
+    tiktok: '#000000',
+    twitch: '#9146FF',
+    twitter: '#1DA1F2',
+    applemusic: '#FC3C44',
+    deezer: '#FEAA2D',
+    dailymotion: '#0066DC',
+    bandcamp: '#1DA0C3',
     video: '#666666'
   };
 
@@ -283,8 +324,21 @@
               {:else if mediaType === 'spotify'}
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
               {:else if mediaType === 'soundcloud'}
-                <!-- SoundCloud: nube simplificada -->
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.56 8.87V17h8.76c1.85-.13 2.68-1.27 2.68-2.67 0-1.48-1.12-2.67-2.53-2.67-.33 0-.65.08-.96.2-.11-2.02-1.69-3.63-3.66-3.63-1.24 0-2.34.64-2.99 1.64H11.56zm-1 0H9.4v8.13h1.16V8.87zm-2.16.52H7.24v7.61H8.4V9.39zm-2.16.91H5.08v6.7h1.16v-6.7zm-2.16.78H2.92v5.92h1.16v-5.92zm-2.16 1.3H.76v4.62h1.16v-4.62z"/></svg>
+              {:else if mediaType === 'tiktok'}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>
+              {:else if mediaType === 'twitch'}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
+              {:else if mediaType === 'twitter'}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              {:else if mediaType === 'applemusic'}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.994 6.124a9.23 9.23 0 0 0-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 0 0-1.877-.726 10.496 10.496 0 0 0-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026-.747.043-1.49.123-2.193.4-1.336.53-2.3 1.452-2.865 2.78-.192.448-.292.925-.363 1.408-.056.392-.088.785-.1 1.18 0 .032-.007.062-.01.093v12.223c.01.14.017.283.027.424.05.815.154 1.624.497 2.373.65 1.42 1.738 2.353 3.234 2.8.42.127.856.187 1.293.228.555.053 1.11.06 1.667.06h11.03a12.5 12.5 0 0 0 1.57-.1c.822-.106 1.596-.35 2.296-.81a5.046 5.046 0 0 0 1.88-2.207c.186-.42.293-.87.37-1.324.113-.675.138-1.358.137-2.04-.002-3.8 0-7.595-.003-11.393zm-6.423 3.99v5.712c0 .417-.058.827-.244 1.206-.29.59-.76.962-1.388 1.14-.35.1-.706.157-1.07.173-.95.042-1.785-.455-2.105-1.245-.227-.56-.2-1.13.063-1.676.328-.68.88-1.106 1.596-1.29.39-.1.79-.148 1.19-.202.246-.033.494-.06.736-.108.27-.053.415-.2.46-.47a1.327 1.327 0 0 0 .015-.18V8.24a.677.677 0 0 0-.013-.12c-.05-.3-.2-.453-.505-.46-.304-.01-.61.013-.914.055-.505.07-1.01.15-1.514.227-.634.097-1.268.197-1.902.297-.346.054-.552.27-.59.615a2.24 2.24 0 0 0-.014.18v7.63c0 .426-.063.847-.25 1.236-.29.6-.77.97-1.406 1.148-.33.09-.665.134-1.01.152-.978.044-1.81-.424-2.14-1.236-.23-.566-.2-1.14.064-1.69.328-.684.89-1.106 1.6-1.287.38-.096.77-.147 1.156-.197.256-.035.51-.065.764-.11.26-.045.416-.196.458-.456.013-.083.014-.166.014-.25V6.8c0-.29.127-.49.387-.584.055-.02.113-.032.17-.045.348-.066.696-.133 1.044-.198.692-.13 1.386-.257 2.078-.385l2.052-.385 1.19-.22c.072-.014.144-.023.213-.052z"/></svg>
+              {:else if mediaType === 'deezer'}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.81 4.16v3.03H24V4.16h-5.19zM6.27 8.38v3.027h5.189V8.38h-5.19zm12.54 0v3.027H24V8.38h-5.19zM6.27 12.594v3.027h5.189v-3.027h-5.19zm6.271 0v3.027h5.19v-3.027h-5.19zm6.27 0v3.027H24v-3.027h-5.19zM0 16.81v3.029h5.19v-3.03H0zm6.27 0v3.029h5.19v-3.03h-5.19zm6.271 0v3.029h5.19v-3.03h-5.19zm6.27 0v3.029H24v-3.03h-5.19z"/></svg>
+              {:else if mediaType === 'dailymotion'}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.006 13.24c-1.47 0-2.66-1.2-2.66-2.67s1.2-2.67 2.66-2.67 2.67 1.19 2.67 2.67c0 1.47-1.2 2.67-2.67 2.67zM18 2H6C3.79 2 2 3.79 2 6v12c0 2.21 1.79 4 4 4h12c2.21 0 4-1.79 4-4V6c0-2.21-1.79-4-4-4zm-5.99 14.91c-3.32 0-6.01-2.69-6.01-6.01 0-3.32 2.69-6.01 6.01-6.01 3.32 0 6.01 2.69 6.01 6.01 0 3.32-2.69 6.01-6.01 6.01z"/></svg>
+              {:else if mediaType === 'bandcamp'}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5H0z"/></svg>
               {:else}
                 <Play class="play-icon" />
               {/if}

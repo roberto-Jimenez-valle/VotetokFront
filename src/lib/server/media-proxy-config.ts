@@ -76,9 +76,13 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     
     // Servicios de video adicionales
     'dailymotion.com',
+    's1.dmcdn.net',
+    's2.dmcdn.net',
     'streamable.com',
     'twitch.tv',
     'ttvnw.net',
+    'static-cdn.jtvnw.net',
+    'jtvnw.net',
     
     // Reddit
     'redd.it',
@@ -93,10 +97,35 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     // TikTok
     'tiktokcdn.com',
     'tiktok.com',
+    'p16-sign-va.tiktokcdn.com',
+    'p16-sign-sg.tiktokcdn.com',
+    'p77-sign-va.tiktokcdn.com',
     
     // Spotify
     'scdn.co',
+    'i.scdn.co',
     'spotify.com',
+    
+    // SoundCloud
+    'sndcdn.com',
+    'i1.sndcdn.com',
+    
+    // Deezer
+    'dzcdn.net',
+    'cdn-images.dzcdn.net',
+    'e-cdns-images.dzcdn.net',
+    
+    // Apple Music
+    'mzstatic.com',
+    'is1-ssl.mzstatic.com',
+    'is2-ssl.mzstatic.com',
+    'is3-ssl.mzstatic.com',
+    'is4-ssl.mzstatic.com',
+    'is5-ssl.mzstatic.com',
+    
+    // Bandcamp
+    'bcbits.com',
+    'f4.bcbits.com',
     
     // Discord
     'cdn.discordapp.com',

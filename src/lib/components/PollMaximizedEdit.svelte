@@ -107,13 +107,25 @@
   });
 
   // Detectar tipo de media
-  function getMediaType(opt: PollOption): "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" {
-    const url = opt.imageUrl || extractUrlFromText(opt.label);
+  type MediaType = "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" | "tiktok" | "twitch" | "twitter" | "applemusic" | "deezer" | "dailymotion" | "bandcamp";
+  
+  function getMediaType(opt: PollOption): MediaType {
+    const url = (opt.imageUrl || extractUrlFromText(opt.label) || '').toLowerCase();
     if (!url) return "text";
+    // Video platforms
     if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
     if (url.includes("vimeo.com")) return "vimeo";
+    if (url.includes("tiktok.com") || url.includes("vm.tiktok.com")) return "tiktok";
+    if (url.includes("twitch.tv")) return "twitch";
+    if (url.includes("dailymotion.com") || url.includes("dai.ly")) return "dailymotion";
+    // Social
+    if (url.includes("twitter.com") || url.includes("x.com")) return "twitter";
+    // Audio platforms
     if (url.includes("spotify.com")) return "spotify";
     if (url.includes("soundcloud.com")) return "soundcloud";
+    if (url.includes("music.apple.com")) return "applemusic";
+    if (url.includes("deezer.com")) return "deezer";
+    if (url.includes("bandcamp.com")) return "bandcamp";
     return "image";
   }
 
@@ -180,7 +192,7 @@
       {@const type = getMediaType(opt)}
       {@const mediaUrl = getMediaUrl(opt)}
       {@const labelText = getLabelWithoutUrl(opt.label)}
-      {@const isVideoType = type === 'youtube' || type === 'vimeo' || type === 'spotify' || type === 'soundcloud' || (opt.imageUrl && /\.(mp4|webm|mov)([?#]|$)/i.test(opt.imageUrl)) || (opt.imageUrl && (opt.imageUrl.includes('spotify.com') || opt.imageUrl.includes('soundcloud.com')))}
+      {@const isVideoType = type !== 'image' && type !== 'text'}
       {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
       
       <div
