@@ -43,6 +43,7 @@
   import FriendsVotesModal from "./FriendsVotesModal.svelte";
   import CommentsModal from "./CommentsModal.svelte";
   import Portal from "./Portal.svelte";
+  import StatsBottomModal from "./StatsBottomModal.svelte";
   import { apiPost, apiDelete } from '$lib/api/client';
 
   // --- INTERFACES ---
@@ -54,6 +55,11 @@
     pct?: number;
     votes?: number;
     voted?: boolean;
+    // Campos alternativos de la API (para compatibilidad con diferentes formatos)
+    key?: string;
+    optionKey?: string;
+    optionLabel?: string;
+    voteCount?: number;
     // Campos adicionales para el nuevo diseño (opcionales para compatibilidad)
     type?: "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud";
     artist?: string;
@@ -182,6 +188,7 @@
   let showAuthModal = $state(false);
   let showFriendsVotesModal = $state(false);
   let showCommentsModal = $state(false);
+  let showStatsModal = $state(false);
   
   // Estado para repost
   let hasReposted = $state(false);
@@ -879,19 +886,14 @@
             <div class="header-user-info">
               <div class="header-username-row">
                 <span class="header-username">@{creator?.username || 'usuario'}</span>
-                <!-- Botón tipo de voto (cuadrado para múltiple, redondo para único) -->
+                <!-- Botón seguir usuario -->
                 <button
-                  class="header-vote-btn pointer-events-auto"
-                  class:is-multiple={pollType === 'multiple'}
+                  class="header-follow-btn pointer-events-auto"
                   onclick={(e) => { e.stopPropagation(); /* TODO: Follow logic */ }}
                   type="button"
-                  aria-label={pollType === 'multiple' ? 'Voto múltiple' : 'Voto único'}
+                  aria-label="Seguir a {creator?.username || 'usuario'}"
                 >
-                  {#if pollType === 'multiple'}
-                    <Square size={12} />
-                  {:else}
-                    <div class="vote-circle"></div>
-                  {/if}
+                  <span class="follow-text">Seguir</span>
                 </button>
               </div>
               <div class="header-metadata">
@@ -974,6 +976,7 @@
               <div class="option-card-container">
                 <div class="option-card-rounded" style="--option-color: {hasVoted ? opt.color : '#555'};">
                   
+                                    
                   {#if type === "text"}
                     <!-- === LAYOUT SOLO TEXTO === -->
                     <!-- Área principal con color de fondo y comillas -->
@@ -1385,7 +1388,7 @@
           <!-- Estadísticas -->
           <button 
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; onGoToChart(); }}
+            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; showStatsModal = true; }}
           >
             <div class="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
               <Activity size={20} class="text-purple-400" />
@@ -1566,7 +1569,10 @@
 
           <button 
             class="action-bar-btn"
-            onclick={onGoToChart}
+            onclick={(e) => { 
+              e.stopPropagation(); 
+              showStatsModal = true; 
+            }}
             aria-label="Ver estadísticas"
           >
             <Activity size={26} strokeWidth={1.5} />
@@ -1664,6 +1670,20 @@
     bind:isOpen={showCommentsModal}
     {pollId}
     {pollTitle}
+  />
+  
+  <!-- STATS MODAL -->
+  <StatsBottomModal 
+    bind:isOpen={showStatsModal}
+    {pollId}
+    {pollTitle}
+    options={options.map(opt => ({ 
+      key: opt.key || opt.optionKey || String(opt.id),
+      label: opt.label || opt.optionLabel || '', 
+      color: opt.color,
+      votes: opt.voteCount || opt.votes || 0
+    }))}
+    onClose={() => showStatsModal = false}
   />
   
   <!-- Toast de enlace copiado -->
@@ -2553,6 +2573,31 @@
     border: none;
   }
 
+  /* Indicador de tipo de encuesta (círculo o cuadrado) */
+  .poll-type-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .poll-type-indicator.is-multiple {
+    border-radius: 8px;
+  }
+
+  .poll-type-indicator.is-collaborative {
+    border-radius: 50%;
+  }
+
   /* ========================================
      LAYOUT TEXTO - Color sólido + comillas
      ======================================== */
@@ -3131,30 +3176,32 @@
     flex-shrink: 0;
   }
 
-  .header-vote-btn {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: rgba(60, 60, 60, 0.9);
-    border: 2px solid rgba(80, 80, 80, 0.8);
+  .header-follow-btn {
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: default;
-    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
     flex-shrink: 0;
+    transition: all 0.2s ease;
   }
 
-  .header-vote-btn.is-multiple {
-    border-radius: 6px;
+  .header-follow-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
   }
 
-  .vote-circle {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    background: transparent;
+  .header-follow-btn:active {
+    transform: scale(0.95);
+  }
+
+  .follow-text {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
   }
 
   :global(.header-diamond-icon) {
