@@ -121,11 +121,13 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     isUpdate = true;
     
     // Actualizar el voto existente con la nueva opción
+    // IMPORTANTE: Incluir ipAddress para que se pueda encontrar después
     vote = await prisma.vote.update({
       where: { id: existingVote.id },
       data: {
         optionId,
         userId: userId || null,
+        ipAddress, // <-- Agregar IP para que GET pueda encontrarlo
         latitude,
         longitude,
         subdivisionId,

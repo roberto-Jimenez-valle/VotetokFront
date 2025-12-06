@@ -51,13 +51,16 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress }) 
   const userId = locals.user?.userId || locals.user?.id || null;
   const ipAddress = getClientAddress();
   
+  console.log('[API GET Poll] Buscando votos - userId:', userId, 'IP:', ipAddress, 'pollId:', params.id);
+  
   let userVotes: string[] = [];
   if (userId || ipAddress) {
+    // Buscar por userId O por IP (el voto puede haberse registrado con cualquiera)
     const existingVotes = await prisma.vote.findMany({
       where: {
         pollId: Number(params.id),
         OR: [
-          userId ? { userId: Number(userId) } : { ipAddress },
+          ...(userId ? [{ userId: Number(userId) }] : []),
           { ipAddress },
         ],
       },
@@ -70,6 +73,8 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress }) 
         }
       }
     });
+    
+    console.log('[API GET Poll] Votos encontrados:', existingVotes.length, existingVotes.map(v => ({ optionKey: v.option?.optionKey, optionId: v.optionId })));
     
     // Devolver array de optionKeys votados
     userVotes = existingVotes
