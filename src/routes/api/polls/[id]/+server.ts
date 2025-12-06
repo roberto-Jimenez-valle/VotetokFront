@@ -47,13 +47,13 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress }) 
     throw error(404, 'Poll not found');
   }
 
-  // Buscar el voto del usuario actual (si está autenticado o por IP)
+  // Buscar TODOS los votos del usuario actual (para encuestas múltiples)
   const userId = locals.user?.userId || locals.user?.id || null;
   const ipAddress = getClientAddress();
   
-  let userVote = null;
+  let userVotes: string[] = [];
   if (userId || ipAddress) {
-    const existingVote = await prisma.vote.findFirst({
+    const existingVotes = await prisma.vote.findMany({
       where: {
         pollId: Number(params.id),
         OR: [
@@ -71,15 +71,20 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress }) 
       }
     });
     
-    if (existingVote) {
-      userVote = existingVote.option?.optionKey || null;
-    }
+    // Devolver array de optionKeys votados
+    userVotes = existingVotes
+      .map(v => v.option?.optionKey)
+      .filter((key): key is string => key !== null && key !== undefined);
   }
+  
+  // Para compatibilidad, también incluir userVote (el primero o null)
+  const userVote = userVotes.length > 0 ? userVotes[0] : null;
 
   // Transformar opciones para incluir voteCount y avatarUrl
   const transformedPoll = {
     ...poll,
-    userVote, // Incluir el voto del usuario actual
+    userVote, // Compatibilidad: primer voto o null
+    userVotes, // Array de todos los votos (para múltiples)
     options: poll.options.map(option => ({
       ...option,
       voteCount: option._count.votes,

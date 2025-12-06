@@ -1087,10 +1087,11 @@
         onscroll={handleScrollChange}
       >
       {#each sortedPollOptions as option, index (option.key || option.id || index)}
+        {@const userVoteValue = displayVotes[poll.id] || userVotes[poll.id]}
         {@const isPollVoted = poll.type === 'multiple'
           ? (multipleVotes[poll.id]?.includes(option.key) || 
-             (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(option.key))
-          : (displayVotes[poll.id] || userVotes[poll.id]) === option.key}
+             (Array.isArray(userVoteValue) ? userVoteValue.map(String).includes(String(option.key)) : String(userVoteValue)?.split(',').map(s => s.trim()).includes(String(option.key))))
+          : String(userVoteValue) === String(option.key)}
         {@const isNewOption = poll.type === 'collaborative' && option.isEditing === true}
         {@const displayPct = isNewOption ? 25 : option.pct}
         

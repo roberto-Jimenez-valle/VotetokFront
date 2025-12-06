@@ -51,12 +51,15 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     throw error(400, 'subdivisionId debe ser un número (ID de BD) o null');
   }
 
-  // Validar que la opción pertenece a la encuesta
+  // Validar que la opción pertenece a la encuesta y obtener info de la encuesta
   const option = await prisma.pollOption.findFirst({
     where: { 
       id: optionId, 
       pollId: Number(id) 
     },
+    include: {
+      poll: true  // Incluir datos de la encuesta para saber si es múltiple
+    }
   });
 
   if (!option) {
@@ -64,33 +67,60 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
     throw error(404, 'Opción no encontrada');
   }
 
-  // Verificar si el usuario ya votó en esta encuesta
+  // Determinar si es encuesta múltiple (usar campo 'type' de la BD)
+  const isMultiplePoll = option.poll.type === 'multiple';
+  console.log('[API Vote] 📊 Tipo de encuesta:', option.poll.type, '| Múltiple:', isMultiplePoll);
+
+  // Verificar si el usuario ya votó
   const ipAddress = getClientAddress();
   console.log('[API Vote] 🔍 Verificando voto existente para userId:', userId, 'IP:', ipAddress);
   
-  // Buscar voto existente por userId (si está autenticado) O por IP (si es anónimo)
-  const existingVote = await prisma.vote.findFirst({
-    where: {
-      pollId: Number(id),
-      OR: [
-        userId ? { userId: Number(userId) } : { ipAddress },
-        { ipAddress }, // Fallback a IP si userId no coincide
-      ],
-    },
-  });
+  let existingVote;
+  
+  if (isMultiplePoll) {
+    // ENCUESTA MÚLTIPLE: buscar si ya votó por esta OPCIÓN específica
+    existingVote = await prisma.vote.findFirst({
+      where: {
+        pollId: Number(id),
+        optionId: optionId,  // Buscar por opción específica
+        OR: [
+          userId ? { userId: Number(userId) } : { ipAddress },
+          { ipAddress },
+        ],
+      },
+    });
+    console.log('[API Vote] 🔄 Múltiple: Buscando voto para opción específica:', optionId);
+  } else {
+    // ENCUESTA SIMPLE: buscar si ya votó en cualquier opción
+    existingVote = await prisma.vote.findFirst({
+      where: {
+        pollId: Number(id),
+        OR: [
+          userId ? { userId: Number(userId) } : { ipAddress },
+          { ipAddress },
+        ],
+      },
+    });
+  }
 
   let vote;
   let isUpdate = false;
 
   if (existingVote) {
-    console.log('[API Vote] 🔄 Voto existente detectado. Actualizando...');
+    if (isMultiplePoll) {
+      // En múltiple, si ya votó por esta opción, eliminar el voto (toggle)
+      console.log('[API Vote] 🔄 Múltiple: Eliminando voto existente para opción:', optionId);
+      await prisma.vote.delete({
+        where: { id: existingVote.id }
+      });
+      console.log('[API Vote] ✅ Voto eliminado (toggle off)');
+      return json({ success: true, action: 'removed', optionId });
+    }
+    
+    console.log('[API Vote] 🔄 Simple: Voto existente detectado. Actualizando...');
     isUpdate = true;
     
-    // Calcular diferencia de contadores entre opciones
-    const oldOptionId = existingVote.optionId;
-    const optionChanged = oldOptionId !== optionId;
-    
-    // Actualizar el voto existente con la nueva ubicación
+    // Actualizar el voto existente con la nueva opción
     vote = await prisma.vote.update({
       where: { id: existingVote.id },
       data: {
@@ -102,7 +132,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
         userAgent: request.headers.get('user-agent'),
       },
       include: {
-        subdivision: true  // Incluir datos de subdivisión en respuesta
+        subdivision: true
       }
     });
 
@@ -160,7 +190,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 
 export const DELETE: RequestHandler = async ({ params, request, getClientAddress, locals }) => {
   try {
-    console.log('[API Vote DELETE] 🗑️ Iniciando eliminación de voto');
+    console.log('[API Vote DELETE] 🗑️ Iniciando eliminación de voto(s)');
     
     const { id } = params;
     
@@ -169,10 +199,10 @@ export const DELETE: RequestHandler = async ({ params, request, getClientAddress
     const ipAddress = getClientAddress();
     
     console.log('[API Vote DELETE] locals.user:', locals.user);
-    console.log('[API Vote DELETE] Buscando voto para pollId:', id, 'userId:', userId, 'IP:', ipAddress);
+    console.log('[API Vote DELETE] Buscando votos para pollId:', id, 'userId:', userId, 'IP:', ipAddress);
     
-    // Buscar el voto existente
-    const existingVote = await prisma.vote.findFirst({
+    // Buscar TODOS los votos del usuario en esta encuesta (para múltiples)
+    const existingVotes = await prisma.vote.findMany({
       where: {
         pollId: Number(id),
         OR: [
@@ -182,19 +212,21 @@ export const DELETE: RequestHandler = async ({ params, request, getClientAddress
       },
     });
     
-    if (!existingVote) {
-      console.log('[API Vote DELETE] ⚠️ No se encontró voto para eliminar');
-      throw error(404, 'No se encontró el voto');
+    if (existingVotes.length === 0) {
+      console.log('[API Vote DELETE] ⚠️ No se encontraron votos para eliminar');
+      throw error(404, 'No se encontraron votos');
     }
     
-    // Eliminar el voto
-    await prisma.vote.delete({
-      where: { id: existingVote.id },
+    // Eliminar TODOS los votos
+    const deletedCount = await prisma.vote.deleteMany({
+      where: {
+        id: { in: existingVotes.map(v => v.id) }
+      },
     });
     
-    console.log('[API Vote DELETE] ✅ Voto eliminado correctamente:', existingVote.id);
+    console.log('[API Vote DELETE] ✅ Votos eliminados correctamente:', deletedCount.count);
     
-    return json({ success: true, message: 'Voto eliminado correctamente' });
+    return json({ success: true, message: `${deletedCount.count} voto(s) eliminado(s) correctamente`, count: deletedCount.count });
   } catch (err: any) {
     console.error('[API Vote DELETE] ❌ Error:', err);
     

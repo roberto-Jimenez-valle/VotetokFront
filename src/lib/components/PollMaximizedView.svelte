@@ -15,6 +15,9 @@
     X,
     ChevronDown,
     ChevronRight,
+    ArrowLeft,
+    UserPlus,
+    Diamond,
     Check,
     MessageCircle,
     MoreVertical,
@@ -27,8 +30,11 @@
     Link,
     Square,
     SquareCheck,
+    Circle,
+    CircleCheck,
     Volume2,
     VolumeX,
+    BadgeCheck,
   } from "lucide-svelte";
   import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -60,6 +66,7 @@
     id?: number;
     username: string;
     avatar?: string;
+    verified?: boolean;
   }
 
   interface PollStats {
@@ -96,6 +103,7 @@
     onOptionChange: (optionId: string) => void;
     onSwipeVertical?: (direction: "up" | "down") => void;
     onVote?: (optionId: string) => void;
+    onRemoveAllVotes?: () => void;
     onShare?: () => void;
     onBookmark?: () => void;
     onRepost?: () => void;
@@ -114,6 +122,7 @@
     pollId,
     pollTitle,
     pollType = "simple",
+    pollCreatedAt,
     creator,
     stats,
     readOnly = false,
@@ -125,6 +134,7 @@
     onOptionChange,
     onSwipeVertical = () => {},
     onVote = () => {},
+    onRemoveAllVotes = () => {},
     onShare = () => {},
     onBookmark = () => {},
     onRepost = () => {},
@@ -157,6 +167,13 @@
   
   // Usar $derived para que se recalcule reactivamente
   let voteColor = $derived(getVoteColor());
+  
+  // Verificar si la opción actualmente visible está votada
+  let currentOptionVoted = $derived(activeIndex >= 0 && options[activeIndex]?.voted === true);
+  let currentOptionColor = $derived(activeIndex >= 0 ? (options[activeIndex]?.color || voteColor) : voteColor);
+  
+  // Contar opciones votadas (para múltiple)
+  let votedOptionsCount = $derived(options.filter(o => o.voted === true).length);
 
   let scrollContainer: HTMLElement | null = null;
   let showLikeAnim = $state(false);
@@ -355,7 +372,9 @@
     // Lógica de Doble Tap (Touch)
     const DOUBLE_TAP_DELAY = 300;
     if (now - lastTapTime < DOUBLE_TAP_DELAY) {
-      if (!hasVoted && readOnly) {
+      // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
+      const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+      if (canVote && readOnly) {
         // Check authentication before voting
         if (!isAuthenticated) {
           onOpenAuthModal();
@@ -388,7 +407,9 @@
     const DOUBLE_TAP_DELAY = 300;
 
     if (now - lastTapTime < DOUBLE_TAP_DELAY) {
-      if (!hasVoted && readOnly) {
+      // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
+      const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+      if (canVote && readOnly) {
         // Check authentication before voting
         if (!isAuthenticated) {
           onOpenAuthModal();
@@ -413,7 +434,9 @@
     if (e.key === "Enter" || e.key === " ") {
       if (e.key === " ") e.preventDefault();
 
-      if (!hasVoted && readOnly) {
+      // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
+      const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+      if (canVote && readOnly) {
         // Check authentication before voting
         if (!isAuthenticated) {
           onOpenAuthModal();
@@ -611,6 +634,45 @@
     return num.toString();
   }
 
+  // Formatear tiempo relativo (Hace 2h, Hace 3d, etc.)
+  function formatRelativeTime(date: string | Date | undefined): string {
+    if (!date) return "Reciente";
+    
+    try {
+      const now = new Date();
+      const past = new Date(date);
+      
+      // Verificar si la fecha es válida
+      if (isNaN(past.getTime())) return "Reciente";
+      
+      const diffMs = now.getTime() - past.getTime();
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHour = Math.floor(diffMin / 60);
+      const diffDay = Math.floor(diffHour / 24);
+      const diffWeek = Math.floor(diffDay / 7);
+      const diffMonth = Math.floor(diffDay / 30);
+
+      if (diffSec < 60) return "Ahora";
+      if (diffMin < 60) return `Hace ${diffMin}m`;
+      if (diffHour < 24) return `Hace ${diffHour}h`;
+      if (diffDay < 7) return `Hace ${diffDay}d`;
+      if (diffWeek < 4) return `Hace ${diffWeek}sem`;
+      return `Hace ${diffMonth}mes`;
+    } catch {
+      return "Reciente";
+    }
+  }
+
+  // Obtener texto del tipo de voto
+  function getPollTypeText(type: string): string {
+    switch (type) {
+      case "multiple": return "Voto Múltiple";
+      case "collaborative": return "Colaborativo";
+      default: return "Voto Único";
+    }
+  }
+
   // Copiar enlace al portapapeles
   async function copyLink() {
     try {
@@ -777,14 +839,22 @@
           {/each}
         </div>
 
-        <!-- QuestionHeader -->
-        <div
-          class="w-full px-4 py-4 z-40 relative pointer-events-none"
-        >
-          <div class="flex items-start gap-3">
-            <!-- Avatar -->
+        <!-- QuestionHeader - Nuevo diseño tipo Twitter -->
+        <div class="question-header-new z-40 relative pointer-events-none">
+          <!-- Fila superior: Back + Avatar + Username + Metadata + Menu -->
+          <div class="header-top-row">
+            <!-- Botón atrás -->
+            <button 
+              onclick={onClose} 
+              class="header-back-btn pointer-events-auto"
+              aria-label="Volver"
+            >
+              <ArrowLeft size={20} class="text-white" />
+            </button>
+            
+            <!-- Avatar clickeable -->
             <button
-              class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-2 ring-white/20 flex-shrink-0 pointer-events-auto cursor-pointer transition-transform hover:scale-110"
+              class="header-avatar pointer-events-auto"
               onclick={(e) => {
                 e.stopPropagation();
                 if (creator?.id) {
@@ -805,10 +875,50 @@
               {/if}
             </button>
             
-            <!-- Título de la pregunta (mismo nivel que avatar) -->
+            <!-- Info del usuario y metadatos -->
+            <div class="header-user-info">
+              <div class="header-username-row">
+                <span class="header-username">@{creator?.username || 'usuario'}</span>
+                <!-- Botón tipo de voto (cuadrado para múltiple, redondo para único) -->
+                <button
+                  class="header-vote-btn pointer-events-auto"
+                  class:is-multiple={pollType === 'multiple'}
+                  onclick={(e) => { e.stopPropagation(); /* TODO: Follow logic */ }}
+                  type="button"
+                  aria-label={pollType === 'multiple' ? 'Voto múltiple' : 'Voto único'}
+                >
+                  {#if pollType === 'multiple'}
+                    <Square size={12} />
+                  {:else}
+                    <div class="vote-circle"></div>
+                  {/if}
+                </button>
+              </div>
+              <div class="header-metadata">
+                <span>{formatRelativeTime(pollCreatedAt)}</span>
+                <span class="header-metadata-dot">·</span>
+                <span class="header-vote-type">
+                  <Diamond size={10} class="header-diamond-icon" />
+                  {getPollTypeText(pollType)}
+                </span>
+              </div>
+            </div>
+            
+            <!-- Botón menú (3 puntos) -->
+            <button 
+              onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = !isMoreMenuOpen; }}
+              class="header-menu-btn pointer-events-auto"
+              aria-label="Más opciones"
+            >
+              <MoreVertical size={18} class="text-white" />
+            </button>
+          </div>
+          
+          <!-- Fila inferior: Pregunta -->
+          <div class="header-question-row">
             {#if readOnly}
               <button
-                class="font-serif italic text-xl md:text-2xl leading-tight text-white text-left flex-1 pointer-events-auto cursor-pointer transition-all hover:opacity-80"
+                class="header-question-text pointer-events-auto"
                 style={!isTitleExpanded ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word;" : "word-break: break-word;"}
                 onclick={() => isTitleExpanded = !isTitleExpanded}
                 type="button"
@@ -818,24 +928,14 @@
               </button>
             {:else}
               <textarea
-                class="font-serif italic text-xl md:text-2xl leading-tight flex-1 bg-transparent border-none outline-none text-white placeholder-white/50 resize-none"
+                class="header-question-edit pointer-events-auto"
                 placeholder="Escribe tu pregunta..."
                 value={pollTitle}
                 oninput={(e) => onTitleChange(e.currentTarget.value)}
                 rows="2"
                 maxlength="200"
-                style="pointer-events: auto;"
               ></textarea>
             {/if}
-            
-            <!-- Botón minimizar (en línea con la pregunta) -->
-            <button 
-              onclick={onClose} 
-              class="w-8 h-8 bg-black/40 rounded-full flex items-center justify-center border border-white/20 flex-shrink-0 pointer-events-auto transition-all hover:bg-black/60 active:scale-95"
-              aria-label="Minimizar"
-            >
-              <ChevronRight size={18} class="text-white" />
-            </button>
           </div>
         </div>
       </div>
@@ -1217,7 +1317,9 @@
             onclick={(e) => { 
               e.stopPropagation(); 
               isMoreMenuOpen = false;
-              if (!hasVoted && readOnly) {
+              // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
+              const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+              if (canVote && readOnly) {
                 if (!isAuthenticated) {
                   onOpenAuthModal();
                   return;
@@ -1232,10 +1334,18 @@
             }}
           >
             <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background-color: {hasVoted ? `${voteColor}33` : 'rgba(255, 255, 255, 0.1)'}">
-              {#if hasVoted}
-                <SquareCheck size={20} style="color: {voteColor}" />
+              {#if pollType === 'multiple'}
+                {#if hasVoted}
+                  <SquareCheck size={20} style="color: {voteColor}" />
+                {:else}
+                  <Square size={20} class="text-white" />
+                {/if}
               {:else}
-                <Square size={20} class="text-white" />
+                {#if hasVoted}
+                  <CircleCheck size={20} style="color: {voteColor}" />
+                {:else}
+                  <Circle size={20} class="text-white" />
+                {/if}
               {/if}
             </div>
             <div class="flex-1">
@@ -1378,38 +1488,11 @@
       </div>
     {/if}
 
-    <!-- Barra de control principal - Vote/Comments fijos + scroll desde Menu -->
+    <!-- Barra de control principal - Comments/Vote/Globe/Stats fijos + scroll -->
     <div class="action-bar-container">
-      <!-- Zona fija: Vote, Comments -->
+      <!-- Zona fija: Comments, Vote, Globe, Stats -->
       <div class="action-bar-fixed">
-        <!-- Votar -->
-        <button 
-          class="action-bar-btn"
-          onclick={() => {
-            if (!hasVoted && readOnly) {
-              if (!isAuthenticated) {
-                onOpenAuthModal();
-                return;
-              }
-              const opt = options[activeIndex];
-              if (opt) {
-                onVote(opt.id);
-                showLikeAnim = true;
-                setTimeout(() => (showLikeAnim = false), 1000);
-              }
-            }
-          }}
-          aria-label="Votar"
-        >
-          {#if hasVoted}
-            <SquareCheck size={26} strokeWidth={1.5} style="color: {voteColor}" />
-          {:else}
-            <Square size={26} strokeWidth={1.5} />
-          {/if}
-          <span class="action-bar-count" class:voted={hasVoted} style={hasVoted ? `color: ${voteColor}` : ''}>{formatCount(stats?.totalVotes)}</span>
-        </button>
-
-        <!-- Mensajes -->
+        <!-- Mensajes (izquierda) -->
         <button 
           class="action-bar-btn"
           aria-label="Comentarios"
@@ -1418,38 +1501,82 @@
           <MessageCircle size={26} strokeWidth={1.5} />
           <span class="action-bar-count">{stats?.commentsCount || 0}</span>
         </button>
-      </div>
 
-      <!-- Zona scroll: desde Menu (3 puntos) en adelante -->
-      <div class="action-bar-scroll hide-scrollbar">
-        <div class="action-bar-content">
-          <!-- Menú (3 puntos) -->
-          <button 
-            class="action-bar-btn"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = !isMoreMenuOpen; }}
-            aria-label="Más opciones"
-          >
-            <MoreVertical size={26} strokeWidth={1.5} />
-          </button>
-
-          <!-- Mundo y Estadísticas - Solo si ha votado (ANTES de Share) -->
+        <!-- Votar -->
+        <div class="vote-btn-wrapper">
           {#if hasVoted}
             <button 
-              class="action-bar-btn"
-              onclick={onOpenInGlobe}
-              aria-label="Ver en globo"
+              class="vote-remove-badge"
+              style="background-color: {voteColor}"
+              onclick={(e) => {
+                e.stopPropagation();
+                // Quitar todos los votos
+                onRemoveAllVotes();
+              }}
+              aria-label="Eliminar votos"
             >
-              <Globe size={26} strokeWidth={1.5} />
-            </button>
-
-            <button 
-              class="action-bar-btn"
-              onclick={onGoToChart}
-              aria-label="Ver estadísticas"
-            >
-              <Activity size={26} strokeWidth={1.5} />
+              <span class="vote-remove-count">{votedOptionsCount}</span>
+              <X size={12} strokeWidth={3} />
             </button>
           {/if}
+          <button 
+            class="action-bar-btn"
+            onclick={() => {
+              if (readOnly) {
+                if (!isAuthenticated) {
+                  onOpenAuthModal();
+                  return;
+                }
+                const opt = options[activeIndex];
+                if (opt) {
+                  onVote(opt.id);
+                  showLikeAnim = true;
+                  setTimeout(() => (showLikeAnim = false), 1000);
+                }
+              }
+            }}
+            aria-label="Votar"
+          >
+            {#if currentOptionVoted}
+              <div class="vote-icon-voted-container" class:is-multiple={pollType === 'multiple'} style="background-color: {currentOptionColor}">
+                <Check size={32} strokeWidth={3.5} class="vote-check-icon" />
+              </div>
+            {:else}
+              <div class="vote-icon-empty-container" class:is-multiple={pollType === 'multiple'}>
+                {#if pollType === 'multiple'}
+                  <Square size={20} strokeWidth={2.5} class="vote-icon-inner" />
+                {:else}
+                  <Circle size={20} strokeWidth={2.5} class="vote-icon-inner" />
+                {/if}
+              </div>
+            {/if}
+            <span class="action-bar-count" class:voted={currentOptionVoted} style={currentOptionVoted ? `color: ${currentOptionColor}` : ''}>{formatCount(stats?.totalVotes)}</span>
+          </button>
+        </div>
+
+        <!-- Mundo y Estadísticas - Solo si ha votado, fijos al lado del botón de votación -->
+        {#if hasVoted}
+          <button 
+            class="action-bar-btn"
+            onclick={onOpenInGlobe}
+            aria-label="Ver en globo"
+          >
+            <Globe size={26} strokeWidth={1.5} />
+          </button>
+
+          <button 
+            class="action-bar-btn"
+            onclick={onGoToChart}
+            aria-label="Ver estadísticas"
+          >
+            <Activity size={26} strokeWidth={1.5} />
+          </button>
+        {/if}
+      </div>
+
+      <!-- Zona scroll: resto de acciones -->
+      <div class="action-bar-scroll hide-scrollbar">
+        <div class="action-bar-content">
 
           <!-- Share -->
           <button 
@@ -2410,7 +2537,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 110px 12px 70px;
+    padding: 145px 12px 70px;
   }
 
   /* Card con bordes redondeados - igual para todos los tipos */
@@ -2799,7 +2926,7 @@
 
   @media (max-width: 480px) {
     .option-card-container {
-      padding: 100px 10px 60px;
+      padding: 130px 10px 60px;
     }
 
     .option-card-rounded {
@@ -2914,6 +3041,316 @@
     .creator-avatar-max {
       width: 42px;
       height: 42px;
+    }
+  }
+
+  /* ========================================
+     NUEVO HEADER ESTILO TWITTER
+     ======================================== */
+
+  .question-header-new {
+    width: 100%;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .header-top-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-back-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .header-back-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .header-back-btn:active {
+    transform: scale(0.95);
+  }
+
+  .header-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .header-avatar:hover {
+    transform: scale(1.05);
+  }
+
+  .header-user-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .header-username-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .header-username {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  :global(.header-verified-badge) {
+    color: #1d9bf0;
+    flex-shrink: 0;
+  }
+
+  .header-vote-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(60, 60, 60, 0.9);
+    border: 2px solid rgba(80, 80, 80, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+  }
+
+  .header-vote-btn.is-multiple {
+    border-radius: 6px;
+  }
+
+  .vote-circle {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: transparent;
+  }
+
+  :global(.header-diamond-icon) {
+    color: rgba(255, 255, 255, 0.6);
+    margin-right: 2px;
+  }
+
+  /* Iconos de votar */
+  .vote-icon-empty-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(45, 45, 45, 0.95);
+    border: 3px solid rgba(70, 70, 70, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .vote-icon-empty-container.is-multiple {
+    border-radius: 10px;
+  }
+
+  :global(.vote-icon-inner) {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .vote-icon-voted-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  }
+
+  .vote-icon-voted-container.is-multiple {
+    border-radius: 10px;
+  }
+
+  :global(.vote-check-icon) {
+    color: white;
+    position: absolute;
+    top: 48%;
+    left: 52%;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(1px 1px 1px rgba(0, 0, 0, 0.15));
+  }
+
+  /* Wrapper para el botón de votar con badge */
+  .vote-btn-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .vote-remove-badge {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 2px 5px;
+    background: rgba(50, 50, 50, 0.95);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 10;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    transition: all 0.15s ease;
+  }
+
+  .vote-remove-badge:hover {
+    background: rgba(70, 70, 70, 0.95);
+    transform: scale(1.1);
+  }
+
+  .vote-remove-badge:active {
+    transform: scale(0.9);
+  }
+
+  .vote-remove-count {
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .header-metadata {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .header-metadata-dot {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .header-vote-type {
+    display: flex;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .header-menu-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .header-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .header-question-row {
+    padding-left: 42px; /* Alinear con el contenido después del botón back */
+    padding-right: 32px; /* Espacio para el botón de menú */
+  }
+
+  .header-question-text {
+    font-size: 17px;
+    font-weight: 400;
+    color: white;
+    line-height: 1.4;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+  }
+
+  .header-question-text:hover {
+    opacity: 0.85;
+  }
+
+  .header-question-edit {
+    font-size: 17px;
+    font-weight: 400;
+    color: white;
+    line-height: 1.4;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    width: 100%;
+  }
+
+  .header-question-edit::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  /* Responsive para móvil */
+  @media (max-width: 480px) {
+    .question-header-new {
+      padding: 10px 12px;
+    }
+
+    .header-avatar {
+      width: 32px;
+      height: 32px;
+    }
+
+    .header-username {
+      font-size: 13px;
+    }
+
+    .header-metadata {
+      font-size: 11px;
+    }
+
+    .header-question-row {
+      padding-left: 38px;
+      padding-right: 28px;
+    }
+
+    .header-question-text,
+    .header-question-edit {
+      font-size: 15px;
     }
   }
 </style>

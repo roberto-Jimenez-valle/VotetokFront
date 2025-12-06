@@ -1638,15 +1638,48 @@
     const votePollId =
       pollId || (activePoll?.id ? activePoll.id.toString() : "main");
 
-    // Si ya votó por esta misma opción, desmarcar el voto
-    if (userVotes[votePollId] === optionKey) {
-                  // Llamar a clearUserVote que elimina del servidor Y del estado
-      await clearUserVote(votePollId);
-      return;
-    }
+    // Obtener el tipo de encuesta
+    let poll = pollId 
+      ? additionalPolls.find((p) => p.id == pollId || p.id === pollId.toString()) || previewModalPoll
+      : activePoll;
+    const isMultiplePoll = poll?.pollType === 'multiple' || poll?.type === 'multiple';
 
-    // Registrar o cambiar el voto del usuario (forzar reactividad)
-    userVotes = { ...userVotes, [votePollId]: optionKey };
+    // Manejar votos múltiples vs únicos
+    if (isMultiplePoll) {
+      // ENCUESTA MÚLTIPLE: usar array de votos
+      const currentVotes = Array.isArray(userVotes[votePollId]) 
+        ? userVotes[votePollId] 
+        : userVotes[votePollId] ? [userVotes[votePollId]] : [];
+      
+      if (currentVotes.includes(optionKey)) {
+        // Ya votó esta opción, quitarla
+        const newVotes = currentVotes.filter((v: string) => v !== optionKey);
+        if (newVotes.length === 0) {
+          // Si no quedan votos, eliminar la entrada
+          const { [votePollId]: _, ...rest } = userVotes;
+          userVotes = rest;
+        } else {
+          userVotes = { ...userVotes, [votePollId]: newVotes };
+        }
+        // También enviar al backend para quitar el voto
+        await sendVoteToBackend(optionKey, pollId, true); // true = remove
+        return;
+      } else {
+        // Agregar nuevo voto
+        userVotes = { ...userVotes, [votePollId]: [...currentVotes, optionKey] };
+      }
+    } else {
+      // ENCUESTA SIMPLE: comportamiento original
+      // Si ya votó por esta misma opción, desmarcar el voto
+      if (userVotes[votePollId] === optionKey) {
+        // Llamar a clearUserVote que elimina del servidor Y del estado
+        await clearUserVote(votePollId);
+        return;
+      }
+
+      // Registrar o cambiar el voto del usuario (forzar reactividad)
+      userVotes = { ...userVotes, [votePollId]: optionKey };
+    }
 
     // Capturar posición del icono de votos
     if (voteIconElement) {
@@ -1673,7 +1706,7 @@
       }
 
   // Nueva función para enviar voto directamente desde BottomSheet
-  async function sendVoteToBackend(optionKey: string, pollId?: string) {
+  async function sendVoteToBackend(optionKey: string, pollId?: string, isRemove: boolean = false) {
                 // Determinar qué encuesta - buscar por ID (string o number)
     let poll;
     if (pollId) {
@@ -1689,9 +1722,11 @@
                   return;
     }
 
-        // Buscar la opción - puede estar como 'key', 'optionKey', etc.
+        // Buscar la opción - puede estar como 'id', 'key', 'optionKey', etc.
     const option = poll.options?.find(
       (opt: any) =>
+        opt.id === optionKey ||
+        opt.id?.toString() === optionKey?.toString() ||
         opt.key === optionKey ||
         opt.optionKey === optionKey ||
         opt.label === optionKey ||
@@ -2392,30 +2427,35 @@
 
     // Obtener los votos del usuario para esta encuesta
     const userVoteForPoll = userVotes[poll.id.toString()];
-    const isMultiple = poll.multipleChoice;
+    const isMultiple = poll.multipleChoice || poll.pollType === 'multiple' || poll.type === 'multiple';
 
     // Detectar si alguna opción tiene imagen
     const hasAnyImages = (poll.options || []).some((opt: any) => opt.imageUrl);
 
     // Transformar TODAS las opciones (no filtrar por imageUrl)
     const transformedOptions = (poll.options || []).map((opt: any) => {
-      const votes = opt.votes || 0;
+      const votes = opt.votes || opt.voteCount || opt._count?.votes || 0;
       const pct = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
-      const optionKey = opt.key || opt.id;
+      // Usar optionKey que es lo que devuelve el API en userVotes
+      const optionKey = opt.optionKey || opt.key || opt.id?.toString();
 
-      // Determinar si esta opción fue votada
+      // Determinar si esta opción fue votada (comparar con userVotes del servidor)
+      // IMPORTANTE: Convertir a string para comparar porque pueden venir como número o string
+      const optionKeyStr = String(optionKey);
       let hasVoted = false;
       if (isMultiple) {
-        // Encuesta múltiple: array de keys
-        hasVoted =
-          Array.isArray(userVoteForPoll) && userVoteForPoll.includes(optionKey);
+        // Encuesta múltiple: array de keys - convertir todo a string
+        hasVoted = Array.isArray(userVoteForPoll) && userVoteForPoll.map(String).includes(optionKeyStr);
       } else {
         // Encuesta simple: string key
-        hasVoted = userVoteForPoll === optionKey;
+        hasVoted = String(userVoteForPoll) === optionKeyStr;
       }
+      
+      console.log('[Transform] Option:', optionKeyStr, 'userVoteForPoll:', userVoteForPoll, 'voted:', hasVoted);
 
       const transformedOption = {
-        id: optionKey,
+        id: opt.id,  // Mantener ID numérico para el backend
+        key: optionKey,  // Key para comparar con userVotes
         label: opt.label || opt.optionLabel || opt.optionText || "",
         color: opt.color || "#10b981",
         imageUrl: opt.imageUrl || opt.image || opt.mediaUrl,
@@ -3493,6 +3533,8 @@
     pollTitle={previewModalPoll.question ||
       previewModalPoll.title ||
       "Encuesta"}
+    pollType={previewModalPoll.pollType || previewModalPoll.type || "simple"}
+    pollCreatedAt={previewModalPoll.createdAt || previewModalPoll.created_at || previewModalPoll.publishedAt || previewModalPoll.published_at || previewModalPoll.timestamp}
     creator={{
       id: previewModalPoll.creator?.id || previewModalPoll.user?.id,
       username:
@@ -3514,7 +3556,7 @@
     friendsByOption={previewModalPoll.friendsByOption || {}}
     readOnly={true}
     showAllOptions={previewModalShowAllOptions}
-    hasVoted={!!userVotes[previewModalPoll.id]}
+    hasVoted={Array.isArray(userVotes[previewModalPoll.id]) ? userVotes[previewModalPoll.id].length > 0 : !!userVotes[previewModalPoll.id]}
     isAuthenticated={!!$currentUser}
     onClose={closePreviewModal}
     onOptionChange={(optionId: string) => {
@@ -3529,11 +3571,15 @@
         navigateToPreviousPollWithPreview();
       }
     }}
-    onVote={async (optionId: string) => {
+    onVote={async (optionId: string | number) => {
             if (!previewModalPoll) return;
 
-      // Usar el handler de voto existente
-      const option = previewModalOption.find((opt: any) => opt.id === optionId);
+      // Usar el handler de voto existente - buscar por id (numérico o string)
+      const option = previewModalOption.find((opt: any) => 
+        opt.id === optionId || 
+        opt.id?.toString() === optionId?.toString() ||
+        opt.key === optionId
+      );
       if (option) {
         await handleVote(option.id, previewModalPoll.id.toString());
 
@@ -3545,6 +3591,27 @@
             if (response.ok) {
               const updatedPollData = await response.json();
               const updatedPoll = updatedPollData.data || updatedPollData;
+
+              // Sincronizar userVotes con los datos del servidor
+              const pollId = updatedPoll.id.toString();
+              console.log('[Sync] updatedPoll.userVotes:', updatedPoll.userVotes);
+              console.log('[Sync] updatedPoll.userVote:', updatedPoll.userVote);
+              
+              if (updatedPoll.userVotes && Array.isArray(updatedPoll.userVotes) && updatedPoll.userVotes.length > 0) {
+                // Encuesta múltiple: guardar array de votos
+                userVotes = { ...userVotes, [pollId]: updatedPoll.userVotes };
+                console.log('[Sync] Guardando múltiple:', updatedPoll.userVotes);
+              } else if (updatedPoll.userVote) {
+                // Encuesta simple: guardar string
+                userVotes = { ...userVotes, [pollId]: updatedPoll.userVote };
+                console.log('[Sync] Guardando simple:', updatedPoll.userVote);
+              } else {
+                // Sin votos
+                const { [pollId]: _, ...rest } = userVotes;
+                userVotes = rest;
+                console.log('[Sync] Sin votos, eliminando');
+              }
+              console.log('[Sync] userVotes final:', userVotes);
 
               // Actualizar la encuesta en el estado
               if (activePoll && activePoll.id === updatedPoll.id) {
@@ -3566,6 +3633,52 @@
           } catch (error) {
                       }
         }, 300);
+      }
+    }}
+    onRemoveAllVotes={async () => {
+      if (!previewModalPoll) return;
+      
+      // Usar el endpoint DELETE para eliminar todos los votos de esta encuesta
+      try {
+        const response = await apiCall(`/api/polls/${previewModalPoll.id}/vote`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          // Limpiar el estado local de votos
+          const pollId = previewModalPoll.id.toString();
+          const { [pollId]: _, ...rest } = userVotes;
+          userVotes = rest;
+          
+          // Recargar la encuesta para reflejar los cambios
+          setTimeout(async () => {
+            const pollResponse = await apiCall(`/api/polls/${previewModalPoll.id}`);
+            if (pollResponse.ok) {
+              const updatedPollData = await pollResponse.json();
+              const updatedPoll = updatedPollData.data || updatedPollData;
+              
+              // Actualizar la encuesta en el estado
+              if (activePoll && activePoll.id === updatedPoll.id) {
+                activePoll = updatedPoll;
+              } else {
+                const index = additionalPolls.findIndex((p) => p.id === updatedPoll.id);
+                if (index !== -1) {
+                  additionalPolls[index] = updatedPoll;
+                }
+              }
+              
+              // Reabrir el modal con datos actualizados - mantener la opción actual
+              const currentOption = previewModalOption?.find((opt: any) => opt.id?.toString() === previewModalOptionIndex?.toString()) || previewModalOption?.[0];
+              if (currentOption) {
+                handleOpenPreviewModal({
+                  detail: { option: currentOption, pollId: previewModalPoll.id.toString() },
+                } as CustomEvent);
+              }
+            }
+          }, 100);
+        }
+      } catch (error) {
+        console.error('[onRemoveAllVotes] Error:', error);
       }
     }}
     onOpenInGlobe={() => {
