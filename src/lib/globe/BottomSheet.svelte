@@ -1903,10 +1903,6 @@
             return;
     }
 
-    if (poll.options.length >= 10) {
-            return;
-    }
-
         // Generar un ID temporal único
     const tempId = `temp-${Date.now()}`;
 
@@ -3515,6 +3511,45 @@
     hasVoted={Array.isArray(userVotes[previewModalPoll.id]) ? userVotes[previewModalPoll.id].length > 0 : !!userVotes[previewModalPoll.id]}
     isAuthenticated={!!$currentUser}
     onClose={closePreviewModal}
+    onAddOption={async (label: string, color: string) => {
+      if (!previewModalPoll || !label.trim()) return;
+      
+      // Crear la opción directamente con la API
+      try {
+        const response = await apiCall(`/api/polls/${previewModalPoll.id}/options`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ optionText: label.trim(), color })
+        });
+        
+        if (response.ok) {
+          // Recargar la encuesta para ver la nueva opción
+          const updatedResponse = await apiCall(`/api/polls/${previewModalPoll.id}`);
+          if (updatedResponse.ok) {
+            const updatedData = await updatedResponse.json();
+            const updatedPoll = updatedData.data || updatedData;
+            
+            // Actualizar previewModalOption con las nuevas opciones
+            const totalVotes = (updatedPoll.options || []).reduce((sum: number, opt: any) => sum + (opt.votes || 0), 0);
+            previewModalOption = (updatedPoll.options || []).map((opt: any, idx: number) => ({
+              id: opt.id?.toString() || opt.optionKey || `opt_${idx}`,
+              key: opt.optionKey || opt.key || `opt_${idx}`,
+              label: opt.optionText || opt.label || `Opción ${idx + 1}`,
+              color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][idx % 4],
+              imageUrl: opt.imageUrl || opt.image_url || null,
+              votes: opt.votes || 0,
+              pct: totalVotes > 0 ? Math.round((opt.votes || 0) / totalVotes * 100) : 0,
+              voted: userVotes[updatedPoll.id]?.includes?.(opt.optionKey || opt.key) || userVotes[updatedPoll.id] === (opt.optionKey || opt.key),
+            }));
+            
+            // Ir al último slide (la nueva opción)
+            previewModalOptionIndex = previewModalOption[previewModalOption.length - 1]?.id;
+          }
+        }
+      } catch (error) {
+        console.error('[AddOption] Error:', error);
+      }
+    }}
     onOptionChange={(optionId: string) => {
       previewModalOptionIndex = optionId;
           }}

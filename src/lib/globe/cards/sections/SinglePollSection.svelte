@@ -1306,29 +1306,6 @@
     </div>
   {/if}
   
-  <!-- Controles inferiores simplificados (solo acciones) -->
-  <div class="bottom-controls-container">
-    <!-- Lado derecho: Botones de acción -->
-    <div class="bottom-controls-right">
-      <!-- Botón añadir opción (colaborativas) -->
-      {#if poll.type === 'collaborative' && poll.options.length < 10 && !poll.options.some((opt: any) => opt.isEditing)}
-        <button
-          type="button"
-          class="add-option-button-bottom"
-          style="--preview-color: {previewColor}"
-          onclick={handleAddOption}
-          title="Añadir nueva opción"
-          aria-label="Añadir nueva opción"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-      {/if}
-    </div>
-  </div>
-  
   <!-- BARRA DE CONTROL PRINCIPAL - Nuevo Diseño -->
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div class="mini-action-bar more-menu-container" onclick={handleMenuClickOutside}>
@@ -1622,6 +1599,23 @@
           </svg>
           <span class="mini-action-count">0</span>
         </button>
+
+        <!-- Botón añadir opción (colaborativas) -->
+        {#if poll.type === 'collaborative' && !poll.options.some((opt: any) => opt.isEditing)}
+          <button
+            type="button"
+            class="mini-action-btn add-collab-btn"
+            style="--preview-color: {previewColor}"
+            onclick={handleAddOption}
+            title="Añadir nueva opción"
+            aria-label="Añadir nueva opción"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        {/if}
       </div>
 
       <!-- Zona scroll: Globo, Stats, Share, etc -->
@@ -1683,65 +1677,6 @@
               <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
             </svg>
             <span class="mini-action-count-secondary">0</span>
-          </button>
-
-          <!-- Vistas -->
-          <button class="mini-action-btn-secondary" type="button" title="Vistas" aria-label="Vistas">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            <span class="mini-action-count-secondary">{formatCount(poll.stats?.totalViews || poll.totalViews)}</span>
-          </button>
-
-          <!-- Guardar -->
-          <button class="mini-action-btn-secondary" type="button" title="Guardar" aria-label="Guardar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span class="mini-action-count-secondary">0</span>
-          </button>
-
-          <!-- Copiar enlace -->
-          <button 
-            class="mini-action-btn-secondary mini-action-subtle"
-            type="button"
-            title="Copiar enlace"
-            aria-label="Copiar enlace"
-            onclick={(e) => { e.stopPropagation(); copyPollLink(); }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            </svg>
-          </button>
-
-          <!-- No me interesa -->
-          <button 
-            class="mini-action-btn-secondary mini-action-subtle"
-            type="button"
-            title="No me interesa"
-            aria-label="No me interesa"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-              <line x1="1" y1="1" x2="23" y2="23"/>
-            </svg>
-          </button>
-
-          <!-- Reportar -->
-          <button 
-            class="mini-action-btn-secondary mini-action-subtle"
-            type="button"
-            title="Reportar"
-            aria-label="Reportar"
-            style="padding-right: 10px;"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
           </button>
 
         </div>
@@ -2032,9 +1967,9 @@
   .bottom-controls-container {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0;
-    margin: 0 16px;
+    justify-content: flex-end;
+    padding: 8px 16px;
+    margin: 0;
     gap: 8px;
   }
   
@@ -2045,6 +1980,106 @@
     align-items: center;
     gap: 8px;
     min-width: 36px;
+  }
+
+  /* Botón añadir opción - estilo card con borde color */
+  .add-option-button-bottom {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: #2a2c31;
+    border: none;
+    border-bottom: 2.5px solid var(--preview-color, #8b5cf6);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .add-option-button-bottom:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .add-option-button-bottom:active {
+    transform: scale(0.95);
+  }
+
+  /* Botón añadir opción en action bar - alineado a la derecha */
+  .add-option-button-inline {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1.5px solid var(--preview-color, #8b5cf6);
+    color: var(--preview-color, #8b5cf6);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  .add-option-button-inline:hover {
+    background: rgba(139, 92, 246, 0.25);
+    transform: scale(1.05);
+  }
+
+  .add-option-button-inline:active {
+    transform: scale(0.95);
+  }
+
+  .add-option-button-inline svg {
+    stroke: var(--preview-color, #8b5cf6);
+  }
+
+  /* Botón añadir colaborativa en action bar - fijo a la derecha */
+  .add-collab-btn {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    border-radius: 6px !important;
+    background: #2a2c31 !important;
+    border: none !important;
+    border-bottom: 2.5px solid var(--preview-color, #8b5cf6) !important;
+    color: white !important;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    gap: 0 !important;
+    z-index: 10;
+  }
+
+  .add-collab-btn:hover {
+    transform: translateY(-50%) scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .add-collab-btn:active {
+    transform: translateY(-50%) scale(0.95) !important;
+  }
+
+  .add-collab-btn svg {
+    stroke: white !important;
+  }
+
+  .add-collab-btn .mini-action-count {
+    display: none !important;
   }
   
   /* Botón de estadísticas */
@@ -2094,22 +2129,36 @@
     gap: 10px;
   }
 
-  /* Botón añadir opción pequeño debajo - estilo card con borde color */
-  .add-option-button-bottom {
-    width: 30px;
-    height: 30px;
-    border-radius: 6px;
-    background: #2a2c31;
-    border: none;
-    border-bottom: 2.5px solid var(--preview-color, #8b5cf6);
-    color: white;
+  /* Botón añadir opción en action bar - alineado a la derecha */
+  .add-option-button-action-bar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1.5px solid rgba(59, 130, 246, 0.5);
+    color: #3b82f6;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .add-option-button-action-bar:hover {
+    background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.7);
+    transform: scale(1.05);
+  }
+
+  .add-option-button-action-bar:active {
+    transform: scale(0.95);
+  }
+
+  .add-option-button-action-bar svg {
+    stroke: #3b82f6;
   }
 
   /* Vote cards con background sólido - OCULTAR SCROLL AGRESIVAMENTE */

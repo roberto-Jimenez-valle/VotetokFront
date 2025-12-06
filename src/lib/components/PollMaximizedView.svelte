@@ -35,6 +35,7 @@
     Volume2,
     VolumeX,
     BadgeCheck,
+    Plus,
   } from "lucide-svelte";
   import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -120,6 +121,7 @@
     onLabelChange?: (optionId: string, newLabel: string) => void;
     onOpenColorPicker?: (optionId: string) => void;
     onOpenProfile?: (userId: number) => void;
+    onAddOption?: (label: string, color: string) => void;
   }
 
   let {
@@ -153,11 +155,93 @@
     onLabelChange = () => {},
     onOpenColorPicker = () => {},
     onOpenProfile = () => {},
+    onAddOption = (label: string, color: string) => {},
   }: Props = $props();
 
   let totalVotes = $derived(options.reduce((a, b) => a + (b.votes || 0), 0));
   let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
+  
+  // Estado para añadir nueva opción colaborativa
+  let isAddingOption = $state(false);
+  let newOptionLabel = $state('');
+  let newOptionColor = $state('#8b5cf6');
+  let newOptionInputRef: HTMLTextAreaElement | null = null;
+  let showNewOptionColorPicker = $state(false);
+  
+  // Estado del color picker circular
+  let selectedHue = $state(270); // Púrpura por defecto
+  let selectedSaturation = $state(85);
+  let isDraggingColor = $state(false);
+  let selectedColor = $derived(`hsl(${selectedHue}, ${selectedSaturation}%, 55%)`);
+  
+  // Convertir HSL a hex
+  function hslToHex(h: number, s: number, l: number): string {
+    s = s / 100;
+    l = l / 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c/2;
+    let r = 0, g = 0, b = 0;
+    if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
+    else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
+    else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
+    else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
+    else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+  
+  // Confirmar color seleccionado
+  function confirmColorSelection() {
+    newOptionColor = hslToHex(selectedHue, selectedSaturation, 55);
+    showNewOptionColorPicker = false;
+  }
+  
+  // Colores disponibles para nueva opción
+  const optionColors = [
+    '#ef4444', '#f97316', '#f59e0b', '#10b981', 
+    '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'
+  ];
+  
+  // Función para iniciar añadir opción
+  function startAddingOption() {
+    if (!isAuthenticated) {
+      onOpenAuthModal();
+      return;
+    }
+    isAddingOption = true;
+    newOptionLabel = '';
+    newOptionColor = optionColors[Math.floor(Math.random() * optionColors.length)];
+    // Scroll al final para mostrar el nuevo slide
+    setTimeout(() => {
+      if (scrollContainer) {
+        scrollContainer.scrollTo({ left: scrollContainer.scrollWidth, behavior: 'smooth' });
+      }
+      if (newOptionInputRef) {
+        newOptionInputRef.focus();
+      }
+    }, 100);
+  }
+  
+  // Función para cancelar añadir opción
+  function cancelAddingOption() {
+    isAddingOption = false;
+    newOptionLabel = '';
+  }
+  
+  // Función para publicar la nueva opción
+  async function publishNewOption() {
+    if (!newOptionLabel.trim()) return;
+    
+    // Llamar al callback con los datos de la nueva opción
+    onAddOption(newOptionLabel.trim(), newOptionColor);
+    
+    // Resetear estado
+    isAddingOption = false;
+    newOptionLabel = '';
+  }
   
   // Color neutro para opciones antes de votar
   const NEUTRAL_COLOR = '#3a3d42';
@@ -1216,6 +1300,83 @@
 
           </div>
         {/each}
+
+        <!-- Slide para añadir nueva opción (colaborativas) -->
+        {#if isAddingOption && pollType === 'collaborative'}
+          <div
+            class="w-full h-full flex-shrink-0 snap-center relative"
+            style="scroll-snap-stop: always;"
+          >
+            <div class="w-full h-full relative overflow-hidden">
+              <div class="option-card-container">
+                <div class="option-card-rounded" style="--option-color: {newOptionColor};">
+                  <div class="card-content-area new-option-card" style="background-color: {newOptionColor};">
+                    <!-- Comillas decorativas -->
+                    <span class="quote-decoration quote-open">"</span>
+                    <span class="quote-decoration quote-close">"</span>
+                    
+                    <!-- Textarea para el texto -->
+                    <div class="new-option-input-wrapper">
+                      <textarea
+                        bind:this={newOptionInputRef}
+                        bind:value={newOptionLabel}
+                        class="new-option-textarea-max"
+                        placeholder="Escribe tu opción..."
+                        maxlength="100"
+                        rows="2"
+                      ></textarea>
+                    </div>
+                    
+                    <!-- Barra de edición (igual que mini) -->
+                    <div class="new-option-edit-bar">
+                      <!-- Botón de color - abre modal -->
+                      <button 
+                        type="button" 
+                        class="edit-btn-max color-btn-max" 
+                        style="background-color: {newOptionColor};"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          showNewOptionColorPicker = true;
+                        }}
+                        title="Cambiar color"
+                        aria-label="Cambiar color"
+                      >
+                        <svg class="w-5 h-5" fill="none" stroke="white" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                      </button>
+                      
+                      <!-- Botón cancelar -->
+                      <button
+                        type="button"
+                        class="edit-btn-max cancel-btn-max"
+                        onclick={cancelAddingOption}
+                        title="Cancelar"
+                        aria-label="Cancelar"
+                      >
+                        <X size={20} strokeWidth={2.5} />
+                      </button>
+                      
+                      <!-- Botón publicar -->
+                      <button
+                        type="button"
+                        class="edit-btn-max publish-btn-max"
+                        onclick={publishNewOption}
+                        disabled={!newOptionLabel.trim()}
+                        title="Publicar"
+                        aria-label="Publicar"
+                      >
+                        <Check size={20} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                    
+                    <div class="card-divider-line card-divider-bottom"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {/if}
       </div>
     </div>
   {/key}
@@ -1493,18 +1654,8 @@
 
     <!-- Barra de control principal - Comments/Vote/Globe/Stats fijos + scroll -->
     <div class="action-bar-container">
-      <!-- Zona fija: Comments, Vote, Globe, Stats -->
+      <!-- Zona fija: Vote, Comments, Globe, Stats -->
       <div class="action-bar-fixed">
-        <!-- Mensajes (izquierda) -->
-        <button 
-          class="action-bar-btn"
-          aria-label="Comentarios"
-          onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
-        >
-          <MessageCircle size={26} strokeWidth={1.5} />
-          <span class="action-bar-count">{stats?.commentsCount || 0}</span>
-        </button>
-
         <!-- Votar -->
         <div class="vote-btn-wrapper">
           {#if hasVoted}
@@ -1557,6 +1708,16 @@
           </button>
         </div>
 
+        <!-- Mensajes (a la derecha del voto) -->
+        <button 
+          class="action-bar-btn"
+          aria-label="Comentarios"
+          onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
+        >
+          <MessageCircle size={26} strokeWidth={1.5} />
+          <span class="action-bar-count">{stats?.commentsCount || 0}</span>
+        </button>
+
         <!-- Mundo y Estadísticas - Solo si ha votado, fijos al lado del botón de votación -->
         {#if hasVoted}
           <button 
@@ -1578,7 +1739,8 @@
             <Activity size={26} strokeWidth={1.5} />
           </button>
         {/if}
-      </div>
+
+        </div>
 
       <!-- Zona scroll: resto de acciones -->
       <div class="action-bar-scroll hide-scrollbar">
@@ -1605,51 +1767,24 @@
             <span class="action-bar-count" class:reposted={hasReposted}>{formatCount(repostCount)}</span>
           </button>
 
-          <!-- Vistas -->
-          <button 
-            class="action-bar-btn"
-            aria-label="Vistas"
-          >
-            <Eye size={26} strokeWidth={1.5} />
-            <span class="action-bar-count">{formatCount(viewCount)}</span>
-          </button>
-
-          <!-- Bookmark -->
-          <button 
-            class="action-bar-btn"
-            onclick={onBookmark}
-            aria-label="Guardar"
-          >
-            <Bookmark size={26} strokeWidth={1.5} />
-          </button>
-
-          <!-- Copiar enlace -->
-          <button 
-            class="action-bar-btn"
-            onclick={copyLink}
-            aria-label="Copiar enlace"
-          >
-            <Link size={26} strokeWidth={1.5} />
-          </button>
-
-          <!-- No me interesa -->
-          <button 
-            class="action-bar-btn"
-            aria-label="No me interesa"
-          >
-            <EyeOff size={26} strokeWidth={1.5} />
-          </button>
-
-          <!-- Reportar -->
-          <button 
-            class="action-bar-btn"
-            aria-label="Reportar"
-          >
-            <Flag size={26} strokeWidth={1.5} class="text-red-400" />
-          </button>
-
         </div>
       </div>
+
+      <!-- Botón añadir opción (colaborativas) - fijo a la derecha -->
+      {#if pollType === 'collaborative' && !isAddingOption}
+        <button 
+          class="add-option-btn"
+          style="border-bottom-color: {newOptionColor};"
+          onclick={(e) => { 
+            e.stopPropagation(); 
+            startAddingOption();
+          }}
+          aria-label="Añadir opción"
+          title="Añadir nueva opción"
+        >
+          <Plus size={22} strokeWidth={2.5} />
+        </button>
+      {/if}
     </div>
   </div>
 
@@ -1692,6 +1827,125 @@
       ✓ Enlace copiado
     </div>
   {/if}
+
+  <!-- COLOR PICKER MODAL circular para nueva opción -->
+  {#if showNewOptionColorPicker}
+    <div 
+      class="color-picker-overlay" 
+      onclick={() => showNewOptionColorPicker = false}
+      onkeydown={(e) => { if (e.key === 'Escape') showNewOptionColorPicker = false; }}
+      role="button"
+      tabindex="0"
+      aria-label="Cerrar selector de color"
+    >
+      <div 
+        class="color-picker-modal-circular" 
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => { if (e.key === 'Escape') showNewOptionColorPicker = false; }}
+        role="dialog"
+        aria-labelledby="color-picker-title"
+        tabindex="-1"
+      >
+        <div class="color-picker-header-circular">
+          <h3 id="color-picker-title">Selecciona un color</h3>
+          <button onclick={() => showNewOptionColorPicker = false} type="button" aria-label="Cerrar" class="color-picker-close-circular">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <!-- Círculo de colores -->
+        <div class="color-wheel-container">
+          <div 
+            class="color-wheel"
+            role="slider"
+            aria-label="Selector de color"
+            aria-valuenow={selectedHue}
+            aria-valuemin={0}
+            aria-valuemax={360}
+            tabindex="0"
+            onmousedown={(e) => {
+              isDraggingColor = true;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const centerX = rect.left + rect.width / 2;
+              const centerY = rect.top + rect.height / 2;
+              const deltaX = e.clientX - centerX;
+              const deltaY = e.clientY - centerY;
+              const angle = Math.atan2(deltaY, deltaX);
+              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+              const maxDistance = rect.width / 2;
+              selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+              selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+            }}
+            onmousemove={(e) => {
+              if (isDraggingColor) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const deltaX = e.clientX - centerX;
+                const deltaY = e.clientY - centerY;
+                const angle = Math.atan2(deltaY, deltaX);
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2;
+                selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+                selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+              }
+            }}
+            onmouseup={() => isDraggingColor = false}
+            onmouseleave={() => isDraggingColor = false}
+            ontouchstart={(e) => {
+              isDraggingColor = true;
+              const touch = e.touches[0];
+              const rect = e.currentTarget.getBoundingClientRect();
+              const centerX = rect.left + rect.width / 2;
+              const centerY = rect.top + rect.height / 2;
+              const deltaX = touch.clientX - centerX;
+              const deltaY = touch.clientY - centerY;
+              const angle = Math.atan2(deltaY, deltaX);
+              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+              const maxDistance = rect.width / 2;
+              selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+              selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+            }}
+            ontouchmove={(e) => {
+              if (isDraggingColor) {
+                const touch = e.touches[0];
+                const rect = e.currentTarget.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const deltaX = touch.clientX - centerX;
+                const deltaY = touch.clientY - centerY;
+                const angle = Math.atan2(deltaY, deltaX);
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2;
+                selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
+                selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+              }
+            }}
+            ontouchend={() => isDraggingColor = false}
+          >
+            <!-- Gradiente radial para saturación -->
+            <div class="color-wheel-saturation"></div>
+            
+            <!-- Indicador de color seleccionado -->
+            <div 
+              class="color-wheel-indicator"
+              style="background: {selectedColor}; transform: translate(-50%, -50%) rotate({selectedHue}deg) translateY({-selectedSaturation * 1.2}px);"
+            ></div>
+          </div>
+          
+          <!-- Botón confirmar -->
+          <button
+            onclick={confirmColorSelection}
+            type="button"
+            class="color-confirm-btn"
+            style="background: {selectedColor};"
+          >
+            Seleccionar Color
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -1699,6 +1953,7 @@
      ACTION BAR - Contenedor centrado con ancho máximo
      ======================================== */
   .action-bar-container {
+    position: relative;
     width: 100%;
     height: 56px;
     display: flex;
@@ -1791,6 +2046,299 @@
 
   .action-bar-count.reposted {
     color: #4ade80;
+  }
+
+  /* ========================================
+     NUEVA OPCIÓN - Edición (estilo mini)
+     ======================================== */
+  .new-option-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .new-option-input-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    width: 100%;
+    padding: 0 24px;
+  }
+
+  .new-option-textarea-max {
+    width: 100%;
+    max-width: 500px;
+    padding: 16px 20px;
+    font-size: 2rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: -0.5px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 16px;
+    color: white;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    line-height: 1.2;
+  }
+
+  .new-option-textarea-max::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: none;
+    font-weight: 500;
+  }
+
+  .new-option-textarea-max:focus {
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  /* Barra de edición con iconos */
+  .new-option-edit-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .edit-btn-max {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .color-btn-max {
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .color-btn-max:hover {
+    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.7);
+  }
+
+  .cancel-btn-max {
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+  }
+
+  .cancel-btn-max:hover {
+    background: #ef4444;
+    transform: scale(1.1);
+  }
+
+  .publish-btn-max {
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+  }
+
+  .publish-btn-max:hover:not(:disabled) {
+    background: #22c55e;
+    transform: scale(1.1);
+  }
+
+  .publish-btn-max:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ========================================
+     COLOR PICKER MODAL CIRCULAR
+     ======================================== */
+  .color-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2147483647;
+    padding: 1rem;
+  }
+
+  .color-picker-modal-circular {
+    background: rgba(30, 30, 30, 0.98);
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 400px;
+    width: 90%;
+  }
+
+  .color-picker-header-circular {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+
+  .color-picker-header-circular h3 {
+    color: white;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .color-picker-close-circular {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 8px;
+    padding: 8px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .color-picker-close-circular:hover {
+    background: rgba(255,255,255,0.2);
+  }
+
+  .color-wheel-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .color-wheel {
+    width: 280px;
+    height: 280px;
+    border-radius: 50%;
+    position: relative;
+    cursor: pointer;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    background: conic-gradient(
+      from 0deg, 
+      hsl(0, 100%, 50%), 
+      hsl(30, 100%, 50%), 
+      hsl(60, 100%, 50%), 
+      hsl(90, 100%, 50%), 
+      hsl(120, 100%, 50%), 
+      hsl(150, 100%, 50%), 
+      hsl(180, 100%, 50%), 
+      hsl(210, 100%, 50%), 
+      hsl(240, 100%, 50%), 
+      hsl(270, 100%, 50%), 
+      hsl(300, 100%, 50%), 
+      hsl(330, 100%, 50%), 
+      hsl(360, 100%, 50%)
+    );
+  }
+
+  .color-wheel-saturation {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle, white 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .color-wheel-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 4px solid white;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+
+  .color-confirm-btn {
+    width: 100%;
+    padding: 16px;
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: transform 0.2s;
+  }
+
+  .color-confirm-btn:hover {
+    transform: scale(1.02);
+  }
+
+  /* Footer de nueva opción con línea de color */
+  .new-option-footer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    height: auto;
+    min-height: 0;
+  }
+
+  .new-option-color-line {
+    width: 100%;
+    height: 6px;
+    border-radius: 0 0 24px 24px;
+  }
+
+  /* Botón añadir opción - fijo a la derecha, estilo original */
+  .add-option-btn {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    border-radius: 8px !important;
+    background: #2a2c31 !important;
+    border: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: 2.5px solid #8b5cf6;
+    color: white !important;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    z-index: 10;
+  }
+
+  .add-option-btn:hover {
+    transform: translateY(-50%) scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .add-option-btn:active {
+    transform: translateY(-50%) scale(0.95) !important;
+  }
+
+  .add-option-btn :global(svg) {
+    color: white !important;
+    width: 22px !important;
+    height: 22px !important;
   }
 
   /* Hide scrollbar for Chrome, Safari and Opera */
