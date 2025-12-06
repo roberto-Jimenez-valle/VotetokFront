@@ -1644,42 +1644,17 @@
       : activePoll;
     const isMultiplePoll = poll?.pollType === 'multiple' || poll?.type === 'multiple';
 
-    // Manejar votos múltiples vs únicos
-    if (isMultiplePoll) {
-      // ENCUESTA MÚLTIPLE: usar array de votos
-      const currentVotes = Array.isArray(userVotes[votePollId]) 
-        ? userVotes[votePollId] 
-        : userVotes[votePollId] ? [userVotes[votePollId]] : [];
-      
-      if (currentVotes.includes(optionKey)) {
-        // Ya votó esta opción, quitarla
-        const newVotes = currentVotes.filter((v: string) => v !== optionKey);
-        if (newVotes.length === 0) {
-          // Si no quedan votos, eliminar la entrada
-          const { [votePollId]: _, ...rest } = userVotes;
-          userVotes = rest;
-        } else {
-          userVotes = { ...userVotes, [votePollId]: newVotes };
-        }
-        // También enviar al backend para quitar el voto
-        await sendVoteToBackend(optionKey, pollId, true); // true = remove
-        return;
-      } else {
-        // Agregar nuevo voto
-        userVotes = { ...userVotes, [votePollId]: [...currentVotes, optionKey] };
-      }
-    } else {
-      // ENCUESTA SIMPLE: comportamiento original
-      // Si ya votó por esta misma opción, desmarcar el voto
-      if (userVotes[votePollId] === optionKey) {
-        // Llamar a clearUserVote que elimina del servidor Y del estado
-        await clearUserVote(votePollId);
-        return;
-      }
+    // Para encuestas SIMPLES: si ya votó por la misma opción, desmarcar
+    if (!isMultiplePoll && userVotes[votePollId] === optionKey) {
+      await clearUserVote(votePollId);
+      return;
+    }
 
-      // Registrar o cambiar el voto del usuario (forzar reactividad)
+    // Para encuestas simples: actualizar el estado local optimistamente
+    if (!isMultiplePoll) {
       userVotes = { ...userVotes, [votePollId]: optionKey };
     }
+    // Para múltiples: el backend maneja el toggle, actualizaremos después de la respuesta
 
     // Capturar posición del icono de votos
     if (voteIconElement) {
@@ -1820,16 +1795,38 @@
         subdivisionId,
       });
 
-            // Solo incrementar contador si es un voto NUEVO, no si es actualización
-      if (!result.isUpdate) {
-        if (poll.totalVotes !== undefined) {
-          poll.totalVotes++;
-                  }
-        if (option.votes !== undefined) {
-          option.votes++;
-                  }
+      const pollIdStr = poll.id.toString();
+      const isMultiple = poll.type === 'multiple' || poll.pollType === 'multiple';
+
+      // Actualizar estado local según tipo de encuesta y respuesta del backend
+      if (isMultiple) {
+        // Para múltiples: actualizar array basándose en la respuesta del backend
+        const currentVotes = Array.isArray(userVotes[pollIdStr]) 
+          ? [...userVotes[pollIdStr]]
+          : userVotes[pollIdStr] ? [userVotes[pollIdStr]] : [];
+        
+        if (result.action === 'removed') {
+          // Se eliminó el voto
+          const newVotes = currentVotes.filter((v: string) => String(v) !== String(optionKey));
+          if (newVotes.length === 0) {
+            const { [pollIdStr]: _, ...rest } = userVotes;
+            userVotes = rest;
+          } else {
+            userVotes = { ...userVotes, [pollIdStr]: newVotes };
+          }
+        } else {
+          // Se agregó el voto
+          if (!currentVotes.map(String).includes(String(optionKey))) {
+            userVotes = { ...userVotes, [pollIdStr]: [...currentVotes, optionKey] };
+          }
+        }
       } else {
-              }
+        // Para simples: actualizar string
+        userVotes = { ...userVotes, [pollIdStr]: optionKey };
+      }
+
+      // Forzar reactividad
+      userVotes = { ...userVotes };
 
       // Forzar reactividad para encuesta activa vs. adicionales
       if (poll === activePoll) {
@@ -1837,64 +1834,23 @@
       } else {
         additionalPolls = [...additionalPolls];
       }
-
-      // Actualizar estado local de votos
-      userVotes[poll.id.toString()] = optionKey;
-      userVotes = { ...userVotes }; // Forzar reactividad
     } catch (error) {
           }
   }
 
-  // Función para manejar votación múltiple
+  // Función para manejar votación múltiple - ahora vota directamente como PollMaximizedView
   async function handleMultipleVote(optionKey: string, pollId: string) {
     const poll =
       additionalPolls.find((p) => p.id.toString() === pollId) ||
       (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
 
     if (!poll || poll.type !== "multiple") {
-            return;
+      return;
     }
 
-        // Verificar si ya se confirmaron votos anteriormente
-    const hasConfirmedVotes = userVotes[pollId];
-
-    if (hasConfirmedVotes) {
-      // Si ya hay votos confirmados, desvotar del servidor
-            await clearUserVote(pollId);
-
-      // Limpiar también las selecciones pendientes
-      multipleVotes = { ...multipleVotes, [pollId]: [] };
-
-      // Forzar reactividad
-      if (poll === activePoll) {
-        activePoll = { ...activePoll };
-      } else {
-        additionalPolls = [...additionalPolls];
-      }
-
-            return;
-    }
-
-    // Si no hay votos confirmados, alternar selección local
-    if (!multipleVotes[pollId]) {
-      multipleVotes[pollId] = [];
-    }
-
-    const currentVotes = multipleVotes[pollId];
-    const index = currentVotes.indexOf(optionKey);
-
-    if (index > -1) {
-      // Quitar de selección pendiente
-      multipleVotes[pollId] = currentVotes.filter((k) => k !== optionKey);
-          } else {
-      // Añadir a selección pendiente
-      multipleVotes[pollId] = [...currentVotes, optionKey];
-          }
-
-    // Forzar reactividad
-    multipleVotes = { ...multipleVotes };
-
-      }
+    // Votar directamente en la API (toggle on/off)
+    await handleVote(optionKey, pollId);
+  }
 
   // Función para confirmar votos múltiples
   async function confirmMultipleVotes(pollId: string) {

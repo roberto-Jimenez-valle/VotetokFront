@@ -520,7 +520,25 @@
   $: isSingleOptionPoll = sortedPollOptions.length === 1;
   $: isExpired = poll.closedAt ? isPollExpired(poll.closedAt) : false;
   $: pollVotedOption = displayVotes[poll.id] || userVotes[poll.id];
-  $: votedOptionData = pollVotedOption ? poll.options.find((o: any) => o.key === pollVotedOption) : null;
+  // pollVotedOption puede ser string o array - normalizar para comparaciones
+  $: hasVotedAnyOption = Array.isArray(pollVotedOption) ? pollVotedOption.length > 0 : !!pollVotedOption;
+  $: votedOptionData = hasVotedAnyOption 
+    ? poll.options.find((o: any) => 
+        Array.isArray(pollVotedOption) 
+          ? pollVotedOption.map(String).includes(String(o.key))
+          : String(o.key) === String(pollVotedOption)
+      ) 
+    : null;
+  // Variables para el botón de votación estilo PollMaximizedView
+  $: votedOptionsCount = Array.isArray(pollVotedOption) ? pollVotedOption.length : (pollVotedOption ? 1 : 0);
+  $: activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
+  $: currentOptionVoted = activeOption 
+    ? (Array.isArray(pollVotedOption) 
+        ? pollVotedOption.map(String).includes(String(activeOption.key))
+        : String(pollVotedOption) === String(activeOption.key))
+    : false;
+  $: currentOptionColor = currentOptionVoted && activeOption ? activeOption.color : '#555';
+  $: voteColor = votedOptionData?.color || '#10b981';
   
   // Event handlers
   function handleSetActive(index: number) {
@@ -875,11 +893,12 @@
         <div class="options-indicators">
           {#each sortedPollOptions as opt, idx}
             {@const isCurrentOption = idx === activeAccordionIndex}
+            {@const userVoteVal = displayVotes[poll.id] || userVotes[poll.id]}
             {@const isPollVoted = poll.type === 'multiple'
               ? (multipleVotes[poll.id]?.includes(opt.key) || 
-                 (displayVotes[poll.id] || userVotes[poll.id])?.split(',').includes(opt.key))
-              : (displayVotes[poll.id] || userVotes[poll.id]) === opt.key}
-            {@const hasVotedAny = !!(displayVotes[poll.id] || userVotes[poll.id])}
+                 (Array.isArray(userVoteVal) ? userVoteVal.map(String).includes(String(opt.key)) : String(userVoteVal)?.split(',').map(s => s.trim()).includes(String(opt.key))))
+              : String(userVoteVal) === String(opt.key)}
+            {@const hasVotedAny = Array.isArray(userVoteVal) ? userVoteVal.length > 0 : !!userVoteVal}
             {@const totalVotes = sortedPollOptions.reduce((sum: number, o: any) => sum + (o.votes || 0), 0)}
             {@const flexWeight = hasVotedAny 
               ? Math.max(opt.votes || 0, totalVotes * 0.02) 
@@ -1390,19 +1409,22 @@
           {:else}
             <!-- Layout usando PollOptionCard unificado -->
             {@const friendsForOption = (poll.friendsByOption?.[option.key] || []).filter((friend: any) => friend.id !== poll.user?.id)}
-            {@const userHasVoted = !!(displayVotes[poll.id] || userVotes[poll.id])}
+            {@const userHasVoted = hasVotedAnyOption}
+            {@const isThisOptionVoted = Array.isArray(pollVotedOption) 
+              ? pollVotedOption.map(String).includes(String(option.key))
+              : String(pollVotedOption) === String(option.key)}
             
             <PollOptionCard
               label={option.label}
               color={option.color}
               imageUrl={option.imageUrl}
               percentage={displayPct}
-              isVoted={pollVotedOption === option.key}
+              isVoted={isThisOptionVoted}
               mode="view"
               isActive={activeAccordionIndex === index}
               friends={friendsForOption}
               userHasVoted={userHasVoted}
-              showPercentageLabel={!!pollVotedOption}
+              showPercentageLabel={hasVotedAnyOption}
               onFriendsClick={() => { showFriendsVotesModal = true; }}
               isClickable={false}
               compact={activeAccordionIndex !== index}
@@ -1444,28 +1466,6 @@
   <div class="bottom-controls-container">
     <!-- Lado derecho: Botones de acción -->
     <div class="bottom-controls-right">
-      <!-- Botón confirmar votos múltiples -->
-      {#if poll.type === 'multiple'}
-        {@const selectedCount = multipleVotes[poll.id]?.length || 0}
-        {@const hasVoted = !!userVotes[poll.id]}
-        {@const hasNewSelections = selectedCount > 0}
-        {@const shouldActivate = hasNewSelections && (!hasVoted || selectedCount > 0)}
-        <button
-          class="confirm-multiple-btn-compact {shouldActivate ? 'has-selection' : ''} {hasVoted && !hasNewSelections ? 'voted-state' : ''} {isExpired ? 'disabled' : ''}"
-          onclick={handleConfirmMultiple}
-          disabled={selectedCount === 0 || isExpired}
-          type="button"
-          title="{selectedCount === 0 ? 'Selecciona opciones' : `Confirmar ${selectedCount} ${selectedCount === 1 ? 'voto' : 'votos'}`}"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M20 6L9 17l-5-5"/>
-          </svg>
-          {#if selectedCount > 0}
-            <span class="count-badge">{selectedCount}</span>
-          {/if}
-        </button>
-      {/if}
-      
       <!-- Botón añadir opción (colaborativas) -->
       {#if poll.type === 'collaborative' && poll.options.length < 10 && !poll.options.some((opt: any) => opt.isEditing)}
         <button
@@ -1517,15 +1517,15 @@
               e.stopPropagation();
               isMoreMenuOpen = false;
               const activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
-              if (pollVotedOption) {
+              if (hasVotedAnyOption) {
                 dispatch('clearVote', { pollId: poll.id });
               } else if (activeOption) {
                 dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
               }
             }}
           >
-            <div class="mini-bottom-sheet-icon" style="background-color: {pollVotedOption && votedOptionData ? `${votedOptionData.color}33` : 'rgba(255, 255, 255, 0.1)'}">
-              {#if pollVotedOption}
+            <div class="mini-bottom-sheet-icon" style="background-color: {hasVotedAnyOption && votedOptionData ? `${votedOptionData.color}33` : 'rgba(255, 255, 255, 0.1)'}">
+              {#if hasVotedAnyOption}
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="{votedOptionData?.color || '#10b981'}" stroke="{votedOptionData?.color || '#10b981'}" stroke-width="2">
                   <path d="M9 11l3 3L22 4"/>
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
@@ -1537,7 +1537,7 @@
               {/if}
             </div>
             <div class="mini-bottom-sheet-text">
-              <span style="color: {pollVotedOption && votedOptionData ? votedOptionData.color : 'inherit'}">{pollVotedOption ? 'Votado' : 'Votar'}</span>
+              <span style="color: {hasVotedAnyOption && votedOptionData ? votedOptionData.color : 'inherit'}">{hasVotedAnyOption ? 'Votado' : 'Votar'}</span>
               <p>{formatCount(poll.stats?.totalVotes || poll.totalVotes)} votos</p>
             </div>
           </button>
@@ -1712,44 +1712,64 @@
     <div class="mini-control-bar-new">
       <!-- Zona fija: Vote, Comments -->
       <div class="mini-fixed-actions">
-        <!-- Votar -->
-        <button 
-          bind:this={voteIconElement}
-          class="mini-action-btn {pollVotedOption ? 'voted' : ''}"
-          type="button"
-          title={pollVotedOption ? 'Quitar voto' : 'Votar'}
-          aria-label="Votar"
-          style="{pollVotedOption && votedOptionData ? `--vote-color: ${votedOptionData.color};` : ''}"
-          onclick={(e) => {
-            e.stopPropagation();
-            const activeOption = activeAccordionIndex !== null ? paginatedPoll.items[activeAccordionIndex] : null;
-            if (pollVotedOption) {
-              voteRemovalColor = votedOptionData?.color || '#ef4444';
-              showVoteRemoval = true;
-              if (voteRemovalTimeout) clearTimeout(voteRemovalTimeout);
-              voteRemovalTimeout = setTimeout(() => showVoteRemoval = false, 800);
-              dispatch('clearVote', { pollId: poll.id });
-            } else if (activeOption) {
-              voteConfirmationColor = activeOption.color;
-              showVoteConfirmation = true;
-              if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
-              voteConfirmationTimeout = setTimeout(() => showVoteConfirmation = false, 800);
-              dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
-            }
-          }}
-        >
-          {#if pollVotedOption}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" class="mini-icon-voted">
-              <path d="M9 11l3 3L22 4"/>
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-            </svg>
-          {:else}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-            </svg>
+        <!-- Votar (estilo PollMaximizedView) -->
+        <div class="vote-btn-wrapper">
+          {#if hasVotedAnyOption}
+            <button 
+              class="vote-remove-badge"
+              style="background-color: {voteColor}"
+              onclick={(e) => {
+                e.stopPropagation();
+                // Quitar todos los votos
+                dispatch('clearVote', { pollId: poll.id });
+              }}
+              aria-label="Eliminar votos"
+            >
+              <span class="vote-remove-count">{votedOptionsCount}</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
           {/if}
-          <span class="mini-action-count {pollVotedOption ? 'voted' : ''}">{formatCount(poll.stats?.totalVotes || poll.totalVotes)}</span>
-        </button>
+          <button 
+            bind:this={voteIconElement}
+            class="mini-action-btn"
+            type="button"
+            title={currentOptionVoted ? 'Cambiar voto' : 'Votar'}
+            aria-label="Votar"
+            onclick={(e) => {
+              e.stopPropagation();
+              if (activeOption) {
+                voteConfirmationColor = activeOption.color;
+                showVoteConfirmation = true;
+                if (voteConfirmationTimeout) clearTimeout(voteConfirmationTimeout);
+                voteConfirmationTimeout = setTimeout(() => showVoteConfirmation = false, 800);
+                dispatch('optionClick', { event: e, optionKey: activeOption.key, pollId: poll.id, optionColor: activeOption.color });
+              }
+            }}
+          >
+            {#if currentOptionVoted}
+              <div class="vote-icon-voted-container {poll.type === 'multiple' ? 'is-multiple' : ''}" style="background-color: {currentOptionColor}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" class="vote-check-icon">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+            {:else}
+              <div class="vote-icon-empty-container {poll.type === 'multiple' ? 'is-multiple' : ''}">
+                {#if poll.type === 'multiple'}
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  </svg>
+                {:else}
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="10"/>
+                  </svg>
+                {/if}
+              </div>
+            {/if}
+            <span class="mini-action-count {currentOptionVoted ? 'voted' : ''}" style="{currentOptionVoted ? `color: ${currentOptionColor}` : ''}">{formatCount(poll.stats?.totalVotes || poll.totalVotes)}</span>
+          </button>
+        </div>
 
         <!-- Comentarios -->
         <button class="mini-action-btn" type="button" title="Comentarios" aria-label="Comentarios">
@@ -1779,7 +1799,7 @@
           </button>
 
           <!-- Globo y Estadísticas - Solo si ha votado (ANTES de Share) -->
-          {#if pollVotedOption}
+          {#if hasVotedAnyOption}
             <button 
               class="mini-action-btn"
               type="button"
@@ -1941,6 +1961,94 @@
 />
 
 <style>
+  /* Estilos de botón de votación estilo PollMaximizedView */
+  .vote-btn-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .vote-remove-badge {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 2px 5px;
+    background: rgba(50, 50, 50, 0.95);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 10;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    transition: all 0.15s ease;
+  }
+
+  .vote-remove-badge:hover {
+    background: rgba(70, 70, 70, 0.95);
+    transform: scale(1.1);
+  }
+
+  .vote-remove-badge:active {
+    transform: scale(0.9);
+  }
+
+  .vote-remove-count {
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .vote-icon-empty-container {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(45, 45, 45, 0.95);
+    border: 2px solid rgba(70, 70, 70, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .vote-icon-empty-container.is-multiple {
+    border-radius: 8px;
+  }
+
+  .vote-icon-empty-container svg {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .vote-icon-voted-container {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  }
+
+  .vote-icon-voted-container.is-multiple {
+    border-radius: 8px;
+  }
+
+  .vote-check-icon {
+    color: white;
+    position: absolute;
+    top: 48%;
+    left: 52%;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(1px 1px 1px rgba(0, 0, 0, 0.15));
+  }
+
   /* Botón confirmar votos múltiples - Versión compacta */
   .confirm-multiple-btn-compact {
     width: 36px;
