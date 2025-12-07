@@ -16,6 +16,7 @@
   let PollMaximizedView = $state<any>(null);
   // Componente para edición maximizada
   import PollMaximizedEdit from '$lib/components/PollMaximizedEdit.svelte';
+  import PollCreationTutorial from '$lib/components/PollCreationTutorial.svelte';
   import { giphyGifUrl } from '$lib/services/giphy';
   import { 
     extractUrls, 
@@ -135,6 +136,12 @@
   
   // Estado del tooltip de formato
   let showFormatTooltip = $state(false);
+  
+  // Estado del tutorial
+  let showTutorial = $state(false);
+  
+  // Mensaje de error al intentar eliminar opciones
+  let deleteOptionError = $state('');
   let formatEditorContent = $state('');
   
   // DEBUG: Monitorear el estado de currentUser
@@ -351,13 +358,22 @@
   
   // Eliminar opción
   function removeOption(id: string) {
-    if (options.length <= 1) return;
+    // Verificar si es la última opción
+    if (options.length <= 2) {
+      deleteOptionError = 'Debe existir al menos 2 opciones para la encuesta';
+      // Ocultar el mensaje después de 3 segundos
+      setTimeout(() => {
+        deleteOptionError = '';
+      }, 3000);
+      return;
+    }
     
     const optionIndex = options.findIndex(opt => opt.id === id);
     if (optionIndex === -1) return;
     
     // Eliminar la opción
     options = options.filter(opt => opt.id !== id);
+    deleteOptionError = ''; // Limpiar cualquier error previo
     
     // Ajustar el índice activo si es necesario
     if (activeAccordionIndex !== null && activeAccordionIndex >= options.length) {
@@ -1514,7 +1530,7 @@
           <X class="w-5 h-5" />
         </button>
         
-        <h2 id="modal-title">Nueva encuesta</h2>
+<h2 id="modal-title">Nueva encuesta</h2>
         
         <button
           class="publish-btn"
@@ -1619,6 +1635,19 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
+                <button
+                  class="info-btn tutorial-btn"
+                  onclick={() => showTutorial = true}
+                  title="Ver tutorial"
+                  aria-label="Ver tutorial de cómo crear encuestas"
+                  type="button"
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -1705,6 +1734,16 @@
           {/each}
         </div>
         
+        <!-- Mensaje de error al eliminar opciones -->
+        {#if deleteOptionError}
+          <div class="delete-option-error" transition:fly={{ y: -10, duration: 200 }}>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>{deleteOptionError}</span>
+          </div>
+        {/if}
+        
         <!-- Scroll horizontal de opciones (estilo SinglePollSection) -->
         <div class="vote-cards-container {maximizedOption ? 'maximized' : ''}">
             <div 
@@ -1745,7 +1784,7 @@
                     mode="edit"
                     isActive={activeAccordionIndex === index}
                     optionIndex={index}
-                    showRemoveOption={index > 0}
+                    showRemoveOption={true}
                     onLabelChange={(newLabel) => {
                       option.label = newLabel;
                       options = [...options];
@@ -2385,6 +2424,9 @@
 
 <!-- Modal de Autenticación -->
 <AuthModal bind:isOpen={showAuthModal} on:login={handleAuthComplete} />
+
+<!-- Tutorial de creación de encuestas -->
+<PollCreationTutorial bind:isOpen={showTutorial} />
 
 <!-- Buscador de GIFs de Giphy -->
 {#if showGiphyPicker}
@@ -3365,6 +3407,27 @@
   
   .option-indicator.active {
     height: 5px;
+  }
+  
+  /* Mensaje de error al eliminar opciones */
+  .delete-option-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    margin: 0 16px 8px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 10px;
+    color: #f87171;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  
+  .delete-option-error svg {
+    flex-shrink: 0;
+    color: #ef4444;
   }
   
   .option-slide .card-header,
@@ -4618,6 +4681,9 @@
     flex-shrink: 0;
     align-self: flex-start;
     margin-top: 0.25rem;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
   }
   
   .info-btn {
@@ -4631,12 +4697,32 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 40px;
+    height: 40px;
+  }
+  
+  .info-btn :global(svg),
+  .info-btn svg {
+    width: 20px !important;
+    height: 20px !important;
   }
   
   .info-btn:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.25);
     color: rgba(255, 255, 255, 0.95);
+  }
+  
+  .info-btn.tutorial-btn {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #a78bfa;
+  }
+  
+  .info-btn.tutorial-btn:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #c4b5fd;
   }
   
   .format-tooltip-overlay {
