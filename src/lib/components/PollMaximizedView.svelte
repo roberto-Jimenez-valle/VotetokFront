@@ -365,15 +365,33 @@
   // Debug: verificar friendsByOption
   $effect(() => {
     console.log('[PollMaximizedView] friendsByOption:', friendsByOption);
-    console.log('[PollMaximizedView] options IDs:', options.map(o => o.id));
+    console.log('[PollMaximizedView] options:', options.map(o => ({ id: o.id, key: o.key, optionKey: o.optionKey })));
     console.log('[PollMaximizedView] friendsByOption keys:', Object.keys(friendsByOption || {}));
   });
 
   // Helper para obtener amigos de una opción (busca por múltiples claves)
-  function getFriendsForOption(optId: string): Friend[] {
+  function getFriendsForOption(opt: PollOption): Friend[] {
     if (!friendsByOption) return [];
-    // Intentar diferentes claves posibles
-    return friendsByOption[optId] || friendsByOption[`opt_${optId}`] || [];
+    
+    // Intentar diferentes claves posibles basadas en los campos de la opción
+    const idStr = opt.id != null ? String(opt.id) : null;
+    const possibleKeys = [
+      idStr,
+      opt.key,
+      opt.optionKey,
+      idStr ? `opt_${idStr}` : null,
+      idStr?.replace('opt_', ''),
+      opt.key ? String(opt.key) : null,
+    ].filter(Boolean) as string[];
+    
+    for (const key of possibleKeys) {
+      if (friendsByOption[key] && friendsByOption[key].length > 0) {
+        console.log(`[getFriendsForOption] Found friends for option using key ${key}:`, friendsByOption[key]);
+        return friendsByOption[key];
+      }
+    }
+    
+    return [];
   }
   
   // Verificar si hay amigos en total
@@ -1094,7 +1112,7 @@
                         
                         <!-- Avatares de amigos -->
                         <div class="card-avatars-group">
-                          {#if getFriendsForOption(opt.id).length > 0}
+                          {#if getFriendsForOption(opt).length > 0}
                             <button 
                               class="friends-avatars-stack"
                               onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
@@ -1102,7 +1120,7 @@
                               type="button"
                               aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
                             >
-                              {#each getFriendsForOption(opt.id).slice(0, 3) as friend, idx}
+                              {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
                                 {#if hasVoted}
                                   <img 
                                     class="friend-avatar-stacked" 
@@ -1116,8 +1134,8 @@
                                   </div>
                                 {/if}
                               {/each}
-                              {#if getFriendsForOption(opt.id).length > 3}
-                                <span class="friends-more-count">+{getFriendsForOption(opt.id).length - 3}</span>
+                              {#if getFriendsForOption(opt).length > 3}
+                                <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
                               {/if}
                             </button>
                           {/if}
@@ -1171,7 +1189,7 @@
                           
                           <!-- Avatares de amigos -->
                           <div class="card-avatars-group">
-                            {#if getFriendsForOption(opt.id).length > 0}
+                            {#if getFriendsForOption(opt).length > 0}
                               <button 
                                 class="friends-avatars-stack"
                                 onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
@@ -1179,7 +1197,7 @@
                                 type="button"
                                 aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
                               >
-                                {#each getFriendsForOption(opt.id).slice(0, 3) as friend, idx}
+                                {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
                                   {#if hasVoted}
                                     <img 
                                       class="friend-avatar-stacked" 
@@ -1193,8 +1211,8 @@
                                     </div>
                                   {/if}
                                 {/each}
-                                {#if getFriendsForOption(opt.id).length > 3}
-                                  <span class="friends-more-count">+{getFriendsForOption(opt.id).length - 3}</span>
+                                {#if getFriendsForOption(opt).length > 3}
+                                  <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
                                 {/if}
                               </button>
                             {/if}
@@ -1260,7 +1278,7 @@
                           
                           <!-- Avatares de amigos -->
                           <div class="card-avatars-group">
-                            {#if getFriendsForOption(opt.id).length > 0}
+                            {#if getFriendsForOption(opt).length > 0}
                               <button 
                                 class="friends-avatars-stack"
                                 onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
@@ -1268,7 +1286,7 @@
                                 type="button"
                                 aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
                               >
-                                {#each getFriendsForOption(opt.id).slice(0, 3) as friend, idx}
+                                {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
                                   {#if hasVoted}
                                     <img 
                                       class="friend-avatar-stacked" 
@@ -1282,8 +1300,8 @@
                                     </div>
                                   {/if}
                                 {/each}
-                                {#if getFriendsForOption(opt.id).length > 3}
-                                  <span class="friends-more-count">+{getFriendsForOption(opt.id).length - 3}</span>
+                                {#if getFriendsForOption(opt).length > 3}
+                                  <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
                                 {/if}
                               </button>
                             {/if}

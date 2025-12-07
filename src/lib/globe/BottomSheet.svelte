@@ -2976,11 +2976,13 @@
           on:openPreviewModal={handleOpenPreviewModal}
           on:openMaximized={(e: any) => {
             const { pollId, optionIndex } = e.detail;
+            console.log('[BottomSheet] 🎯 openMaximized (activePoll) recibido:', { pollId, optionIndex, activePollId: activePoll?.id });
             const poll = activePoll?.id.toString() === pollId ? activePoll : null;
             if (poll && poll.options && poll.options[optionIndex]) {
               // Abrir el modal maximized con la opción específica
               const safeIndex = Math.min(Math.max(optionIndex, 0), poll.options.length - 1);
               const option = poll.options[safeIndex];
+              console.log('[BottomSheet] ✅ Abriendo modal (activePoll) con opción:', option.key, option.label);
               const customEvent = new CustomEvent('openPreviewModal', {
                 detail: { 
                   option: { key: option.key, label: option.label },
@@ -2988,6 +2990,8 @@
                 }
               });
               handleOpenPreviewModal(customEvent as any);
+            } else {
+              console.log('[BottomSheet] ❌ No se encontró activePoll o la opción');
             }
           }}
           on:openprofile={(event) => dispatch("openprofile", event.detail)}
@@ -3140,10 +3144,13 @@
           on:openPreviewModal={handleOpenPreviewModal}
           on:openMaximized={(e: any) => {
             const { pollId, optionIndex } = e.detail;
+            console.log('[BottomSheet] 🎯 openMaximized recibido:', { pollId, optionIndex, type: typeof pollId });
             const foundPoll = additionalPolls.find((p) => p.id.toString() === pollId);
+            console.log('[BottomSheet] 🔍 foundPoll:', foundPoll?.id, 'additionalPolls count:', additionalPolls.length);
             if (foundPoll && foundPoll.options && foundPoll.options[optionIndex]) {
               // Abrir el modal maximized con la opción específica
               const option = foundPoll.options[optionIndex];
+              console.log('[BottomSheet] ✅ Abriendo modal con opción:', option.key, option.label);
               const customEvent = new CustomEvent('openPreviewModal', {
                 detail: { 
                   option: { key: option.key, label: option.label },
@@ -3151,6 +3158,8 @@
                 }
               });
               handleOpenPreviewModal(customEvent as any);
+            } else {
+              console.log('[BottomSheet] ❌ No se encontró la encuesta o la opción');
             }
           }}
           bind:isProfileModalOpen

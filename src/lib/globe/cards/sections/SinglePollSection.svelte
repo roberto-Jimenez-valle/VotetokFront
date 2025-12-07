@@ -1123,8 +1123,9 @@
                 });
               } else if (clickCount === 1) {
                 // Single click → abrir maximized con esta opción
-                                dispatch('openMaximized', { 
-                  pollId: poll.id, 
+                console.log('[SinglePoll] 🎯 Single click - abriendo maximized para poll:', poll.id, 'opción:', index);
+                dispatch('openMaximized', { 
+                  pollId: poll.id.toString(), 
                   optionIndex: index 
                 });
               }
