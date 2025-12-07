@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Trash2, Sparkles, Play } from 'lucide-svelte';
+  import { X, Trash2, Sparkles, Play, CircleCheck } from 'lucide-svelte';
   import MediaEmbed from './MediaEmbed.svelte';
 
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -38,6 +38,16 @@
     onGiphyPickerOpen?: () => void;
     onRemoveMedia?: () => void;
     onRemoveOption?: () => void;
+    onToggleYesNo?: () => void;
+    onToggleCorrect?: (answer?: 'yes' | 'no') => void;
+    
+    // Estados de opción
+    isYesNo?: boolean;
+    isCorrect?: boolean;
+    yesText?: string;
+    noText?: string;
+    correctAnswer?: 'yes' | 'no';
+    onYesNoTextChange?: (yesText: string, noText: string) => void;
     
     // Callbacks para vista
     onFriendsClick?: () => void;
@@ -71,6 +81,14 @@
     onGiphyPickerOpen,
     onRemoveMedia,
     onRemoveOption,
+    onToggleYesNo,
+    onToggleCorrect,
+    isYesNo = false,
+    isCorrect = false,
+    yesText = '',
+    noText = '',
+    correctAnswer,
+    onYesNoTextChange,
     onFriendsClick,
     onClick,
     onDoubleClick,
@@ -334,8 +352,68 @@
           </h2>
         {/if}
         
+        {#if mode === 'edit'}
+          <!-- Contador encima de línea -->
+          <div class="char-counter-above">
+            <span>{label.length}/200</span>
+          </div>
+        {/if}
+        
         <!-- Línea divisoria -->
         <div class="card-divider-line"></div>
+        
+        <!-- Campos Sí/No -->
+        {#if mode === 'edit' && isYesNo}
+          <div class="yesno-row">
+            <button
+              type="button"
+              class="yesno-input yesno-yes"
+              class:correct={correctAnswer === 'yes'}
+              style="color: {color}"
+              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('yes'); }}
+            >
+              <CircleCheck size={18} class={correctAnswer === 'yes' ? 'correct-icon active' : 'correct-icon'} />
+              <input
+                type="text"
+                inputmode="text"
+                placeholder="👍 Sí"
+                value={yesText}
+                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(e.currentTarget.value, noText); }}
+                onclick={(e) => e.stopPropagation()}
+              />
+            </button>
+            <button
+              type="button"
+              class="yesno-input yesno-no"
+              class:correct={correctAnswer === 'no'}
+              style="color: {color}"
+              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('no'); }}
+            >
+              <CircleCheck size={18} class={correctAnswer === 'no' ? 'correct-icon active' : 'correct-icon'} />
+              <input
+                type="text"
+                inputmode="text"
+                placeholder="👎 No"
+                value={noText}
+                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(yesText, e.currentTarget.value); }}
+                onclick={(e) => e.stopPropagation()}
+              />
+            </button>
+          </div>
+        {/if}
+        
+        <!-- Mensaje de opción correcta -->
+        {#if mode === 'edit' && isYesNo && correctAnswer}
+          <div class="correct-answer-hint">
+            <CircleCheck size={10} />
+            <span>"{correctAnswer === 'yes' ? (yesText || 'Sí') : (noText || 'No')}" es correcta</span>
+          </div>
+        {:else if mode === 'edit' && !isYesNo && isCorrect}
+          <div class="correct-answer-hint">
+            <CircleCheck size={10} />
+            <span>Esta opción es correcta</span>
+          </div>
+        {/if}
         
         <!-- Footer - PORCENTAJE SOLO SI HA VOTADO -->
         <div class="card-bottom-row">
@@ -352,6 +430,22 @@
           
           {#if mode === 'edit'}
             <div class="edit-buttons">
+              <button type="button" class="edit-btn yesno-btn" class:active={isYesNo} onclick={(e) => { e.stopPropagation(); onToggleYesNo?.(); }} title="Sí/No" aria-label="Activar votación Sí/No">
+                <svg class="w-9 h-9" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="16" cy="16" r="16" fill="#808080"></circle>
+                  <circle cx="16" cy="16" r="14" fill="#333333"></circle>
+                  <path d="M 16 2 A 14 14 0 0 0 16 30 Z" fill="#EEEEEE"></path>
+                  <circle cx="16" cy="9" r="7" fill="#EEEEEE"></circle>
+                  <circle cx="16" cy="23" r="7" fill="#333333"></circle>
+                  <path d="M12 9 L15 12 L20 6" stroke="#333333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M13 20 L19 26 M19 20 L13 26" stroke="#EEEEEE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </button>
+              {#if !isYesNo}
+                <button type="button" class="edit-btn correct-btn" class:active={isCorrect} onclick={(e) => { e.stopPropagation(); onToggleCorrect?.(); }} title="Correcta" aria-label="Marcar como correcta">
+                  <CircleCheck class="w-4 h-4" />
+                </button>
+              {/if}
               <button type="button" class="edit-btn color-btn" style="background-color: {color}" onclick={(e) => { e.stopPropagation(); onColorPickerOpen?.(); }} title="Cambiar color" aria-label="Cambiar color">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
               </button>
@@ -472,6 +566,10 @@
             onclick={(e) => e.stopPropagation()}
             maxlength="200"
           ></textarea>
+          <!-- Contador debajo del textarea -->
+          <div class="char-counter-above">
+            <span>{label.length}/200</span>
+          </div>
         {:else}
           <h2 class="option-label-view">
             {displayLabel}
@@ -479,6 +577,59 @@
         {/if}
         
         <div class="divider-line"></div>
+        
+        <!-- Campos Sí/No -->
+        {#if mode === 'edit' && isYesNo}
+          <div class="yesno-row">
+            <button
+              type="button"
+              class="yesno-input yesno-yes"
+              class:correct={correctAnswer === 'yes'}
+              style="color: {color}"
+              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('yes'); }}
+            >
+              <CircleCheck size={18} class={correctAnswer === 'yes' ? 'correct-icon active' : 'correct-icon'} />
+              <input
+                type="text"
+                inputmode="text"
+                placeholder="👍 Sí"
+                value={yesText}
+                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(e.currentTarget.value, noText); }}
+                onclick={(e) => e.stopPropagation()}
+              />
+            </button>
+            <button
+              type="button"
+              class="yesno-input yesno-no"
+              class:correct={correctAnswer === 'no'}
+              style="color: {color}"
+              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('no'); }}
+            >
+              <CircleCheck size={18} class={correctAnswer === 'no' ? 'correct-icon active' : 'correct-icon'} />
+              <input
+                type="text"
+                inputmode="text"
+                placeholder="👎 No"
+                value={noText}
+                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(yesText, e.currentTarget.value); }}
+                onclick={(e) => e.stopPropagation()}
+              />
+            </button>
+          </div>
+        {/if}
+        
+        <!-- Mensaje de opción correcta -->
+        {#if mode === 'edit' && isYesNo && correctAnswer}
+          <div class="correct-answer-hint">
+            <CircleCheck size={10} />
+            <span>"{correctAnswer === 'yes' ? (yesText || 'Sí') : (noText || 'No')}" es correcta</span>
+          </div>
+        {:else if mode === 'edit' && !isYesNo && isCorrect}
+          <div class="correct-answer-hint">
+            <CircleCheck size={10} />
+            <span>Esta opción es correcta</span>
+          </div>
+        {/if}
         
         <div class="option-footer">
           {#if userHasVoted}
@@ -494,6 +645,22 @@
           
           {#if mode === 'edit'}
             <div class="edit-buttons">
+              <button type="button" class="edit-btn yesno-btn" class:active={isYesNo} onclick={(e) => { e.stopPropagation(); onToggleYesNo?.(); }} title="Sí/No" aria-label="Activar votación Sí/No">
+                <svg class="w-8 h-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="16" cy="16" r="16" fill="#808080"></circle>
+                  <circle cx="16" cy="16" r="14" fill="#333333"></circle>
+                  <path d="M 16 2 A 14 14 0 0 0 16 30 Z" fill="#EEEEEE"></path>
+                  <circle cx="16" cy="9" r="7" fill="#EEEEEE"></circle>
+                  <circle cx="16" cy="23" r="7" fill="#333333"></circle>
+                  <path d="M12 9 L15 12 L20 6" stroke="#333333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M13 20 L19 26 M19 20 L13 26" stroke="#EEEEEE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </button>
+              {#if !isYesNo}
+                <button type="button" class="edit-btn correct-btn" class:active={isCorrect} onclick={(e) => { e.stopPropagation(); onToggleCorrect?.(); }} title="Correcta" aria-label="Marcar como correcta">
+                  <CircleCheck class="w-4 h-4" />
+                </button>
+              {/if}
               <button type="button" class="edit-btn color-btn" style="background-color: {color}" onclick={(e) => { e.stopPropagation(); onColorPickerOpen?.(); }} title="Cambiar color" aria-label="Cambiar color">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
               </button>
@@ -545,6 +712,10 @@
             onclick={(e) => e.stopPropagation()}
             maxlength="200"
           ></textarea>
+          <!-- Contador debajo del textarea -->
+          <div class="char-counter-above">
+            <span>{label.length}/200</span>
+          </div>
         {:else}
           <h2 class="option-label-view">
             {displayLabel}
@@ -552,6 +723,59 @@
         {/if}
         
         <div class="card-divider-line"></div>
+        
+        <!-- Campos Sí/No -->
+        {#if mode === 'edit' && isYesNo}
+          <div class="yesno-row">
+            <button
+              type="button"
+              class="yesno-input yesno-yes"
+              class:correct={correctAnswer === 'yes'}
+              style="color: {color}"
+              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('yes'); }}
+            >
+              <CircleCheck size={18} class={correctAnswer === 'yes' ? 'correct-icon active' : 'correct-icon'} />
+              <input
+                type="text"
+                inputmode="text"
+                placeholder="👍 Sí"
+                value={yesText}
+                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(e.currentTarget.value, noText); }}
+                onclick={(e) => e.stopPropagation()}
+              />
+            </button>
+            <button
+              type="button"
+              class="yesno-input yesno-no"
+              class:correct={correctAnswer === 'no'}
+              style="color: {color}"
+              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('no'); }}
+            >
+              <CircleCheck size={18} class={correctAnswer === 'no' ? 'correct-icon active' : 'correct-icon'} />
+              <input
+                type="text"
+                inputmode="text"
+                placeholder="👎 No"
+                value={noText}
+                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(yesText, e.currentTarget.value); }}
+                onclick={(e) => e.stopPropagation()}
+              />
+            </button>
+          </div>
+        {/if}
+        
+        <!-- Mensaje de opción correcta -->
+        {#if mode === 'edit' && isYesNo && correctAnswer}
+          <div class="correct-answer-hint">
+            <CircleCheck size={10} />
+            <span>"{correctAnswer === 'yes' ? (yesText || 'Sí') : (noText || 'No')}" es correcta</span>
+          </div>
+        {:else if mode === 'edit' && !isYesNo && isCorrect}
+          <div class="correct-answer-hint">
+            <CircleCheck size={10} />
+            <span>Esta opción es correcta</span>
+          </div>
+        {/if}
         
         <div class="card-bottom-row">
           {#if userHasVoted}
@@ -567,6 +791,22 @@
           
           {#if mode === 'edit'}
             <div class="edit-buttons">
+              <button type="button" class="edit-btn yesno-btn" class:active={isYesNo} onclick={(e) => { e.stopPropagation(); onToggleYesNo?.(); }} title="Sí/No" aria-label="Activar votación Sí/No">
+                <svg class="w-8 h-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="16" cy="16" r="16" fill="#808080"></circle>
+                  <circle cx="16" cy="16" r="14" fill="#333333"></circle>
+                  <path d="M 16 2 A 14 14 0 0 0 16 30 Z" fill="#EEEEEE"></path>
+                  <circle cx="16" cy="9" r="7" fill="#EEEEEE"></circle>
+                  <circle cx="16" cy="23" r="7" fill="#333333"></circle>
+                  <path d="M12 9 L15 12 L20 6" stroke="#333333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M13 20 L19 26 M19 20 L13 26" stroke="#EEEEEE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </button>
+              {#if !isYesNo}
+                <button type="button" class="edit-btn correct-btn" class:active={isCorrect} onclick={(e) => { e.stopPropagation(); onToggleCorrect?.(); }} title="Correcta" aria-label="Marcar como correcta">
+                  <CircleCheck class="w-4 h-4" />
+                </button>
+              {/if}
               <button type="button" class="edit-btn color-btn" style="background-color: {color}" onclick={(e) => { e.stopPropagation(); onColorPickerOpen?.(); }} title="Cambiar color" aria-label="Cambiar color">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
               </button>
@@ -1097,10 +1337,15 @@
     transform: scale(1.1);
   }
   
-  /* Botones de edición */
+  /* Botones de edición - VERTICAL en esquina derecha */
   .edit-buttons {
+    position: absolute;
+    right: 16px;
+    bottom: 55px; /* Por encima de la línea divisoria */
     display: flex;
+    flex-direction: column;
     gap: 8px;
+    z-index: 10;
   }
   
   .edit-btn {
@@ -1109,6 +1354,7 @@
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.3);
     background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
     color: white;
     display: flex;
     align-items: center;
@@ -1125,6 +1371,156 @@
   .edit-btn.delete-btn:hover {
     background: rgba(220, 38, 38, 0.8);
     border-color: #dc2626;
+  }
+  
+  /* Botón Sí/No */
+  .edit-btn.yesno-btn {
+    border-color: rgba(255, 255, 255, 0.3);
+    padding: 4px;
+  }
+  
+  .edit-btn.yesno-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+  
+  .edit-btn.yesno-btn.active {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Botón Marcar Correcta */
+  .edit-btn.correct-btn {
+    border-color: rgba(34, 197, 94, 0.4);
+  }
+  
+  .edit-btn.correct-btn:hover {
+    background: rgba(34, 197, 94, 0.3);
+    border-color: rgba(34, 197, 94, 0.8);
+  }
+  
+  .edit-btn.correct-btn.active {
+    background: rgba(34, 197, 94, 0.6);
+    border-color: rgba(34, 197, 94, 1);
+    color: white;
+  }
+  
+  /* Contador de caracteres */
+  .char-counter-above {
+    display: flex;
+    justify-content: flex-start;
+    padding: 2px 6px 0;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  
+  /* Campos de Sí/No */
+  .yesno-row {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 8px;
+    box-sizing: border-box;
+  }
+  
+  .yesno-input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(0, 0, 0, 0.1);
+    background: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    transition: all 0.2s;
+    box-sizing: border-box;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    position: relative;
+  }
+  
+  .yesno-input input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    width: 100%;
+    cursor: text;
+  }
+  
+  .yesno-input input::placeholder {
+    color: rgba(0, 0, 0, 0.4);
+  }
+  
+  .yesno-input:hover {
+    border-color: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .yesno-input.correct {
+    border-color: #22c55e !important;
+    border-width: 2px;
+  }
+  
+  .yesno-input :global(.correct-icon) {
+    color: rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
+    transition: color 0.2s;
+  }
+  
+  .yesno-input :global(.correct-icon.active) {
+    color: #22c55e;
+  }
+  
+  .yesno-yes {
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+  
+  .yesno-yes:hover {
+    border-color: rgba(34, 197, 94, 0.5);
+  }
+  
+  .yesno-no {
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  
+  .yesno-no:hover {
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+  
+  /* Mensaje de opción correcta */
+  .correct-answer-hint {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    margin-top: 4px;
+    background: #22c55e;
+    border-radius: 12px;
+    color: white;
+    font-size: 9px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  .correct-answer-hint :global(svg) {
+    flex-shrink: 0;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   
   /* Avatares de amigos */

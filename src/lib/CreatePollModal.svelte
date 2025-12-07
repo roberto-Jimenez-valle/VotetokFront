@@ -95,6 +95,11 @@
     label: string;
     color: string;
     imageUrl?: string;
+    isYesNo?: boolean;
+    isCorrect?: boolean;
+    yesText?: string;
+    noText?: string;
+    correctAnswer?: 'yes' | 'no';
   };
   
   type PollType = 'single' | 'multiple' | 'rating' | 'reactions' | 'collaborative';
@@ -119,7 +124,7 @@
   let pollType = $state<PollType>('single');
   let hashtags = $state('');
   let location = $state('');
-  let duration = $state('7d'); // 1d, 3d, 7d, 30d, never
+  let duration = $state('never'); // 1d, 3d, 7d, 30d, never
   let editors = $state(''); // @usuario1, @usuario2...
   
   // Estado del modal de autenticación
@@ -156,8 +161,6 @@
   const POLL_TYPES = [
     { id: 'single', label: 'Única', icon: 'circle' },
     { id: 'multiple', label: 'Múltiple', icon: 'check-square' },
-    { id: 'rating', label: 'Rating', icon: 'star' },
-    { id: 'reactions', label: 'Reacciones', icon: 'smile' },
     { id: 'collaborative', label: 'Colaborativa', icon: 'users' }
   ] as const;
   
@@ -1620,6 +1623,29 @@
             </div>
           </div>
           
+          <!-- Info de opciones y tiempo debajo del título -->
+          {#if title.length > 0 || options.some(o => o.label.trim())}
+            <div class="poll-meta-compact">
+              <div class="meta-item-compact">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <span>{options.filter(o => o.label.trim()).length || options.length} opciones</span>
+              </div>
+              <span class="meta-sep">•</span>
+              <div class="meta-item-compact meta-duration">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <select class="duration-select-compact" bind:value={duration}>
+                  {#each DURATIONS as dur}
+                    <option value={dur.value}>{dur.label}</option>
+                  {/each}
+                </select>
+              </div>
+            </div>
+          {/if}
+          
           <!-- Preview multimedia del título principal -->
           {#if detectedTitlePreview || extractUrlFromText(title) || imageUrl}
             {@const detectedMainUrl = extractUrlFromText(title)}
@@ -1739,6 +1765,30 @@
                       options = [...options];
                     }}
                     onRemoveOption={() => { removeOption(option.id); }}
+                    isYesNo={option.isYesNo || false}
+                    isCorrect={option.isCorrect || false}
+                    yesText={option.yesText || ''}
+                    noText={option.noText || ''}
+                    correctAnswer={option.correctAnswer}
+                    onToggleYesNo={() => {
+                      option.isYesNo = !option.isYesNo;
+                      if (option.isYesNo && !option.yesText) option.yesText = '';
+                      if (option.isYesNo && !option.noText) option.noText = '';
+                      options = [...options];
+                    }}
+                    onToggleCorrect={(answer) => {
+                      if (answer) {
+                        option.correctAnswer = option.correctAnswer === answer ? undefined : answer;
+                      } else {
+                        option.isCorrect = !option.isCorrect;
+                      }
+                      options = [...options];
+                    }}
+                    onYesNoTextChange={(yesText, noText) => {
+                      option.yesText = yesText;
+                      option.noText = noText;
+                      options = [...options];
+                    }}
                   />
                 </div>
               {/each}
@@ -1750,6 +1800,34 @@
         <!-- Contenedor para botones -->
         <div class="pagination-container">
           <div class="cards-actions">
+            <!-- Botones de tipo de votación a la izquierda -->
+            <div class="poll-types-inline">
+              {#each POLL_TYPES as type}
+                <button
+                  type="button"
+                  class="poll-type-btn-inline"
+                  class:active={pollType === type.id}
+                  onclick={() => { pollType = type.id; showTypeOptionsModal = true; }}
+                  aria-label="Tipo: {type.label}"
+                  title={type.label}
+                >
+                  {#if type.icon === 'circle'}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                    </svg>
+                  {:else if type.icon === 'check-square'}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2"/>
+                    </svg>
+                  {:else if type.icon === 'users'}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+            
             <!-- Botones alineados a la derecha -->
             <div class="action-buttons">
               <!-- Botón de animar cards -->
@@ -1807,77 +1885,6 @@
                 </button>
               {/if}
             </div>
-          </div>
-        </div>
-        
-        <!-- Info adicional -->
-        {#if title.length > 0 || options.some(o => o.label.trim())}
-          <div class="poll-info">
-            <div class="info-item">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <span>{options.filter(o => o.label.trim()).length} opciones</span>
-            </div>
-            <div class="info-item">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <select class="duration-select-inline" bind:value={duration}>
-                {#each DURATIONS as dur}
-                  <option value={dur.value}>{dur.label}</option>
-                {/each}
-              </select>
-            </div>
-          </div>
-        {/if}
-        
-        
-        <!-- Footer con tipos de encuesta -->
-        <div class="modal-footer">
-          <div class="footer-header">
-            <span class="footer-label">Tipo de votación:</span>
-            <span class="footer-selected">{POLL_TYPES.find(t => t.id === pollType)?.label}</span>
-          </div>
-          <div class="poll-types-grid">
-            {#each POLL_TYPES as type}
-              <button
-                type="button"
-                class="poll-type-btn"
-                class:active={pollType === type.id}
-                onclick={() => {
-                  pollType = type.id;
-                  showTypeOptionsModal = true;
-                }}
-                aria-label="Seleccionar tipo de encuesta: {type.label}"
-                aria-pressed={pollType === type.id}
-              >
-                {#if type.icon === 'circle'}
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" stroke-width="2"/>
-                  </svg>
-                {:else if type.icon === 'check-square'}
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2"/>
-                  </svg>
-                {:else if type.icon === 'star'}
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                  </svg>
-                {:else if type.icon === 'smile'}
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                {:else if type.icon === 'users'}
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                {/if}
-                {#if pollType === type.id}
-                  <div class="active-indicator" transition:fade={{ duration: 150 }}></div>
-                {/if}
-              </button>
-            {/each}
           </div>
         </div>
       </div>
@@ -2309,6 +2316,54 @@
     }}
     extractUrlFromText={extractUrlFromText}
     getLabelWithoutUrl={getLabelWithoutUrl}
+    pollType={pollType}
+    pollTypes={POLL_TYPES}
+    onChangePollType={(type: string) => { pollType = type as typeof pollType; }}
+    onOpenTypeOptionsModal={() => { showTypeOptionsModal = true; }}
+    onAddOption={addOption}
+    onAnimateCards={animateCardsWithGifs}
+    isAnimatingCards={isAnimatingCards}
+    canAddOption={options.length < 10}
+    canAnimateCards={options.some(opt => opt.label.trim() && !opt.imageUrl)}
+    totalOptions={options.length}
+    duration={duration}
+    onDurationChange={(value) => { duration = value; }}
+    onPublish={handleSubmit}
+    canPublish={!isSubmitting && title.trim().length > 0 && options.filter(o => o.label.trim()).length >= 2}
+    onYesNoTextChange={(optionId: string, yesText: string, noText: string) => {
+      const option = options.find(opt => opt.id === optionId);
+      if (option) {
+        option.yesText = yesText;
+        option.noText = noText;
+        options = [...options];
+      }
+    }}
+    onToggleYesNo={(optionId: string) => {
+      const optionIndex = options.findIndex(opt => opt.id === optionId);
+      if (optionIndex !== -1) {
+        const newOptions = [...options];
+        newOptions[optionIndex] = {
+          ...newOptions[optionIndex],
+          isYesNo: !newOptions[optionIndex].isYesNo,
+          yesText: newOptions[optionIndex].yesText || '',
+          noText: newOptions[optionIndex].noText || ''
+        };
+        options = newOptions;
+      }
+    }}
+    onToggleCorrect={(optionId: string, answer?: 'yes' | 'no') => {
+      const option = options.find(opt => opt.id === optionId);
+      if (option) {
+        if (answer) {
+          // Para Sí/No, toggle la respuesta correcta
+          option.correctAnswer = option.correctAnswer === answer ? undefined : answer;
+        } else {
+          // Para opción normal
+          option.isCorrect = !option.isCorrect;
+        }
+        options = [...options];
+      }
+    }}
   />
 {/if}
 
@@ -2575,14 +2630,13 @@
     font-family: inherit;
     letter-spacing: -0.02em;
     min-height: 42px;
-    max-height: 300px;
+    max-height: 4.2rem; /* 2 líneas con scroll */
     overflow-y: auto;
     overflow-wrap: break-word;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
     overscroll-behavior-y: contain;
     position: relative;
-    field-sizing: content;
   }
   
   .poll-title-input::-webkit-scrollbar {
@@ -2645,7 +2699,7 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
     gap: 12px;
-    height: 250px;
+    height: 320px;
     width: 100%;
     padding: 4px 12px;
   }
@@ -3858,9 +3912,43 @@
     display: flex;
     position: relative;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     padding: 0;
     min-height: 48px;
+    width: 100%;
+  }
+  
+  /* Botones de tipo de votación a la izquierda */
+  .poll-types-inline {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .poll-type-btn-inline {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(30, 30, 35, 0.8);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .poll-type-btn-inline:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+  
+  .poll-type-btn-inline.active {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: white;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
   }
   
   /* Botones de acción alineados a la derecha */
@@ -3868,8 +3956,6 @@
     display: flex;
     gap: 12px;
     align-items: center;
-    position: absolute;
-    right: 0;
   }
   
   
@@ -4037,6 +4123,51 @@
     flex-shrink: 0;
   }
   
+  /* Info compacta debajo del título */
+  .poll-meta-compact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0 8px;
+  }
+  
+  .meta-item-compact {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  
+  .meta-item-compact svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+  
+  .meta-sep {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+  }
+  
+  .duration-select-compact {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+  }
+  
+  .duration-select-compact:hover {
+    color: rgba(255, 255, 255, 0.8);
+  }
+  
+  .duration-select-compact option {
+    background: #1a1a2e;
+    color: white;
+  }
+  
   .error-banner {
     margin: 0 auto 1rem;
     max-width: 600px;
@@ -4136,7 +4267,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
-    z-index: 999998;
+    z-index: 2147483645;
     backdrop-filter: blur(8px);
   }
 
@@ -4164,7 +4295,7 @@
     right: 0;
     background: #0a0a0a;
     border-radius: 16px 16px 0 0;
-    z-index: 999999;
+    z-index: 2147483646;
     max-height: 70vh;
     display: flex;
     flex-direction: column;
