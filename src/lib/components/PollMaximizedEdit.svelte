@@ -1323,30 +1323,36 @@
   }
   
   .edit-btn.delete-btn {
-    background: rgba(239, 68, 68, 0.3);
-    border-color: rgba(239, 68, 68, 0.5);
+    background: #2a2c31;
+    border: none;
+    border-bottom: 3px solid #ef4444;
+  }
+  
+  .edit-btn.delete-btn :global(svg) {
+    color: #ef4444;
   }
   
   .edit-btn.delete-btn:hover {
-    background: rgba(239, 68, 68, 0.5);
-    border-color: rgba(239, 68, 68, 0.8);
+    background: #35373d;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
   }
   
   /* Botón Sí/No */
   .edit-btn.yesno-btn {
-    background: rgba(30, 30, 35, 0.8);
-    border-color: rgba(255, 255, 255, 0.3);
+    background: #2a2c31;
+    border: none;
+    border-bottom: 3px solid rgba(255, 255, 255, 0.4);
     padding: 6px;
   }
   
   .edit-btn.yesno-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.5);
+    background: #35373d;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
   }
   
   .edit-btn.yesno-btn.active {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.6);
+    background: #2a2c31;
+    border-bottom-color: rgba(255, 255, 255, 0.8);
     box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
   }
   
@@ -1502,13 +1508,17 @@
   .footer-btn.add-btn {
     width: 48px;
     height: 48px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    border-color: rgba(16, 185, 129, 0.5);
+    background: #2a2c31;
+    border: none;
+    border-bottom: 3px solid #10b981;
+  }
+  
+  .footer-btn.add-btn :global(svg) {
+    color: #10b981;
   }
   
   .footer-btn.add-btn:hover {
-    border-color: rgba(16, 185, 129, 0.8);
-    box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
   }
   
   @keyframes spin {

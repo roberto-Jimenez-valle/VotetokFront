@@ -21,6 +21,12 @@
   export let multipleVotes: Record<string, string[]> = {};
   export let OPTIONS_PER_PAGE: number = 4;
   
+  // Paleta de colores para nuevas opciones
+  const optionColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9', '#fd79a8', '#a29bfe', '#00b894', '#e17055'];
+  
+  // Color calculado para la nueva opción
+  $: newOptionColor = optionColors[(activePoll?.options?.length || 0) % optionColors.length];
+  
   // Vote effect state (passed from parent)
   export const voteEffectActive: boolean = false;
   export const voteEffectPollId: string | null = null;
@@ -299,11 +305,12 @@
       <button
         type="button"
         class="add-option-button-inline"
+        style="border-bottom-color: {newOptionColor};"
         onclick={handleAddOption}
         title="Añadir nueva opción"
         aria-label="Añadir nueva opción"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{newOptionColor}" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
@@ -348,6 +355,32 @@
 </div>
 
 <style>
+  /* Botón añadir opción inline */
+  .add-option-button-inline {
+    width: 44px;
+    height: 44px;
+    background: #2a2c31;
+    border: none;
+    border-bottom: 3px solid;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin: 8px auto;
+  }
+  
+  .add-option-button-inline:hover {
+    background: #35373d;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  .add-option-button-inline:active {
+    transform: scale(0.95);
+  }
+  
   /* Estilos para opciones de encuesta inline */
   .vote-card {
     position: relative;

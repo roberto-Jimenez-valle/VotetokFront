@@ -1792,7 +1792,7 @@
       {#if pollType === 'collaborative' && !isAddingOption}
         <button 
           class="add-option-btn"
-          style="border-bottom-color: {newOptionColor};"
+          style="border-bottom-color: {newOptionColor}; --icon-color: {newOptionColor};"
           onclick={(e) => { 
             e.stopPropagation(); 
             startAddingOption();
@@ -1800,7 +1800,7 @@
           aria-label="Añadir opción"
           title="Añadir nueva opción"
         >
-          <Plus size={22} strokeWidth={2.5} />
+          <Plus size={22} strokeWidth={2.5} style="color: {newOptionColor};" />
         </button>
       {/if}
     </div>
@@ -2354,7 +2354,6 @@
   }
 
   .add-option-btn :global(svg) {
-    color: white !important;
     width: 22px !important;
     height: 22px !important;
   }

@@ -20,6 +20,12 @@
   
   let expanded = $state(false);
   
+  // Paleta de colores para nuevas opciones
+  const optionColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9', '#fd79a8', '#a29bfe', '#00b894', '#e17055'];
+  
+  // Color calculado para la nueva opción
+  let newOptionColor = $derived(optionColors[(poll?.options?.length || 0) % optionColors.length]);
+  
   // Reset cuando poll cambia
   $effect(() => {
     if (!poll) {
@@ -172,11 +178,12 @@
         <button
           type="button"
           class="add-option-button"
+          style="border-bottom-color: {newOptionColor};"
           onclick={addNewOption}
           title="Añadir nueva opción"
         >
-          <Plus class="w-5 h-5" />
-          <span>Añadir opción</span>
+          <Plus class="w-5 h-5" style="color: {newOptionColor};" />
+          <span style="color: {newOptionColor};">Añadir opción</span>
         </button>
       {/if}
     </div>
@@ -421,10 +428,10 @@
   .add-option-button {
     width: 100%;
     padding: 14px 16px;
-    background: rgba(59, 130, 246, 0.15);
-    border: 1px dashed rgba(59, 130, 246, 0.4);
+    background: #2a2c31;
+    border: none;
+    border-bottom: 3px solid;
     border-radius: 12px;
-    color: rgba(59, 130, 246, 1);
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
@@ -437,9 +444,9 @@
   }
   
   .add-option-button:hover {
-    background: rgba(59, 130, 246, 0.25);
-    border-color: rgba(59, 130, 246, 0.6);
+    background: #35373d;
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
   
   .add-option-button:active {
