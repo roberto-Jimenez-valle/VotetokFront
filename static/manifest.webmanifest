@@ -22,7 +22,7 @@
       "purpose": "any"
     },
     {
-      "src": "/logo_min.png",
+      "src": "/logo_med.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
