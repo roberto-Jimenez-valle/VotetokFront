@@ -219,7 +219,7 @@
 				<img 
 					src="/logo.png" 
 					alt="VouTop" 
-					class="h-12 sm:h-16 md:h-18 w-auto"
+					class="h-12 sm:h-12 md:h-14 w-auto"
 				/>
 				<div id="theme-toggle-slot"></div>
 			</div>
