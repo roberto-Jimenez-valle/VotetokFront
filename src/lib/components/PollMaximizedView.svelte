@@ -606,6 +606,27 @@
     if (url.includes("bandcamp.com")) return "bandcamp";
     return "image";
   }
+  
+  // Detectar si debemos mostrar el enlace (cualquier URL válida excepto imágenes directas y GIFs)
+  function shouldShowLink(url: string | undefined): boolean {
+    if (!url) return false;
+    const lowerUrl = url.toLowerCase();
+    // Si es una imagen directa, no mostramos enlace
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(lowerUrl)) return false;
+    // Si es un GIF de GIPHY/Tenor, no mostramos enlace (ya tiene badge GIPHY)
+    if (lowerUrl.includes('giphy.com') || lowerUrl.includes('tenor.com')) return false;
+    // Para todo lo demás (YouTube, Twitter, enlaces genéricos, etc.) mostramos enlace
+    return true;
+  }
+  
+  // Obtener hostname de una URL
+  function getHostname(url: string): string {
+    try {
+      return new URL(url).hostname.replace('www.', '');
+    } catch {
+      return '';
+    }
+  }
 
   function getYoutubeId(url?: string): string {
     if (!url) return "";
@@ -1261,6 +1282,25 @@
                         <h2 class="{opt.label.length > 40 ? 'text-xl' : opt.label.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight card-bottom-label">
                           {opt.label}
                         </h2>
+                        
+                        <!-- Enlace debajo del texto para URLs con embed -->
+                        {#if shouldShowLink(opt.imageUrl)}
+                          <a 
+                            href={opt.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="link-below-text-max"
+                            onclick={(e) => e.stopPropagation()}
+                          >
+                            <img 
+                              src="https://www.google.com/s2/favicons?domain={getHostname(opt.imageUrl || '')}&sz=16" 
+                              alt="" 
+                              class="link-below-favicon-max"
+                            />
+                            <span class="link-below-domain-max">{getHostname(opt.imageUrl || '')}</span>
+                            <span class="link-below-arrow-max">↗</span>
+                          </a>
+                        {/if}
                         
                         <!-- Línea divisoria -->
                         <div class="card-divider-line"></div>
@@ -3326,10 +3366,39 @@
     height: 100% !important;
     object-fit: cover !important;
   }
+  
+  /* Forzar que las imágenes llenen todo el contenedor sin recorte extra */
+  .card-image-fullscreen :global(.image-with-link) {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .card-image-fullscreen :global(.image-container) {
+    flex: 1 !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+  
+  .card-image-fullscreen :global(.image-container img) {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: cover !important;
+  }
 
   /* Ocultar el contenido extra de MediaEmbed */
   .card-image-fullscreen :global(.linkedin-content),
-  .card-image-fullscreen :global(.mini-card-content) {
+  .card-image-fullscreen :global(.mini-card-content),
+  .card-image-fullscreen :global(.bottom-link-button),
+  .card-image-fullscreen :global(.compact-link-container),
+  .card-image-fullscreen :global(.error-link),
+  .card-image-fullscreen :global(.error-state) {
     display: none !important;
   }
 
@@ -3347,6 +3416,48 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     z-index: 50;
     pointer-events: none;
+  }
+
+  /* Enlace debajo del texto de la opción */
+  .link-below-text-max {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    width: fit-content;
+  }
+  
+  .link-below-text-max:hover {
+    background: rgba(255, 255, 255, 0.22);
+    color: white;
+  }
+  
+  .link-below-favicon-max {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  
+  .link-below-domain-max {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+  
+  .link-below-arrow-max {
+    font-size: 12px;
+    opacity: 0.7;
+    flex-shrink: 0;
   }
 
   /* Degradado inferior fuerte */

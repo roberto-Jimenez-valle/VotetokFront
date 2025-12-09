@@ -423,11 +423,16 @@
             }
             // Si no, usar metadatos para preview
             else {
-              // Usar placeholder si no hay imagen
-              const imageUrl = data.image || data.imageProxied;
-              const finalImage = imageUrl
-                ? getProxiedImageUrl(imageUrl)
-                : `https://placehold.co/400x250/1a1a2e/white?text=${encodeURIComponent(data.domain || new URL(url).hostname)}`;
+              // Usar imageProxied si está disponible (ya incluye &trusted=1 si viene de fuente confiable)
+              // Si no, usar image y generar proxy
+              let finalImage: string;
+              if (data.imageProxied) {
+                finalImage = data.imageProxied;
+              } else if (data.image) {
+                finalImage = getProxiedImageUrl(data.image);
+              } else {
+                finalImage = `https://placehold.co/400x250/1a1a2e/white?text=${encodeURIComponent(data.domain || new URL(url).hostname)}`;
+              }
 
               metadata = {
                 title: data.title || "Sin título",
@@ -691,45 +696,54 @@
       {@html processEmbedHTML(embedHTML)}
     </div>
   {:else if (embedType === "generic" || embedType === "opengraph" || embedType === "text" || embedType === "website") && metadata}
-    <div class="mini-card linkedin-card">
-      <div class="linkedin-image">
-        <img
-          src={metadata.image}
-          alt={metadata.title}
-          loading="lazy"
-          data-original-url={url}
-          onerror={(e) => {
-            const img = e.target as HTMLImageElement;
-            const fallbackUrl = "https://placehold.co/220x130/333/FFF?text=?";
-
-            // Extraer URL original si viene del proxy
-            let originalImageUrl = img.src;
-            if (img.src.includes("/api/media-proxy?url=")) {
-              try {
-                const proxyUrl = new URL(img.src, window.location.origin);
-                const urlParam = proxyUrl.searchParams.get("url");
-                if (urlParam) {
-                  originalImageUrl = decodeURIComponent(urlParam);
-                }
-              } catch (err) {
-                console.warn(
-                  "[MediaEmbed] No se pudo extraer URL original del proxy",
-                );
-              }
-            }
-
-            // Emitir evento antes de aplicar fallback
-            if (img.src !== fallbackUrl && !img.src.includes(fallbackUrl)) {
-              dispatch("imageerror", {
-                url: originalImageUrl, // URL original, no la del proxy
-                originalUrl: url,
-              });
-              img.src = fallbackUrl;
-            }
-          }}
-        />
+    {@const hasRealImage = metadata.image && !metadata.image.includes('placehold.co')}
+    
+    {#if hasRealImage}
+      <!-- Con imagen: mostrar imagen grande + enlace abajo -->
+      <div class="image-with-link">
+        <div class="image-container">
+          <img
+            src={metadata.image}
+            alt={metadata.title}
+            loading="lazy"
+            onerror={(e) => {
+              const img = e.target as HTMLImageElement;
+              img.style.display = 'none';
+            }}
+          />
+        </div>
+        <a 
+          href={metadata.url || url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          class="bottom-link-button"
+          onclick={(e) => e.stopPropagation()}
+        >
+          <span class="bottom-link-text">{metadata.title || new URL(metadata.url || url).hostname}</span>
+          <span class="bottom-link-arrow">↗</span>
+        </a>
       </div>
-    </div>
+    {:else}
+      <!-- Sin imagen: enlace compacto con icono de dominio -->
+      <div class="compact-link-container">
+        <a 
+          href={metadata.url || url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          class="compact-link-button"
+          onclick={(e) => e.stopPropagation()}
+        >
+          <img 
+            src="https://www.google.com/s2/favicons?domain={new URL(metadata.url || url).hostname}&sz=32" 
+            alt="" 
+            class="domain-favicon"
+            onerror={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/16x16/666/fff?text=🔗'; }}
+          />
+          <span class="compact-link-text">{metadata.title || new URL(metadata.url || url).hostname}</span>
+          <span class="compact-link-arrow">↗</span>
+        </a>
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -1050,5 +1064,170 @@
   .error-link:hover {
     background: rgba(100, 150, 255, 0.1);
     border-color: rgba(100, 150, 255, 0.6);
+  }
+
+  /* Card clickeable con overlay de enlace */
+  .clickable-card {
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .clickable-card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .clickable-card:hover .link-overlay {
+    opacity: 1;
+  }
+
+  .link-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 12px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+  }
+
+  .link-domain {
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .link-icon {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  /* Enlace compacto - modo minimalista */
+  .compact-link-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 50px;
+    height: auto;
+    background: rgba(30, 30, 40, 0.95);
+    padding: 12px;
+    box-sizing: border-box;
+  }
+
+  .compact-link-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(60, 60, 80, 0.8);
+    border: 1px solid rgba(100, 100, 140, 0.4);
+    border-radius: 20px;
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 11px;
+    transition: all 0.2s ease;
+    max-width: 90%;
+    cursor: pointer;
+  }
+
+  .compact-link-button:hover {
+    background: rgba(80, 80, 110, 0.9);
+    border-color: rgba(120, 120, 180, 0.6);
+    transform: translateY(-1px);
+  }
+
+  .compact-link-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .compact-link-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+  }
+
+  .compact-link-arrow {
+    font-size: 10px;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  /* Favicon del dominio en enlace compacto */
+  .domain-favicon {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* Imagen grande + enlace abajo */
+  .image-with-link {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: #000;
+  }
+
+  .image-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .image-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    max-height: calc(100% - 36px);
+  }
+
+  .bottom-link-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(30, 30, 50, 0.95);
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 11px;
+    border-top: 1px solid rgba(100, 100, 140, 0.3);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .bottom-link-button:hover {
+    background: rgba(50, 50, 80, 0.95);
+  }
+
+  .bottom-link-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 250px;
+  }
+
+  .bottom-link-arrow {
+    font-size: 12px;
+    opacity: 0.7;
   }
 </style>

@@ -8,6 +8,8 @@ import { apiGet } from '$lib/api/client';
 // Tipo de datos del preview
 export interface LinkPreviewData {
   url: string;
+  originalUrl?: string; // URL original antes de resolución
+  trustedSource?: string; // Fuente confiable (ej: 'search.app')
   title: string;
   description?: string;
   image?: string;
@@ -68,23 +70,76 @@ export function hasUrls(text: string): boolean {
 }
 
 /**
- * Obtiene el preview de un enlace
+ * Obtiene el preview de un enlace (con timeout de 15 segundos)
  */
 export async function fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
   try {
     console.log('[LinkPreview] 🔍 Fetching preview for:', url);
     
-    const response = await apiGet(`/api/link-preview?url=${encodeURIComponent(url)}`);
+    // Timeout de 15 segundos para evitar que se quede colgado
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.warn('[LinkPreview] ⏱️ Timeout después de 15 segundos');
+      controller.abort();
+    }, 15000);
     
-    if (response.success && response.data) {
-      return response.data;
+    try {
+      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          console.log('[LinkPreview] ✅ Preview obtenido:', result.data.domain, result.resolved ? '(resuelto)' : '');
+          return result.data;
+        }
+      }
+      
+      console.warn('[LinkPreview] ⚠️ No preview data returned');
+      return null;
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.warn('[LinkPreview] ⏱️ Request abortado por timeout');
+        // Retornar un preview mínimo para URLs que timeout
+        return createFallbackPreview(url);
+      }
+      throw fetchError;
     }
-    
-    console.warn('[LinkPreview] ⚠️ No preview data returned');
-    return null;
   } catch (error) {
     console.error('[LinkPreview] ❌ Error fetching preview:', error);
     return null;
+  }
+}
+
+/**
+ * Crea un preview mínimo para URLs que fallan
+ */
+function createFallbackPreview(url: string): LinkPreviewData {
+  try {
+    const urlObj = new URL(url);
+    return {
+      url: url,
+      title: urlObj.hostname,
+      description: 'Haz clic para ver el enlace',
+      domain: urlObj.hostname,
+      type: 'generic',
+      isSafe: true, // Asumir seguro si el usuario lo pegó
+      nsfwScore: 0
+    };
+  } catch {
+    return {
+      url: url,
+      title: 'Enlace',
+      description: 'Haz clic para ver',
+      domain: 'enlace',
+      type: 'generic',
+      isSafe: true,
+      nsfwScore: 0
+    };
   }
 }
 

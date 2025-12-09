@@ -20,9 +20,392 @@ const cache = new Map<string, {
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 const TIMEOUT = 8000; // 8 segundos
 const MAX_HTML_SIZE = 1024 * 1024; // 1MB para HTML
+const URL_RESOLVE_TIMEOUT = 5000; // 5 segundos para resolver URLs
+
+// Dominios conocidos que usan redirecciones (acortadores/tracking)
+const REDIRECT_DOMAINS = [
+  'search.app',        // Google Search shared links
+  'search.app.goo.gl',
+  'goo.gl',
+  'bit.ly',
+  'bitly.com',
+  't.co',
+  'tinyurl.com',
+  'ow.ly',
+  'is.gd',
+  'v.gd',
+  'buff.ly',
+  'adf.ly',
+  'j.mp',
+  'rb.gy',
+  'cutt.ly',
+  'shorturl.at',
+  'tiny.cc',
+  'shorte.st',
+  'lnk.to',
+  'linktr.ee',
+  'amzn.to',
+  'amzn.eu',
+  'youtu.be',
+  'vm.tiktok.com',
+  'fb.watch',
+  'fb.me',
+  'flic.kr',
+  'forms.gle',
+  'g.co',
+  'g.page',
+  'maps.app.goo.gl',
+  'apple.co',
+  'spoti.fi',
+  'open.spotify.com', // A veces redirige
+  'music.apple.com', // A veces redirige
+  'link.springer.com',
+  'doi.org',
+  'dlvr.it',
+  'shor.by',
+  'rebrand.ly',
+  'short.io',
+  'smarturl.it',
+]
+
+/**
+ * Verifica si un hostname necesita resolución de URL (es un acortador/tracker)
+ */
+function needsUrlResolution(hostname: string): boolean {
+  const normalizedHost = hostname.toLowerCase().replace(/^www\./, '');
+  
+  // Verificar contra lista de dominios conocidos
+  for (const domain of REDIRECT_DOMAINS) {
+    if (normalizedHost === domain || normalizedHost.endsWith('.' + domain)) {
+      return true;
+    }
+  }
+  
+  // Patrones adicionales que indican URLs de tracking/redirect
+  const trackingPatterns = [
+    /^l\./,           // l.instagram.com, l.facebook.com
+    /^lm\./,          // lm.facebook.com
+    /^out\./,         // out.reddit.com
+    /^click\./,       // click.mailchimp.com
+    /^links?\./,      // link.medium.com, links.example.com
+    /^redirect\./,    // redirect.example.com
+    /^go\./,          // go.example.com
+    /^r\./,           // r.example.com
+    /^u\./,           // u.example.com
+    /^track\./,       // track.example.com
+    /^trk\./,         // trk.example.com
+  ];
+  
+  for (const pattern of trackingPatterns) {
+    if (pattern.test(normalizedHost)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Resuelve una URL siguiendo todas las redirecciones (301, 302, 307, 308)
+ * Retorna la URL final canónica
+ */
+async function resolveUrl(url: string): Promise<{ finalUrl: string; redirectChain: string[]; status: number }> {
+  const redirectChain: string[] = [url];
+  let currentUrl = url;
+  let maxRedirects = 10; // Prevenir loops infinitos
+  let lastStatus = 200;
+  
+  console.log('[URL Resolver] 🔍 Iniciando resolución para:', url);
+  
+  while (maxRedirects > 0) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), URL_RESOLVE_TIMEOUT);
+    
+    try {
+      // Usar HEAD primero (más rápido), fallback a GET si HEAD no funciona
+      let response: Response;
+      
+      try {
+        response = await fetch(currentUrl, {
+          method: 'HEAD',
+          signal: controller.signal,
+          redirect: 'manual', // No seguir redirecciones automáticamente
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+          }
+        });
+      } catch (headError) {
+        // Algunos servidores no soportan HEAD, intentar con GET
+        console.log('[URL Resolver] HEAD falló, intentando GET...');
+        response = await fetch(currentUrl, {
+          method: 'GET',
+          signal: controller.signal,
+          redirect: 'manual',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          }
+        });
+      }
+      
+      clearTimeout(timeoutId);
+      lastStatus = response.status;
+      
+      // Verificar si es una redirección
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get('Location');
+        
+        if (!location) {
+          console.log('[URL Resolver] ⚠️ Redirección sin header Location');
+          break;
+        }
+        
+        // Resolver URL relativa a absoluta si es necesario
+        let nextUrl: string;
+        try {
+          nextUrl = new URL(location, currentUrl).href;
+        } catch {
+          console.log('[URL Resolver] ⚠️ URL de redirección inválida:', location);
+          break;
+        }
+        
+        // Limpiar parámetros de tracking comunes
+        nextUrl = cleanTrackingParams(nextUrl);
+        
+        console.log(`[URL Resolver] ↪️ ${response.status} → ${nextUrl}`);
+        
+        // Detectar loop
+        if (redirectChain.includes(nextUrl)) {
+          console.log('[URL Resolver] ⚠️ Loop detectado, terminando');
+          break;
+        }
+        
+        redirectChain.push(nextUrl);
+        currentUrl = nextUrl;
+        maxRedirects--;
+        continue;
+      }
+      
+      // También buscar meta refresh o JavaScript redirect en el HTML
+      if (response.status === 200) {
+        const contentType = response.headers.get('Content-Type') || '';
+        
+        // Solo para HTML, verificar meta refresh y JS redirects
+        if (contentType.includes('text/html')) {
+          // Para HEAD, necesitamos hacer GET para ver el contenido
+          const getController = new AbortController();
+          const getTimeoutId = setTimeout(() => getController.abort(), URL_RESOLVE_TIMEOUT);
+          
+          try {
+            const getResponse = await fetch(currentUrl, {
+              method: 'GET',
+              signal: getController.signal,
+              redirect: 'manual',
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              }
+            });
+            clearTimeout(getTimeoutId);
+            
+            if (getResponse.body) {
+              // Leer solo los primeros bytes para buscar redirects
+              const reader = getResponse.body.getReader();
+              const { value } = await reader.read();
+              reader.cancel();
+              
+              if (value) {
+                const partialHtml = new TextDecoder().decode(value.slice(0, 4000));
+                
+                // Buscar meta refresh
+                const metaRefresh = partialHtml.match(/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["']\d+;\s*url=([^"']+)["']/i) ||
+                                    partialHtml.match(/<meta[^>]+content=["']\d+;\s*url=([^"']+)["'][^>]+http-equiv=["']refresh["']/i);
+                
+                // Buscar JavaScript redirects (window.location, location.href, etc.)
+                const jsRedirect = partialHtml.match(/(?:window\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']/i) ||
+                                   partialHtml.match(/location\.replace\s*\(\s*["']([^"']+)["']/i) ||
+                                   partialHtml.match(/window\.location\.assign\s*\(\s*["']([^"']+)["']/i);
+                
+                // Buscar canonical link (fallback)
+                const canonicalLink = partialHtml.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i) ||
+                                      partialHtml.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i);
+                
+                // Prioridad: meta refresh > JS redirect > canonical
+                const redirectUrl = metaRefresh?.[1] || jsRedirect?.[1] || canonicalLink?.[1];
+                
+                if (redirectUrl) {
+                  let resolvedRedirectUrl: string;
+                  try {
+                    resolvedRedirectUrl = new URL(redirectUrl, currentUrl).href;
+                    resolvedRedirectUrl = cleanTrackingParams(resolvedRedirectUrl);
+                    
+                    // Solo seguir si es diferente y no es un loop
+                    if (resolvedRedirectUrl !== currentUrl && !redirectChain.includes(resolvedRedirectUrl)) {
+                      const redirectType = metaRefresh?.[1] ? 'meta refresh' : (jsRedirect?.[1] ? 'JS redirect' : 'canonical');
+                      console.log(`[URL Resolver] ↪️ ${redirectType} → ${resolvedRedirectUrl}`);
+                      redirectChain.push(resolvedRedirectUrl);
+                      currentUrl = resolvedRedirectUrl;
+                      maxRedirects--;
+                      continue;
+                    }
+                  } catch {
+                    // URL inválida, ignorar
+                  }
+                }
+              }
+            }
+          } catch (getErr) {
+            // Error obteniendo contenido HTML, continuar sin redirección
+            console.log('[URL Resolver] ⚠️ Error obteniendo HTML para detectar redirects');
+          }
+        }
+      }
+      
+      // No es redirección, hemos llegado al destino final
+      break;
+      
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      
+      if (err.name === 'AbortError') {
+        console.log('[URL Resolver] ⏱️ Timeout resolviendo URL');
+      } else {
+        console.log('[URL Resolver] ❌ Error:', err.message);
+      }
+      
+      // Retornar la última URL conocida
+      break;
+    }
+  }
+  
+  // Limpiar parámetros de tracking de la URL final
+  const finalUrl = cleanTrackingParams(currentUrl);
+  
+  console.log(`[URL Resolver] ✅ Resolución completa: ${url} → ${finalUrl} (${redirectChain.length} pasos)`);
+  
+  return {
+    finalUrl,
+    redirectChain,
+    status: lastStatus
+  };
+}
+
+/**
+ * Limpia parámetros de tracking conocidos de una URL
+ */
+function cleanTrackingParams(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    
+    // Parámetros de tracking comunes a eliminar
+    const trackingParams = [
+      // UTM
+      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
+      // Facebook
+      'fbclid', 'fb_action_ids', 'fb_action_types', 'fb_source', 'fb_ref',
+      // Google
+      'gclid', 'gclsrc', 'dclid',
+      // Microsoft
+      'msclkid',
+      // Twitter
+      'twclid',
+      // TikTok
+      'ttclid',
+      // MailChimp
+      'mc_cid', 'mc_eid',
+      // HubSpot
+      'hsa_acc', 'hsa_cam', 'hsa_grp', 'hsa_ad', 'hsa_src', 'hsa_net', 'hsa_tgt', 'hsa_kw',
+      // Otros
+      'ref', 'ref_src', 'ref_url', '_ga', '_gl', 'vero_id', 'zanpid', 'si',
+      // Affiliate
+      'aff_id', 'affiliate_id', 'partner', 'campaign_id',
+      // Misc
+      'trk', 'tracking_id', 's', 'ss', 'igsh', 'igshid',
+    ];
+    
+    let modified = false;
+    for (const param of trackingParams) {
+      if (urlObj.searchParams.has(param)) {
+        urlObj.searchParams.delete(param);
+        modified = true;
+      }
+    }
+    
+    if (modified) {
+      console.log('[URL Resolver] 🧹 Parámetros de tracking eliminados');
+    }
+    
+    // Limpiar hash de tracking (ej: #xtor=...)
+    if (urlObj.hash && /^#(xtor|pk_|utm_|mtm_)/.test(urlObj.hash)) {
+      urlObj.hash = '';
+    }
+    
+    return urlObj.href;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Lista de acortadores/redirectores confiables
+ * Los enlaces de estas fuentes se marcarán como seguros aunque el destino final no lo sea
+ */
+const TRUSTED_REDIRECTORS = [
+  'search.app',        // Google Search
+  'google.com',        // Google directo
+  'youtube.com',       // YouTube
+  'youtu.be',          // YouTube corto
+  'spotify.com',       // Spotify
+  'spoti.fi',          // Spotify corto
+  'twitter.com',       // Twitter/X
+  'x.com',             // X
+  't.co',              // Twitter corto
+  'facebook.com',      // Facebook
+  'fb.me',             // Facebook corto
+  'fb.watch',          // Facebook Watch
+  'instagram.com',     // Instagram
+  'linkedin.com',      // LinkedIn
+  'tiktok.com',        // TikTok
+  'vm.tiktok.com',     // TikTok corto
+  'reddit.com',        // Reddit
+  'redd.it',           // Reddit corto
+  'pinterest.com',     // Pinterest
+  'pin.it',            // Pinterest corto
+  'apple.co',          // Apple
+  'music.apple.com',   // Apple Music
+  'open.spotify.com',  // Spotify
+  'soundcloud.com',    // SoundCloud
+  'vimeo.com',         // Vimeo
+  'twitch.tv',         // Twitch
+  'github.com',        // GitHub
+  'medium.com',        // Medium
+  'wikipedia.org',     // Wikipedia
+  'amazon.com',        // Amazon
+  'amzn.to',           // Amazon corto
+  'amzn.eu',           // Amazon EU corto
+];
+
+/**
+ * Verifica si un hostname es un redirector confiable
+ */
+function isTrustedRedirector(hostname: string): boolean {
+  const normalizedHost = hostname.toLowerCase().replace(/^www\./, '');
+  
+  for (const trusted of TRUSTED_REDIRECTORS) {
+    if (normalizedHost === trusted || normalizedHost.endsWith('.' + trusted)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
 
 export interface LinkPreviewData {
   url: string;
+  originalUrl?: string; // URL original antes de resolución (si hubo redirección)
+  trustedSource?: string; // Dominio del acortador confiable (ej: 'search.app')
   title: string;
   description?: string;
   image?: string;
@@ -67,16 +450,50 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
     });
   }
   
-  // 3. Verificar caché
-  const cacheKey = targetUrl;
+  // 2.5 NUEVO: Resolver redirecciones para obtener URL final canónica
+  let resolvedUrl = targetUrl;
+  let wasRedirected = false;
+  
+  if (needsUrlResolution(validUrl.hostname)) {
+    console.log('[Link Preview] 🔄 URL necesita resolución:', targetUrl);
+    try {
+      const resolution = await resolveUrl(targetUrl);
+      if (resolution.finalUrl !== targetUrl) {
+        resolvedUrl = resolution.finalUrl;
+        wasRedirected = true;
+        console.log('[Link Preview] ✅ URL resuelta:', targetUrl, '→', resolvedUrl);
+        
+        // Actualizar validUrl con la URL resuelta
+        try {
+          validUrl = new URL(resolvedUrl);
+        } catch {
+          console.warn('[Link Preview] ⚠️ URL resuelta inválida, usando original');
+          resolvedUrl = targetUrl;
+          wasRedirected = false;
+        }
+      } else {
+        console.log('[Link Preview] ℹ️ URL no redirigió:', targetUrl);
+      }
+    } catch (err) {
+      console.warn('[Link Preview] ⚠️ Error resolviendo URL, usando original:', err);
+      // Continuar con la URL original si falla la resolución
+    }
+  }
+  
+  // 3. Verificar caché (usar URL resuelta como key principal)
+  const cacheKey = resolvedUrl;
   const cached = cache.get(cacheKey);
   const now = Date.now();
   
   // Plataformas que necesitan thumbnail - no usar cache si no tiene imagen
-  const needsThumbnail = targetUrl.includes('tiktok.com') || 
-                         targetUrl.includes('twitter.com') || 
-                         targetUrl.includes('x.com') ||
-                         targetUrl.includes('twitch.tv');
+  // Verificar tanto URL original como resuelta
+  const urlToCheck = resolvedUrl || targetUrl;
+  const needsThumbnail = urlToCheck.includes('tiktok.com') || 
+                         urlToCheck.includes('twitter.com') || 
+                         urlToCheck.includes('x.com') ||
+                         urlToCheck.includes('twitch.tv') ||
+                         urlToCheck.includes('youtube.com') ||
+                         urlToCheck.includes('youtu.be');
   
   if (cached && (now - cached.timestamp) < CACHE_DURATION) {
     // Si es una plataforma que necesita thumbnail y el cache no tiene imagen, ignorar cache
@@ -94,33 +511,44 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
   }
   
   try {
-    console.log('[Link Preview] 🔍 Fetching metadata for:', targetUrl);
+    console.log('[Link Preview] 🔍 Fetching metadata for:', resolvedUrl, wasRedirected ? `(original: ${targetUrl})` : '');
     
     // 4a. Manejo especial para plataformas sin oEmbed público
-    const specialData = await fetchSpecialPlatformData(targetUrl);
+    // Usar URL resuelta para detectar correctamente la plataforma
+    const specialData = await fetchSpecialPlatformData(resolvedUrl);
     if (specialData) {
+      // Guardar URL original y resuelta en los datos
+      if (wasRedirected) {
+        specialData.originalUrl = targetUrl;
+        specialData.url = resolvedUrl;
+      }
       cache.set(cacheKey, { data: specialData, timestamp: now });
+      // También cachear por URL original si fue redirigida
+      if (wasRedirected && targetUrl !== resolvedUrl) {
+        cache.set(targetUrl, { data: specialData, timestamp: now });
+      }
       cleanCache();
       return json({
         success: true,
         data: specialData,
-        cached: false
+        cached: false,
+        resolved: wasRedirected
       });
     }
     
-    // 4b. Intentar oEmbed primero
-    const oembedProvider = findOEmbedProvider(targetUrl);
+    // 4b. Intentar oEmbed primero (usar URL resuelta)
+    const oembedProvider = findOEmbedProvider(resolvedUrl);
     console.log('[Link Preview] oEmbed provider found:', oembedProvider ? oembedProvider.name : 'NONE');
     
     if (oembedProvider) {
       try {
-        const oembedData = await fetchOEmbed(oembedProvider, targetUrl);
+        const oembedData = await fetchOEmbed(oembedProvider, resolvedUrl);
         if (oembedData) {
           // Si oEmbed no tiene imagen, intentar obtenerla de Open Graph
           if (!oembedData.image) {
             console.log('[Link Preview] ⚠️ oEmbed sin imagen, intentando Open Graph...');
             try {
-              const ogData = await fetchOpenGraphMetadata(targetUrl);
+              const ogData = await fetchOpenGraphMetadata(resolvedUrl);
               if (ogData.image) {
                 // Combinar: datos de oEmbed + imagen de Open Graph
                 oembedData.image = ogData.image;
@@ -137,14 +565,25 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
             }
           }
           
+          // Guardar URL original si fue redirigida
+          if (wasRedirected) {
+            oembedData.originalUrl = targetUrl;
+            oembedData.url = resolvedUrl;
+          }
+          
           // Guardar en caché
           cache.set(cacheKey, { data: oembedData, timestamp: now });
+          // También cachear por URL original si fue redirigida
+          if (wasRedirected && targetUrl !== resolvedUrl) {
+            cache.set(targetUrl, { data: oembedData, timestamp: now });
+          }
           cleanCache();
           
           return json({
             success: true,
             data: oembedData,
-            cached: false
+            cached: false,
+            resolved: wasRedirected
           });
         }
       } catch (err) {
@@ -152,17 +591,43 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
       }
     }
     
-    // 5. Fallback: Open Graph + metatags
-    const openGraphData = await fetchOpenGraph(targetUrl);
+    // 5. Fallback: Open Graph + metatags (usar URL resuelta)
+    const openGraphData = await fetchOpenGraph(resolvedUrl);
+    
+    // Guardar URL original si fue redirigida
+    if (wasRedirected) {
+      openGraphData.originalUrl = targetUrl;
+      openGraphData.url = resolvedUrl;
+      
+      // Si vino de un acortador confiable, marcar como seguro
+      // El usuario compartió este enlace intencionalmente desde una fuente conocida
+      const originalHostname = new URL(targetUrl).hostname.toLowerCase();
+      if (isTrustedRedirector(originalHostname)) {
+        openGraphData.isSafe = true;
+        openGraphData.trustedSource = originalHostname;
+        
+        // Añadir &trusted=1 a la URL del proxy para que permita cualquier dominio
+        if (openGraphData.imageProxied) {
+          openGraphData.imageProxied = openGraphData.imageProxied + '&trusted=1';
+        }
+        
+        console.log('[Link Preview] ✅ Marcado como seguro (fuente confiable):', originalHostname);
+      }
+    }
     
     // Guardar en caché
     cache.set(cacheKey, { data: openGraphData, timestamp: now });
+    // También cachear por URL original si fue redirigida
+    if (wasRedirected && targetUrl !== resolvedUrl) {
+      cache.set(targetUrl, { data: openGraphData, timestamp: now });
+    }
     cleanCache();
     
     return json({
       success: true,
       data: openGraphData,
-      cached: false
+      cached: false,
+      resolved: wasRedirected
     });
     
   } catch (err: any) {

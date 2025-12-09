@@ -7,6 +7,7 @@
 
 export interface MediaProxyConfig {
   allowedDomains: string[];
+  allowAllDomains: boolean; // Si es true, permite cualquier dominio (para imágenes de fuentes confiables)
   allowedMimeTypes: {
     images: string[];
     videos: string[];
@@ -19,7 +20,11 @@ export interface MediaProxyConfig {
 }
 
 export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
-  // Whitelist de dominios permitidos para imágenes
+  // Por defecto NO permite todos los dominios
+  // Solo permite todos si viene con el parámetro trusted=1 (de fuentes confiables como search.app)
+  allowAllDomains: false,
+  
+  // Whitelist de dominios (se usa si allowAllDomains es false y no hay trusted=1)
   allowedDomains: [
     // Servicios de imágenes populares
     'i.imgur.com',
@@ -256,9 +261,15 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
 };
 
 /**
- * Verifica si un dominio está en la whitelist
+ * Verifica si un dominio está permitido
+ * Si allowAllDomains es true, permite cualquier dominio (URLs ya validadas desde fuentes confiables)
  */
 export function isDomainAllowed(url: string): boolean {
+  // Si allowAllDomains está habilitado, permitir todo
+  if (MEDIA_PROXY_CONFIG.allowAllDomains) {
+    return true;
+  }
+  
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase();

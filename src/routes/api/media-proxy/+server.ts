@@ -45,13 +45,20 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
   }
   
   // 3. Verificar que el dominio está en la whitelist
-  if (!isDomainAllowed(targetUrl)) {
+  // Si viene con trusted=1, permite cualquier dominio (viene de fuente confiable como search.app)
+  const isTrusted = url.searchParams.get('trusted') === '1';
+  
+  if (!isTrusted && !isDomainAllowed(targetUrl)) {
     console.warn('[Media Proxy] Dominio no permitido:', validUrl.hostname);
     throw error(403, {
       message: `Dominio no permitido: ${validUrl.hostname}`,
       code: 'DOMAIN_NOT_ALLOWED',
       hint: 'Solo se permiten dominios de la whitelist configurada'
     });
+  }
+  
+  if (isTrusted) {
+    console.log('[Media Proxy] Trusted source, allowing domain:', validUrl.hostname);
   }
   
   // 4. Verificar protocolo (solo HTTPS)

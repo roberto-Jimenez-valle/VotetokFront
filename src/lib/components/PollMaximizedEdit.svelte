@@ -187,6 +187,27 @@
   function getMediaUrl(opt: PollOption): string {
     return opt.imageUrl || extractUrlFromText(opt.label) || '';
   }
+  
+  // Detectar si debemos mostrar el enlace (cualquier URL válida excepto imágenes directas y GIFs)
+  function shouldShowLink(url: string | undefined): boolean {
+    if (!url) return false;
+    const lowerUrl = url.toLowerCase();
+    // Si es una imagen directa, no mostramos enlace
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(lowerUrl)) return false;
+    // Si es un GIF de GIPHY/Tenor, no mostramos enlace (ya tiene badge GIPHY)
+    if (lowerUrl.includes('giphy.com') || lowerUrl.includes('tenor.com')) return false;
+    // Para todo lo demás mostramos enlace
+    return true;
+  }
+  
+  // Obtener hostname de una URL
+  function getHostname(url: string): string {
+    try {
+      return new URL(url).hostname.replace('www.', '');
+    } catch {
+      return '';
+    }
+  }
 </script>
 
 <div
@@ -499,6 +520,25 @@
                       rows="2"
                     ></textarea>
                     
+                    <!-- Enlace debajo del texto para URLs -->
+                    {#if shouldShowLink(mediaUrl)}
+                      <a 
+                        href={mediaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="link-below-text-edit"
+                        onclick={(e) => e.stopPropagation()}
+                      >
+                        <img 
+                          src="https://www.google.com/s2/favicons?domain={getHostname(mediaUrl)}&sz=16" 
+                          alt="" 
+                          class="link-below-favicon-edit"
+                        />
+                        <span class="link-below-domain-edit">{getHostname(mediaUrl)}</span>
+                        <span class="link-below-arrow-edit">↗</span>
+                      </a>
+                    {/if}
+                    
                     <!-- Botones de edición VERTICALES -->
                     <div class="edit-buttons-vertical">
                       <!-- Botón Sí/No -->
@@ -659,6 +699,25 @@
                         onclick={(e) => e.stopPropagation()}
                         rows="2"
                       ></textarea>
+                      
+                      <!-- Enlace debajo del texto para URLs -->
+                      {#if shouldShowLink(mediaUrl)}
+                        <a 
+                          href={mediaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="link-below-text-edit"
+                          onclick={(e) => e.stopPropagation()}
+                        >
+                          <img 
+                            src="https://www.google.com/s2/favicons?domain={getHostname(mediaUrl)}&sz=16" 
+                            alt="" 
+                            class="link-below-favicon-edit"
+                          />
+                          <span class="link-below-domain-edit">{getHostname(mediaUrl)}</span>
+                          <span class="link-below-arrow-edit">↗</span>
+                        </a>
+                      {/if}
                       
                       <!-- Botones de edición VERTICALES -->
                       <div class="edit-buttons-vertical">
@@ -1181,6 +1240,86 @@
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
+  }
+  
+  /* Forzar que las imágenes llenen todo el contenedor */
+  .card-image-fullscreen :global(.image-with-link) {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .card-image-fullscreen :global(.image-container) {
+    flex: 1 !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+  
+  .card-image-fullscreen :global(.image-container img) {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: cover !important;
+  }
+
+  /* Ocultar contenido extra de MediaEmbed */
+  .card-image-fullscreen :global(.linkedin-content),
+  .card-image-fullscreen :global(.mini-card-content),
+  .card-image-fullscreen :global(.bottom-link-button),
+  .card-image-fullscreen :global(.compact-link-container),
+  .card-image-fullscreen :global(.mini-card),
+  .card-image-fullscreen :global(.card-content),
+  .card-image-fullscreen :global(.error-link),
+  .card-image-fullscreen :global(.error-state) {
+    display: none !important;
+  }
+
+  /* Enlace debajo del texto de la opción */
+  .link-below-text-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    width: fit-content;
+    pointer-events: auto;
+  }
+  
+  .link-below-text-edit:hover {
+    background: rgba(255, 255, 255, 0.22);
+    color: white;
+  }
+  
+  .link-below-favicon-edit {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  
+  .link-below-domain-edit {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+  
+  .link-below-arrow-edit {
+    font-size: 12px;
+    opacity: 0.7;
+    flex-shrink: 0;
   }
 
   /* Badge GIPHY logo en esquina superior derecha */

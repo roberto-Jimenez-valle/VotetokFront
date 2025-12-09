@@ -135,6 +135,29 @@
   const isImageType = $derived(mediaType === 'image' || isThumbnailPlatform);
   const isTextOnly = $derived(mediaType === 'text');
   const hasMedia = $derived(!!imageUrl);
+  
+  // Detectar si es un enlace genérico (debe mostrar favicon)
+  function isGenericLink(url: string): boolean {
+    if (!url) return false;
+    // Si es una imagen directa, no es un enlace genérico
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url)) return false;
+    // Si es una plataforma conocida o GIF, no es genérico (ya tienen su propio badge)
+    if (isThumbnailPlatform || isGifType) return false;
+    // Todo lo demás es un enlace genérico (Wikipedia, GitHub, noticias, etc.)
+    return true;
+  }
+  
+  const showGenericLinkBadge = $derived(isGenericLink(imageUrl));
+  
+  // Obtener hostname de una URL
+  function getHostname(url: string): string {
+    try {
+      return new URL(url).hostname.replace('www.', '');
+    } catch {
+      return '';
+    }
+  }
+  
 
   // Extraer URL del label si existe
   function extractUrlFromText(text: string): string | null {
@@ -538,6 +561,17 @@
         <!-- Badge GIPHY en esquina superior derecha -->
         {#if isGifType}
           <img src="/logoGIPHY.png" alt="GIPHY" class="giphy-badge" />
+        {/if}
+        
+        <!-- Badge favicon para enlaces genéricos (Wikipedia, GitHub, etc.) -->
+        {#if showGenericLinkBadge && imageUrl}
+          <div class="generic-link-badge" title={getHostname(imageUrl)}>
+            <img 
+              src="https://www.google.com/s2/favicons?domain={getHostname(imageUrl)}&sz=32" 
+              alt=""
+              class="generic-link-favicon"
+            />
+          </div>
         {/if}
       </div>
       
@@ -1021,33 +1055,33 @@
   
   .platform-badge {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 28px;
-    height: 28px;
+    top: 12px;
+    right: 12px;
+    width: 18px;
+    height: 18px;
     background: var(--platform-color, rgba(0, 0, 0, 0.8));
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
     z-index: 10;
   }
   
   .platform-badge svg {
-    width: 14px;
-    height: 14px;
+    width: 10px;
+    height: 10px;
     color: white;
   }
   
   /* Badge GIPHY logo en esquina superior derecha */
   .giphy-badge {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 22px;
-    height: 22px;
-    padding: 4px;
+    top: 12px;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    padding: 3px;
     background: rgba(0, 0, 0, 0.75);
     border-radius: 50%;
     object-fit: contain;
@@ -1056,6 +1090,29 @@
     pointer-events: none;
   }
   
+  /* Badge favicon para enlaces genéricos - igual que GIPHY */
+  .generic-link-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    padding: 3px;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    z-index: 20;
+    pointer-events: none;
+  }
+  
+  .generic-link-favicon {
+    width: 12px;
+    height: 12px;
+    object-fit: contain;
+  }
   
   .card-video-bottom {
     flex: 1;
@@ -1169,6 +1226,56 @@
   .media-embed-background :global(video) {
     width: 100% !important;
     height: 100% !important;
+    object-fit: cover !important;
+  }
+  
+  /* Forzar que las imágenes llenen todo el contenedor sin recorte extra */
+  .media-embed-background :global(.image-with-link) {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .media-embed-background :global(.image-container) {
+    flex: 1 !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+  
+  .media-embed-background :global(.image-container img) {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: cover !important;
+  }
+  
+  /* Ocultar todo el contenido extra de MediaEmbed */
+  .media-embed-background :global(.bottom-link-button),
+  .media-embed-background :global(.compact-link-container),
+  .media-embed-background :global(.linkedin-content),
+  .media-embed-background :global(.mini-card-content),
+  .media-embed-background :global(.mini-card),
+  .media-embed-background :global(.card-content),
+  .media-embed-background :global(.error-link),
+  .media-embed-background :global(.error-state) {
+    display: none !important;
+  }
+  
+  /* Asegurar que el embed container llene todo */
+  .media-embed-background :global(.embed-container) {
+    position: absolute !important;
+    inset: 0 !important;
+  }
+  
+  /* Imágenes directas dentro del embed */
+  .media-embed-background :global(.embed-container > img) {
+    position: absolute !important;
+    inset: 0 !important;
     object-fit: cover !important;
   }
   
@@ -1313,14 +1420,15 @@
     text-transform: none;
   }
   
-  /* Botón eliminar media */
+  /* Botón eliminar media - centrado arriba */
   .remove-media-btn {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 20;
-    width: 32px;
-    height: 32px;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 25;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.3);
@@ -1334,7 +1442,7 @@
   
   .remove-media-btn:hover {
     background: rgba(0, 0, 0, 0.9);
-    transform: scale(1.1);
+    transform: translateX(-50%) scale(1.1);
   }
   
   /* Botones de edición - VERTICAL en esquina derecha */
