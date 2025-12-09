@@ -1090,28 +1090,28 @@
     pointer-events: none;
   }
   
-  /* Badge favicon para enlaces genéricos - igual que GIPHY */
+  /* Badge favicon para enlaces genéricos - redondo sin fondo */
   .generic-link-badge {
     position: absolute;
     top: 12px;
     right: 12px;
     width: 18px;
     height: 18px;
-    padding: 3px;
-    background: rgba(0, 0, 0, 0.75);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
     z-index: 20;
     pointer-events: none;
+    overflow: hidden;
   }
   
   .generic-link-favicon {
-    width: 12px;
-    height: 12px;
-    object-fit: contain;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
   }
   
   .card-video-bottom {
