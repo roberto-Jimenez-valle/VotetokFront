@@ -1715,12 +1715,12 @@
             </div>
           {/if}
         
-        <!-- Indicadores de opciones (arriba de las cards) -->
+        <!-- Indicadores de opciones (arriba de las cards) - Todos con su color -->
         <div class="options-indicators-top">
           {#each options as opt, i}
             <button 
               class="option-indicator {activeAccordionIndex === i ? 'active' : ''}"
-              style="background-color: {activeAccordionIndex === i ? opt.color : 'rgba(255,255,255,0.2)'};"
+              style="background-color: {opt.color};"
               onclick={() => {
                 activeAccordionIndex = i;
                 if (gridRef) {
@@ -3406,7 +3406,8 @@
   }
   
   .option-indicator.active {
-    height: 5px;
+    transform: scaleY(1.5);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
   
   /* Mensaje de error al eliminar opciones */
