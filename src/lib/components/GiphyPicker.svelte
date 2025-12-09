@@ -1,7 +1,11 @@
 <script lang="ts">
   import { searchGiphy, getTrendingGifs, getBestGifUrl, type GiphyGif } from '$lib/services/giphy';
+  import { searchTenor, getTrendingTenor, getBestTenorUrl, type TenorGif, registerTenorShare } from '$lib/services/tenor';
   import { getUserLocation } from '$lib/services/geolocation';
   import { Search, Loader2, TrendingUp, Globe } from 'lucide-svelte';
+  
+  // Tipo unificado para GIFs de ambas fuentes
+  type UnifiedGif = (GiphyGif & { source?: 'giphy' }) | TenorGif;
   
   // Props
   interface Props {
@@ -15,13 +19,12 @@
   
   // Estado
   let searchTerm = $state(initialSearch);
-  let gifs = $state<GiphyGif[]>([]);
+  let gifs = $state<UnifiedGif[]>([]);
   let isLoading = $state(false);
   let showTrending = $state(true);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let userCountry = $state<string>('');
   let userLanguage = $state<string>('');
-  let contentType = $state<'gifs' | 'stickers'>('gifs');
   
   // Detectar ubicación del usuario al inicio
   $effect(() => {
@@ -45,11 +48,37 @@
     }
   });
   
+  /**
+   * Mezclar e intercalar resultados de ambas fuentes
+   */
+  function shuffleAndMerge(giphyGifs: GiphyGif[], tenorGifs: TenorGif[]): UnifiedGif[] {
+    // Marcar la fuente en los GIFs de Giphy
+    const giphyMarked = giphyGifs.map(g => ({ ...g, source: 'giphy' as const }));
+    
+    // Intercalar: alternar empezando por Tenor
+    const merged: UnifiedGif[] = [];
+    const maxLen = Math.max(giphyMarked.length, tenorGifs.length);
+    
+    for (let i = 0; i < maxLen; i++) {
+      // Tenor primero, luego Giphy
+      if (i < tenorGifs.length) merged.push(tenorGifs[i]);
+      if (i < giphyMarked.length) merged.push(giphyMarked[i]);
+    }
+    
+    return merged;
+  }
+
   async function loadTrending() {
     isLoading = true;
     try {
-      gifs = await getTrendingGifs(20, 'g', contentType);
+      // Cargar de ambas fuentes en paralelo y mezclar
+      const [giphyGifs, tenorGifs] = await Promise.all([
+        getTrendingGifs(12, 'g', 'gifs'),
+        getTrendingTenor(12, 'medium')
+      ]);
+      gifs = shuffleAndMerge(giphyGifs, tenorGifs);
       showTrending = true;
+      console.log(`[GifPicker] Cargados ${gifs.length} GIFs trending`);
     } catch (error) {
       console.error('Error cargando trending GIFs:', error);
     } finally {
@@ -57,17 +86,6 @@
     }
   }
   
-  // Recargar cuando cambia el tipo de contenido
-  $effect(() => {
-    const type = contentType; // Capturar el valor
-    if (searchTerm.trim()) {
-      // Trigger search
-      const event = new Event('input', { bubbles: true });
-      handleSearch();
-    } else {
-      loadTrending();
-    }
-  });
   
   async function handleSearch() {
     if (!searchTerm.trim()) {
@@ -86,12 +104,22 @@
       showTrending = false;
       
       try {
-        gifs = await searchGiphy(searchTerm, {
-          limit: 20,
-          rating: 'g',
-          lang: 'es',
-          type: contentType
-        });
+        // Buscar en ambas fuentes en paralelo y mezclar
+        const [giphyGifs, tenorGifs] = await Promise.all([
+          searchGiphy(searchTerm, {
+            limit: 12,
+            rating: 'g',
+            lang: 'es',
+            type: 'gifs'
+          }),
+          searchTenor(searchTerm, {
+            limit: 12,
+            contentfilter: 'medium',
+            lang: 'es'
+          })
+        ]);
+        gifs = shuffleAndMerge(giphyGifs, tenorGifs);
+        console.log(`[GifPicker] Buscados ${gifs.length} GIFs para "${searchTerm}"`);
       } catch (error) {
         console.error('Error buscando GIFs:', error);
       } finally {
@@ -100,10 +128,28 @@
     }, 500);
   }
   
-  function selectGif(gif: GiphyGif) {
-    // Usar fixed_height para mejor rendimiento
-    const gifUrl = getBestGifUrl(gif, 'fixed_height');
+  
+  function selectGif(gif: UnifiedGif) {
+    // Determinar la fuente y obtener la mejor URL
+    let gifUrl: string;
+    
+    if (gif.source === 'tenor') {
+      gifUrl = getBestTenorUrl(gif as TenorGif, 'fixed_height');
+      // Registrar el share en Tenor para mejorar resultados futuros
+      registerTenorShare(gif.id);
+    } else {
+      gifUrl = getBestGifUrl(gif as GiphyGif, 'fixed_height');
+    }
+    
     onSelect(gifUrl);
+  }
+  
+  // Helper para obtener la URL de preview (thumbnail)
+  function getPreviewUrl(gif: UnifiedGif): string {
+    if (gif.source === 'tenor') {
+      return getBestTenorUrl(gif as TenorGif, 'fixed_height_small');
+    }
+    return getBestGifUrl(gif as GiphyGif, 'fixed_height_small');
   }
 </script>
 
@@ -139,7 +185,7 @@
         type="text"
         bind:value={searchTerm}
         oninput={handleSearch}
-        placeholder="Buscar GIFs en Giphy..."
+        placeholder="Buscar GIFs..."
         class="search-input"
       />
       {#if searchTerm}
@@ -156,23 +202,6 @@
       {/if}
     </div>
     
-    <!-- Filtros de tipo -->
-    <div class="content-filters">
-      <button
-        class="filter-btn {contentType === 'gifs' ? 'active' : ''}"
-        onclick={() => { contentType = 'gifs'; }}
-        type="button"
-      >
-        GIFs
-      </button>
-      <button
-        class="filter-btn {contentType === 'stickers' ? 'active' : ''}"
-        onclick={() => { contentType = 'stickers'; }}
-        type="button"
-      >
-        Stickers
-      </button>
-    </div>
   </div>
   
   <!-- Loading -->
@@ -194,7 +223,7 @@
           title={gif.title}
         >
           <img
-            src={getBestGifUrl(gif, 'fixed_height_small')}
+            src={getPreviewUrl(gif)}
             alt={gif.title}
             loading="lazy"
           />
@@ -220,7 +249,7 @@
   <!-- Footer -->
   <div class="footer">
     <span class="powered-by">
-      Powered by <strong>GIPHY</strong>
+      Powered by <strong>GIPHY</strong> + <strong>TENOR</strong>
     </span>
   </div>
 </div>
@@ -517,40 +546,6 @@
   
   .gifs-grid::-webkit-scrollbar-thumb:hover {
     background: var(--option-color);
-  }
-  
-  /* Filtros de tipo de contenido */
-  .content-filters {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-  }
-  
-  .filter-btn {
-    flex: 1;
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1.5px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  
-  .filter-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.8);
-  }
-  
-  .filter-btn.active {
-    background: var(--option-color-light);
-    border-color: var(--option-color);
-    color: white;
   }
   
   /* Variables CSS para el color de la opción */
