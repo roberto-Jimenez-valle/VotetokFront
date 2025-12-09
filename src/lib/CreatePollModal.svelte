@@ -142,6 +142,115 @@
   
   // Mensaje de error al intentar eliminar opciones
   let deleteOptionError = $state('');
+  
+  // Estado para dropdown de opciones
+  let showOptionsDropdown = $state(false);
+  let draggedOptionIndex = $state<number | null>(null);
+  let dragOverOptionIndex = $state<number | null>(null);
+  
+  // Estado para dropdown de duración
+  let showDurationDropdown = $state(false);
+  let showCustomDatePicker = $state(false);
+  let customEndDate = $state('');
+  let customEndTime = $state('23:59');
+  
+  // Formatear fecha personalizada para mostrar
+  function formatCustomDate(dateStr: string, timeStr: string): string {
+    if (!dateStr) return '';
+    const date = new Date(`${dateStr}T${timeStr}`);
+    return date.toLocaleDateString('es-ES', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+  
+  // Obtener fecha mínima (hoy)
+  function getMinDate(): string {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  }
+  
+  // Aplicar fecha personalizada
+  function applyCustomDate() {
+    if (customEndDate) {
+      // Guardamos como ISO string con formato especial
+      duration = `custom:${customEndDate}T${customEndTime}`;
+      showCustomDatePicker = false;
+      showDurationDropdown = false;
+    }
+  }
+  
+  // Verificar si es duración personalizada
+  function isCustomDuration(dur: string): boolean {
+    return dur.startsWith('custom:');
+  }
+  
+  // Obtener label de duración
+  function getDurationLabel(dur: string): string {
+    if (isCustomDuration(dur)) {
+      const dateTime = dur.replace('custom:', '');
+      const date = new Date(dateTime);
+      return date.toLocaleDateString('es-ES', { 
+        day: 'numeric', 
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+    return DURATIONS.find(d => d.value === dur)?.label || 'Sin límite';
+  }
+  
+  // Funciones para drag and drop de opciones
+  function handleOptionDragStart(e: DragEvent, index: number) {
+    draggedOptionIndex = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index));
+    }
+  }
+  
+  function handleOptionDragOver(e: DragEvent, index: number) {
+    e.preventDefault();
+    if (draggedOptionIndex !== null && draggedOptionIndex !== index) {
+      dragOverOptionIndex = index;
+    }
+  }
+  
+  function handleOptionDragLeave() {
+    dragOverOptionIndex = null;
+  }
+  
+  function handleOptionDrop(e: DragEvent, dropIndex: number) {
+    e.preventDefault();
+    if (draggedOptionIndex !== null && draggedOptionIndex !== dropIndex) {
+      // Reordenar opciones
+      const newOptions = [...options];
+      const [draggedItem] = newOptions.splice(draggedOptionIndex, 1);
+      newOptions.splice(dropIndex, 0, draggedItem);
+      options = newOptions;
+      
+      // Actualizar índice activo si es necesario
+      if (activeAccordionIndex !== null) {
+        if (activeAccordionIndex === draggedOptionIndex) {
+          activeAccordionIndex = dropIndex;
+        } else if (draggedOptionIndex < activeAccordionIndex && dropIndex >= activeAccordionIndex) {
+          activeAccordionIndex--;
+        } else if (draggedOptionIndex > activeAccordionIndex && dropIndex <= activeAccordionIndex) {
+          activeAccordionIndex++;
+        }
+      }
+    }
+    draggedOptionIndex = null;
+    dragOverOptionIndex = null;
+  }
+  
+  function handleOptionDragEnd() {
+    draggedOptionIndex = null;
+    dragOverOptionIndex = null;
+  }
   let formatEditorContent = $state('');
   
   // DEBUG: Monitorear el estado de currentUser
@@ -1112,7 +1221,6 @@
     lines.push('');
     lines.push('🧩 Opciones:');
     lines.push('1️⃣ VouTop (#8b5cf6)');
-    lines.push('https://voutop.com/logo.png');
     lines.push('2️⃣ Instagram (#E1306C)');
     lines.push('3️⃣ TikTok (#00f2ea)');
     lines.push('4️⃣ Facebook (#1877F2)');
@@ -1655,22 +1763,260 @@
           <!-- Info de opciones y tiempo debajo del título -->
           {#if title.length > 0 || options.some(o => o.label.trim())}
             <div class="poll-meta-compact">
-              <div class="meta-item-compact">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                <span>{options.filter(o => o.label.trim()).length || options.length} opciones</span>
+              <!-- Botón de opciones con dropdown -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div 
+                class="options-dropdown-container"
+                onmousedown={(e) => e.stopPropagation()}
+              >
+                <button 
+                  type="button"
+                  class="meta-item-compact options-btn"
+                  onclick={() => showOptionsDropdown = !showOptionsDropdown}
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span>{options.filter(o => o.label.trim()).length || options.length} opciones</span>
+                  <svg class="w-3 h-3 chevron {showOptionsDropdown ? 'open' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                <!-- Dropdown con lista de opciones -->
+                {#if showOptionsDropdown}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div 
+                    class="options-dropdown" 
+                    transition:fly={{ y: -5, duration: 150 }}
+                    onclick={(e) => e.stopPropagation()}
+                  >
+                    <div class="dropdown-header">
+                      <span>Ir a opción</span>
+                      <span class="drag-hint">⋮⋮ Arrastra para ordenar</span>
+                    </div>
+                    {#each options as opt, i (opt.id)}
+                      {@const hasText = opt.label.trim().length > 0}
+                      {@const hasMedia = opt.imageUrl || extractUrlFromText(opt.label)}
+                      <div 
+                        class="dropdown-option-row {draggedOptionIndex === i ? 'dragging' : ''} {dragOverOptionIndex === i ? 'drag-over' : ''}"
+                        draggable="true"
+                        ondragstart={(e) => handleOptionDragStart(e, i)}
+                        ondragover={(e) => handleOptionDragOver(e, i)}
+                        ondragleave={handleOptionDragLeave}
+                        ondrop={(e) => handleOptionDrop(e, i)}
+                        ondragend={handleOptionDragEnd}
+                        role="listitem"
+                      >
+                        <!-- Drag handle -->
+                        <div class="drag-handle" title="Arrastra para reordenar">
+                          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="9" cy="6" r="1.5"/>
+                            <circle cx="15" cy="6" r="1.5"/>
+                            <circle cx="9" cy="12" r="1.5"/>
+                            <circle cx="15" cy="12" r="1.5"/>
+                            <circle cx="9" cy="18" r="1.5"/>
+                            <circle cx="15" cy="18" r="1.5"/>
+                          </svg>
+                        </div>
+                        <button
+                          type="button"
+                          class="dropdown-option {activeAccordionIndex === i ? 'active' : ''} {!hasText && !hasMedia ? 'incomplete' : ''}"
+                          onclick={() => {
+                            activeAccordionIndex = i;
+                            if (gridRef) {
+                              const slideWidth = gridRef.offsetWidth;
+                              gridRef.scrollTo({ left: slideWidth * i, behavior: 'smooth' });
+                            }
+                            showOptionsDropdown = false;
+                          }}
+                        >
+                          <span class="option-color-dot" style="background-color: {opt.color};"></span>
+                          <span class="option-number">{i + 1}</span>
+                          <span class="option-label">{opt.label.trim() || `Opción ${i + 1}`}</span>
+                          {#if !hasText && !hasMedia}
+                            <!-- Icono de incompleto -->
+                            <svg class="w-3.5 h-3.5 incomplete-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Falta contenido">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                          {:else if hasMedia}
+                            <!-- Icono de media -->
+                            <svg class="w-3 h-3 has-media" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          {/if}
+                        </button>
+                        <!-- Botón eliminar (solo si hay más de 2 opciones) -->
+                        {#if options.length > 2}
+                          <button
+                            type="button"
+                            class="delete-option-btn"
+                            onclick={(e) => {
+                              e.stopPropagation();
+                              removeOption(opt.id);
+                            }}
+                            title="Eliminar opción {i + 1}"
+                            aria-label="Eliminar opción {i + 1}"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        {/if}
+                      </div>
+                    {/each}
+                    {#if options.length < OPTIONS_MAX_COUNT}
+                      <button
+                        type="button"
+                        class="dropdown-option add-option"
+                        onclick={() => {
+                          addOption();
+                        }}
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>Añadir opción</span>
+                      </button>
+                    {/if}
+                  </div>
+                  <!-- Overlay para cerrar al hacer click fuera -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div 
+                    class="dropdown-backdrop" 
+                    onclick={() => showOptionsDropdown = false}
+                  ></div>
+                {/if}
               </div>
               <span class="meta-sep">•</span>
-              <div class="meta-item-compact meta-duration">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <select class="duration-select-compact" bind:value={duration}>
-                  {#each DURATIONS as dur}
-                    <option value={dur.value}>{dur.label}</option>
-                  {/each}
-                </select>
+              <!-- Dropdown de duración personalizado -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div 
+                class="duration-dropdown-container"
+                onmousedown={(e) => e.stopPropagation()}
+              >
+                <button 
+                  type="button"
+                  class="meta-item-compact duration-btn"
+                  onclick={() => { showDurationDropdown = !showDurationDropdown; showCustomDatePicker = false; }}
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{getDurationLabel(duration)}</span>
+                  <svg class="w-3 h-3 chevron {showDurationDropdown ? 'open' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {#if showDurationDropdown}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div 
+                    class="duration-dropdown" 
+                    transition:fly={{ y: -5, duration: 150 }}
+                    onclick={(e) => e.stopPropagation()}
+                  >
+                    <div class="dropdown-header">Duración de la encuesta</div>
+                    
+                    {#if !showCustomDatePicker}
+                      <!-- Opciones rápidas -->
+                      {#each DURATIONS as dur}
+                        <button
+                          type="button"
+                          class="dropdown-option {duration === dur.value ? 'active' : ''}"
+                          onclick={() => {
+                            duration = dur.value;
+                            showDurationDropdown = false;
+                          }}
+                        >
+                          <svg class="w-4 h-4 duration-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span class="duration-label">{dur.label}</span>
+                          {#if duration === dur.value}
+                            <svg class="w-4 h-4 check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                          {/if}
+                        </button>
+                      {/each}
+                      
+                      <!-- Separador -->
+                      <div class="dropdown-divider"></div>
+                      
+                      <!-- Opción de fecha personalizada -->
+                      <button
+                        type="button"
+                        class="dropdown-option custom-date-option {isCustomDuration(duration) ? 'active' : ''}"
+                        onclick={() => showCustomDatePicker = true}
+                      >
+                        <svg class="w-4 h-4 duration-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span class="duration-label">Fecha exacta...</span>
+                        {#if isCustomDuration(duration)}
+                          <svg class="w-4 h-4 check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                          </svg>
+                        {/if}
+                      </button>
+                    {:else}
+                      <!-- Selector de fecha/hora -->
+                      <div class="custom-date-picker">
+                        <button 
+                          type="button" 
+                          class="back-btn"
+                          onclick={() => showCustomDatePicker = false}
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                          </svg>
+                          <span>Volver</span>
+                        </button>
+                        
+                        <div class="date-time-inputs">
+                          <div class="input-group">
+                            <label>Fecha de cierre</label>
+                            <input 
+                              type="date" 
+                              bind:value={customEndDate}
+                              min={getMinDate()}
+                              class="date-input"
+                            />
+                          </div>
+                          <div class="input-group">
+                            <label>Hora</label>
+                            <input 
+                              type="time" 
+                              bind:value={customEndTime}
+                              class="time-input"
+                            />
+                          </div>
+                        </div>
+                        
+                        {#if customEndDate}
+                          <div class="date-preview">
+                            Cierra: {formatCustomDate(customEndDate, customEndTime)}
+                          </div>
+                        {/if}
+                        
+                        <button 
+                          type="button" 
+                          class="apply-date-btn"
+                          onclick={applyCustomDate}
+                          disabled={!customEndDate}
+                        >
+                          Aplicar fecha
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div 
+                    class="dropdown-backdrop" 
+                    onclick={() => { showDurationDropdown = false; showCustomDatePicker = false; }}
+                  ></div>
+                {/if}
               </div>
             </div>
           {/if}
@@ -2367,6 +2713,7 @@
     totalOptions={options.length}
     duration={duration}
     onDurationChange={(value) => { duration = value; }}
+    durations={DURATIONS}
     onPublish={handleSubmit}
     canPublish={!isSubmitting && title.trim().length > 0 && options.filter(o => o.label.trim()).length >= 2}
     onYesNoTextChange={(optionId: string, yesText: string, noText: string) => {
@@ -4213,23 +4560,462 @@
     color: rgba(255, 255, 255, 0.3);
   }
   
-  .duration-select-compact {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 12px;
-    cursor: pointer;
-    padding: 0;
-    outline: none;
+  /* Dropdown de duración personalizado */
+  .duration-dropdown-container {
+    position: relative;
   }
   
-  .duration-select-compact:hover {
+  .duration-btn {
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px 8px;
+    transition: all 0.2s;
+  }
+  
+  .duration-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
     color: rgba(255, 255, 255, 0.8);
   }
   
-  .duration-select-compact option {
-    background: #1a1a2e;
+  .duration-btn .chevron {
+    margin-left: 2px;
+    transition: transform 0.2s;
+    opacity: 0.5;
+  }
+  
+  .duration-btn .chevron.open {
+    transform: rotate(180deg);
+  }
+  
+  .duration-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 220px;
+    max-width: 280px;
+    background: rgba(25, 25, 35, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+  }
+  
+  .duration-dropdown .dropdown-option {
+    justify-content: flex-start;
+  }
+  
+  .duration-icon {
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+  }
+  
+  .duration-label {
+    flex: 1;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+  
+  .check-icon {
+    color: #8b5cf6;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  
+  .duration-dropdown .dropdown-option.active {
+    background: rgba(139, 92, 246, 0.15);
+  }
+  
+  .duration-dropdown .dropdown-option.active .duration-icon {
+    color: #8b5cf6;
+  }
+  
+  /* Separador y fecha personalizada */
+  .dropdown-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 8px 0;
+  }
+  
+  .custom-date-option .duration-icon {
+    color: rgba(139, 92, 246, 0.7);
+  }
+  
+  .custom-date-picker {
+    padding: 8px 4px;
+  }
+  
+  .custom-date-picker .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s;
+    margin-bottom: 8px;
+  }
+  
+  .custom-date-picker .back-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .date-time-inputs {
+    display: flex;
+    gap: 10px;
+    padding: 0 8px;
+    align-items: flex-end;
+  }
+  
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .input-group:first-child {
+    flex: 1.5;
+  }
+  
+  .input-group:last-child {
+    flex: 1;
+    min-width: 100px;
+  }
+  
+  .input-group label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+  }
+  
+  .date-input,
+  .time-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
     color: white;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.15s;
+  }
+  
+  .date-input:focus,
+  .time-input:focus {
+    border-color: rgba(139, 92, 246, 0.5);
+    background: rgba(139, 92, 246, 0.08);
+  }
+  
+  .date-input::-webkit-calendar-picker-indicator,
+  .time-input::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.5);
+    cursor: pointer;
+  }
+  
+  .date-preview {
+    padding: 10px 12px;
+    margin: 12px 8px 8px;
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+  }
+  
+  .apply-date-btn {
+    width: calc(100% - 16px);
+    margin: 4px 8px 8px;
+    padding: 12px;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .apply-date-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+  }
+  
+  .apply-date-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  /* Dropdown de opciones */
+  .options-dropdown-container {
+    position: relative;
+  }
+  
+  .options-btn {
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px 8px;
+    transition: all 0.2s;
+  }
+  
+  .options-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+  }
+  
+  .options-btn .chevron {
+    margin-left: 2px;
+    transition: transform 0.2s;
+    opacity: 0.5;
+  }
+  
+  .options-btn .chevron.open {
+    transform: rotate(180deg);
+  }
+  
+  .options-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 280px;
+    max-width: 360px;
+    width: max-content;
+    max-height: 320px;
+    overflow-y: auto;
+    background: rgba(25, 25, 35, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+  }
+  
+  .options-dropdown::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .options-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .options-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+  
+  .options-dropdown::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  .dropdown-header {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 6px 10px 4px;
+    font-weight: 600;
+  }
+  
+  .dropdown-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+  }
+  
+  .dropdown-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  
+  .dropdown-option.active {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  
+  .option-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  
+  .option-number {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    min-width: 16px;
+  }
+  
+  .option-label {
+    flex: 1;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .dropdown-option .has-media {
+    color: rgba(255, 255, 255, 0.4);
+    flex-shrink: 0;
+  }
+  
+  .dropdown-option.add-option {
+    color: rgba(139, 92, 246, 0.8);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 4px;
+    padding-top: 10px;
+    gap: 6px;
+  }
+  
+  .dropdown-option.add-option:hover {
+    color: rgba(139, 92, 246, 1);
+    background: rgba(139, 92, 246, 0.1);
+  }
+  
+  .dropdown-option.add-option span {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  /* Fila de opción con botón de eliminar */
+  .dropdown-option-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    position: relative;
+    transition: all 0.15s;
+  }
+  
+  .dropdown-option-row .dropdown-option {
+    flex: 1;
+  }
+  
+  .dropdown-option.incomplete {
+    opacity: 0.7;
+  }
+  
+  .dropdown-option.incomplete .option-label {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+  }
+  
+  .incomplete-icon {
+    color: #f59e0b;
+    flex-shrink: 0;
+    animation: pulse-warning 2s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-warning {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+  
+  .delete-option-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  
+  .delete-option-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+  
+  /* Drag and drop para opciones */
+  .dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .drag-hint {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 400;
+  }
+  
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 28px;
+    color: rgba(255, 255, 255, 0.25);
+    cursor: grab;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  
+  .drag-handle:hover {
+    color: rgba(255, 255, 255, 0.5);
+  }
+  
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+  
+  .dropdown-option-row.dragging {
+    opacity: 0.5;
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 6px;
+  }
+  
+  .dropdown-option-row.drag-over {
+    border-top: 2px solid #8b5cf6;
+    margin-top: -2px;
+  }
+  
+  .dropdown-option-row.drag-over::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -1px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #8b5cf6, transparent);
+  }
+  
+  /* Backdrop para cerrar dropdown */
+  .dropdown-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+  }
+  
+  .options-dropdown {
+    z-index: 100;
   }
   
   .error-banner {

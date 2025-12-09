@@ -49,6 +49,7 @@
     totalOptions?: number;
     duration?: string;
     onDurationChange?: (value: string) => void;
+    durations?: readonly { value: string; label: string }[];
     // Publicar
     onPublish?: () => void;
     canPublish?: boolean;
@@ -83,9 +84,106 @@
     totalOptions = 0,
     duration = 'never',
     onDurationChange,
+    durations = [],
     onPublish,
     canPublish = false,
   }: Props = $props();
+  
+  // Estado para dropdowns
+  let showOptionsDropdown = $state(false);
+  let showDurationDropdown = $state(false);
+  let showCustomDatePicker = $state(false);
+  let customEndDate = $state('');
+  let customEndTime = $state('23:59');
+  let draggedOptionIndex = $state<number | null>(null);
+  let dragOverOptionIndex = $state<number | null>(null);
+  
+  // Funciones para fecha personalizada
+  function getMinDate(): string {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  }
+  
+  function formatCustomDate(dateStr: string, timeStr: string): string {
+    if (!dateStr) return '';
+    const date = new Date(`${dateStr}T${timeStr}`);
+    return date.toLocaleDateString('es-ES', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+  
+  function applyCustomDate() {
+    if (customEndDate) {
+      onDurationChange?.(`custom:${customEndDate}T${customEndTime}`);
+      showCustomDatePicker = false;
+      showDurationDropdown = false;
+    }
+  }
+  
+  function isCustomDuration(dur: string): boolean {
+    return dur?.startsWith('custom:') || false;
+  }
+  
+  function getDurationLabel(dur: string): string {
+    if (isCustomDuration(dur)) {
+      const dateTime = dur.replace('custom:', '');
+      const date = new Date(dateTime);
+      return date.toLocaleDateString('es-ES', { 
+        day: 'numeric', 
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+    return durations.find(d => d.value === dur)?.label || 'Sin límite';
+  }
+  
+  // Funciones para drag and drop de opciones
+  function handleOptionDragStart(e: DragEvent, index: number) {
+    draggedOptionIndex = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index));
+    }
+  }
+  
+  function handleOptionDragOver(e: DragEvent, index: number) {
+    e.preventDefault();
+    if (draggedOptionIndex !== null && draggedOptionIndex !== index) {
+      dragOverOptionIndex = index;
+    }
+  }
+  
+  function handleOptionDragLeave() {
+    dragOverOptionIndex = null;
+  }
+  
+  function handleOptionDrop(e: DragEvent, dropIndex: number) {
+    e.preventDefault();
+    if (draggedOptionIndex !== null && draggedOptionIndex !== dropIndex) {
+      // Reordenar opciones
+      const newOptions = [...options];
+      const [draggedItem] = newOptions.splice(draggedOptionIndex, 1);
+      newOptions.splice(dropIndex, 0, draggedItem);
+      options = newOptions;
+      
+      // Actualizar opción activa si es necesario
+      if (activeOptionId === options[draggedOptionIndex]?.id) {
+        // La opción arrastrada era la activa, actualizar
+      }
+    }
+    draggedOptionIndex = null;
+    dragOverOptionIndex = null;
+  }
+  
+  function handleOptionDragEnd() {
+    draggedOptionIndex = null;
+    dragOverOptionIndex = null;
+  }
 
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
   let scrollContainer: HTMLElement | null = null;
@@ -93,15 +191,28 @@
   let prevOptionsLength = $state(options.length);
 
   // Manejar botón atrás del navegador
+  let isClosingViaBack = false;
+  
   onMount(() => {
+    // Guardar el estado actual antes de pushear el nuevo
+    const previousState = history.state;
+    const previousUrl = window.location.href;
     history.pushState({ modal: 'maximizedEdit' }, '');
     
     const handlePopState = () => {
+      if (isClosingViaBack) return;
+      isClosingViaBack = true;
+      
+      // Restaurar el estado anterior inmediatamente para evitar cascada
+      history.pushState(previousState, '', previousUrl);
+      
       onClose();
     };
     
     const handleCloseModals = () => {
-      onClose();
+      if (isClosingViaBack) return;
+      // Si se cierra por otro evento (no por back), quitar el estado del historial
+      history.back();
     };
     
     window.addEventListener('popstate', handlePopState);
@@ -216,13 +327,13 @@
   <!-- HEADER -->
   <div class="absolute top-0 left-0 w-full z-50 flex flex-col pointer-events-none">
     <!-- DataBar / Indicadores -->
-    <div class="w-full px-2 flex gap-0.5 h-1.5 pointer-events-auto mt-2 z-50">
+    <div class="w-full px-2 flex gap-0.5 h-1 pointer-events-auto mt-1.5 z-50">
       {#each options as opt, idx}
         {@const isActive = idx === activeIndex}
         <button
           class="h-full transition-all duration-700 ease-out overflow-hidden relative rounded-sm flex-1 cursor-pointer"
           style:background-color={opt.color}
-          style:transform={isActive ? "scaleY(1.5)" : "scaleY(1)"}
+          style:transform={isActive ? "scaleY(1.3)" : "scaleY(1)"}
           style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);"
           onclick={() => {
             onOptionChange(opt.id);
@@ -257,26 +368,228 @@
         </button>
       </div>
       
-      <!-- Info de opciones y tiempo -->
+      <!-- Info de opciones y tiempo con dropdowns -->
       <div class="poll-meta-info">
-        <div class="meta-item-row">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          <span>{totalOptions || options.length} opciones</span>
+        <!-- Dropdown de opciones -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="dropdown-container" onmousedown={(e) => e.stopPropagation()}>
+          <button 
+            type="button"
+            class="meta-dropdown-btn"
+            onclick={() => showOptionsDropdown = !showOptionsDropdown}
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <span>{totalOptions || options.length} opciones</span>
+            <svg class="w-3 h-3 chevron-icon {showOptionsDropdown ? 'open' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {#if showOptionsDropdown}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="meta-dropdown options-dropdown-max" transition:fly={{ y: -5, duration: 150 }} onclick={(e) => e.stopPropagation()}>
+              <div class="dropdown-header-max">
+                <span>Ir a opción</span>
+                <span class="drag-hint-max">⋮⋮ Arrastra para ordenar</span>
+              </div>
+              {#each options as opt, i (opt.id)}
+                {@const hasText = opt.label.trim().length > 0}
+                {@const hasMedia = opt.imageUrl}
+                <div 
+                  class="dropdown-option-row-max {draggedOptionIndex === i ? 'dragging' : ''} {dragOverOptionIndex === i ? 'drag-over' : ''}"
+                  draggable="true"
+                  ondragstart={(e) => handleOptionDragStart(e, i)}
+                  ondragover={(e) => handleOptionDragOver(e, i)}
+                  ondragleave={handleOptionDragLeave}
+                  ondrop={(e) => handleOptionDrop(e, i)}
+                  ondragend={handleOptionDragEnd}
+                  role="listitem"
+                >
+                  <!-- Drag handle -->
+                  <div class="drag-handle-max">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                      <circle cx="9" cy="6" r="1.5"/>
+                      <circle cx="15" cy="6" r="1.5"/>
+                      <circle cx="9" cy="12" r="1.5"/>
+                      <circle cx="15" cy="12" r="1.5"/>
+                      <circle cx="9" cy="18" r="1.5"/>
+                      <circle cx="15" cy="18" r="1.5"/>
+                    </svg>
+                  </div>
+                  <button
+                    type="button"
+                    class="dropdown-option-max {activeIndex === i ? 'active' : ''} {!hasText && !hasMedia ? 'incomplete' : ''}"
+                    onclick={() => {
+                      onOptionChange(opt.id);
+                      scrollToOption(i);
+                      showOptionsDropdown = false;
+                    }}
+                  >
+                    <span class="option-dot-max" style="background-color: {opt.color};"></span>
+                    <span class="option-num-max">{i + 1}</span>
+                    <span class="option-text-max">{opt.label.trim() || `Opción ${i + 1}`}</span>
+                    {#if !hasText && !hasMedia}
+                      <svg class="w-3.5 h-3.5 warning-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    {:else if hasMedia}
+                      <svg class="w-3 h-3 media-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    {/if}
+                  </button>
+                  <!-- Botón eliminar (solo si hay más de 2 opciones) -->
+                  {#if options.length > 2}
+                    <button
+                      type="button"
+                      class="delete-btn-max"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        onRemoveOption(opt.id);
+                      }}
+                      title="Eliminar opción {i + 1}"
+                      aria-label="Eliminar opción {i + 1}"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  {/if}
+                </div>
+              {/each}
+              {#if canAddOption}
+                <button type="button" class="dropdown-option-max add-btn-max" onclick={() => { onAddOption?.(); }}>
+                  <Plus class="w-4 h-4" />
+                  <span>Añadir opción</span>
+                </button>
+              {/if}
+            </div>
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="dropdown-backdrop-max" onclick={() => showOptionsDropdown = false}></div>
+          {/if}
         </div>
+        
         <span class="meta-separator">•</span>
-        <div class="meta-item-row">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <select class="duration-select-maximized" bind:value={duration} onchange={(e) => onDurationChange?.(e.currentTarget.value)}>
-            <option value="1d">1 día</option>
-            <option value="3d">3 días</option>
-            <option value="7d">7 días</option>
-            <option value="30d">30 días</option>
-            <option value="never">Sin límite</option>
-          </select>
+        
+        <!-- Dropdown de duración -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="dropdown-container" onmousedown={(e) => e.stopPropagation()}>
+          <button 
+            type="button"
+            class="meta-dropdown-btn"
+            onclick={() => { showDurationDropdown = !showDurationDropdown; showCustomDatePicker = false; }}
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{getDurationLabel(duration)}</span>
+            <svg class="w-3 h-3 chevron-icon {showDurationDropdown ? 'open' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {#if showDurationDropdown}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="meta-dropdown duration-dropdown-max" transition:fly={{ y: -5, duration: 150 }} onclick={(e) => e.stopPropagation()}>
+              <div class="dropdown-header-max">Duración</div>
+              
+              {#if !showCustomDatePicker}
+                {#each durations as dur}
+                  <button
+                    type="button"
+                    class="dropdown-option-max {duration === dur.value ? 'active' : ''}"
+                    onclick={() => {
+                      onDurationChange?.(dur.value);
+                      showDurationDropdown = false;
+                    }}
+                  >
+                    <svg class="w-4 h-4 duration-icon-max" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="duration-text-max">{dur.label}</span>
+                    {#if duration === dur.value}
+                      <svg class="w-4 h-4 check-icon-max" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                    {/if}
+                  </button>
+                {/each}
+                
+                <!-- Separador -->
+                <div class="dropdown-divider-max"></div>
+                
+                <!-- Opción de fecha personalizada -->
+                <button
+                  type="button"
+                  class="dropdown-option-max custom-date-btn {isCustomDuration(duration) ? 'active' : ''}"
+                  onclick={() => showCustomDatePicker = true}
+                >
+                  <svg class="w-4 h-4 duration-icon-max" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span class="duration-text-max">Fecha exacta...</span>
+                  {#if isCustomDuration(duration)}
+                    <svg class="w-4 h-4 check-icon-max" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                  {/if}
+                </button>
+              {:else}
+                <!-- Selector de fecha/hora -->
+                <div class="custom-date-picker-max">
+                  <button 
+                    type="button" 
+                    class="back-btn-max"
+                    onclick={() => showCustomDatePicker = false}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span>Volver</span>
+                  </button>
+                  
+                  <div class="date-time-inputs-max">
+                    <div class="input-group-max">
+                      <span class="input-label-max">Fecha de cierre</span>
+                      <input 
+                        type="date" 
+                        bind:value={customEndDate}
+                        min={getMinDate()}
+                        class="date-input-max"
+                      />
+                    </div>
+                    <div class="input-group-max">
+                      <span class="input-label-max">Hora</span>
+                      <input 
+                        type="time" 
+                        bind:value={customEndTime}
+                        class="time-input-max"
+                      />
+                    </div>
+                  </div>
+                  
+                  {#if customEndDate}
+                    <div class="date-preview-max">
+                      Cierra: {formatCustomDate(customEndDate, customEndTime)}
+                    </div>
+                  {/if}
+                  
+                  <button 
+                    type="button" 
+                    class="apply-date-btn-max"
+                    onclick={applyCustomDate}
+                    disabled={!customEndDate}
+                  >
+                    Aplicar fecha
+                  </button>
+                </div>
+              {/if}
+            </div>
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="dropdown-backdrop-max" onclick={() => { showDurationDropdown = false; showCustomDatePicker = false; }}></div>
+          {/if}
         </div>
       </div>
     </div>
@@ -1040,7 +1353,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 120px 12px 80px;
+    padding: 130px 12px 80px;
   }
 
   /* Card con bordes redondeados - igual para todos los tipos */
@@ -1544,7 +1857,7 @@
   /* Responsive */
   @media (max-width: 480px) {
     .option-card-container {
-      padding: 110px 8px 70px;
+      padding: 118px 8px 70px;
     }
     
     .quote-decoration {
@@ -1855,5 +2168,408 @@
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
+  }
+  
+  /* ========================================
+     DROPDOWNS DE META INFO
+     ======================================== */
+  .poll-meta-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0 8px;
+    pointer-events: auto;
+  }
+  
+  .meta-separator {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+  }
+  
+  .dropdown-container {
+    position: relative;
+  }
+  
+  .meta-dropdown-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .meta-dropdown-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .meta-dropdown-btn svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+  
+  .chevron-icon {
+    transition: transform 0.2s;
+    opacity: 0.5;
+  }
+  
+  .chevron-icon.open {
+    transform: rotate(180deg);
+  }
+  
+  .meta-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 260px;
+    max-width: 340px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: rgba(20, 20, 30, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 8px;
+    z-index: 200;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+  }
+  
+  .duration-dropdown-max {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  .meta-dropdown::-webkit-scrollbar {
+    width: 5px;
+  }
+  
+  .meta-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+  
+  .dropdown-header-max {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 6px 12px 8px;
+    font-weight: 600;
+  }
+  
+  .dropdown-option-max {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    color: rgba(255, 255, 255, 0.85);
+  }
+  
+  .dropdown-option-max:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  
+  .dropdown-option-max.active {
+    background: rgba(139, 92, 246, 0.15);
+  }
+  
+  .dropdown-option-max.incomplete {
+    opacity: 0.6;
+  }
+  
+  .dropdown-option-max.incomplete .option-text-max {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+  }
+  
+  .option-dot-max {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  
+  .option-num-max {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    min-width: 16px;
+  }
+  
+  .option-text-max {
+    flex: 1;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .warning-icon {
+    color: #f59e0b;
+    flex-shrink: 0;
+  }
+  
+  .media-icon {
+    color: rgba(255, 255, 255, 0.4);
+    flex-shrink: 0;
+  }
+  
+  .add-btn-max {
+    color: rgba(139, 92, 246, 0.9);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 6px;
+    padding-top: 12px;
+  }
+  
+  .add-btn-max:hover {
+    color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.1);
+  }
+  
+  .duration-icon-max {
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+  }
+  
+  .duration-text-max {
+    flex: 1;
+    font-size: 13px;
+  }
+  
+  .check-icon-max {
+    color: #8b5cf6;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  
+  .duration-dropdown-max .dropdown-option-max.active {
+    background: rgba(139, 92, 246, 0.15);
+  }
+  
+  .duration-dropdown-max .dropdown-option-max.active .duration-icon-max {
+    color: #8b5cf6;
+  }
+  
+  .dropdown-backdrop-max {
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+  }
+  
+  /* Header del dropdown con hint de drag */
+  .dropdown-header-max {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .drag-hint-max {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 400;
+  }
+  
+  /* Fila de opción con drag y delete */
+  .dropdown-option-row-max {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    position: relative;
+    transition: all 0.15s;
+  }
+  
+  .dropdown-option-row-max .dropdown-option-max {
+    flex: 1;
+  }
+  
+  .dropdown-option-row-max.dragging {
+    opacity: 0.5;
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 8px;
+  }
+  
+  .dropdown-option-row-max.drag-over {
+    border-top: 2px solid #8b5cf6;
+    margin-top: -2px;
+  }
+  
+  /* Drag handle */
+  .drag-handle-max {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 28px;
+    color: rgba(255, 255, 255, 0.25);
+    cursor: grab;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  
+  .drag-handle-max:hover {
+    color: rgba(255, 255, 255, 0.5);
+  }
+  
+  .drag-handle-max:active {
+    cursor: grabbing;
+  }
+  
+  /* Botón eliminar */
+  .delete-btn-max {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  
+  .delete-btn-max:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+  
+  /* Fecha personalizada */
+  .dropdown-divider-max {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 8px 0;
+  }
+  
+  .custom-date-btn .duration-icon-max {
+    color: rgba(139, 92, 246, 0.7);
+  }
+  
+  .custom-date-picker-max {
+    padding: 8px 4px;
+  }
+  
+  .back-btn-max {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s;
+    margin-bottom: 8px;
+  }
+  
+  .back-btn-max:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .date-time-inputs-max {
+    display: flex;
+    gap: 10px;
+    padding: 0 8px;
+    align-items: flex-end;
+  }
+  
+  .input-group-max {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .input-group-max:first-child {
+    flex: 1.5;
+  }
+  
+  .input-group-max:last-child {
+    flex: 1;
+    min-width: 100px;
+  }
+  
+  .input-label-max {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+  }
+  
+  .date-input-max,
+  .time-input-max {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: white;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.15s;
+  }
+  
+  .date-input-max:focus,
+  .time-input-max:focus {
+    border-color: rgba(139, 92, 246, 0.5);
+    background: rgba(139, 92, 246, 0.08);
+  }
+  
+  .date-input-max::-webkit-calendar-picker-indicator,
+  .time-input-max::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.5);
+    cursor: pointer;
+  }
+  
+  .date-preview-max {
+    padding: 10px 12px;
+    margin: 12px 8px 8px;
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+  }
+  
+  .apply-date-btn-max {
+    width: calc(100% - 16px);
+    margin: 4px 8px 8px;
+    padding: 12px;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .apply-date-btn-max:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+  }
+  
+  .apply-date-btn-max:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>

@@ -204,7 +204,14 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     
     // Otros servicios
     '*.railway.app',
-    'railway.app'
+    'railway.app',
+    
+    // Dominio propio de VouTop
+    'voutop.com',
+    '*.voutop.com',
+    'www.voutop.com',
+    'localhost',
+    '127.0.0.1'
   ],
   
   // Tipos MIME permitidos

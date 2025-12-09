@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from "svelte";
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    imageerror: { url: string };
+  }>();
 
   interface Props {
     url: string;
@@ -709,6 +711,7 @@
             onerror={(e) => {
               const img = e.target as HTMLImageElement;
               img.style.display = 'none';
+              dispatch('imageerror', { url: metadata.image });
             }}
           />
         </div>
