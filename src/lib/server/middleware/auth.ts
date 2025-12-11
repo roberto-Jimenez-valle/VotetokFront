@@ -21,14 +21,10 @@ export async function extractAuthOptional(event: RequestEvent): Promise<JWTPaylo
     try {
       const token = authHeader.split(' ')[1]
       const payload = await verifyJWT(token)
-      if (isRepostEndpoint) console.log('[Auth] ✅ Token de header válido, userId:', payload.userId)
       return payload
     } catch (err) {
-      if (isRepostEndpoint) console.log('[Auth] ⚠️ Token de header inválido:', err)
       // Token de header inválido, seguir buscando en cookie
     }
-  } else if (isRepostEndpoint) {
-    console.log('[Auth] ⚠️ No hay header Authorization')
   }
 
   // 2. Si no hay header, buscar en cookie httpOnly

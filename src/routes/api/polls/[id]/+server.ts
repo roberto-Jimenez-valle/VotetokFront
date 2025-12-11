@@ -1,7 +1,7 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
-export const GET: RequestHandler = async ({ params, locals, getClientAddress }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
   const poll = await prisma.poll.findUnique({
     where: { id: Number(params.id) },
     include: {
@@ -47,22 +47,15 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress }) 
     throw error(404, 'Poll not found');
   }
 
-  // Buscar TODOS los votos del usuario actual (para encuestas múltiples)
-  const userId = locals.user?.userId || locals.user?.id || null;
-  const ipAddress = getClientAddress();
-  
-  console.log('[API GET Poll] Buscando votos - userId:', userId, 'IP:', ipAddress, 'pollId:', params.id);
+  // Buscar votos del usuario actual SOLO por userId (no por IP)
+  const userId = locals.user?.userId;
   
   let userVotes: string[] = [];
-  if (userId || ipAddress) {
-    // Buscar por userId O por IP (el voto puede haberse registrado con cualquiera)
+  if (userId) {
     const existingVotes = await prisma.vote.findMany({
       where: {
         pollId: Number(params.id),
-        OR: [
-          ...(userId ? [{ userId: Number(userId) }] : []),
-          { ipAddress },
-        ],
+        userId: Number(userId)
       },
       include: {
         option: {
@@ -74,9 +67,8 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress }) 
       }
     });
     
-    console.log('[API GET Poll] Votos encontrados:', existingVotes.length, existingVotes.map(v => ({ optionKey: v.option?.optionKey, optionId: v.optionId })));
+    console.log('[API GET Poll] Votos del usuario', userId, ':', existingVotes.length);
     
-    // Devolver array de optionKeys votados
     userVotes = existingVotes
       .map(v => v.option?.optionKey)
       .filter((key): key is string => key !== null && key !== undefined);

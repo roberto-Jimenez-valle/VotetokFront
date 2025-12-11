@@ -555,9 +555,11 @@
   $: paginatedPoll = getPaginatedOptions(sortedPollOptions, currentPage);
   $: isSingleOptionPoll = sortedPollOptions.length === 1;
   $: isExpired = poll.closedAt ? isPollExpired(poll.closedAt) : false;
-  $: pollVotedOption = displayVotes[poll.id] || userVotes[poll.id];
+  // IMPORTANTE: Las claves de userVotes/displayVotes son strings
+  $: pollVotedOption = displayVotes[poll.id.toString()] || userVotes[poll.id.toString()];
   // pollVotedOption puede ser string o array - normalizar para comparaciones
   $: hasVotedAnyOption = Array.isArray(pollVotedOption) ? pollVotedOption.length > 0 : !!pollVotedOption;
+  
   $: votedOptionData = hasVotedAnyOption 
     ? poll.options.find((o: any) => 
         Array.isArray(pollVotedOption) 

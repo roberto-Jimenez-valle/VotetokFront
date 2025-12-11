@@ -5,7 +5,7 @@ import { prisma } from '$lib/server/prisma';
  * GET /api/polls/my-votes?pollIds=1,2,3
  * Obtiene los votos del usuario actual para las encuestas especificadas
  */
-export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
   try {
     const pollIdsParam = url.searchParams.get('pollIds');
     
@@ -19,22 +19,19 @@ export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => 
       return json({ data: {} });
     }
     
-    // Obtener userId del contexto de sesión o IP
-    const userId = locals.user?.userId || locals.user?.id || null;
-    const ipAddress = getClientAddress();
+    // Obtener userId del JWT - autenticación obligatoria
+    const userId = locals.user?.userId;
     
-    if (!userId && !ipAddress) {
+    if (!userId) {
+      // Usuario no autenticado - no tiene votos
       return json({ data: {} });
     }
     
-    // Buscar votos del usuario para las encuestas especificadas
+    // Buscar votos del usuario SOLO por userId (no por IP)
     const votes = await prisma.vote.findMany({
       where: {
         pollId: { in: pollIds },
-        OR: [
-          userId ? { userId: Number(userId) } : { ipAddress },
-          { ipAddress },
-        ],
+        userId: Number(userId)
       },
       include: {
         option: {

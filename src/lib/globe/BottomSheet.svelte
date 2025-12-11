@@ -3,8 +3,8 @@
   import "$lib/styles/trending-ranking.css";
   import "$lib/styles/bottom-sheet.css"; // ✅ Ya está importado aquí globalmente
   import type { Poll } from "./types";
-  import { currentUser } from "$lib/stores";
-  import { currentUser as authUser } from "$lib/stores/auth";
+  // Store unificado de autenticación
+  import { currentUser } from "$lib/stores/auth";
   import { apiGet, apiCall, apiPost, apiDelete } from "$lib/api/client";
 
   // Componentes de sección completos
@@ -871,9 +871,9 @@
   export const mainPollShares: number = 0;
   export const mainPollReposts: number = 0;
   // ID del usuario actual (para cargar amigos que votaron)
-  // Se obtiene del store currentUser o authUser - reactivo
+  // Se obtiene del store unificado currentUser
   let currentUserId: number | null = null;
-  $: currentUserId = $currentUser?.id || $authUser?.userId || null;
+  $: currentUserId = $currentUser?.id ?? $currentUser?.userId ?? null;
   // Amigos que han votado por opción (opcional)
   export const friendsByOption: Record<
     string,
@@ -1782,14 +1782,15 @@
       } catch (geocodeError) {
               }
 
-      // Validar que tenemos subdivisionId
+      // Si no hay subdivisionId, usar null (el voto aún debe enviarse)
+      // El backend aceptará votos sin subdivisión
       if (!subdivisionId) {
-                        return;
+        console.log('[sendVoteToBackend] ⚠️ Sin subdivisionId, enviando voto sin subdivisión');
       }
 
             const result = await apiPost(`/api/polls/${numericPollId}/vote`, {
         optionId,
-        userId: $currentUser?.id || $authUser?.userId || null,
+        userId: $currentUser?.id ?? $currentUser?.userId ?? null,
         latitude,
         longitude,
         subdivisionId,
@@ -2035,7 +2036,7 @@
       const result = await apiPost(`/api/polls/${numericPollId}/options`, {
         label: label,
         color: color,
-        userId: $currentUser?.id || $authUser?.userId || null,
+        userId: $currentUser?.id ?? $currentUser?.userId ?? null,
       });
 
       // Actualizar la opción temporal con los datos del servidor
@@ -2086,7 +2087,7 @@
       const result = await apiPost(`/api/polls/${numericPollId}/options`, {
         label: option.label.trim(),
         color: option.color,
-        userId: $currentUser?.id || $authUser?.userId || null,
+        userId: $currentUser?.id ?? $currentUser?.userId ?? null,
       });
 
       // Actualizar la opción temporal con los datos del servidor
@@ -2154,7 +2155,7 @@
 
       const result = await apiPost(`/api/polls/${numericPollId}/options`, {
         label: newOptionLabel[pollId],
-        userId: $currentUser?.id || $authUser?.userId || null,
+        userId: $currentUser?.id ?? $currentUser?.userId ?? null,
       });
             // Actualizar la encuesta localmente
       const newOption = {
@@ -2304,9 +2305,9 @@
 
       // Guardar las opciones votadas antes de borrar (para encuestas múltiples)
       const votedOptions = userVotes[pollId];
-            // DELETE no debe enviar body (el servidor usa currentUser del contexto)
+            // DELETE requiere autenticación - el userId viene del JWT
       await apiCall(`/api/polls/${numericPollId}/vote`, {
-        method: "DELETE",
+        method: "DELETE"
       });
 
       // Actualizar estado local - eliminar voto de ambos registros
@@ -2380,7 +2381,7 @@
     // Obtener los votos del usuario para esta encuesta
     const userVoteForPoll = userVotes[poll.id.toString()];
     const isMultiple = poll.multipleChoice || poll.pollType === 'multiple' || poll.type === 'multiple';
-
+    
     // Detectar si alguna opción tiene imagen
     const hasAnyImages = (poll.options || []).some((opt: any) => opt.imageUrl);
 
@@ -2403,8 +2404,6 @@
         hasVoted = String(userVoteForPoll) === optionKeyStr;
       }
       
-      console.log('[Transform] Option:', optionKeyStr, 'userVoteForPoll:', userVoteForPoll, 'voted:', hasVoted);
-
       const transformedOption = {
         id: opt.id,  // Mantener ID numérico para el backend
         key: optionKey,  // Key para comparar con userVotes

@@ -55,13 +55,22 @@ export async function apiCall(
   }
 
   // Agregar JWT si existe (para endpoints protegidos)
-  const token = get(authToken)
+  let token = get(authToken)
+  
+  // Fallback: intentar obtener del localStorage si el store está vacío
+  if (!token && typeof window !== 'undefined') {
+    token = localStorage.getItem('voutop-auth-token')
+    if (token) {
+      console.log('[apiCall] 🔄 Token obtenido de localStorage (store vacío)')
+    }
+  }
+  
   const authHeaders: Record<string, string> = {}
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`
     console.debug('[apiCall] ✅ Token JWT encontrado, agregando a headers')
   } else {
-    console.debug('[apiCall] ⚠️ No hay token JWT - petición sin autenticación')
+    console.warn('[apiCall] ⚠️ No hay token JWT - petición sin autenticación')
   }
 
   // Combinar headers

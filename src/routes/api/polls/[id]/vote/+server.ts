@@ -1,30 +1,32 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
-export const POST: RequestHandler = async ({ params, request, getClientAddress }) => {
+export const POST: RequestHandler = async ({ params, request, getClientAddress, locals }) => {
   try {
-    console.log('═'.repeat(60));
-    console.log('[API Vote] 🚀 ENDPOINT LLAMADO - Inicio del proceso de votación');
-    console.log('═'.repeat(60));
-    
     const { id } = params;
-    console.log('[API Vote] 📌 Poll ID:', id);
+    
+    // 🔐 AUTENTICACIÓN OBLIGATORIA
+    const userId = locals?.user?.userId;
+    if (!userId) {
+      console.log('[API Vote] ❌ Usuario no autenticado');
+      throw error(401, 'Debes iniciar sesión para votar');
+    }
+    
+    console.log('[API Vote] ✅ Usuario autenticado:', userId);
     
     let body;
     try {
       body = await request.json();
-      console.log('[API Vote] 📦 Body recibido:', JSON.stringify(body, null, 2));
     } catch (err) {
-      console.error('[API Vote] ❌ Error parseando JSON:', err);
       throw error(400, 'Invalid JSON in request body');
     }
   
-  const { optionId, userId, latitude, longitude, subdivisionId } = body;
+  const { optionId, latitude, longitude, subdivisionId } = body;
 
-  console.log('[API Vote] 📥 Voto recibido y parseado:', {
+  console.log('[API Vote] 📥 Voto recibido:', {
     pollId: id,
     optionId,
-    userId: userId || 'anónimo',
+    userId,
     latitude,
     longitude,
     subdivisionId
@@ -77,30 +79,26 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
   
   let existingVote;
   
+  // AUTENTICACIÓN OBLIGATORIA: buscar solo por userId (no por IP)
   if (isMultiplePoll) {
     // ENCUESTA MÚLTIPLE: buscar si ya votó por esta OPCIÓN específica
     existingVote = await prisma.vote.findFirst({
       where: {
         pollId: Number(id),
-        optionId: optionId,  // Buscar por opción específica
-        OR: [
-          userId ? { userId: Number(userId) } : { ipAddress },
-          { ipAddress },
-        ],
+        optionId: optionId,
+        userId: Number(userId)
       },
     });
-    console.log('[API Vote] 🔄 Múltiple: Buscando voto para opción específica:', optionId);
+    console.log('[API Vote] 🔄 Múltiple: Buscando voto del usuario', userId, 'para opción:', optionId);
   } else {
     // ENCUESTA SIMPLE: buscar si ya votó en cualquier opción
     existingVote = await prisma.vote.findFirst({
       where: {
         pollId: Number(id),
-        OR: [
-          userId ? { userId: Number(userId) } : { ipAddress },
-          { ipAddress },
-        ],
+        userId: Number(userId)
       },
     });
+    console.log('[API Vote] 🔄 Simple: Buscando voto existente del usuario', userId);
   }
 
   let vote;
@@ -190,33 +188,27 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
   }
 };
 
-export const DELETE: RequestHandler = async ({ params, request, getClientAddress, locals }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
   try {
-    console.log('[API Vote DELETE] 🗑️ Iniciando eliminación de voto(s)');
-    
     const { id } = params;
     
-    // Obtener userId del contexto de sesión (locals.user) o null para anónimos
-    const userId = locals.user?.userId || locals.user?.id || null;
-    const ipAddress = getClientAddress();
+    // 🔐 AUTENTICACIÓN OBLIGATORIA
+    const userId = locals?.user?.userId;
+    if (!userId) {
+      throw error(401, 'Debes iniciar sesión para eliminar tu voto');
+    }
     
-    console.log('[API Vote DELETE] locals.user:', locals.user);
-    console.log('[API Vote DELETE] Buscando votos para pollId:', id, 'userId:', userId, 'IP:', ipAddress);
-    
-    // Buscar TODOS los votos del usuario en esta encuesta (para múltiples)
+    // Buscar votos del usuario en esta encuesta
+    // IMPORTANTE: Convertir userId a Number para asegurar match correcto
     const existingVotes = await prisma.vote.findMany({
       where: {
         pollId: Number(id),
-        OR: [
-          userId ? { userId: Number(userId) } : { ipAddress },
-          { ipAddress },
-        ],
+        userId: Number(userId)
       },
     });
     
     if (existingVotes.length === 0) {
-      console.log('[API Vote DELETE] ⚠️ No se encontraron votos para eliminar');
-      throw error(404, 'No se encontraron votos');
+      throw error(404, 'No tienes votos en esta encuesta');
     }
     
     // Eliminar TODOS los votos

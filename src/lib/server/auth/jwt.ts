@@ -20,13 +20,14 @@ export interface JWTPayload {
 }
 
 /**
- * Generar Access Token (15 minutos de validez)
+ * Generar Access Token (24 horas de validez en desarrollo, 15 min en producción)
  */
 export async function generateAccessToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise<string> {
+  const isDev = process.env.NODE_ENV !== 'production'
   return new SignJWT(payload as any)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('15m')
+    .setExpirationTime(isDev ? '24h' : '15m')
     .sign(JWT_SECRET)
 }
 

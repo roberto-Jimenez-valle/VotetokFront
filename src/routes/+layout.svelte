@@ -4,12 +4,8 @@
 	import UnifiedThemeToggle from "$lib/components/UnifiedThemeToggle.svelte";
 	import UnderConstruction from "$lib/UnderConstruction.svelte";
 	import InstallPWABanner from "$lib/InstallPWABanner.svelte";
-	import { setCurrentUser } from "$lib/stores";
-	import {
-		currentUser as authUser,
-		isAuthenticated,
-		setAuth,
-	} from "$lib/stores/auth";
+	// Store unificado de autenticación
+	import { setCurrentUser, setAuth, initAuth } from "$lib/stores/auth";
 
 	let { children } = $props();
 	let hasAccess = $state(false);
@@ -113,73 +109,10 @@
 			}
 		}
 
-		// 👤 Cargar usuario: primero intenta OAuth real, luego test user
-		// 1. Verificar autenticación real (OAuth/JWT)
-		const realAuthToken = localStorage.getItem("voutop-auth-token");
-		const realAuthUser = localStorage.getItem("voutop-user");
-
-		if (realAuthToken && realAuthUser) {
-			// Usuario autenticado con OAuth - PRIORIDAD
-			try {
-				const user = JSON.parse(realAuthUser);
-
-				// Guardar token en el store authToken para que apiCall funcione
-				setAuth(realAuthToken, user);
-
-				// También actualizar el store currentUser con el formato esperado
-				setCurrentUser({
-					id: user.userId,
-					username: user.username,
-					displayName: user.displayName,
-					email: user.email,
-					avatarUrl: user.avatarUrl,
-					verified: user.verified || false,
-					countryIso3: user.countryIso3,
-					subdivisionId: user.subdivisionId,
-					role: user.role,
-				});
-				console.log(
-					"✅ Usuario autenticado con OAuth:",
-					user.username,
-					"(ID:",
-					user.userId + ")",
-				);
-			} catch (error) {
-				console.error("❌ Error al cargar usuario OAuth:", error);
-			}
-		} else {
-			// 2. Fallback: Usuario de prueba (solo desarrollo)
-			const savedUser = localStorage.getItem("voutop-test-user");
-			if (savedUser) {
-				try {
-					const user = JSON.parse(savedUser);
-					setCurrentUser({
-						id: user.id,
-						username: user.username,
-						displayName: user.displayName,
-						email: user.email,
-						avatarUrl: user.avatarUrl,
-						verified: user.verified,
-						countryIso3: user.countryIso3,
-						subdivisionId: user.subdivisionId,
-						role: user.role,
-					});
-					console.log(
-						"🧪 Usuario de prueba cargado:",
-						user.username,
-						"(ID:",
-						user.id + ")",
-					);
-				} catch (error) {
-					console.error(
-						"❌ Error al cargar usuario de prueba:",
-						error,
-					);
-				}
-			} else {
-				console.log("👤 Sin usuario - modo autenticación disponible");
-			}
-		}
+		// 👤 Inicializar autenticación desde el store unificado
+		// initAuth() se llama automáticamente al importar el módulo,
+		// pero lo llamamos explícitamente para asegurar que se ejecute después del callback
+		initAuth();
 
 		// Activar modo dark por defecto
 		document.documentElement.classList.add("dark");

@@ -2,8 +2,8 @@
   import { fade, fly } from 'svelte/transition';
   import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles, Search, Maximize2, LayoutGrid, HelpCircle } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
-  import { currentUser as storeUser } from '$lib/stores';
-  import { currentUser as authUser, isAuthenticated } from '$lib/stores/auth';
+  // Store unificado de autenticación
+  import { currentUser, isAuthenticated } from '$lib/stores/auth';
   import { apiPost } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
@@ -885,8 +885,8 @@
   // Submit del formulario
   async function handleSubmit() {
                         
-    // Verificar si el usuario está autenticado (usar authUser que se sincroniza desde localStorage)
-    const currentUserData = $authUser || $storeUser;
+    // Verificar si el usuario está autenticado (store unificado)
+    const currentUserData = $currentUser;
     if (!currentUserData) {
             showAuthModal = true;
             return;
