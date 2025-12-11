@@ -28,7 +28,7 @@
     // Crear el portal target en el body
     portalTarget = document.createElement('div');
     portalTarget.className = 'svelte-portal';
-    portalTarget.style.cssText = 'position: fixed; inset: 0; z-index: 999999; pointer-events: none;';
+    portalTarget.style.cssText = 'position: fixed; inset: 0; z-index: 2147483647; pointer-events: none;';
     document.body.appendChild(portalTarget);
     mounted = true;
   });

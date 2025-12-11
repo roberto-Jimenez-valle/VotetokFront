@@ -246,7 +246,7 @@
       
       if (point) {
         newValues.set(optionKey, {
-          y: getYPosition(point.y, 200),
+          y: getYPosition(point.y, 240),
           value: point.y,
           color: point.color
         });
@@ -519,8 +519,8 @@
             <!-- Scrollable chart area -->
             <div class="chart-scroll-area" bind:this={chartScrollArea} onscroll={handleChartScroll}>
               <svg 
-                viewBox="0 0 600 220" 
-                preserveAspectRatio="xMinYMid meet"
+                viewBox="0 0 600 260" 
+                preserveAspectRatio="none"
                 class="chart-svg"
                 bind:this={chartSvgElement}
                 role="img"
@@ -528,7 +528,7 @@
               >
                 <!-- Horizontal grid lines -->
                 {#each getYAxisTicks() as tick, i}
-                  {@const y = getYPosition(tick, 200)}
+                  {@const y = getYPosition(tick, 240)}
                   <line 
                     x1="0" 
                     y1={y} 
@@ -542,7 +542,7 @@
                 
                 <!-- Lines per option -->
                 {#each Array.from(historicalDataByOption.entries()) as [optionKey, seriesData]}
-                  {@const chartPath = createChartPath(seriesData, 600, 200, 0, 0)}
+                  {@const chartPath = createChartPath(seriesData, 600, 240, 0, 0)}
                   {@const color = seriesData[0]?.color || '#3b82f6'}
                   {@const isVisible = visibleOptions.has(optionKey)}
                   {@const lastPoint = seriesData[seriesData.length - 1]}
@@ -560,7 +560,7 @@
                     
                     <!-- End dot -->
                     {#if lastPoint}
-                      {@const dotY = getYPosition(lastPoint.y, 200)}
+                      {@const dotY = getYPosition(lastPoint.y, 240)}
                       <circle 
                         cx="600" 
                         cy={dotY} 
@@ -590,7 +590,7 @@
             <!-- Fixed Y-axis labels on right -->
             <div class="y-axis-labels">
               {#each getYAxisTicks() as tick}
-                {@const y = getYPosition(tick, 200)}
+                {@const y = getYPosition(tick, 240)}
                 <div class="y-label" style="top: {y}px">
                   {tick.toFixed(0)}
                 </div>
@@ -818,15 +818,16 @@
     max-height: 85vh;
     background: linear-gradient(180deg, #0d0d0d 0%, #1a1a1a 100%);
     border-radius: 24px 24px 0 0;
-    padding: 0 16px 24px;
+    padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+    padding-bottom: max(24px, calc(24px + env(safe-area-inset-bottom)));
     overflow: hidden;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-bottom: none;
-    overscroll-behavior: contain; /* Prevent scroll chaining to background */
-    touch-action: pan-y; /* Allow vertical scroll inside modal */
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
   
   .drag-handle {
@@ -1169,7 +1170,7 @@
   
   .chart-container {
     position: relative;
-    height: 220px;
+    height: 260px;
     margin: 16px 0;
     background: rgba(0, 0, 0, 0.2);
     border-radius: 16px;
@@ -1353,6 +1354,76 @@
     .time-btn {
       padding: 8px 14px;
       font-size: 12px;
+    }
+  }
+  
+  @media (min-width: 640px) {
+    .modal-sheet {
+      max-width: 700px;
+      width: 700px;
+      max-height: 88vh;
+    }
+    
+    .chart-container {
+      height: 280px;
+    }
+    
+    .chart-svg {
+      width: 800px;
+      height: 280px;
+    }
+    
+    .donut-svg {
+      width: 220px;
+      height: 220px;
+    }
+    
+    .bar-chart-item {
+      gap: 16px;
+    }
+    
+    .bar-label {
+      max-width: 250px;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .modal-sheet {
+      max-width: 850px;
+      width: 850px;
+      max-height: 90vh;
+    }
+    
+    .chart-container {
+      height: 340px;
+    }
+    
+    .chart-svg {
+      width: 1000px;
+      height: 340px;
+    }
+    
+    .donut-svg {
+      width: 260px;
+      height: 260px;
+    }
+    
+    .bar-label {
+      max-width: 350px;
+      font-size: 14px;
+    }
+    
+    .bar-percentage {
+      font-size: 16px;
+    }
+    
+    .y-label {
+      font-size: 11px;
+    }
+    
+    .value-label {
+      font-size: 12px;
+      padding: 3px 7px;
     }
   }
 </style>

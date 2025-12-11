@@ -1893,26 +1893,30 @@
     onClose={() => showFriendsVotesModal = false}
   />
 
-  <!-- COMMENTS MODAL -->
-  <CommentsModal 
-    bind:isOpen={showCommentsModal}
-    {pollId}
-    {pollTitle}
-  />
+  <!-- COMMENTS MODAL (Portal para salir del contexto padre) -->
+  <Portal>
+    <CommentsModal 
+      bind:isOpen={showCommentsModal}
+      {pollId}
+      {pollTitle}
+    />
+  </Portal>
   
-  <!-- STATS MODAL -->
-  <StatsBottomModal 
-    bind:isOpen={showStatsModal}
-    {pollId}
-    {pollTitle}
-    options={options.map(opt => ({ 
-      key: opt.key || opt.optionKey || String(opt.id),
-      label: opt.label || opt.optionLabel || '', 
-      color: opt.color,
-      votes: opt.voteCount || opt.votes || 0
-    }))}
-    onClose={() => showStatsModal = false}
-  />
+  <!-- STATS MODAL (Portal para salir del contexto padre) -->
+  <Portal>
+    <StatsBottomModal 
+      bind:isOpen={showStatsModal}
+      {pollId}
+      {pollTitle}
+      options={options.map(opt => ({ 
+        key: opt.key || opt.optionKey || String(opt.id),
+        label: opt.label || opt.optionLabel || '', 
+        color: opt.color,
+        votes: opt.voteCount || opt.votes || 0
+      }))}
+      onClose={() => showStatsModal = false}
+    />
+  </Portal>
   
   <!-- Toast de enlace copiado -->
   {#if showShareToast}

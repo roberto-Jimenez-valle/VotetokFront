@@ -1736,19 +1736,21 @@
   onClose={() => showFriendsVotesModal = false}
 />
 
-<!-- MODAL DE ESTADÍSTICAS -->
-<StatsBottomModal 
-  bind:isOpen={showStatsModal}
-  pollId={poll.id}
-  pollTitle={poll.title || poll.question || 'Estadísticas'}
-  options={poll.options?.map((opt: any) => ({ 
-    key: opt.key || opt.optionKey,
-    label: opt.label || opt.optionLabel, 
-    color: opt.color,
-    votes: opt.voteCount || opt.votes || 0
-  })) || []}
-  onClose={() => showStatsModal = false}
-/>
+<!-- MODAL DE ESTADÍSTICAS (Portal para salir del BottomSheet) -->
+<Portal>
+  <StatsBottomModal 
+    bind:isOpen={showStatsModal}
+    pollId={poll.id}
+    pollTitle={poll.title || poll.question || 'Estadísticas'}
+    options={poll.options?.map((opt: any) => ({ 
+      key: opt.key || opt.optionKey,
+      label: opt.label || opt.optionLabel, 
+      color: opt.color,
+      votes: opt.voteCount || opt.votes || 0
+    })) || []}
+    onClose={() => showStatsModal = false}
+  />
+</Portal>
 
 <!-- MODAL DE COMENTARIOS (Portal para salir del BottomSheet) -->
 <Portal>

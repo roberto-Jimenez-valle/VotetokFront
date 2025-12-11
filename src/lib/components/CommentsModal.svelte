@@ -377,8 +377,8 @@
   .comments-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 99998;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999998;
     backdrop-filter: blur(4px);
   }
   
@@ -387,11 +387,11 @@
     bottom: 0;
     left: 0;
     right: 0;
-    max-height: 95vh;
-    height: 95vh;
+    height: 92vh;
+    max-height: 92vh;
     background: #1a1a1a;
     border-radius: 20px 20px 0 0;
-    z-index: 99999;
+    z-index: 9999999;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -447,8 +447,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 16px;
-    min-height: 200px;
-    max-height: calc(85vh - 180px);
+    min-height: 100px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   }
@@ -592,8 +591,9 @@
   .input-area {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding: 12px 16px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-bottom: max(16px, calc(16px + env(safe-area-inset-bottom)));
     background: #1a1a1a;
+    flex-shrink: 0;
   }
   
   .replying-to {
@@ -719,10 +719,22 @@
   
   @media (min-width: 640px) {
     .comments-modal {
-      max-width: 500px;
+      max-width: 800px;
+      width: 800px;
+      height: 80vh;
+      max-height: 80vh;
       left: 50%;
-      transform: translateX(-50%);
+      right: auto;
+      margin-left: -400px; /* Half of max-width */
       border-radius: 20px 20px 0 0;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .comments-modal {
+      max-width: 900px;
+      width: 900px;
+      margin-left: -450px;
     }
   }
 </style>
