@@ -198,7 +198,9 @@ export const POST: RequestHandler = async (event) => {
               color: opt.color,
               imageUrl: opt.imageUrl || null,
               createdById: opt.createdById || finalUserId,
-              displayOrder: opt.displayOrder ?? index
+              displayOrder: opt.displayOrder ?? index,
+              // Campo para indicar si esta opción es la correcta
+              isCorrect: opt.isCorrect || false,
             }))
           }
         },

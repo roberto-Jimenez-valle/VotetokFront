@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { fade, fly, scale } from 'svelte/transition';
-  import { X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-svelte';
+  import { fade, fly } from 'svelte/transition';
   import { onMount, tick } from 'svelte';
   
   interface Props {
@@ -10,348 +9,1061 @@
   
   let { isOpen = $bindable(false), onClose }: Props = $props();
   
-  let currentStep = $state(0);
-  let highlightRect = $state<DOMRect | null>(null);
-  let tooltipPosition = $state<'top' | 'bottom' | 'left' | 'right' | 'top-fixed' | 'top-higher'>('bottom');
-  let isReady = $state(false);
+  // Estado principal
+  let message = $state('');
+  let subMessage = $state('');
+  let isRunning = $state(false);
+  let canAdvance = $state(true);
+  let canGoBack = $state(false);
+  let showSkip = $state(true);
+  let showFinalOptions = $state(false);
+  let currentStepIndex = $state(0);
   
-  // Definición de los pasos del tutorial con selectores CSS reales
-  const tutorialSteps = [
-    {
-      id: 'welcome',
-      title: '¡Bienvenido al Tutorial!',
-      description: 'Te guiaré paso a paso para crear tu primera encuesta. Voy a señalar cada elemento importante.',
-      selector: null,
-      action: null,
-      position: 'center'
-    },
-    {
-      id: 'title',
-      title: '1. Escribe tu pregunta',
-      description: 'Este es el campo del título. Escribe aquí la pregunta de tu encuesta. Ejemplo: "¿Cuál es tu comida favorita?"',
-      selector: '.poll-title-input',
-      action: 'Haz clic y escribe tu pregunta',
-      position: 'bottom'
-    },
-    {
-      id: 'option-card',
-      title: '2. Las tarjetas de opciones',
-      description: 'Cada tarjeta representa una opción de respuesta. Los usuarios votarán haciendo clic en ellas.',
-      selector: '.option-slide.is-active .poll-option-card, .option-slide:first-child .poll-option-card',
-      action: 'Haz clic en la tarjeta para editarla',
-      position: 'top'
-    },
-    {
-      id: 'option-textarea',
-      title: '3. Escribe en la opción',
-      description: 'Escribe el texto de la opción aquí. Puede ser una respuesta corta o una frase.',
-      selector: '.option-slide.is-active .option-label-edit, .option-slide:first-child .option-label-edit, .poll-option-card .option-label-edit',
-      action: 'Escribe el texto de la respuesta',
-      position: 'top-higher'
-    },
-    {
-      id: 'yesno-btn',
-      title: '4. Botón Sí/No',
-      description: 'Este botón (yin-yang) convierte la opción en dos sub-respuestas: Sí y No. Útil para preguntas de confirmación.',
-      selector: '.option-slide.is-active .yesno-btn, .option-slide:first-child .yesno-btn, .edit-buttons .yesno-btn',
-      action: 'Pulsa para activar modo Sí/No',
-      position: 'left'
-    },
-    {
-      id: 'correct-btn',
-      title: '5. Marcar como correcta',
-      description: 'Si es un quiz, marca esta opción como la respuesta correcta. Se revelará después de votar.',
-      selector: '.option-slide.is-active .correct-btn, .option-slide:first-child .correct-btn, .edit-buttons .correct-btn',
-      action: 'Pulsa para marcar como correcta',
-      position: 'left'
-    },
-    {
-      id: 'color-btn',
-      title: '6. Cambiar color',
-      description: 'Personaliza el color de cada opción para hacerla más visual y atractiva.',
-      selector: '.option-slide.is-active .color-btn, .option-slide:first-child .color-btn, .edit-buttons .color-btn',
-      action: 'Pulsa para abrir el selector de color',
-      position: 'left'
-    },
-    {
-      id: 'giphy-btn',
-      title: '7. Añadir GIF',
-      description: 'Añade GIFs animados de GIPHY para hacer tu encuesta más divertida y visual.',
-      selector: '.option-slide.is-active .giphy-btn, .option-slide:first-child .giphy-btn, .edit-buttons .giphy-btn',
-      action: 'Pulsa para buscar GIFs',
-      position: 'top-fixed'
-    },
-    {
-      id: 'delete-btn',
-      title: '8. Eliminar opción',
-      description: 'Elimina una opción si no la necesitas. Siempre debes mantener al menos 2 opciones.',
-      selector: '.option-slide.is-active .delete-btn, .option-slide:first-child .delete-btn, .edit-buttons .delete-btn',
-      action: 'Pulsa para eliminar esta opción',
-      position: 'top-fixed'
-    },
-    {
-      id: 'indicators',
-      title: '9. Navegación de opciones',
-      description: 'Navega entre opciones con estos puntos.',
-      selector: '.options-indicators-top, .pagination-dots',
-      action: 'Pulsa un punto para cambiar',
-      position: 'bottom'
-    },
-    {
-      id: 'poll-type-single',
-      title: '10. Tipo: Simple',
-      description: 'Cada usuario puede votar UNA sola opción. Es el tipo más común.',
-      selector: '.poll-types-inline button:first-child',
-      action: 'Icono círculo = voto único',
-      position: 'top-fixed'
-    },
-    {
-      id: 'poll-type-multiple',
-      title: '11. Tipo: Múltiple',
-      description: 'Los usuarios pueden votar VARIAS opciones a la vez.',
-      selector: '.poll-types-inline button:nth-child(2)',
-      action: 'Icono cuadrado = varios votos',
-      position: 'top-fixed'
-    },
-    {
-      id: 'poll-type-collaborative',
-      title: '12. Tipo: Colaborativa',
-      description: 'Los usuarios pueden AÑADIR sus propias opciones a tu encuesta.',
-      selector: '.poll-types-inline button:nth-child(3)',
-      action: 'Icono usuarios = todos participan',
-      position: 'top-fixed'
-    },
-    {
-      id: 'maximize-btn',
-      title: '13. Maximizar tarjeta',
-      description: 'Abre la tarjeta en pantalla completa para editar con más detalle.',
-      selector: '.maximize-button',
-      action: 'Pulsa para expandir',
-      position: 'top-fixed'
-    },
-    {
-      id: 'add-option',
-      title: '14. Añadir opción',
-      description: 'Crea nuevas opciones de respuesta. Máximo 10 opciones por encuesta.',
-      selector: '.add-option-floating-bottom',
-      action: 'Pulsa + para añadir',
-      position: 'top-fixed'
-    },
-    {
-      id: 'publish',
-      title: '15. ¡Publicar!',
-      description: 'Cuando esté todo listo, publica tu encuesta para que todos voten.',
-      selector: '.publish-btn',
-      action: 'Pulsa para publicar',
-      position: 'bottom'
-    },
-    {
-      id: 'finish',
-      title: '¡Tutorial completado! 🎉',
-      description: '¡Ya sabes todo! Ahora crea tu primera encuesta.',
-      selector: null,
-      action: null,
-      position: 'center'
-    }
-  ];
+  // Síntesis de voz
+  let speechEnabled = $state(true);
+  let isSpeaking = $state(false);
+  let speechSynth: SpeechSynthesis | null = null;
+  let spanishVoice: SpeechSynthesisVoice | null = null;
   
-  // Buscar elemento y calcular posición
-  async function updateHighlight() {
-    const step = tutorialSteps[currentStep];
+  // Posición del mensaje flotante
+  let messagePos = $state<'top' | 'bottom' | 'center'>('center');
+  
+  // Dedo animado
+  let finger = $state({ x: 0, y: 0, visible: false, tapping: false });
+  
+  // Spotlight para resaltar elemento
+  let spotlight = $state<{ x: number; y: number; width: number; height: number } | null>(null);
+  let showDimOverlay = $state(false);
+  
+  // Control de la demo
+  let demoAborted = false;
+  
+  // === UTILIDADES ===
+  const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+  
+  function hideFinger() {
+    finger = { ...finger, visible: false, tapping: false };
+    spotlight = null;
+    showDimOverlay = false;
+  }
+  
+  // Inicializar síntesis de voz
+  function initSpeech() {
+    if (typeof window === 'undefined') return;
     
-    if (!step.selector) {
-      highlightRect = null;
-      return;
-    }
+    speechSynth = window.speechSynthesis;
     
-    await tick();
-    
-    // Intentar con cada selector separado por coma
-    const selectors = step.selector.split(',').map(s => s.trim());
-    let element: Element | null = null;
-    
-    for (const sel of selectors) {
-      element = document.querySelector(sel);
-      if (element) break;
-    }
-    
-    if (element) {
-      const rect = element.getBoundingClientRect();
-      highlightRect = rect;
-      tooltipPosition = step.position as any || 'bottom';
+    // Buscar voz en español
+    const loadVoices = () => {
+      const voices = speechSynth?.getVoices() || [];
+      // Prioridad: español de España, luego cualquier español
+      spanishVoice = voices.find(v => v.lang === 'es-ES') 
+        || voices.find(v => v.lang.startsWith('es'))
+        || voices.find(v => v.lang === 'es-MX')
+        || null;
       
-      // Scroll suave al elemento si está fuera de vista
-      const isInView = rect.top >= 0 && rect.bottom <= window.innerHeight;
-      if (!isInView) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Recalcular después del scroll
-        setTimeout(() => {
-          const newRect = element!.getBoundingClientRect();
-          highlightRect = newRect;
-        }, 300);
-      }
-    } else {
-      highlightRect = null;
-    }
-  }
-  
-  function nextStep() {
-    if (currentStep < tutorialSteps.length - 1) {
-      currentStep++;
-      updateHighlight();
-    }
-  }
-  
-  function prevStep() {
-    if (currentStep > 0) {
-      currentStep--;
-      updateHighlight();
-    }
-  }
-  
-  function closeTutorial() {
-    isOpen = false;
-    currentStep = 0;
-    highlightRect = null;
-    onClose?.();
-  }
-  
-  function goToStep(index: number) {
-    if (index >= 0 && index < tutorialSteps.length) {
-      currentStep = index;
-      updateHighlight();
-    }
-  }
-  
-  // Actualizar highlight cuando cambia el paso o se abre
-  $effect(() => {
-    if (isOpen) {
-      isReady = false;
-      currentStep = 0;
-      // Dar tiempo al modal de creación a renderizar
-      setTimeout(() => {
-        isReady = true;
-        updateHighlight();
-      }, 500);
-    }
-  });
-  
-  // Re-calcular en resize
-  onMount(() => {
-    const handleResize = () => {
-      if (isOpen && isReady) {
-        updateHighlight();
+      if (spanishVoice) {
+        console.log('[Tutorial] Voz seleccionada:', spanishVoice.name, spanishVoice.lang);
       }
     };
     
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    // Las voces pueden tardar en cargar
+    if (speechSynth?.getVoices().length > 0) {
+      loadVoices();
+    } else {
+      speechSynth?.addEventListener('voiceschanged', loadVoices);
+    }
+  }
+  
+  // Hablar texto
+  function speak(text: string): Promise<void> {
+    return new Promise((resolve) => {
+      if (!speechEnabled || !speechSynth || demoAborted) {
+        resolve();
+        return;
+      }
+      
+      // Cancelar cualquier discurso anterior
+      speechSynth.cancel();
+      
+      // Limpiar emojis y caracteres especiales para mejor pronunciación
+      const cleanText = text
+        .replace(/[📝🎨🎬🖼️🔗✓🗑️➕⏱️🚀🎉👋👆🛠️📋✅]/g, '')
+        .replace(/➜/g, 'siguiente')
+        .trim();
+      
+      if (!cleanText) {
+        resolve();
+        return;
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'es-ES';
+      utterance.rate = 1.0; // Velocidad normal
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      
+      if (spanishVoice) {
+        utterance.voice = spanishVoice;
+      }
+      
+      isSpeaking = true;
+      
+      utterance.onend = () => {
+        isSpeaking = false;
+        resolve();
+      };
+      
+      utterance.onerror = () => {
+        isSpeaking = false;
+        resolve();
+      };
+      
+      speechSynth.speak(utterance);
+    });
+  }
+  
+  // Detener voz
+  function stopSpeech() {
+    if (speechSynth) {
+      speechSynth.cancel();
+      isSpeaking = false;
+    }
+  }
+  
+  // Toggle voz on/off
+  function toggleSpeech() {
+    speechEnabled = !speechEnabled;
+    if (!speechEnabled) {
+      stopSpeech();
+    }
+  }
+  
+  // showMessage con control de voz
+  async function showMessage(text: string, sub = '', pos: 'top' | 'bottom' | 'center' = 'bottom', shouldSpeak = true) {
+    message = text;
+    subMessage = sub;
+    messagePos = pos;
+    
+    // Solo hablar si shouldSpeak es true
+    if (speechEnabled && shouldSpeak) {
+      const fullText = sub ? `${text}. ${sub}` : text;
+      speak(fullText);
+    }
+    
+    await wait(100);
+  }
+  
+  // Esperar a que el usuario pulse un elemento específico
+  let waitingForElement: Element | null = null;
+  let elementClickResolver: (() => void) | null = null;
+  
+  function waitForElementClick(el: Element): Promise<void> {
+    return new Promise(resolve => {
+      waitingForElement = el;
+      elementClickResolver = resolve;
+      
+      // Añadir listener temporal al elemento
+      const handleClick = () => {
+        el.removeEventListener('click', handleClick);
+        waitingForElement = null;
+        elementClickResolver = null;
+        resolve();
+      };
+      
+      el.addEventListener('click', handleClick);
+    });
+  }
+  
+  // Escribir texto SIN hacer focus (evita teclado móvil)
+  async function writeTextNoFocus(input: HTMLInputElement | HTMLTextAreaElement | null, text: string, speed = 60) {
+    if (!input || demoAborted) return;
+    
+    const rect = input.getBoundingClientRect();
+    spotlight = {
+      x: rect.left - 8,
+      y: rect.top - 8,
+      width: rect.width + 16,
+      height: rect.height + 16
+    };
+    showDimOverlay = true;
+    
+    for (let i = 0; i < text.length && !demoAborted; i++) {
+      input.value = text.substring(0, i + 1);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await wait(speed);
+    }
+  }
+  
+  async function fingerTo(el: Element | null, tap = false) {
+    if (!el || demoAborted) return;
+    const rect = el.getBoundingClientRect();
+    
+    // Activar overlay oscuro y spotlight
+    showDimOverlay = true;
+    spotlight = {
+      x: rect.left - 8,
+      y: rect.top - 8,
+      width: rect.width + 16,
+      height: rect.height + 16
+    };
+    
+    finger = { 
+      x: rect.left + rect.width / 2, 
+      y: rect.top + rect.height / 2, 
+      visible: true, 
+      tapping: false 
+    };
+    await wait(500); // Más lento
+    
+    if (tap && !demoAborted) {
+      finger = { ...finger, tapping: true };
+      await wait(200); // Más lento
+      (el as HTMLElement).click();
+      await wait(150); // Más lento
+      finger = { ...finger, tapping: false };
+    }
+  }
+  
+  async function fingerSwipe(startX: number, endX: number, y: number) {
+    if (demoAborted) return;
+    showDimOverlay = true;
+    const steps = 15; // Más pasos = más suave
+    const delta = (endX - startX) / steps;
+    
+    for (let i = 0; i <= steps && !demoAborted; i++) {
+      finger = { x: startX + delta * i, y, visible: true, tapping: false };
+      await wait(70); // Más lento
+    }
+    await wait(200);
+  }
+  
+  // Apuntar a un elemento (sin pulsar)
+  async function pointTo(el: Element | null) {
+    if (!el || demoAborted) return;
+    const rect = el.getBoundingClientRect();
+    
+    showDimOverlay = true;
+    spotlight = {
+      x: rect.left - 8,
+      y: rect.top - 8,
+      width: rect.width + 16,
+      height: rect.height + 16
+    };
+    
+    finger = { 
+      x: rect.left + rect.width / 2, 
+      y: rect.top + rect.height / 2, 
+      visible: true, 
+      tapping: false 
+    };
+    await wait(300);
+  }
+  
+  async function writeText(input: HTMLInputElement | HTMLTextAreaElement | null, text: string, speed = 60) {
+    if (!input || demoAborted) return;
+    // Resaltar el input mientras se escribe
+    const rect = input.getBoundingClientRect();
+    spotlight = {
+      x: rect.left - 8,
+      y: rect.top - 8,
+      width: rect.width + 16,
+      height: rect.height + 16
+    };
+    showDimOverlay = true;
+    
+    for (let i = 0; i < text.length && !demoAborted; i++) {
+      input.value = text.substring(0, i + 1);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await wait(speed);
+    }
+  }
+  
+  function getInput(selector: string): HTMLInputElement | HTMLTextAreaElement | null {
+    return document.querySelector(selector);
+  }
+  
+  function getEl(selector: string): Element | null {
+    return document.querySelector(selector);
+  }
+  
+  function getEls(selector: string): NodeListOf<Element> {
+    return document.querySelectorAll(selector);
+  }
+  
+  // === TUTORIAL INTERACTIVO CON GUION AMIGABLE ===
+  async function runDemo() {
+    if (isRunning) return;
+    isRunning = true;
+    demoAborted = false;
+    canAdvance = false;
+    
+    try {
+      // ========== INTRO ==========
+      await showMessage('¡Hola, creador!', 'Vamos a hacer tu primera encuesta juntos. ¡Será muy fácil y divertido!', 'center');
+      canAdvance = true;
+      canGoBack = false;
+      currentStepIndex = 0;
+      await waitForTap();
+      if (demoAborted) return;
+      
+      canGoBack = true;
+      currentStepIndex = 1;
+      
+      // ========== PASO 1: EL TÍTULO ==========
+      const titleInput = getInput('.poll-title-input');
+      if (titleInput) {
+        await pointTo(titleInput);
+        await showMessage('Primero, la pregunta', 'Aquí escribes lo que quieres preguntar. ¡Toca para empezar!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        await showMessage('...', '', 'top', false);
+        canAdvance = false;
+        await writeTextNoFocus(titleInput, '¿Cuál es tu red social favorita?', 35);
+        await wait(300);
+        await showMessage('¡Genial! Ya tenemos la pregunta', '', 'top');
+        await wait(1000);
+      }
+      hideFinger();
+      
+      // ========== PASO 2: NÚMERO DE OPCIONES ==========
+      await wait(300); // Esperar a que los elementos estén listos
+      const optionsCountBtn = getEl('.meta-item-compact.options-btn, .options-btn');
+      if (optionsCountBtn) {
+        await pointTo(optionsCountBtn);
+        await showMessage('Número de opciones', 'Aquí eliges cuántas opciones tendrá tu encuesta. ¡Toca!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        (optionsCountBtn as HTMLElement).click();
+        await wait(500);
+        await showMessage('Puedes tener desde 2 hasta 10 opciones', '', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        const backdrop = getEl('.dropdown-backdrop');
+        if (backdrop) (backdrop as HTMLElement).click();
+        await wait(200);
+      } else {
+        console.warn('[Tutorial] No se encontró el botón de opciones');
+      }
+      hideFinger();
+      
+      // ========== PASO 3: DURACIÓN ==========
+      const durationBtn = getEl('.duration-btn');
+      if (durationBtn) {
+        await pointTo(durationBtn);
+        await showMessage('Tiempo de la encuesta', 'Define cuánto tiempo estará activa. ¡Toca!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        (durationBtn as HTMLElement).click();
+        await wait(500);
+        await showMessage('1 hora, 1 día, 1 semana... ¡tú decides!', '', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        const backdrop = getEl('.dropdown-backdrop');
+        if (backdrop) (backdrop as HTMLElement).click();
+        await wait(200);
+      }
+      hideFinger();
+      
+      // ========== PASO 4: OPCIÓN 1 - COLOR ==========
+      await goToSlide(0);
+      await wait(300);
+      
+      await showMessage('¡Vamos con las opciones!', 'Cada tarjeta es una respuesta diferente', 'top');
+      canAdvance = true;
+      await waitForTap();
+      if (demoAborted) return;
+      
+      // Escribir opción 1
+      let optInput = getInput('.option-slide.is-active .option-label-edit');
+      if (optInput) {
+        await pointTo(optInput);
+        await showMessage('Primera opción', 'Toca para escribir', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        spotlight = null;
+        showDimOverlay = false;
+        await showMessage('...', '', 'top', false);
+        canAdvance = false;
+        await wait(200);
+        await writeTextNoFocus(optInput, 'VouTop', 50);
+        await wait(400);
+      }
+      hideFinger();
+      
+      // Explicar botón COLOR
+      const colorBtn = getEl('.color-btn');
+      if (colorBtn) {
+        await pointTo(colorBtn);
+        await showMessage('Botón de COLOR', 'Dale vida con un color llamativo. ¡Toca!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        (colorBtn as HTMLElement).click();
+        await wait(400);
+        await showMessage('¡Elige el que más te guste!', '', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        const backdrop = getEl('.color-picker-backdrop, .dropdown-backdrop');
+        if (backdrop) (backdrop as HTMLElement).click();
+        await wait(200);
+      }
+      hideFinger();
+      
+      // ========== DESLIZAR A OPCIÓN 2 ==========
+      hideFinger();
+      spotlight = null;
+      showDimOverlay = false;
+      await wait(200);
+      await showMessage('Vamos a la siguiente', '', 'top');
+      await swipeToSlide(1);
+      await wait(200);
+      
+      // ========== PASO 5: OPCIÓN 2 - GIF ==========
+      await wait(300); // Esperar a que el slide esté listo
+      const opt2Input = getInput('.option-slide.is-active .option-label-edit');
+      if (opt2Input) {
+        await pointTo(opt2Input);
+        await showMessage('Segunda opción', 'Toca para escribir', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        spotlight = null;
+        showDimOverlay = false;
+        await showMessage('...', '', 'top', false);
+        canAdvance = false;
+        await wait(200);
+        await writeTextNoFocus(opt2Input, 'Instagram', 50);
+        await wait(400);
+      }
+      hideFinger();
+      
+      // Explicar botón GIF
+      const gifBtn = getEl('.option-slide.is-active .giphy-btn');
+      if (gifBtn) {
+        await pointTo(gifBtn);
+        await showMessage('Botón de GIF', '¡Añade un GIF animado! Toca.', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        (gifBtn as HTMLElement).click();
+        await wait(500);
+        await showMessage('¡Busca uno que te encante!', '', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await wait(300);
+      }
+      hideFinger();
+      
+      // ========== CREAR OPCIÓN 3 ==========
+      hideFinger();
+      spotlight = null;
+      showDimOverlay = false;
+      await wait(200);
+      
+      // Crear opción 3 (se muestra automáticamente)
+      const addBtn3 = getEl('.add-option-floating-bottom');
+      if (addBtn3) {
+        await pointTo(addBtn3);
+        await showMessage('Añadimos otra opción', 'Toca para crear la tercera', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        spotlight = null;
+        showDimOverlay = false;
+        (addBtn3 as HTMLElement).click();
+        await wait(800); // Esperar a que la nueva opción se renderice completamente
+      }
+      hideFinger();
+      
+      // ========== PASO 6: OPCIÓN 3 - SÍ/NO ==========
+      await wait(300); // Esperar a que el slide esté listo
+      const opt3Input = getInput('.option-slide.is-active .option-label-edit');
+      if (opt3Input) {
+        await pointTo(opt3Input);
+        await showMessage('Tercera opción', 'Toca para escribir', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        spotlight = null;
+        showDimOverlay = false;
+        await showMessage('...', '', 'top', false);
+        canAdvance = false;
+        await wait(200); // Esperar antes de escribir
+        await writeTextNoFocus(opt3Input, 'TikTok', 50);
+        await wait(400);
+      }
+      hideFinger();
+      
+      // Explicar botón SÍ/NO
+      const yesnoBtn = getEl('.option-slide.is-active .yesno-btn');
+      if (yesnoBtn) {
+        await pointTo(yesnoBtn);
+        await showMessage('Botón Sí/No', 'Actívalo para que los usuarios voten SÍ o NO en esta opción', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        (yesnoBtn as HTMLElement).click();
+        await wait(400);
+        await showMessage('¡Activado!', 'Ahora los usuarios verán botones de SÍ y NO para votar. Puedes personalizar los textos.', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        await showMessage('Perfecto para preguntas como:', '"¿Te gusta esta opción?" o "¿Estás de acuerdo?"', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        (yesnoBtn as HTMLElement).click();
+        await wait(200);
+      }
+      hideFinger();
+      
+      // ========== CREAR OPCIÓN 4 ==========
+      hideFinger();
+      spotlight = null;
+      showDimOverlay = false;
+      await wait(200);
+      
+      // Crear opción 4 (se muestra automáticamente)
+      const addBtn4 = getEl('.add-option-floating-bottom');
+      if (addBtn4) {
+        await pointTo(addBtn4);
+        await showMessage('¡Una más!', 'Toca para crear la última opción', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        spotlight = null;
+        showDimOverlay = false;
+        (addBtn4 as HTMLElement).click();
+        await wait(800); // Esperar a que la nueva opción se renderice completamente
+      }
+      hideFinger();
+      
+      // ========== PASO 7: OPCIÓN 4 - CORRECTA ==========
+      await wait(300); // Esperar a que el slide esté listo
+      const opt4Input = getInput('.option-slide.is-active .option-label-edit');
+      if (opt4Input) {
+        await pointTo(opt4Input);
+        await showMessage('Cuarta opción', 'Toca para escribir', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        spotlight = null;
+        showDimOverlay = false;
+        await showMessage('...', '', 'top', false);
+        canAdvance = false;
+        await wait(200); // Esperar antes de escribir
+        await writeTextNoFocus(opt4Input, 'YouTube', 50);
+        await wait(400);
+      }
+      hideFinger();
+      
+      // Explicar botón CORRECTA
+      const correctBtn = getEl('.option-slide.is-active .correct-btn');
+      if (correctBtn) {
+        await pointTo(correctBtn);
+        await showMessage('Botón Correcta', 'Convierte tu encuesta en un QUIZ marcando la respuesta correcta', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        (correctBtn as HTMLElement).click();
+        await wait(400);
+        await showMessage('¡Marcada como correcta!', 'Cuando los usuarios voten, verán si acertaron o no', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        await showMessage('Ideal para trivia:', '"¿Cuál es la capital de Francia?" - Los usuarios descubrirán la respuesta al votar', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+      }
+      hideFinger();
+      
+      // ========== PASO 8: BOTÓN ELIMINAR ==========
+      const deleteBtn = getEl('.option-slide.is-active .delete-btn');
+      if (deleteBtn) {
+        await pointTo(deleteBtn);
+        await showMessage('Botón Eliminar', 'Borra la opción si te equivocas. ¡Cuidado!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+      }
+      hideFinger();
+      
+      // ========== PASO 9: TIPOS DE VOTACIÓN ==========
+      // Explicar los 3 tipos principales abriendo el modal
+      const pollTypeBtns = getEls('.poll-type-btn-inline');
+      if (pollTypeBtns.length > 0) {
+        // Tipo 1: Única
+        const singleBtn = pollTypeBtns[0];
+        if (singleBtn) {
+          await pointTo(singleBtn);
+          await showMessage('Votación Única', 'Solo pueden elegir UNA opción. Perfecta para "¿Cuál prefieres?"', 'top');
+          canAdvance = true;
+          await waitForTap();
+          if (demoAborted) return;
+          
+          hideFinger();
+          (singleBtn as HTMLElement).click();
+          await wait(400);
+          await showMessage('Mira las opciones disponibles', 'Cada tipo tiene configuraciones diferentes', 'top');
+          canAdvance = true;
+          await waitForTap();
+          if (demoAborted) return;
+          
+          // Cerrar modal
+          const closeModal = getEl('.type-options-modal .close-btn, .modal-backdrop');
+          if (closeModal) (closeModal as HTMLElement).click();
+          await wait(300);
+        }
+        hideFinger();
+        
+        // Tipo 2: Múltiple
+        if (pollTypeBtns.length > 1) {
+          const multiBtn = pollTypeBtns[1];
+          await pointTo(multiBtn);
+          await showMessage('Votación Múltiple', 'Pueden elegir VARIAS opciones. Ideal para "¿Qué te gusta?"', 'top');
+          canAdvance = true;
+          await waitForTap();
+          if (demoAborted) return;
+          
+          hideFinger();
+          (multiBtn as HTMLElement).click();
+          await wait(400);
+          await showMessage('Aquí puedes limitar cuántas opciones pueden elegir', '', 'top');
+          canAdvance = true;
+          await waitForTap();
+          if (demoAborted) return;
+          
+          const closeModal2 = getEl('.type-options-modal .close-btn, .modal-backdrop');
+          if (closeModal2) (closeModal2 as HTMLElement).click();
+          await wait(300);
+        }
+        hideFinger();
+        
+        // Tipo 3: Colaborativa
+        if (pollTypeBtns.length > 2) {
+          const collabBtn = pollTypeBtns[2];
+          await pointTo(collabBtn);
+          await showMessage('Votación Colaborativa', '¡Los usuarios pueden AÑADIR sus propias opciones!', 'top');
+          canAdvance = true;
+          await waitForTap();
+          if (demoAborted) return;
+          
+          hideFinger();
+          (collabBtn as HTMLElement).click();
+          await wait(400);
+          await showMessage('Perfecta para lluvia de ideas o sugerencias', '', 'top');
+          canAdvance = true;
+          await waitForTap();
+          if (demoAborted) return;
+          
+          const closeModal3 = getEl('.type-options-modal .close-btn, .modal-backdrop');
+          if (closeModal3) (closeModal3 as HTMLElement).click();
+          await wait(300);
+        }
+      }
+      hideFinger();
+      
+      // Botón de IA/Animar con GIFs
+      const animateBtn = getEl('.animate-cards-button');
+      if (animateBtn) {
+        await pointTo(animateBtn);
+        await showMessage('Botón Mágico ✨', 'Busca GIFs automáticamente para todas tus opciones. ¡Toca!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        hideFinger();
+        (animateBtn as HTMLElement).click();
+        await showMessage('Buscando GIFs...', 'Espera un momento mientras la IA trabaja', 'top');
+        await wait(3000); // Esperar a que se carguen los GIFs
+        
+        await showMessage('¡Listo!', 'Veamos qué GIFs encontró para cada opción', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        // Recorrer cada opción para mostrar los GIFs añadidos
+        hideFinger();
+        spotlight = null;
+        showDimOverlay = false;
+        await wait(200);
+        
+        // Ir a opción 1
+        await goToSlide(0);
+        await wait(400);
+        await showMessage('Opción 1: VouTop', 'Mira el GIF que encontró', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        // Deslizar a opción 2
+        await swipeToSlide(1);
+        await wait(300);
+        await showMessage('Opción 2: Instagram', 'Cada GIF combina con el texto', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        // Deslizar a opción 3
+        await swipeToSlide(2);
+        await wait(300);
+        await showMessage('Opción 3: TikTok', '¡La IA entiende el contexto!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+        
+        // Deslizar a opción 4
+        await swipeToSlide(3);
+        await wait(300);
+        await showMessage('Opción 4: YouTube', '¡Todas las opciones animadas!', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+      }
+      hideFinger();
+      
+      // Maximizar
+      const maximizeBtn = getEl('.maximize-button');
+      if (maximizeBtn) {
+        await pointTo(maximizeBtn);
+        await showMessage('Botón Maximizar', 'Agranda la tarjeta para editar con más detalle', 'top');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+      }
+      hideFinger();
+      
+      await showMessage('¡Todas las opciones listas!', 'Tu encuesta está casi terminada', 'top');
+      canAdvance = true;
+      await waitForTap();
+      if (demoAborted) return;
+      
+      // ========== PASO 11: PUBLICAR ==========
+      const publishBtn = getEl('.publish-btn, [class*="publish"], button[type="submit"]');
+      if (publishBtn) {
+        await pointTo(publishBtn);
+        await showMessage('¡El botón mágico!', 'Cuando todo esté perfecto, pulsa PUBLICAR y comparte tu encuesta con el mundo', 'center');
+        canAdvance = true;
+        await waitForTap();
+        if (demoAborted) return;
+      }
+      hideFinger();
+      
+      // ========== FINAL ==========
+      await showMessage('¡Felicidades, ya eres un experto!', 'Ahora puedes crear encuestas increíbles. ¡Diviértete!', 'center');
+      showSkip = false;
+      showFinalOptions = true;
+      
+    } catch (e) {
+      console.error('[Tutorial] Error:', e);
+    } finally {
+      isRunning = false;
+      hideFinger();
+    }
+  }
+  
+  async function goToSlide(index: number) {
+    const dots = getEls('.options-indicators-top button, .pagination-dots button');
+    if (dots[index]) {
+      (dots[index] as HTMLElement).click();
+      await wait(350);
+    }
+  }
+  
+  async function goToLastSlide() {
+    const dots = getEls('.options-indicators-top button, .pagination-dots button');
+    if (dots.length > 0) {
+      (dots[dots.length - 1] as HTMLElement).click();
+      await wait(350);
+    }
+  }
+  
+  // Deslizar a slide con animación del dedo
+  async function swipeToSlide(index: number) {
+    const slider = getEl('.options-horizontal-scroll, .options-slides-wrapper');
+    if (slider) {
+      const rect = slider.getBoundingClientRect();
+      // Mostrar dedo y hacer swipe
+      finger = { x: rect.right - 60, y: rect.top + rect.height / 2, visible: true, tapping: false };
+      showDimOverlay = true;
+      await wait(300);
+      await fingerSwipe(rect.right - 60, rect.left + 60, rect.top + rect.height / 2);
+      hideFinger();
+    }
+    // Navegar al slide
+    await goToSlide(index);
+  }
+  
+  // Esperar tap del usuario
+  let tapResolver: (() => void) | null = null;
+  
+  function waitForTap(): Promise<void> {
+    return new Promise(resolve => {
+      tapResolver = resolve;
+    });
+  }
+  
+  function handleTap() {
+    if (canAdvance && tapResolver) {
+      tapResolver();
+      tapResolver = null;
+    }
+  }
+  
+  function goToNextStep() {
+    // Avanza al siguiente paso (igual que tap)
+    if (canAdvance && tapResolver) {
+      tapResolver();
+      tapResolver = null;
+    }
+  }
+  
+  function goToPrevStep() {
+    // Reiniciar el tutorial desde el principio
+    if (canGoBack) {
+      restartTutorial();
+    }
+  }
+  
+  function closeTutorial(clearPoll = false) {
+    demoAborted = true;
+    stopSpeech();
+    isOpen = false;
+    message = '';
+    subMessage = '';
+    showFinalOptions = false;
+    hideFinger();
+    if (tapResolver) {
+      tapResolver();
+      tapResolver = null;
+    }
+    
+    if (clearPoll) {
+      // Limpiar la encuesta
+      resetPoll();
+    }
+    
+    onClose?.();
+  }
+  
+  function resetPoll() {
+    // Limpiar título
+    const titleInput = getInput('.poll-title-input');
+    if (titleInput) {
+      titleInput.value = '';
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    
+    // Limpiar todas las opciones
+    const optionInputs = document.querySelectorAll('.option-text-input, .option-slide textarea');
+    optionInputs.forEach((input) => {
+      (input as HTMLInputElement | HTMLTextAreaElement).value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    
+    // Eliminar GIFs/imágenes de las opciones
+    const removeMediaBtns = document.querySelectorAll('[aria-label*="quitar"], [aria-label*="remove"], .remove-media-btn');
+    removeMediaBtns.forEach((btn) => {
+      (btn as HTMLElement).click();
+    });
+    
+    // Volver a la primera opción
+    const firstDot = document.querySelector('.options-indicators-top button, .pagination-dots button');
+    if (firstDot) (firstDot as HTMLElement).click();
+    
+    console.log('[Tutorial] Encuesta limpiada');
+  }
+  
+  function restartTutorial() {
+    showFinalOptions = false;
+    resetPoll();
+    demoAborted = false;
+    showSkip = true;
+    canGoBack = false;
+    currentStepIndex = 0;
+    message = '';
+    subMessage = '';
+    setTimeout(() => runDemo(), 400);
+  }
+  
+  function exitTutorial(clearPoll: boolean) {
+    closeTutorial(clearPoll);
+  }
+  
+  function skipTutorial() {
+    closeTutorial(false);
+  }
+  
+  // Iniciar cuando se abre
+  $effect(() => {
+    if (isOpen) {
+      demoAborted = false;
+      showSkip = true;
+      initSpeech();
+      setTimeout(() => runDemo(), 600);
+    } else {
+      stopSpeech();
+    }
   });
 </script>
 
-{#if isOpen && isReady}
-  <!-- Overlay oscuro con agujero para el spotlight -->
-  <div class="tutorial-backdrop" transition:fade={{ duration: 200 }}>
-    {#if highlightRect}
-      <!-- Spotlight/Agujero que deja ver el elemento -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+{#if isOpen}
+  <!-- Overlay oscuro cuando hay animación -->
+  {#if showDimOverlay}
+    <div class="dim-overlay" transition:fade={{ duration: 200 }}></div>
+  {/if}
+  
+  <!-- Spotlight para resaltar elemento -->
+  {#if spotlight}
+    <div 
+      class="spotlight-ring"
+      style="left: {spotlight.x}px; top: {spotlight.y}px; width: {spotlight.width}px; height: {spotlight.height}px;"
+      transition:fade={{ duration: 150 }}
+    ></div>
+  {/if}
+  
+  <!-- Capa invisible para capturar clicks -->
+  <div class="tutorial-overlay" onclick={handleTap} transition:fade={{ duration: 200 }}>
+    
+    <!-- Mensaje flotante -->
+    {#if message}
       <div 
-        class="spotlight"
-        style="
-          top: {highlightRect.top - 8}px;
-          left: {highlightRect.left - 8}px;
-          width: {highlightRect.width + 16}px;
-          height: {highlightRect.height + 16}px;
-        "
+        class="floating-message {messagePos}"
+        transition:fly={{ y: messagePos === 'top' ? -20 : 20, duration: 250 }}
       >
-        <div class="spotlight-pulse"></div>
+        <div class="message-content">
+          <p class="main-text">{message}</p>
+          {#if subMessage}
+            <p class="sub-text">{subMessage}</p>
+          {/if}
+        </div>
+        
+        {#if canAdvance}
+          <div class="tap-indicator">
+            <span class="tap-dot"></span>
+          </div>
+        {/if}
       </div>
     {/if}
-  </div>
-  
-  <!-- Tooltip flotante -->
-  <div 
-    class="tutorial-tooltip"
-    class:center={!highlightRect}
-    class:top-fixed={tooltipPosition === 'top-fixed'}
-    class:top-higher={tooltipPosition === 'top-higher'}
-    style={highlightRect && tooltipPosition !== 'top-fixed' && tooltipPosition !== 'top-higher' ? `
-      top: ${tooltipPosition === 'top' ? highlightRect.top - 160 : 
-            tooltipPosition === 'bottom' ? highlightRect.bottom + 20 :
-            highlightRect.top + highlightRect.height / 2 - 80}px;
-      left: ${tooltipPosition === 'left' ? highlightRect.left - 320 :
-             tooltipPosition === 'right' ? highlightRect.right + 20 :
-             highlightRect.left + highlightRect.width / 2 - 150}px;
-    ` : ''}
-    transition:fly={{ y: 20, duration: 300 }}
-  >
-    <!-- Flecha apuntando al elemento -->
-    {#if highlightRect}
-      <div class="tooltip-arrow tooltip-arrow-{tooltipPosition}"></div>
+    
+    <!-- Barra de navegación inferior con controles centrales -->
+    {#if !showFinalOptions && isRunning}
+      <div class="bottom-nav-bar" transition:fade>
+        <button class="nav-arrow prev" onclick={goToPrevStep} disabled={!canGoBack} aria-label="Anterior">
+          <span>‹</span>
+        </button>
+        
+        <!-- Controles centrales -->
+        <div class="center-controls">
+          <button 
+            class="control-btn sound-btn" 
+            class:muted={!speechEnabled}
+            onclick={toggleSpeech} 
+            aria-label={speechEnabled ? 'Silenciar voz' : 'Activar voz'}
+          >
+            {#if speechEnabled}
+              🔊
+            {:else}
+              🔇
+            {/if}
+          </button>
+          
+          {#if showSkip}
+            <button class="control-btn skip-btn" onclick={skipTutorial}>
+              Saltar
+            </button>
+          {/if}
+        </div>
+        
+        <button class="nav-arrow next" onclick={goToNextStep} disabled={!canAdvance} aria-label="Siguiente">
+          <span>›</span>
+        </button>
+      </div>
     {/if}
     
-    <!-- Header del tooltip -->
-    <div class="tooltip-header">
-      <div class="step-badge">{currentStep + 1}/{tutorialSteps.length}</div>
-      <button class="close-btn-small" onclick={closeTutorial} aria-label="Cerrar">
-        <X size={18} />
-      </button>
-    </div>
-    
-    <!-- Contenido -->
-    <div class="tooltip-content">
-      <h3 class="tooltip-title">{tutorialSteps[currentStep].title}</h3>
-      <p class="tooltip-description">{tutorialSteps[currentStep].description}</p>
-      
-      {#if tutorialSteps[currentStep].action}
-        <div class="tooltip-action">
-          <span class="action-icon">👆</span>
-          <span>{tutorialSteps[currentStep].action}</span>
+    <!-- Opciones finales -->
+    {#if showFinalOptions}
+      <div class="final-options" transition:fly={{ y: 30, duration: 300 }}>
+        <p class="final-question">¿Qué deseas hacer?</p>
+        <div class="final-buttons">
+          <button class="final-btn restart-btn" onclick={restartTutorial}>
+            🔄 Repetir tutorial
+          </button>
+          <button class="final-btn exit-keep-btn" onclick={() => exitTutorial(false)}>
+            ✅ Salir y mantener
+          </button>
+          <button class="final-btn exit-clear-btn" onclick={() => exitTutorial(true)}>
+            🗑️ Salir y limpiar
+          </button>
         </div>
-      {/if}
-    </div>
+      </div>
+    {/if}
     
-    <!-- Progress dots -->
-    <div class="tooltip-dots">
-      {#each tutorialSteps as _, i}
-        <button 
-          class="dot"
-          class:active={i === currentStep}
-          class:completed={i < currentStep}
-          onclick={() => goToStep(i)}
-          aria-label="Ir al paso {i + 1}"
-        ></button>
-      {/each}
-    </div>
-    
-    <!-- Navegación -->
-    <div class="tooltip-nav">
-      <button 
-        class="nav-btn prev" 
-        onclick={prevStep}
-        disabled={currentStep === 0}
+    <!-- Dedo animado -->
+    {#if finger.visible}
+      <div 
+        class="demo-finger"
+        class:tapping={finger.tapping}
+        style="left: {finger.x}px; top: {finger.y + 25}px;"
       >
-        <ChevronLeft size={18} />
-        Anterior
-      </button>
-      
-      {#if currentStep === tutorialSteps.length - 1}
-        <button class="nav-btn finish" onclick={closeTutorial}>
-          <Sparkles size={18} />
-          ¡Listo!
-        </button>
-      {:else}
-        <button class="nav-btn next" onclick={nextStep}>
-          Siguiente
-          <ChevronRight size={18} />
-        </button>
-      {/if}
-    </div>
+        <span class="finger-icon">👆</span>
+        {#if finger.tapping}
+          <div class="tap-ripple"></div>
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}
 
 <style>
-  /* Backdrop oscuro con agujero transparente - menos oscuro */
-  .tutorial-backdrop {
+  /* Overlay oscuro para resaltar acciones */
+  .dim-overlay {
     position: fixed;
     inset: 0;
     z-index: 99998;
@@ -359,374 +1071,398 @@
     pointer-events: none;
   }
   
-  /* Spotlight que resalta el elemento */
-  .spotlight {
+  /* Spotlight ring para resaltar elemento */
+  .spotlight-ring {
     position: fixed;
+    z-index: 99999;
+    border: 3px solid rgba(139, 92, 246, 0.8);
     border-radius: 12px;
     box-shadow: 
-      0 0 0 9999px rgba(0, 0, 0, 0.5),
-      0 0 20px 4px rgba(139, 92, 246, 0.6);
-    z-index: 99999;
+      0 0 0 4px rgba(139, 92, 246, 0.3),
+      0 0 20px rgba(139, 92, 246, 0.5),
+      0 0 40px rgba(139, 92, 246, 0.3),
+      inset 0 0 20px rgba(139, 92, 246, 0.1);
     pointer-events: none;
-    transition: all 0.3s ease;
+    animation: spotlight-pulse 2s ease-in-out infinite;
   }
   
-  .spotlight-pulse {
-    position: absolute;
-    inset: -4px;
-    border: 2px solid rgba(139, 92, 246, 0.8);
-    border-radius: 14px;
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-  
-  @keyframes pulse {
-    0%, 100% { 
-      opacity: 1;
-      transform: scale(1);
+  @keyframes spotlight-pulse {
+    0%, 100% {
+      box-shadow: 
+        0 0 0 4px rgba(139, 92, 246, 0.3),
+        0 0 20px rgba(139, 92, 246, 0.5),
+        0 0 40px rgba(139, 92, 246, 0.3),
+        inset 0 0 20px rgba(139, 92, 246, 0.1);
     }
-    50% { 
-      opacity: 0.5;
-      transform: scale(1.05);
+    50% {
+      box-shadow: 
+        0 0 0 6px rgba(139, 92, 246, 0.4),
+        0 0 30px rgba(139, 92, 246, 0.6),
+        0 0 60px rgba(139, 92, 246, 0.4),
+        inset 0 0 30px rgba(139, 92, 246, 0.15);
     }
   }
   
-  /* Tooltip flotante */
-  .tutorial-tooltip {
+  .tutorial-overlay {
     position: fixed;
+    inset: 0;
     z-index: 100000;
-    width: 300px;
-    background: linear-gradient(180deg, #1e1e2e 0%, #151520 100%);
-    border-radius: 16px;
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    box-shadow: 
-      0 20px 40px rgba(0, 0, 0, 0.5),
-      0 0 30px rgba(139, 92, 246, 0.2);
-    overflow: hidden;
     pointer-events: auto;
+    cursor: pointer;
   }
   
-  .tutorial-tooltip.center {
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%);
-  }
-  
-  .tutorial-tooltip.top-fixed {
-    top: 80px !important;
-    bottom: auto !important;
-    left: 50% !important;
-    transform: translateX(-50%);
-  }
-  
-  .tutorial-tooltip.top-higher {
-    top: 50px !important;
-    bottom: auto !important;
-    left: 50% !important;
-    transform: translateX(-50%);
-  }
-  
-  /* Flechas del tooltip */
-  .tooltip-arrow {
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    background: #1e1e2e;
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    transform: rotate(45deg);
-  }
-  
-  .tooltip-arrow-top {
-    bottom: -9px;
+  /* Barra de navegación inferior */
+  .bottom-nav-bar {
+    position: fixed;
+    bottom: 20px;
     left: 50%;
-    margin-left: -8px;
-    border-top: none;
-    border-left: none;
-  }
-  
-  .tooltip-arrow-bottom {
-    top: -9px;
-    left: 50%;
-    margin-left: -8px;
-    border-bottom: none;
-    border-right: none;
-  }
-  
-  .tooltip-arrow-left {
-    right: -9px;
-    top: 50%;
-    margin-top: -8px;
-    border-left: none;
-    border-bottom: none;
-  }
-  
-  .tooltip-arrow-right {
-    left: -9px;
-    top: 50%;
-    margin-top: -8px;
-    border-right: none;
-    border-top: none;
-  }
-  
-  /* Header del tooltip */
-  .tooltip-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(139, 92, 246, 0.1);
-  }
-  
-  .step-badge {
-    font-size: 12px;
-    font-weight: 700;
-    color: #a78bfa;
-    background: rgba(139, 92, 246, 0.2);
-    padding: 4px 10px;
-    border-radius: 20px;
-  }
-  
-  .close-btn-small {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border: none;
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
+    transform: translateX(-50%);
+    z-index: 100001;
     display: flex;
     align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-  }
-  
-  .close-btn-small:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-  }
-  
-  /* Contenido del tooltip */
-  .tooltip-content {
-    padding: 16px;
-  }
-  
-  .tooltip-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: white;
-    margin: 0 0 8px 0;
-    line-height: 1.3;
-  }
-  
-  .tooltip-description {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
-    margin: 0;
-    line-height: 1.5;
-  }
-  
-  .tooltip-action {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    padding: 10px 12px;
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    border-radius: 8px;
-    font-size: 12px;
-    color: #10b981;
-    font-weight: 600;
-  }
-  
-  .action-icon {
-    font-size: 14px;
-  }
-  
-  /* Dots de progreso */
-  .tooltip-dots {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 16px;
-  }
-  
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    transition: all 0.2s;
-  }
-  
-  .dot:hover {
-    background: rgba(255, 255, 255, 0.4);
-  }
-  
-  .dot.active {
-    width: 16px;
-    border-radius: 3px;
-    background: linear-gradient(90deg, #8b5cf6, #3b82f6);
-  }
-  
-  .dot.completed {
-    background: #8b5cf6;
-  }
-  
-  /* Navegación del tooltip */
-  .tooltip-nav {
-    display: flex;
-    gap: 8px;
-    padding: 12px 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.2);
-  }
-  
-  .nav-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 10px 16px;
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: none;
-    flex: 1;
-  }
-  
-  .nav-btn.prev {
-    background: rgba(255, 255, 255, 0.05);
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
-    flex: 0.8;
+    border-radius: 28px;
   }
   
-  .nav-btn.prev:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
+  .nav-arrow {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.3);
+    border: 1px solid rgba(139, 92, 246, 0.5);
     color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
   }
   
-  .nav-btn.prev:disabled {
+  .nav-arrow:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.5);
+  }
+  
+  .nav-arrow:disabled {
     opacity: 0.3;
     cursor: not-allowed;
   }
   
-  .nav-btn.next {
+  /* Controles centrales */
+  .center-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .control-btn {
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+  
+  .sound-btn {
+    font-size: 18px;
+    padding: 6px 10px;
+    min-width: 40px;
+  }
+  
+  .sound-btn.muted {
+    opacity: 0.5;
+  }
+  
+  .skip-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+  
+  /* Mensaje flotante */
+  .floating-message {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100002;
+    max-width: 340px;
+    width: calc(100% - 32px);
+    padding: 16px 20px;
+    background: linear-gradient(135deg, rgba(15, 15, 25, 0.98), rgba(25, 25, 40, 0.98));
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 16px;
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(139, 92, 246, 0.15) inset,
+      0 0 60px rgba(139, 92, 246, 0.15);
+  }
+  
+  .floating-message.top {
+    top: 16px;
+  }
+  
+  .floating-message.bottom {
+    bottom: 100px;
+  }
+  
+  .floating-message.center {
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+  
+  .message-content {
+    text-align: center;
+  }
+  
+  .main-text {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    line-height: 1.4;
+  }
+  
+  .sub-text {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  
+  /* Indicador de tap */
+  .tap-indicator {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+  }
+  
+  .tap-dot {
+    width: 8px;
+    height: 8px;
+    background: rgba(139, 92, 246, 0.8);
+    border-radius: 50%;
+    animation: pulse-tap 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-tap {
+    0%, 100% { 
+      transform: scale(1); 
+      opacity: 1;
+      box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+    }
+    50% { 
+      transform: scale(1.2); 
+      opacity: 0.8;
+      box-shadow: 0 0 0 8px rgba(139, 92, 246, 0);
+    }
+  }
+  
+  /* Dedo animado */
+  .demo-finger {
+    position: fixed;
+    z-index: 100002;
+    pointer-events: none;
+    transform: translateX(-50%);
+    transition: left 0.2s ease-out, top 0.2s ease-out;
+  }
+  
+  .finger-icon {
+    font-size: 32px;
+    display: block;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+    transition: transform 0.1s ease;
+  }
+  
+  .demo-finger.tapping .finger-icon {
+    transform: scale(0.85) translateY(-4px);
+  }
+  
+  .tap-ripple {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    background: rgba(139, 92, 246, 0.6);
+    border-radius: 50%;
+    transform: translateX(-50%) scale(0);
+    animation: ripple-expand 0.4s ease-out forwards;
+  }
+  
+  @keyframes ripple-expand {
+    0% { 
+      transform: translateX(-50%) scale(0); 
+      opacity: 1; 
+    }
+    100% { 
+      transform: translateX(-50%) scale(3); 
+      opacity: 0; 
+    }
+  }
+  
+  /* Opciones finales */
+  .final-options {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100003;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px;
+    background: linear-gradient(135deg, rgba(15, 15, 25, 0.98), rgba(25, 25, 40, 0.98));
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 20px;
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 0 60px rgba(139, 92, 246, 0.2);
+  }
+  
+  .final-question {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    text-align: center;
+  }
+  
+  .final-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  
+  .final-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 200px;
+  }
+  
+  .restart-btn {
     background: linear-gradient(135deg, #8b5cf6, #7c3aed);
     color: white;
   }
   
-  .nav-btn.next:hover {
-    background: linear-gradient(135deg, #9333ea, #8b5cf6);
-    transform: translateY(-1px);
+  .restart-btn:hover {
+    background: linear-gradient(135deg, #9d6eff, #8b5cf6);
+    transform: scale(1.02);
   }
   
-  .nav-btn.finish {
+  .exit-keep-btn {
     background: linear-gradient(135deg, #10b981, #059669);
     color: white;
   }
   
-  .nav-btn.finish:hover {
-    background: linear-gradient(135deg, #059669, #047857);
-    transform: translateY(-1px);
+  .exit-keep-btn:hover {
+    background: linear-gradient(135deg, #34d399, #10b981);
+    transform: scale(1.02);
+  }
+  
+  .exit-clear-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .exit-clear-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    transform: scale(1.02);
   }
   
   /* Responsive */
   @media (max-width: 480px) {
-    .tutorial-tooltip {
-      width: calc(100% - 24px);
-      max-width: 280px;
-      position: fixed !important;
-      bottom: 16px !important;
-      top: auto !important;
-      left: 50% !important;
-      transform: translateX(-50%) !important;
+    .floating-message {
+      max-width: calc(100% - 24px);
+      padding: 14px 16px;
     }
     
-    .tutorial-tooltip.center {
-      bottom: auto !important;
-      top: 50% !important;
-      transform: translate(-50%, -50%) !important;
+    .main-text {
+      font-size: 15px;
     }
     
-    .tutorial-tooltip.top-fixed {
-      top: 60px !important;
-      bottom: auto !important;
-      transform: translateX(-50%) !important;
-    }
-    
-    .tutorial-tooltip.top-higher {
-      top: 40px !important;
-      bottom: auto !important;
-      transform: translateX(-50%) !important;
-    }
-    
-    .tooltip-arrow {
-      display: none;
-    }
-    
-    .tooltip-header {
-      padding: 8px 12px;
-    }
-    
-    .step-badge {
-      font-size: 10px;
-      padding: 3px 8px;
-    }
-    
-    .tooltip-content {
-      padding: 10px 12px;
-    }
-    
-    .tooltip-title {
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-    
-    .tooltip-description {
-      font-size: 11px;
-      line-height: 1.4;
-    }
-    
-    .tooltip-action {
-      padding: 6px 10px;
-      margin-top: 8px;
-      font-size: 10px;
-    }
-    
-    .tooltip-dots {
-      padding: 6px 12px;
-      gap: 4px;
-    }
-    
-    .dot {
-      width: 5px;
-      height: 5px;
-    }
-    
-    .dot.active {
-      width: 12px;
-    }
-    
-    .tooltip-nav {
-      padding: 8px 12px;
-      gap: 6px;
-    }
-    
-    .nav-btn {
-      padding: 8px 12px;
+    .sub-text {
       font-size: 12px;
     }
     
-    .close-btn-small {
-      width: 24px;
-      height: 24px;
+    .top-controls {
+      top: 12px;
+      right: 12px;
+      gap: 6px;
+    }
+    
+    .control-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    
+    .sound-btn {
+      font-size: 16px;
+      padding: 5px 8px;
+      min-width: 36px;
+    }
+    
+    .nav-arrows {
+      bottom: 16px;
+      gap: 60px;
+    }
+    
+    .nav-arrow {
+      width: 44px;
+      height: 44px;
+      font-size: 24px;
+    }
+    
+    .floating-message.top {
+      top: 12px;
+    }
+    
+    .floating-message.bottom {
+      bottom: 80px;
+    }
+    
+    .spotlight-ring {
+      border-width: 2px;
+    }
+    
+    .final-options {
+      bottom: 60px;
+      left: 12px;
+      right: 12px;
+      transform: none;
+      padding: 20px 16px;
+    }
+    
+    .final-btn {
+      padding: 12px 20px;
+      font-size: 14px;
+      min-width: unset;
     }
   }
 </style>

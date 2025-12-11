@@ -116,6 +116,9 @@ export function sanitizePollData(data: any): any {
       ...opt,
       optionLabel: sanitizeOption(opt.optionLabel),
       optionKey: sanitizePlainText(opt.optionKey),
+      // Sanitizar textos de Sí/No personalizados
+      yesText: opt.yesText ? sanitizePlainText(opt.yesText) : null,
+      noText: opt.noText ? sanitizePlainText(opt.noText) : null,
     })),
     hashtags: data.hashtags?.map((tag: string) => sanitizeHashtag(tag)).filter(Boolean)
   };

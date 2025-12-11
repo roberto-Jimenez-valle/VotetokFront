@@ -1681,7 +1681,7 @@
       }
 
   // Nueva función para enviar voto directamente desde BottomSheet
-  async function sendVoteToBackend(optionKey: string, pollId?: string, isRemove: boolean = false) {
+  async function sendVoteToBackend(optionKey: string, pollId?: string) {
                 // Determinar qué encuesta - buscar por ID (string o number)
     let poll;
     if (pollId) {
@@ -2417,6 +2417,8 @@
         pct: pct,
         votes: votes,
         voted: hasVoted,
+        // Campo para indicar si esta opción es la correcta
+        isCorrect: opt.isCorrect || false,
       };
 
             return transformedOption;
@@ -2918,6 +2920,12 @@
               handleVote(optionKey);
             }
           }}
+          on:yesNoVote={(e: any) => {
+            const { optionKey, answer, optionColor } = e.detail;
+            voteEffectColor = answer === 'yes' ? '#22c55e' : '#ef4444';
+            // El voto Sí/No funciona como voto a la opción
+            handleVote(optionKey);
+          }}
           on:setActive={(e: any) => (activeAccordionMainIndex = e.detail.index)}
           on:pageChange={(e: any) => {
             transitionDirectionMain =
@@ -3083,6 +3091,11 @@
             } else {
               handleVote(optionKey, pollId);
             }
+          }}
+          on:yesNoVote={(e) => {
+            const { optionKey, pollId, answer, optionColor } = e.detail;
+            voteEffectColor = answer === 'yes' ? '#22c55e' : '#ef4444';
+            handleVote(optionKey, pollId);
           }}
           on:setActive={(e) =>
             setActiveForPoll(e.detail.pollId, e.detail.index)}

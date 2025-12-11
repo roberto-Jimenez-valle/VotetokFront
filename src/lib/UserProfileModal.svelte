@@ -506,6 +506,12 @@
                           console.log('[UserProfileModal] Voto registrado:', optionKey);
                         }
                       }}
+                      on:yesNoVote={(e) => {
+                        const { pollId, optionKey, answer } = e.detail;
+                        console.log('[UserProfileModal] Voto Sí/No recibido:', e.detail);
+                        const pollIdStr = pollId.toString();
+                        votesState = { ...votesState, [pollIdStr]: optionKey };
+                      }}
                       on:clearVote={async (e) => {
                         const { pollId } = e.detail;
                         const pollIdStr = pollId.toString();
@@ -582,6 +588,11 @@
                           } else {
                             votesState = { ...votesState, [pollIdStr]: optionKey };
                           }
+                        }}
+                        on:yesNoVote={(e) => {
+                          const { pollId, optionKey, answer } = e.detail;
+                          const pollIdStr = pollId.toString();
+                          votesState = { ...votesState, [pollIdStr]: optionKey };
                         }}
                         on:clearVote={async (e) => {
                           const { pollId } = e.detail;

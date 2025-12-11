@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Trash2, Sparkles, Play, CircleCheck } from 'lucide-svelte';
+  import { X, Trash2, Sparkles, Play, CircleCheck, Ban, Palette, ThumbsUp, ThumbsDown, Check } from 'lucide-svelte';
   import MediaEmbed from './MediaEmbed.svelte';
 
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -38,16 +38,10 @@
     onGiphyPickerOpen?: () => void;
     onRemoveMedia?: () => void;
     onRemoveOption?: () => void;
-    onToggleYesNo?: () => void;
-    onToggleCorrect?: (answer?: 'yes' | 'no') => void;
+    onToggleCorrect?: () => void;
     
     // Estados de opción
-    isYesNo?: boolean;
     isCorrect?: boolean;
-    yesText?: string;
-    noText?: string;
-    correctAnswer?: 'yes' | 'no';
-    onYesNoTextChange?: (yesText: string, noText: string) => void;
     
     // Callbacks para vista
     onFriendsClick?: () => void;
@@ -81,14 +75,8 @@
     onGiphyPickerOpen,
     onRemoveMedia,
     onRemoveOption,
-    onToggleYesNo,
     onToggleCorrect,
-    isYesNo = false,
     isCorrect = false,
-    yesText = '',
-    noText = '',
-    correctAnswer,
-    onYesNoTextChange,
     onFriendsClick,
     onClick,
     onDoubleClick,
@@ -290,7 +278,7 @@
 >
   {#if isVideoType}
     <!-- === LAYOUT VIDEO/SPOTIFY/SOUNDCLOUD === -->
-    <div class="card-video-wrapper" style="background-color: {displayColor};">
+    <div class="card-video-wrapper"  style="background-color: {displayColor};">
       <!-- Área de video (55%) -->
       <div class="card-video-area">
         {#if showThumbnail}
@@ -361,9 +349,13 @@
       <!-- Contenido debajo del video -->
       <div class="card-video-bottom">
         {#if mode === 'edit'}
+          <!-- Contador encima del texto -->
+          <div class="char-counter-above">
+            <span>{label.length}/200</span>
+          </div>
           <textarea
             class="option-label-edit"
-            placeholder="Opción {optionIndex + 1}"
+            placeholder="Opción {optionIndex + 1}..."
             value={displayLabel}
             oninput={(e) => onLabelChange?.((e.target as HTMLTextAreaElement).value)}
             onclick={(e) => e.stopPropagation()}
@@ -375,68 +367,8 @@
           </h2>
         {/if}
         
-        {#if mode === 'edit'}
-          <!-- Contador encima de línea -->
-          <div class="char-counter-above">
-            <span>{label.length}/200</span>
-          </div>
-        {/if}
-        
         <!-- Línea divisoria -->
         <div class="card-divider-line"></div>
-        
-        <!-- Campos Sí/No -->
-        {#if mode === 'edit' && isYesNo}
-          <div class="yesno-row">
-            <button
-              type="button"
-              class="yesno-input yesno-yes"
-              class:correct={correctAnswer === 'yes'}
-              style="color: {color}"
-              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('yes'); }}
-            >
-              <CircleCheck size={18} class={correctAnswer === 'yes' ? 'correct-icon active' : 'correct-icon'} />
-              <input
-                type="text"
-                inputmode="text"
-                placeholder="👍 Sí"
-                value={yesText}
-                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(e.currentTarget.value, noText); }}
-                onclick={(e) => e.stopPropagation()}
-              />
-            </button>
-            <button
-              type="button"
-              class="yesno-input yesno-no"
-              class:correct={correctAnswer === 'no'}
-              style="color: {color}"
-              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('no'); }}
-            >
-              <CircleCheck size={18} class={correctAnswer === 'no' ? 'correct-icon active' : 'correct-icon'} />
-              <input
-                type="text"
-                inputmode="text"
-                placeholder="👎 No"
-                value={noText}
-                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(yesText, e.currentTarget.value); }}
-                onclick={(e) => e.stopPropagation()}
-              />
-            </button>
-          </div>
-        {/if}
-        
-        <!-- Mensaje de opción correcta -->
-        {#if mode === 'edit' && isYesNo && correctAnswer}
-          <div class="correct-answer-hint">
-            <CircleCheck size={10} />
-            <span>"{correctAnswer === 'yes' ? (yesText || 'Sí') : (noText || 'No')}" es correcta</span>
-          </div>
-        {:else if mode === 'edit' && !isYesNo && isCorrect}
-          <div class="correct-answer-hint">
-            <CircleCheck size={10} />
-            <span>Esta opción es correcta</span>
-          </div>
-        {/if}
         
         <!-- Footer - PORCENTAJE SOLO SI HA VOTADO -->
         <div class="card-bottom-row">
@@ -451,37 +383,7 @@
             <div class="card-percentage-placeholder"></div>
           {/if}
           
-          {#if mode === 'edit'}
-            <div class="edit-buttons">
-              <button type="button" class="edit-btn yesno-btn" class:active={isYesNo} onclick={(e) => { e.stopPropagation(); onToggleYesNo?.(); }} title="Sí/No" aria-label="Activar votación Sí/No">
-                <svg class="w-9 h-9" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="16" cy="16" r="16" fill="#808080"></circle>
-                  <circle cx="16" cy="16" r="14" fill="#333333"></circle>
-                  <path d="M 16 2 A 14 14 0 0 0 16 30 Z" fill="#EEEEEE"></path>
-                  <circle cx="16" cy="9" r="7" fill="#EEEEEE"></circle>
-                  <circle cx="16" cy="23" r="7" fill="#333333"></circle>
-                  <path d="M12 9 L15 12 L20 6" stroke="#333333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M13 20 L19 26 M19 20 L13 26" stroke="#EEEEEE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
-              </button>
-              {#if !isYesNo}
-                <button type="button" class="edit-btn correct-btn" class:active={isCorrect} onclick={(e) => { e.stopPropagation(); onToggleCorrect?.(); }} title="Correcta" aria-label="Marcar como correcta">
-                  <CircleCheck class="w-4 h-4" />
-                </button>
-              {/if}
-              <button type="button" class="edit-btn color-btn" style="background-color: {color}" onclick={(e) => { e.stopPropagation(); onColorPickerOpen?.(); }} title="Cambiar color" aria-label="Cambiar color">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
-              </button>
-              <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); onGiphyPickerOpen?.(); }} title="Buscar GIF" aria-label="Buscar GIF">
-                <Sparkles class="w-4 h-4" />
-              </button>
-              {#if showRemoveOption}
-                <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); onRemoveOption?.(); }} title="Eliminar opción" aria-label="Eliminar opción">
-                  <Trash2 class="w-4 h-4" />
-                </button>
-              {/if}
-            </div>
-          {:else if friends.length > 0}
+          {#if friends.length > 0 && mode !== 'edit'}
             <button 
               type="button"
               class="friends-avatars-btn"
@@ -509,7 +411,7 @@
     
   {:else if hasMedia}
     <!-- === LAYOUT IMAGEN/GIF/THUMBNAIL (fondo completo) === -->
-    <div class="card-media-wrapper">
+    <div class="card-media-wrapper" >
       <!-- Fondo de color -->
       <div class="option-background">
         <div class="noise-overlay"></div>
@@ -592,18 +494,18 @@
       <!-- Contenido inferior -->
       <div class="option-content-bottom">
         {#if mode === 'edit'}
+          <!-- Contador encima del texto -->
+          <div class="char-counter-above">
+            <span>{label.length}/200</span>
+          </div>
           <textarea
             class="option-label-edit"
-            placeholder="Opción {optionIndex + 1}"
+            placeholder="Opción {optionIndex + 1}..."
             value={displayLabel}
             oninput={(e) => onLabelChange?.((e.target as HTMLTextAreaElement).value)}
             onclick={(e) => e.stopPropagation()}
             maxlength="200"
           ></textarea>
-          <!-- Contador debajo del textarea -->
-          <div class="char-counter-above">
-            <span>{label.length}/200</span>
-          </div>
         {:else}
           <h2 class="option-label-view">
             {displayLabel}
@@ -611,59 +513,6 @@
         {/if}
         
         <div class="divider-line"></div>
-        
-        <!-- Campos Sí/No -->
-        {#if mode === 'edit' && isYesNo}
-          <div class="yesno-row">
-            <button
-              type="button"
-              class="yesno-input yesno-yes"
-              class:correct={correctAnswer === 'yes'}
-              style="color: {color}"
-              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('yes'); }}
-            >
-              <CircleCheck size={18} class={correctAnswer === 'yes' ? 'correct-icon active' : 'correct-icon'} />
-              <input
-                type="text"
-                inputmode="text"
-                placeholder="👍 Sí"
-                value={yesText}
-                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(e.currentTarget.value, noText); }}
-                onclick={(e) => e.stopPropagation()}
-              />
-            </button>
-            <button
-              type="button"
-              class="yesno-input yesno-no"
-              class:correct={correctAnswer === 'no'}
-              style="color: {color}"
-              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('no'); }}
-            >
-              <CircleCheck size={18} class={correctAnswer === 'no' ? 'correct-icon active' : 'correct-icon'} />
-              <input
-                type="text"
-                inputmode="text"
-                placeholder="👎 No"
-                value={noText}
-                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(yesText, e.currentTarget.value); }}
-                onclick={(e) => e.stopPropagation()}
-              />
-            </button>
-          </div>
-        {/if}
-        
-        <!-- Mensaje de opción correcta -->
-        {#if mode === 'edit' && isYesNo && correctAnswer}
-          <div class="correct-answer-hint">
-            <CircleCheck size={10} />
-            <span>"{correctAnswer === 'yes' ? (yesText || 'Sí') : (noText || 'No')}" es correcta</span>
-          </div>
-        {:else if mode === 'edit' && !isYesNo && isCorrect}
-          <div class="correct-answer-hint">
-            <CircleCheck size={10} />
-            <span>Esta opción es correcta</span>
-          </div>
-        {/if}
         
         <div class="option-footer">
           {#if userHasVoted}
@@ -677,37 +526,7 @@
             <div class="percentage-display-placeholder"></div>
           {/if}
           
-          {#if mode === 'edit'}
-            <div class="edit-buttons">
-              <button type="button" class="edit-btn yesno-btn" class:active={isYesNo} onclick={(e) => { e.stopPropagation(); onToggleYesNo?.(); }} title="Sí/No" aria-label="Activar votación Sí/No">
-                <svg class="w-8 h-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="16" cy="16" r="16" fill="#808080"></circle>
-                  <circle cx="16" cy="16" r="14" fill="#333333"></circle>
-                  <path d="M 16 2 A 14 14 0 0 0 16 30 Z" fill="#EEEEEE"></path>
-                  <circle cx="16" cy="9" r="7" fill="#EEEEEE"></circle>
-                  <circle cx="16" cy="23" r="7" fill="#333333"></circle>
-                  <path d="M12 9 L15 12 L20 6" stroke="#333333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M13 20 L19 26 M19 20 L13 26" stroke="#EEEEEE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
-              </button>
-              {#if !isYesNo}
-                <button type="button" class="edit-btn correct-btn" class:active={isCorrect} onclick={(e) => { e.stopPropagation(); onToggleCorrect?.(); }} title="Correcta" aria-label="Marcar como correcta">
-                  <CircleCheck class="w-4 h-4" />
-                </button>
-              {/if}
-              <button type="button" class="edit-btn color-btn" style="background-color: {color}" onclick={(e) => { e.stopPropagation(); onColorPickerOpen?.(); }} title="Cambiar color" aria-label="Cambiar color">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
-              </button>
-              <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); onGiphyPickerOpen?.(); }} title="Buscar GIF" aria-label="Buscar GIF">
-                <Sparkles class="w-4 h-4" />
-              </button>
-              {#if showRemoveOption}
-                <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); onRemoveOption?.(); }} title="Eliminar opción" aria-label="Eliminar opción">
-                  <Trash2 class="w-4 h-4" />
-                </button>
-              {/if}
-            </div>
-          {:else if friends.length > 0}
+          {#if friends.length > 0 && mode !== 'edit'}
             <button 
               type="button"
               class="friends-avatars-btn"
@@ -733,149 +552,141 @@
       </div>
     </div>
   {:else}
-    <!-- === LAYOUT TEXTO PURO (sin área superior) === -->
-    <div class="card-text-only" style="background-color: {displayColor};">
+    <!-- === LAYOUT TEXTO PURO (nuevo diseño React-style) === -->
+    <div class="card-text-only"  style="background-color: {displayColor};">
       <div class="noise-overlay"></div>
-      <div class="card-text-content">
+      
+      <div class="card-text-content-new">
+        <!-- Spacer para empujar contenido hacia abajo -->
+        <div class="content-spacer"></div>
+        
+        <!-- Textarea de texto -->
         {#if mode === 'edit'}
-          <textarea
-            class="option-label-edit"
-            placeholder="Opción {optionIndex + 1}"
-            value={displayLabel}
-            oninput={(e) => onLabelChange?.((e.target as HTMLTextAreaElement).value)}
-            onclick={(e) => e.stopPropagation()}
-            maxlength="200"
-          ></textarea>
-          <!-- Contador debajo del textarea -->
-          <div class="char-counter-above">
+          <!-- Contador de caracteres encima del texto -->
+          <div class="char-counter-new">
             <span>{label.length}/200</span>
           </div>
+          <textarea
+            class="option-label-edit-new option-label-autosize"
+            placeholder="Opción {optionIndex + 1}..."
+            value={displayLabel}
+            oninput={(e) => {
+              onLabelChange?.((e.target as HTMLTextAreaElement).value);
+              // Auto-resize textarea
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = target.scrollHeight + 'px';
+            }}
+            onclick={(e) => e.stopPropagation()}
+            maxlength="200"
+            rows="2"
+          ></textarea>
         {:else}
           <h2 class="option-label-view">
             {displayLabel}
           </h2>
         {/if}
         
-        <div class="card-divider-line"></div>
-        
-        <!-- Campos Sí/No -->
-        {#if mode === 'edit' && isYesNo}
-          <div class="yesno-row">
-            <button
-              type="button"
-              class="yesno-input yesno-yes"
-              class:correct={correctAnswer === 'yes'}
-              style="color: {color}"
-              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('yes'); }}
-            >
-              <CircleCheck size={18} class={correctAnswer === 'yes' ? 'correct-icon active' : 'correct-icon'} />
-              <input
-                type="text"
-                inputmode="text"
-                placeholder="👍 Sí"
-                value={yesText}
-                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(e.currentTarget.value, noText); }}
-                onclick={(e) => e.stopPropagation()}
-              />
-            </button>
-            <button
-              type="button"
-              class="yesno-input yesno-no"
-              class:correct={correctAnswer === 'no'}
-              style="color: {color}"
-              onclick={(e) => { e.stopPropagation(); onToggleCorrect?.('no'); }}
-            >
-              <CircleCheck size={18} class={correctAnswer === 'no' ? 'correct-icon active' : 'correct-icon'} />
-              <input
-                type="text"
-                inputmode="text"
-                placeholder="👎 No"
-                value={noText}
-                oninput={(e) => { e.stopPropagation(); onYesNoTextChange?.(yesText, e.currentTarget.value); }}
-                onclick={(e) => e.stopPropagation()}
-              />
-            </button>
-          </div>
-        {/if}
-        
-        <!-- Mensaje de opción correcta -->
-        {#if mode === 'edit' && isYesNo && correctAnswer}
-          <div class="correct-answer-hint">
-            <CircleCheck size={10} />
-            <span>"{correctAnswer === 'yes' ? (yesText || 'Sí') : (noText || 'No')}" es correcta</span>
-          </div>
-        {:else if mode === 'edit' && !isYesNo && isCorrect}
-          <div class="correct-answer-hint">
-            <CircleCheck size={10} />
-            <span>Esta opción es correcta</span>
-          </div>
-        {/if}
-        
-        <div class="card-bottom-row">
+        {#if mode === 'view'}
+          <!-- Vista de porcentaje para modo view -->
           {#if userHasVoted}
-            <div class="card-percentage">
-              <span class="percentage-value">{Math.round(percentage)}%</span>
-              {#if showPercentageLabel}
-                <span class="percentage-label">DE LOS VOTOS</span>
-              {/if}
-            </div>
-          {:else}
-            <div class="card-percentage-placeholder"></div>
-          {/if}
-          
-          {#if mode === 'edit'}
-            <div class="edit-buttons">
-              <button type="button" class="edit-btn yesno-btn" class:active={isYesNo} onclick={(e) => { e.stopPropagation(); onToggleYesNo?.(); }} title="Sí/No" aria-label="Activar votación Sí/No">
-                <svg class="w-8 h-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="16" cy="16" r="16" fill="#808080"></circle>
-                  <circle cx="16" cy="16" r="14" fill="#333333"></circle>
-                  <path d="M 16 2 A 14 14 0 0 0 16 30 Z" fill="#EEEEEE"></path>
-                  <circle cx="16" cy="9" r="7" fill="#EEEEEE"></circle>
-                  <circle cx="16" cy="23" r="7" fill="#333333"></circle>
-                  <path d="M12 9 L15 12 L20 6" stroke="#333333" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M13 20 L19 26 M19 20 L13 26" stroke="#EEEEEE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
-              </button>
-              {#if !isYesNo}
-                <button type="button" class="edit-btn correct-btn" class:active={isCorrect} onclick={(e) => { e.stopPropagation(); onToggleCorrect?.(); }} title="Correcta" aria-label="Marcar como correcta">
-                  <CircleCheck class="w-4 h-4" />
-                </button>
-              {/if}
-              <button type="button" class="edit-btn color-btn" style="background-color: {color}" onclick={(e) => { e.stopPropagation(); onColorPickerOpen?.(); }} title="Cambiar color" aria-label="Cambiar color">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
-              </button>
-              <button type="button" class="edit-btn giphy-btn" onclick={(e) => { e.stopPropagation(); onGiphyPickerOpen?.(); }} title="Buscar GIF" aria-label="Buscar GIF">
-                <Sparkles class="w-4 h-4" />
-              </button>
-              {#if showRemoveOption}
-                <button type="button" class="edit-btn delete-btn" onclick={(e) => { e.stopPropagation(); onRemoveOption?.(); }} title="Eliminar opción" aria-label="Eliminar opción">
-                  <Trash2 class="w-4 h-4" />
-                </button>
-              {/if}
-            </div>
-          {:else if friends.length > 0}
-            <button 
-              type="button"
-              class="friends-avatars-btn"
-              onclick={(e) => { e.stopPropagation(); if (userHasVoted) onFriendsClick?.(); }}
-              disabled={!userHasVoted}
-              aria-label="Ver votos de amigos"
-            >
-              {#each friends.slice(0, 3) as friend, i}
-                <div class="friend-avatar-wrapper" style="z-index: {10 - i};">
-                  {#if userHasVoted}
-                    <img src={friend.avatarUrl || DEFAULT_AVATAR} alt={friend.name} class="friend-avatar" loading="lazy" />
-                  {:else}
-                    <div class="friend-avatar-mystery"><span>?</span></div>
+            <div class="card-bottom-row">
+              <div class="card-percentage">
+                <span class="percentage-value">{Math.round(percentage)}%</span>
+                {#if showPercentageLabel}
+                  <span class="percentage-label">DE LOS VOTOS</span>
+                {/if}
+              </div>
+              {#if friends.length > 0}
+                <button 
+                  type="button"
+                  class="friends-avatars-btn"
+                  onclick={(e) => { e.stopPropagation(); if (userHasVoted) onFriendsClick?.(); }}
+                  disabled={!userHasVoted}
+                  aria-label="Ver votos de amigos"
+                >
+                  {#each friends.slice(0, 3) as friend, i}
+                    <div class="friend-avatar-wrapper" style="z-index: {10 - i};">
+                      <img src={friend.avatarUrl || DEFAULT_AVATAR} alt={friend.name} class="friend-avatar" loading="lazy" />
+                    </div>
+                  {/each}
+                  {#if friends.length > 3}
+                    <span class="friends-more">+{friends.length - 3}</span>
                   {/if}
-                </div>
-              {/each}
-              {#if friends.length > 3}
-                <span class="friends-more">+{friends.length - 3}</span>
+                </button>
               {/if}
-            </button>
+            </div>
           {/if}
-        </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+  
+  <!-- Botones de edición - SIEMPRE en la misma posición -->
+  {#if mode === 'edit'}
+    <div class="floating-actions-right">
+      <button
+        type="button"
+        class="tool-btn {isCorrect ? 'active' : ''}"
+        onclick={(e) => { e.stopPropagation(); onToggleCorrect?.(); }}
+        title={isCorrect ? 'Opción correcta' : 'Marcar como correcta'}
+        aria-label="Marcar correcta"
+      >
+        <CircleCheck size={18} />
+      </button>
+      <button
+        type="button"
+        class="tool-btn"
+        onclick={(e) => { e.stopPropagation(); onColorPickerOpen?.(); }}
+        title="Cambiar color"
+        aria-label="Color"
+      >
+        <Palette size={18} />
+      </button>
+      <button
+        type="button"
+        class="tool-btn sparkles-btn"
+        onclick={(e) => { e.stopPropagation(); onGiphyPickerOpen?.(); }}
+        title="Buscar GIF"
+        aria-label="GIF"
+      >
+        <Sparkles size={18} />
+      </button>
+      {#if showRemoveOption}
+        <button
+          type="button"
+          class="tool-btn danger-btn"
+          onclick={(e) => { e.stopPropagation(); onRemoveOption?.(); }}
+          title="Eliminar opción"
+          aria-label="Eliminar"
+        >
+          <Trash2 size={18} />
+        </button>
+      {/if}
+    </div>
+  {/if}
+  
+  <!-- Mensaje de opción correcta en edición -->
+  {#if mode === 'edit' && isCorrect}
+    <div class="correct-hint-overlay">
+      <div class="correct-answer-hint">
+        <CircleCheck size={12} />
+        <span>Esta opción es correcta</span>
+      </div>
+    </div>
+  {/if}
+  
+  <!-- === MODO VIEW: Indicador de opción correcta === -->
+  {#if mode === 'view' && isCorrect && userHasVoted}
+    <div class="correct-indicator-overlay">
+      <div class="correct-indicator-badge {isVoted ? 'correct' : 'incorrect'}">
+        {#if isVoted}
+          <Check size={14} />
+          <span>¡Acertaste!</span>
+        {:else}
+          <CircleCheck size={14} />
+          <span>Esta era la correcta</span>
+        {/if}
       </div>
     </div>
   {/if}
@@ -887,12 +698,15 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    border-radius: 29px;
+    border-radius: 24px;
     overflow: hidden;
     border: none;
     padding: 0;
     background: #1a1a1a;
     text-align: left;
+    /* Flex layout para que Sí/No esté dentro del flujo */
+    display: flex;
+    flex-direction: column;
     /* Ocultar scrollbars */
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -936,9 +750,10 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     padding: 4px;
-    border-radius: 32px;
+    border-radius: 24px;
     overflow: hidden;
   }
   
@@ -947,7 +762,7 @@
     position: relative;
     overflow: hidden;
     background: var(--option-color);
-    border-radius: 28px;
+    border-radius: 22px;
   }
   
   .card-video-area :global(.media-embed),
@@ -960,7 +775,7 @@
   
   .card-video-area :global(iframe),
   .card-video-area :global(video) {
-    border-radius: 28px !important;
+    border-radius: 22px !important;
     width: 100% !important;
     height: 100% !important;
     object-fit: contain !important;
@@ -984,7 +799,7 @@
     align-items: center;
     justify-content: center;
     background: #000;
-    border-radius: 28px;
+    border-radius: 22px;
     overflow: hidden;
     border: none;
     padding: 0;
@@ -1144,7 +959,7 @@
     position: relative;
     width: 100%;
     height: 100%;
-    border-radius: 32px;
+    border-radius: 24px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -1177,8 +992,9 @@
   .card-media-wrapper {
     position: relative;
     width: 100%;
-    height: 100%;
-    border-radius: 32px;
+    flex: 1;
+    min-height: 0;
+    border-radius: 24px;
     overflow: hidden;
   }
   
@@ -1404,10 +1220,8 @@
     border: none;
     outline: none;
     color: white;
-    font-size: 16px;
+    font-size: 24px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: -0.02em;
     line-height: 1.2;
     resize: none;
     width: 100%;
@@ -1416,8 +1230,7 @@
   }
   
   .option-label-edit::placeholder {
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: none;
+    color: rgba(255, 255, 255, 0.5);
   }
   
   /* Botón eliminar media - centrado arriba */
@@ -1445,14 +1258,15 @@
     transform: translateX(-50%) scale(1.1);
   }
   
-  /* Botones de edición - VERTICAL en esquina derecha */
+  /* Botones de edición - VERTICAL en esquina derecha, centrados */
   .edit-buttons {
     position: absolute;
-    right: 16px;
-    bottom: 55px; /* Por encima de la línea divisoria */
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     z-index: 10;
   }
   
@@ -1531,9 +1345,13 @@
   .char-counter-above {
     display: flex;
     justify-content: flex-start;
-    padding: 2px 6px 0;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.4);
+    padding: 4px 0 0;
+  }
+  
+  .char-counter-above span {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
   }
   
   /* Campos de Sí/No */
@@ -1618,21 +1436,31 @@
     border-color: rgba(239, 68, 68, 0.5);
   }
   
+  /* Overlay para mensaje de opción correcta - posicionado arriba de los campos Sí/No */
+  .correct-hint-overlay {
+    position: absolute;
+    bottom: 60px; /* Encima de los campos Sí/No */
+    left: 12px;
+    right: 60px;
+    z-index: 26;
+    pointer-events: none;
+  }
+
   /* Mensaje de opción correcta */
   .correct-answer-hint {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 8px;
-    margin-top: 4px;
+    padding: 6px 10px;
     background: #22c55e;
     border-radius: 12px;
     color: white;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 600;
     white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
     animation: fadeIn 0.2s ease-out;
+    backdrop-filter: blur(8px);
   }
   
   .correct-answer-hint :global(svg) {
@@ -1753,5 +1581,481 @@
     font-size: 32px;
     -webkit-line-clamp: 6;
     line-clamp: 6;
+  }
+
+  /* ========================================
+     NUEVO DISEÑO - BOTONES FLOTANTES Y YES/NO
+     ======================================== */
+  
+  /* Botones flotantes a la derecha */
+  .floating-actions-right {
+    position: absolute;
+    bottom: 100px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 20;
+  }
+
+  .tool-btn {
+    padding: 8px;
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    border: none;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tool-btn:hover {
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .tool-btn.active {
+    background: white;
+    color: #1f2937;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transform: scale(1.1);
+  }
+
+  .tool-btn.danger-btn:hover {
+    background: rgba(239, 68, 68, 0.8);
+    color: white;
+  }
+
+  .tool-btn.sparkles-btn {
+    opacity: 0.8;
+  }
+
+  .tool-btn.sparkles-btn:hover {
+    opacity: 1;
+  }
+
+  /* Contenido de tarjeta nuevo */
+  .card-text-content-new {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 24px;
+    padding-right: 56px; /* Espacio para botones flotantes */
+  }
+
+  .content-spacer {
+    flex: 1;
+    cursor: text;
+  }
+
+  .option-label-edit-new {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: white;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.2;
+    padding: 0;
+    margin-bottom: 4px;
+  }
+
+  .option-label-edit-new::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  /* Auto-resize para layout de solo texto */
+  .option-label-autosize {
+    overflow: hidden;
+    min-height: 48px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  .char-counter-new {
+    display: flex;
+    justify-content: flex-start;
+    padding-bottom: 4px;
+  }
+
+  .char-counter-new span {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .divider-line-new {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    margin-bottom: 16px;
+  }
+
+  /* Campos Sí/No - overlay superpuesto dentro del contenido */
+  .yesno-overlay {
+    position: absolute;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    pointer-events: auto;
+    /* Sin fondo - se integra con el contenido detrás */
+  }
+
+  /* Empujar contenido cuando Sí/No está activo */
+  /* Para layout GIF/imagen (position absolute) - cambiar bottom */
+  .has-yesno .option-content-bottom {
+    bottom: 70px;
+  }
+
+  .has-yesno .card-text-content-new {
+    padding-bottom: 70px;
+  }
+
+  .has-yesno .card-video-bottom {
+    padding-bottom: 70px;
+  }
+
+  /* Etiqueta de respuesta correcta centrada */
+  .yesno-correct-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #22c55e;
+    border-radius: 12px;
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(34, 197, 94, 0.4);
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .yesno-correct-label :global(svg) {
+    flex-shrink: 0;
+  }
+
+  /* Etiqueta "Selecciona el botón correcto" - amarillo pastel */
+  .yesno-select-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #fef3c7;
+    border-radius: 12px;
+    color: #92400e;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.3);
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .yesno-select-label :global(svg) {
+    flex-shrink: 0;
+    color: #f59e0b;
+  }
+
+  /* Mensaje de opción correcta (sin Sí/No) - abajo centrado */
+  .correct-hint-overlay {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    right: 60px;
+    z-index: 25;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .correct-answer-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: #22c55e;
+    border-radius: 12px;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+  }
+
+  .correct-answer-hint :global(svg) {
+    flex-shrink: 0;
+  }
+
+  /* Fila de opciones Sí/No */
+  .yesno-row-new {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .option-btn-new {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid transparent;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: all 0.2s;
+    overflow: hidden;
+    backdrop-filter: blur(8px);
+  }
+
+  .option-btn-new:hover {
+    border-color: rgba(236, 72, 153, 0.2);
+  }
+
+  .option-btn-new.selected {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+  }
+
+  .option-selector {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+
+  .option-selector.selected {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: white;
+  }
+
+  .option-btn-new:hover .option-selector:not(.selected) {
+    border-color: #86efac;
+  }
+
+  .option-content-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding-right: 4px;
+  }
+
+  .option-content-btn :global(.thumbs-up) {
+    color: #22c55e;
+    fill: #dcfce7;
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
+
+  .option-content-btn :global(.thumbs-down) {
+    color: #ef4444;
+    fill: #fee2e2;
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
+
+  .option-input-new {
+    width: 100%;
+    background: #f1f5f9;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 14px;
+    color: #334155;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .option-input-new::placeholder {
+    color: #94a3b8;
+  }
+
+  .option-input-new:hover {
+    background: #e2e8f0;
+  }
+
+  .option-input-new:focus {
+    background: white;
+    border-color: rgba(34, 197, 94, 0.5);
+  }
+
+  /* ========================================
+     MODO VIEW: Botones Sí/No para votar
+     ======================================== */
+  
+  .yesno-vote-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 16px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+    z-index: 30;
+  }
+
+  .yesno-vote-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .yesno-vote-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 16px;
+    border: none;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 100px;
+    justify-content: center;
+  }
+
+  .yesno-vote-btn.yes {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+  }
+
+  .yesno-vote-btn.yes:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(34, 197, 94, 0.5);
+  }
+
+  .yesno-vote-btn.no {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+  }
+
+  .yesno-vote-btn.no:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.5);
+  }
+
+  .yesno-vote-btn :global(svg) {
+    flex-shrink: 0;
+  }
+
+  /* ========================================
+     MODO VIEW: Resultado después de votar
+     ======================================== */
+  
+  .yesno-result-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 30;
+  }
+
+  .yesno-result-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    animation: popIn 0.3s ease-out;
+  }
+
+  .yesno-result-badge.correct {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+  }
+
+  .yesno-result-badge.incorrect {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  }
+
+  .yesno-result-badge :global(svg) {
+    flex-shrink: 0;
+  }
+
+  /* ========================================
+     MODO VIEW: Indicador de opción correcta
+     ======================================== */
+  
+  .correct-indicator-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 30;
+  }
+
+  .correct-indicator-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    animation: popIn 0.3s ease-out;
+  }
+
+  .correct-indicator-badge.correct {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+  }
+
+  .correct-indicator-badge.incorrect {
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  }
+
+  .correct-indicator-badge :global(svg) {
+    flex-shrink: 0;
+  }
+
+  @keyframes popIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 </style>

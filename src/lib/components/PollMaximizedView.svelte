@@ -36,6 +36,9 @@
     VolumeX,
     BadgeCheck,
     Plus,
+    ThumbsUp,
+    ThumbsDown,
+    Ban,
   } from "lucide-svelte";
   import { fade, fly, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -67,6 +70,8 @@
     description?: string;
     youtubeId?: string;
     vimeoId?: string;
+    // Campo para indicar si esta opción es la correcta
+    isCorrect?: boolean;
   }
 
   interface PollCreator {
@@ -481,6 +486,7 @@
     // Lógica de Doble Tap (Touch)
     const DOUBLE_TAP_DELAY = 300;
     if (now - lastTapTime < DOUBLE_TAP_DELAY) {
+      const opt = options[activeIndex];
       // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
       const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
       if (canVote && readOnly) {
@@ -491,7 +497,6 @@
           return;
         }
 
-        const opt = options[activeIndex];
         if (opt) {
           onVote(opt.id);
           showLikeAnim = true;
@@ -516,6 +521,7 @@
     const DOUBLE_TAP_DELAY = 300;
 
     if (now - lastTapTime < DOUBLE_TAP_DELAY) {
+      const opt = options[activeIndex];
       // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
       const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
       if (canVote && readOnly) {
@@ -526,7 +532,6 @@
           return;
         }
 
-        const opt = options[activeIndex];
         if (opt) {
           onVote(opt.id);
           showLikeAnim = true;
@@ -1121,83 +1126,6 @@
                     
                     <!-- Barra inferior -->
                     <div class="card-footer-bar" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                      <div class="card-bottom-row">
-                        {#if hasVoted && totalVotes > 0}
-                          <div class="card-percentage">
-                            <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
-                            <span class="card-percentage-label">DE LOS VOTOS</span>
-                          </div>
-                        {:else}
-                          <div></div>
-                        {/if}
-                        
-                        <!-- Avatares de amigos -->
-                        <div class="card-avatars-group">
-                          {#if getFriendsForOption(opt).length > 0}
-                            <button 
-                              class="friends-avatars-stack"
-                              onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
-                              disabled={!hasVoted}
-                              type="button"
-                              aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
-                            >
-                              {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
-                                {#if hasVoted}
-                                  <img 
-                                    class="friend-avatar-stacked" 
-                                    style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
-                                    src={friend.avatarUrl || '/default-avatar.png'}
-                                    alt={friend.name || 'Amigo'}
-                                  />
-                                {:else}
-                                  <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
-                                    <span>?</span>
-                                  </div>
-                                {/if}
-                              {/each}
-                              {#if getFriendsForOption(opt).length > 3}
-                                <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
-                              {/if}
-                            </button>
-                          {/if}
-                        </div>
-                      </div>
-                    </div>
-                    
-                  {:else if isVideoType}
-                    <!-- === LAYOUT VIDEO === -->
-                    <!-- Card con color de fondo de la opción -->
-                    <div class="card-video-wrapper {isMusicType ? 'is-music' : ''}" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                      <!-- Área de video/música -->
-                      <div class="card-video-area {isMusicType ? 'is-music' : ''}">
-                        {#if i === activeIndex}
-                          {#key `video-${opt.id}-${activeIndex}`}
-                            <MediaEmbed
-                              url={opt.imageUrl || ""}
-                              mode="full"
-                              width="100%"
-                              height="100%"
-                              autoplay={true}
-                            />
-                          {/key}
-                        {:else}
-                          <div class="w-full h-full flex items-center justify-center bg-black">
-                            <span class="text-white/50"></span>
-                          </div>
-                        {/if}
-                      </div>
-                      
-                      <!-- Contenido debajo del video -->
-                      <div class="card-video-bottom">
-                        <!-- Label -->
-                        <h2 class="{opt.label.length > 40 ? 'text-xl' : opt.label.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight card-bottom-label">
-                          {opt.label}
-                        </h2>
-                        
-                        <!-- Línea divisoria -->
-                        <div class="card-divider-line"></div>
-                        
-                        <!-- Footer con porcentaje y avatares -->
                         <div class="card-bottom-row">
                           {#if hasVoted && totalVotes > 0}
                             <div class="card-percentage">
@@ -1239,8 +1167,115 @@
                             {/if}
                           </div>
                         </div>
+                    </div>
+                    
+                    <!-- === INDICADOR DE RESPUESTA CORRECTA === -->
+                    {#if hasVoted && opt.isCorrect}
+                      <div class="correct-indicator-overlay">
+                        <div class="correct-indicator-badge {opt.voted ? 'correct' : 'incorrect'}">
+                          {#if opt.voted}
+                            <Check size={14} />
+                            <span>¡Acertaste!</span>
+                          {:else}
+                            <CircleCheck size={14} />
+                            <span>Esta era la correcta</span>
+                          {/if}
+                        </div>
+                      </div>
+                    {/if}
+                    
+                  {:else if isVideoType}
+                    <!-- === LAYOUT VIDEO === -->
+                    <!-- Card con color de fondo de la opción -->
+                    <div class="card-video-wrapper {isMusicType ? 'is-music' : ''}" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
+                      <!-- Área de video/música -->
+                      <div class="card-video-area {isMusicType ? 'is-music' : ''}">
+                        {#if i === activeIndex}
+                          {#key `video-${opt.id}-${activeIndex}`}
+                            <MediaEmbed
+                              url={opt.imageUrl || ""}
+                              mode="full"
+                              width="100%"
+                              height="100%"
+                              autoplay={true}
+                            />
+                          {/key}
+                        {:else}
+                          <div class="w-full h-full flex items-center justify-center bg-black">
+                            <span class="text-white/50"></span>
+                          </div>
+                        {/if}
+                      </div>
+                      
+                      <!-- Contenido debajo del video -->
+                      <div class="card-video-bottom">
+                        <!-- Label -->
+                        <h2 class="{opt.label.length > 40 ? 'text-xl' : opt.label.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight card-bottom-label">
+                          {opt.label}
+                        </h2>
+                        
+                        <!-- Línea divisoria -->
+                        <div class="card-divider-line"></div>
+                        
+                        <!-- Footer con porcentaje y avatares -->
+                          <div class="card-bottom-row">
+                            {#if hasVoted && totalVotes > 0}
+                              <div class="card-percentage">
+                                <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
+                                <span class="card-percentage-label">DE LOS VOTOS</span>
+                              </div>
+                            {:else}
+                              <div></div>
+                            {/if}
+                            
+                            <!-- Avatares de amigos -->
+                            <div class="card-avatars-group">
+                              {#if getFriendsForOption(opt).length > 0}
+                                <button 
+                                  class="friends-avatars-stack"
+                                  onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
+                                  disabled={!hasVoted}
+                                  type="button"
+                                  aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
+                                >
+                                  {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
+                                    {#if hasVoted}
+                                      <img 
+                                        class="friend-avatar-stacked" 
+                                        style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
+                                        src={friend.avatarUrl || '/default-avatar.png'}
+                                        alt={friend.name || 'Amigo'}
+                                      />
+                                    {:else}
+                                      <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
+                                        <span>?</span>
+                                      </div>
+                                    {/if}
+                                  {/each}
+                                  {#if getFriendsForOption(opt).length > 3}
+                                    <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
+                                  {/if}
+                                </button>
+                              {/if}
+                            </div>
+                          </div>
                       </div>
                     </div>
+                    
+                    <!-- === INDICADOR CORRECTA VIDEO === -->
+                    {#if hasVoted && opt.isCorrect}
+                      <div class="correct-indicator-overlay">
+                        <div class="correct-indicator-badge {opt.voted ? 'correct' : 'incorrect'}">
+                          {#if opt.voted}
+                            <Check size={14} />
+                            <span>¡Acertaste!</span>
+                          {:else}
+                            <CircleCheck size={14} />
+                            <span>Esta era la correcta</span>
+                          {/if}
+                        </div>
+                      </div>
+                    {/if}
                     
                   {:else}
                     <!-- === LAYOUT GIF/IMAGEN === -->
@@ -3645,6 +3680,26 @@
      RESPONSIVE
      ======================================== */
 
+  /* Desktop - Cards centradas y más grandes */
+  @media (min-width: 768px) {
+    .option-card-container {
+      padding: 130px 40px 80px;
+    }
+    
+    .option-card-rounded {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    
+    .quote-decoration {
+      font-size: 140px;
+    }
+    
+    .card-bottom-label {
+      font-size: 38px;
+    }
+  }
+
   @media (max-width: 480px) {
     .option-card-container {
       padding: 130px 10px 60px;
@@ -4015,11 +4070,14 @@
     padding-right: 32px; /* Espacio para el botón de menú */
   }
 
+  /* Título/pregunta - ESTILO UNIFICADO (igual que CreatePollModal) */
   .header-question-text {
-    font-size: 17px;
+    font-size: 24px;
     font-weight: 400;
-    color: white;
-    line-height: 1.4;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    color: #d1d5db;
+    line-height: 1.3;
     text-align: left;
     background: none;
     border: none;
@@ -4032,10 +4090,12 @@
   }
 
   .header-question-edit {
-    font-size: 17px;
+    font-size: 24px;
     font-weight: 400;
-    color: white;
-    line-height: 1.4;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    color: #d1d5db;
+    line-height: 1.3;
     background: transparent;
     border: none;
     outline: none;
@@ -4073,7 +4133,120 @@
 
     .header-question-text,
     .header-question-edit {
-      font-size: 15px;
+      font-size: 18px;
+    }
+  }
+
+  /* ========================================
+     BOTONES SÍ/NO INLINE (debajo de línea divisoria)
+     ======================================== */
+  
+  .yesno-vote-buttons-inline {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    width: 100%;
+    padding: 8px 0;
+  }
+
+  .yesno-vote-btn-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+    max-width: 140px;
+    justify-content: center;
+  }
+
+  .yesno-vote-btn-inline.yes {
+    background: rgba(255, 255, 255, 0.95);
+    color: #22c55e;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+  }
+
+  .yesno-vote-btn-inline.yes:hover {
+    transform: scale(1.05);
+    border-color: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+  }
+
+  .yesno-vote-btn-inline.no {
+    background: rgba(255, 255, 255, 0.95);
+    color: #ef4444;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+  }
+
+  .yesno-vote-btn-inline.no:hover {
+    transform: scale(1.05);
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+  }
+
+  .yesno-vote-btn-inline :global(svg) {
+    flex-shrink: 0;
+  }
+
+  /* ========================================
+     INDICADOR DE RESPUESTA CORRECTA
+     ======================================== */
+  
+  .correct-indicator-overlay {
+    position: absolute;
+    top: 150px;
+    right: 12px;
+    z-index: 30;
+  }
+
+  .correct-indicator-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    animation: popIn 0.3s ease-out;
+  }
+
+  .correct-indicator-badge.correct {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+  }
+
+  .correct-indicator-badge.incorrect {
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  }
+
+  .correct-indicator-badge :global(svg) {
+    flex-shrink: 0;
+  }
+
+  @keyframes popIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
     }
   }
 </style>

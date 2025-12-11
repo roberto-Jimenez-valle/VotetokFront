@@ -93,7 +93,7 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress }) 
     options: poll.options.map(option => ({
       ...option,
       voteCount: option._count.votes,
-      avatarUrl: option.createdBy?.avatarUrl || null
+      avatarUrl: option.createdBy?.avatarUrl || null,
     }))
   };
 

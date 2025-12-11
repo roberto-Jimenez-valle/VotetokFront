@@ -143,7 +143,7 @@
 				class:nav-btn-active={activeItem === 'home'}
 				aria-label="Inicio"
 			>
-				<Home class="w-6 h-6 sm:w-7 sm:h-7" />
+				<Home class="w-7 h-7 sm:w-8 sm:h-8" />
 			</button>
 			<button
 			onclick={openSearch}
@@ -151,7 +151,7 @@
 			class:nav-btn-active={activeItem === 'search'}
 			aria-label="Buscar"
 		>
-			<Search class="w-6 h-6 sm:w-7 sm:h-7" />
+			<Search class="w-7 h-7 sm:w-8 sm:h-8" />
 		</button>
 		<!-- Botón Añadir Publicación - Destacado -->
 		{#if !modalOpen}
@@ -162,7 +162,7 @@
 			style="--border-color: {randomBorderColor}; --wave-color-2: {randomColor2}; --wave-color-3: {randomColor3}"
 			aria-label="Añadir publicación"
 		>
-			<Plus class="w-5 h-5" stroke-width="2.5" />
+			<Plus class="w-6 h-6" stroke-width="2.5" />
 		</button>
 		{/if}
 		<button
@@ -171,7 +171,7 @@
 			class:nav-btn-active={activeItem === 'notifications'}
 			aria-label="Notificaciones"
 		>
-			<Bell class="w-6 h-6 sm:w-7 sm:h-7" />
+			<Bell class="w-7 h-7 sm:w-8 sm:h-8" />
 		</button>
 	<button
 		onclick={openProfile}
@@ -179,7 +179,7 @@
 		aria-label="Perfil"
 	>
 		{#if $currentUser?.avatarUrl}
-			<img src={$currentUser.avatarUrl} alt={$currentUser.displayName || $currentUser.username} class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover" />
+			<img src={$currentUser.avatarUrl} alt={$currentUser.displayName || $currentUser.username} class="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover" />
 		{:else}
 			<!-- Avatar por defecto cuando NO está logueado -->
 			<div class="default-avatar">
@@ -205,14 +205,14 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		padding: 0.5rem 0.5rem 0.25rem 0.5rem;
+		padding: 0.75rem 0.5rem 0.5rem 0.5rem;
 		transition: transform 0.3s ease-in-out;
 		border-top: none;
 	}
 
 	@media (min-width: 640px) {
 		.nav-bottom-fixed {
-			padding: 0.5rem 1rem 0.25rem 1rem;
+			padding: 0.75rem 1rem 0.5rem 1rem;
 		}
 	}
 	
@@ -227,13 +227,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		height: 1.5rem;
+		height: 2.25rem;
 		width: 100%;
 	}
 
 	@media (min-width: 640px) {
 		.nav-bottom-container {
-			height: 1.75rem;
+			height: 2.5rem;
 		}
 	}
 
@@ -262,8 +262,8 @@
 
 	/* Botón de añadir - bordes dobles de colores diferentes */
 	.nav-btn-add {
-		width: 50px;
-		height: 28px;
+		width: 54px;
+		height: 32px;
 		border-radius: 8px;
 		background: #2a2c31;
 		border: none;
@@ -341,8 +341,8 @@
 
 	/* Avatar por defecto cuando no está logueado */
 	.default-avatar {
-		width: 32px;
-		height: 32px;
+		width: 36px;
+		height: 36px;
 		border-radius: 50%;
 		background: #2a2c31;
 		display: flex;
@@ -353,8 +353,8 @@
 	}
 
 	.default-avatar svg {
-		width: 18px;
-		height: 18px;
+		width: 20px;
+		height: 20px;
 	}
 
 	.nav-btn-profile:hover .default-avatar {
@@ -364,13 +364,13 @@
 
 	@media (min-width: 640px) {
 		.default-avatar {
-			width: 36px;
-			height: 36px;
+			width: 40px;
+			height: 40px;
 		}
 
 		.default-avatar svg {
-			width: 20px;
-			height: 20px;
+			width: 22px;
+			height: 22px;
 		}
 	}
 

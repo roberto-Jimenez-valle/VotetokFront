@@ -115,8 +115,25 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
+  html, body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1;
+  }
+}
+
+/* Escalar interfaz en escritorio para mejor legibilidad */
+@media screen and (min-width: 768px) {
+  body {
+    zoom: 1.1;
+  }
+}
+
+@media screen and (min-width: 1200px) {
+  body {
+    zoom: 1.26;
   }
 }
 

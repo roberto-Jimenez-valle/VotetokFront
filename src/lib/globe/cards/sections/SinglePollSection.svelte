@@ -7,12 +7,15 @@
   import FriendsVotesModal from '$lib/components/FriendsVotesModal.svelte';
   import PollOptionCard from '$lib/components/PollOptionCard.svelte';
   import StatsBottomModal from '$lib/components/StatsBottomModal.svelte';
+  import CommentsModal from '$lib/components/CommentsModal.svelte';
+  import Portal from '$lib/components/Portal.svelte';
     
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
   let showDoubleClickTooltip: boolean = false;
   let showVoteConfirmation: boolean = false;
   let showVoteRemoval: boolean = false;
+  let showCommentsModal: boolean = false;
   let voteConfirmationColor: string = '#10b981';
   let voteRemovalColor: string = '#ef4444';
   let tooltipTimeout: any = null;
@@ -1594,11 +1597,17 @@
         </div>
 
         <!-- Comentarios -->
-        <button class="mini-action-btn" type="button" title="Comentarios" aria-label="Comentarios">
+        <button 
+          class="mini-action-btn" 
+          type="button" 
+          title="Comentarios" 
+          aria-label="Comentarios"
+          onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
           </svg>
-          <span class="mini-action-count">0</span>
+          <span class="mini-action-count">{poll.stats?.commentsCount || poll.commentsCount || 0}</span>
         </button>
 
         <!-- Botón añadir opción (colaborativas) -->
@@ -1738,6 +1747,15 @@
   })) || []}
   onClose={() => showStatsModal = false}
 />
+
+<!-- MODAL DE COMENTARIOS (Portal para salir del BottomSheet) -->
+<Portal>
+  <CommentsModal 
+    bind:isOpen={showCommentsModal}
+    pollId={poll.id}
+    pollTitle={poll.title || poll.question || ''}
+  />
+</Portal>
 
 <style>
   /* Estilos de botón de votación estilo PollMaximizedView */

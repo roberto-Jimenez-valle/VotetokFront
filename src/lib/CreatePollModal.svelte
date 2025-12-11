@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
-  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles, Search } from 'lucide-svelte';
+  import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles, Search, Maximize2, LayoutGrid, HelpCircle } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   import { currentUser as storeUser } from '$lib/stores';
   import { currentUser as authUser, isAuthenticated } from '$lib/stores/auth';
@@ -96,11 +96,7 @@
     label: string;
     color: string;
     imageUrl?: string;
-    isYesNo?: boolean;
     isCorrect?: boolean;
-    yesText?: string;
-    noText?: string;
-    correctAnswer?: 'yes' | 'no';
   };
   
   type PollType = 'single' | 'multiple' | 'rating' | 'reactions' | 'collaborative';
@@ -922,10 +918,12 @@
         location: location || undefined,
         options: validOptions.map((opt, index) => ({
           optionKey: opt.id,
-          optionLabel: opt.label.trim() || optionUrls.get(opt.id) || 'Opción sin texto',  // Si solo tiene URL, usar la URL como label
+          optionLabel: opt.label.trim() || optionUrls.get(opt.id) || 'Opción sin texto',
           color: opt.color,
           displayOrder: index,
-          imageUrl: optionUrls.get(opt.id) || opt.imageUrl || undefined  // 🆕 Usar URL del Map persistente
+          imageUrl: optionUrls.get(opt.id) || opt.imageUrl || undefined,
+          // Campo para indicar si esta opción es la correcta
+          isCorrect: opt.isCorrect || false,
         })),
         // Opciones específicas por tipo
         settings: {
@@ -1626,27 +1624,61 @@
     ontouchstart={handleModalSwipeStart}
     ontouchmove={(e) => handleModalSwipeMove(e, close)}
   >
-    <!-- Header -->
-    <div class="modal-header {maximizedOption ? 'maximized' : ''}">
+    <!-- Header - Diseño limpio -->
+    <div class="modal-header-new {maximizedOption ? 'maximized' : ''}">
       {#if !maximizedOption}
-        <button
-          class="close-btn"
-          onclick={close}
-          disabled={isSubmitting}
-          aria-label="Cerrar"
-        >
-          <X class="w-5 h-5" />
-        </button>
-        
-<h2 id="modal-title">Nueva encuesta</h2>
-        
-        <button
-          class="publish-btn"
-          onclick={handleSubmit}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Publicando...' : 'Publicar'}
-        </button>
+        <!-- Fila superior: cerrar, acciones secundarias, publicar -->
+        <div class="header-row">
+          <button
+            class="header-icon-btn"
+            onclick={close}
+            disabled={isSubmitting}
+            aria-label="Cerrar"
+            type="button"
+          >
+            <X size={20} />
+          </button>
+          
+          <div class="header-actions">
+            <!-- Botones secundarios -->
+            <button
+              class="header-icon-btn-subtle"
+              onclick={openFormatEditor}
+              title="Opciones múltiples"
+              type="button"
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button
+              class="header-icon-btn-subtle"
+              onclick={() => showTutorial = true}
+              title="Ayuda"
+              type="button"
+            >
+              <HelpCircle size={18} />
+            </button>
+            <button
+              class="header-icon-btn-subtle"
+              onclick={() => maximizedOption = options[activeAccordionIndex ?? 0]?.id}
+              type="button"
+              title="Vista previa"
+            >
+              <Maximize2 size={18} />
+            </button>
+            
+            <!-- Separador -->
+            <div class="header-divider"></div>
+            
+            <!-- Botón publicar -->
+            <button
+              class="publish-btn-clean"
+              onclick={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Publicando...' : 'Publicar'}
+            </button>
+          </div>
+        </div>
       {:else}
         <div class="maximized-poll-title-overlay">
           <textarea
@@ -1731,37 +1763,10 @@
                   }, 10);
                 }}
               ></textarea>
-              <div class="info-tooltip-container">
-                <button
-                  class="info-btn"
-                  onclick={openFormatEditor}
-                  title="Editor de formato rápido"
-                  aria-label="Abrir editor de formato rápido"
-                  type="button"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-                <button
-                  class="info-btn tutorial-btn"
-                  onclick={() => showTutorial = true}
-                  title="Ver tutorial"
-                  aria-label="Ver tutorial de cómo crear encuestas"
-                  type="button"
-                >
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                    <line x1="12" y1="17" x2="12.01" y2="17"/>
-                  </svg>
-                </button>
-              </div>
             </div>
           </div>
           
-          <!-- Info de opciones y tiempo debajo del título -->
-          {#if title.length > 0 || options.some(o => o.label.trim())}
+          <!-- Info de opciones y tiempo debajo del título - SIEMPRE visible -->
             <div class="poll-meta-compact">
               <!-- Botón de opciones con dropdown -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1836,7 +1841,7 @@
                           <span class="option-label">{opt.label.trim() || `Opción ${i + 1}`}</span>
                           {#if !hasText && !hasMedia}
                             <!-- Icono de incompleto -->
-                            <svg class="w-3.5 h-3.5 incomplete-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Falta contenido">
+                            <svg class="w-3.5 h-3.5 incomplete-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" >
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                           {:else if hasMedia}
@@ -1888,7 +1893,7 @@
                   ></div>
                 {/if}
               </div>
-              <span class="meta-sep">•</span>
+              <span class="meta-sep-gray">•</span>
               <!-- Dropdown de duración personalizado -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div 
@@ -2019,7 +2024,6 @@
                 {/if}
               </div>
             </div>
-          {/if}
           
           <!-- Preview multimedia del título principal -->
           {#if detectedTitlePreview || extractUrlFromText(title) || imageUrl}
@@ -2150,28 +2154,16 @@
                       options = [...options];
                     }}
                     onRemoveOption={() => { removeOption(option.id); }}
-                    isYesNo={option.isYesNo || false}
                     isCorrect={option.isCorrect || false}
-                    yesText={option.yesText || ''}
-                    noText={option.noText || ''}
-                    correctAnswer={option.correctAnswer}
-                    onToggleYesNo={() => {
-                      option.isYesNo = !option.isYesNo;
-                      if (option.isYesNo && !option.yesText) option.yesText = '';
-                      if (option.isYesNo && !option.noText) option.noText = '';
-                      options = [...options];
-                    }}
-                    onToggleCorrect={(answer) => {
-                      if (answer) {
-                        option.correctAnswer = option.correctAnswer === answer ? undefined : answer;
-                      } else {
-                        option.isCorrect = !option.isCorrect;
+                    onToggleCorrect={() => {
+                      // Solo una card puede ser correcta
+                      if (!option.isCorrect) {
+                        // Desmarcar todas las demás cards
+                        options.forEach(opt => {
+                          opt.isCorrect = false;
+                        });
                       }
-                      options = [...options];
-                    }}
-                    onYesNoTextChange={(yesText, noText) => {
-                      option.yesText = yesText;
-                      option.noText = noText;
+                      option.isCorrect = !option.isCorrect;
                       options = [...options];
                     }}
                   />
@@ -2230,25 +2222,6 @@
                   {:else}
                     <Sparkles class="w-5 h-5" />
                   {/if}
-                </button>
-              {/if}
-              
-              <!-- Botón de maximizar -->
-              {#if activeAccordionIndex !== null && options[activeAccordionIndex]}
-                {@const activeOption = options[activeAccordionIndex]}
-                <button
-                  type="button"
-                  class="maximize-button"
-                  style="border-color: {activeOption.color};"
-                  onclick={() => {
-                    maximizedOption = activeOption.id;
-                  }}
-                  title="Vista maximizada"
-                  aria-label="Maximizar opción"
-                >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
                 </button>
               {/if}
               
@@ -2644,6 +2617,18 @@
     bind:activeOptionId={maximizedOption}
     pollTitle={title}
     onClose={() => {
+      // Encontrar el índice de la opción activa antes de cerrar
+      const activeIndex = options.findIndex(opt => opt.id === maximizedOption);
+      if (activeIndex !== -1) {
+        activeAccordionIndex = activeIndex;
+        // Hacer scroll a la opción activa
+        setTimeout(() => {
+          if (gridRef) {
+            const slideWidth = gridRef.offsetWidth;
+            gridRef.scrollTo({ left: slideWidth * activeIndex, behavior: 'smooth' });
+          }
+        }, 50);
+      }
       maximizedOption = null;
     }}
     onOptionChange={(optionId: string) => {
@@ -2716,37 +2701,16 @@
     durations={DURATIONS}
     onPublish={handleSubmit}
     canPublish={!isSubmitting && title.trim().length > 0 && options.filter(o => o.label.trim()).length >= 2}
-    onYesNoTextChange={(optionId: string, yesText: string, noText: string) => {
+    onToggleCorrect={(optionId: string) => {
       const option = options.find(opt => opt.id === optionId);
       if (option) {
-        option.yesText = yesText;
-        option.noText = noText;
-        options = [...options];
-      }
-    }}
-    onToggleYesNo={(optionId: string) => {
-      const optionIndex = options.findIndex(opt => opt.id === optionId);
-      if (optionIndex !== -1) {
-        const newOptions = [...options];
-        newOptions[optionIndex] = {
-          ...newOptions[optionIndex],
-          isYesNo: !newOptions[optionIndex].isYesNo,
-          yesText: newOptions[optionIndex].yesText || '',
-          noText: newOptions[optionIndex].noText || ''
-        };
-        options = newOptions;
-      }
-    }}
-    onToggleCorrect={(optionId: string, answer?: 'yes' | 'no') => {
-      const option = options.find(opt => opt.id === optionId);
-      if (option) {
-        if (answer) {
-          // Para Sí/No, toggle la respuesta correcta
-          option.correctAnswer = option.correctAnswer === answer ? undefined : answer;
-        } else {
-          // Para opción normal
-          option.isCorrect = !option.isCorrect;
+        // Solo una card puede ser correcta
+        if (!option.isCorrect) {
+          options.forEach(opt => {
+            opt.isCorrect = false;
+          });
         }
+        option.isCorrect = !option.isCorrect;
         options = [...options];
       }
     }}
@@ -2820,11 +2784,13 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: #181a20;
+    background: #0F1115;
     z-index: 30001;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* Padding bottom para la nav bar externa */
+    padding-bottom: 60px;
   }
   
   /* Permitir overflow cuando hay card maximizada */
@@ -2836,18 +2802,19 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background: #181a20;
+    padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    border-bottom: none;
+    background: transparent;
     flex-shrink: 0;
   }
   
   .modal-header h2 {
-    font-size: 1rem;
+    font-size: 18px;
     font-weight: 600;
     color: #ffffff;
     margin: 0;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.02em;
   }
   
   .error-banner {
@@ -2861,77 +2828,114 @@
   
   .error-banner p {
     margin: 4px 0;
-    color: #fca5a5;
-    font-size: 14px;
-    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
   
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  /* ========================================
+     NUEVO HEADER - Diseño limpio
+     ======================================== */
   
-  .close-btn {
-    padding: 0.5rem;
-    border-radius: 6px;
-    background: transparent;
-    border: none;
-    color: #71717a;
-    cursor: pointer;
-    transition: all 0.2s ease;
+  .modal-header-new {
+    padding: 8px 16px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    flex-shrink: 0;
+  }
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .header-icon-btn {
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-  
-  .close-btn:hover {
-    background: rgba(255, 255, 255, 0.04);
-    color: #ffffff;
-  }
-  
-  .close-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-  
-  .publish-btn {
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    background: #ffffff;
+    background: transparent;
     border: none;
-    color: #000000;
-    font-weight: 600;
-    font-size: 0.875rem;
+    color: #64748b;
     cursor: pointer;
-    transition: all 0.2s ease;
-    letter-spacing: -0.01em;
+    border-radius: 50%;
+    transition: all 0.2s;
   }
   
-  .publish-btn:hover:not(:disabled) {
-    background: #e5e5e5;
+  .header-icon-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
   }
   
-  .publish-btn:disabled {
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .header-icon-btn-subtle {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: all 0.2s;
+  }
+
+  .header-icon-btn-subtle:hover {
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .header-divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0 8px;
+  }
+
+  .publish-btn-clean {
+    padding: 8px 18px;
+    border-radius: 8px;
+    background: white;
+    border: none;
+    color: #0f172a;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  
+  .publish-btn-clean:hover:not(:disabled) {
+    background: #f1f5f9;
+  }
+  
+  .publish-btn-clean:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  
+  .publish-btn-clean:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
   
   .modal-content {
     flex: 1;
-    overflow-y: scroll;
+    display: flex;
+    flex-direction: column;
+    /* Scroll vertical si el contenido no cabe */
+    overflow-y: auto;
     overflow-x: hidden;
     padding: 0;
-    padding-bottom: 2rem;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-    touch-action: pan-y;
     position: relative;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
   }
   
   /* Permitir overflow y expandir altura cuando hay card maximizada */
@@ -2939,35 +2943,27 @@
     overflow: visible;
   }
   
-  .modal-content::-webkit-scrollbar {
-    width: 4px;
-  }
-  
-  .modal-content::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .modal-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-  }
-  
   .main-card {
-    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    /* No usar flex: 1, usar min-height fijo */
+    padding: 0.5rem 1rem;
     margin: 0 auto;
     max-width: 640px;
     width: 100%;
-    min-height: 100%;
+    /* Altura mínima para asegurar que todo se vea */
+    min-height: fit-content;
   }
   
-  /* Sección de título */
+  /* Sección de título - no colapsa */
   .poll-title-section {
+    flex-shrink: 0;
     margin-bottom: 0;
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-    padding-bottom: 0.75rem;
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-bottom: 0.25rem;
     position: relative;
     z-index: 1;
   }
@@ -3003,11 +2999,13 @@
   }
   
   .poll-title-input {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #ffffff;
+    font-size: 24px;
+    font-weight: 400;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    color: #d1d5db;
     margin: 0;
-    line-height: 1.4;
+    line-height: 1.3;
     background: transparent;
     border: none;
     outline: none;
@@ -3016,8 +3014,6 @@
     flex: 1;
     padding: 0;
     padding-right: 0.5rem;
-    font-family: inherit;
-    letter-spacing: -0.02em;
     min-height: 42px;
     max-height: 4.2rem; /* 2 líneas con scroll */
     overflow-y: auto;
@@ -3042,12 +3038,12 @@
   }
   
   .poll-title-input::placeholder {
-    color: #52525b;
-    font-weight: 600;
+    color: #9ca3af;
+    font-weight: 400;
   }
   
   .poll-title-input:focus {
-    color: #ffffff;
+    color: #e5e7eb;
   }
   
   .duration-select-inline {
@@ -3070,27 +3066,61 @@
     color: white;
   }
   
-  /* Contenedor de tarjetas */
+  /* Contenedor de tarjetas - altura fija mínima */
   .vote-cards-container {
-    position: relative;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    position: relative;
+    /* Altura fija para las cards - si pantalla pequeña, el contenedor padre hace scroll */
+    height: 400px;
+    min-height: 400px;
+    flex-shrink: 0;
   }
-  
-  /* Scroll horizontal estilo SearchModal (scrollbar oculto) */
+
+  /* Scroll horizontal */
   .options-horizontal-scroll {
     display: flex;
     overflow-x: auto;
     overflow-y: visible;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    /* Ocultar scrollbar */
     scrollbar-width: none;
     -ms-overflow-style: none;
-    gap: 12px;
-    height: 320px;
+    gap: 8px;
+    height: 100%;
     width: 100%;
     padding: 4px 12px;
+  }
+
+  /* Ajustes responsivos - pantallas pequeñas */
+  @media (max-height: 800px) {
+    .vote-cards-container {
+      height: 350px;
+      min-height: 350px;
+    }
+  }
+  
+  @media (max-height: 700px) {
+    .vote-cards-container {
+      height: 320px;
+      min-height: 320px;
+    }
+    .modal-header-new {
+      padding: 4px 12px;
+    }
+    .main-card {
+      padding: 0.25rem 0.75rem;
+    }
+    .poll-title-section {
+      padding-bottom: 0;
+    }
+    .poll-meta-compact {
+      padding: 0 0 2px;
+    }
+    .poll-title-input {
+      font-size: 18px;
+      min-height: 24px;
+    }
   }
   
   .options-horizontal-scroll::-webkit-scrollbar {
@@ -3099,17 +3129,17 @@
     height: 0;
   }
   
-  /* Cada slide/opción ocupa el 100% del ancho */
+  /* Cada slide/opción ocupa el 100% del ancho y altura del contenedor */
   .option-slide {
     flex-shrink: 0;
     width: 100%;
     height: 100%;
     scroll-snap-align: start;
     position: relative;
-    border-radius: 29px;
+    border-radius: 24px;
     overflow: hidden;
     margin: 0;
-    background: transparent;
+    background: var(--card-color);
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
@@ -3119,9 +3149,9 @@
     outline: none;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    /* Sin borde ni sombra */
+    /* Sombra suave */
     border: none;
-    box-shadow: none;
+    box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.2);
     /* Ocultar scrollbars */
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -3733,18 +3763,19 @@
     gap: 4px;
     align-items: center;
     justify-content: center;
-    padding: 8px 16px;
+    padding: 16px 24px;
   }
   
   .option-indicator {
     flex: 1;
     max-width: 60px;
     height: 4px;
-    border-radius: 2px;
+    border-radius: 9999px;
     border: none;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     padding: 0;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--indicator-color, currentColor) 50%, transparent);
   }
   
   .option-indicator:hover {
@@ -4339,11 +4370,10 @@
   .poll-type-btn-inline {
     width: 40px;
     height: 40px;
-    border-radius: 8px;
-    background: rgba(30, 30, 35, 0.8);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    color: white;
+    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 2px solid #334155;
+    color: #64748b;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4352,14 +4382,15 @@
   }
   
   .poll-type-btn-inline:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.4);
+    border-color: #475569;
+    color: #94a3b8;
   }
   
   .poll-type-btn-inline.active {
-    background: rgba(255, 255, 255, 0.15);
+    background: white;
     border-color: white;
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+    color: #1f2937;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
   
   /* Botones de acción alineados a la derecha */
@@ -4372,13 +4403,12 @@
   
   /* Botón de maximizar */
   .maximize-button {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    background: rgba(30, 30, 35, 0.95);
-    backdrop-filter: blur(10px);
-    border: 2px solid;
-    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 2px solid #334155;
+    color: #64748b;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4388,22 +4418,21 @@
   }
 
   .maximize-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-    background: rgba(30, 30, 35, 1);
+    border-color: #475569;
+    color: #94a3b8;
   }
 
   .maximize-button:active {
-    transform: translateY(0);
+    transform: scale(0.95);
   }
 
   /* Botón de animar cards */
   .animate-cards-button {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: 2px solid rgba(102, 126, 234, 0.5);
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: #6366f1;
+    border: 2px solid #6366f1;
     color: white;
     display: flex;
     align-items: center;
@@ -4411,16 +4440,15 @@
     cursor: pointer;
     transition: all 0.2s;
     z-index: 10;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
   }
 
   .animate-cards-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.6);
-    border-color: rgba(102, 126, 234, 0.8);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.7);
   }
 
   .animate-cards-button:active:not(:disabled) {
-    transform: translateY(0);
+    transform: scale(0.95);
   }
 
   .animate-cards-button:disabled {
@@ -4451,13 +4479,12 @@
 
   /* Botón flotante abajo a la derecha */
   .add-option-floating-bottom {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    background: rgba(30, 30, 35, 0.95);
-    backdrop-filter: blur(10px);
-    border: 2px solid;
-    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 2px solid #334155;
+    color: #64748b;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4467,13 +4494,12 @@
   }
   
   .add-option-floating-bottom:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-    background: rgba(30, 30, 35, 1);
+    border-color: #475569;
+    color: #94a3b8;
   }
   
   .add-option-floating-bottom:active {
-    transform: translateY(0);
+    transform: scale(0.95);
   }
   
   /* Contenedor de paginación y botones */
@@ -4534,20 +4560,31 @@
     flex-shrink: 0;
   }
   
-  /* Info compacta debajo del título */
+  /* Info compacta debajo del título - no colapsa */
   .poll-meta-compact {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 4px 0 8px;
+    gap: 12px;
+    padding: 0 0 6px;
   }
   
   .meta-item-compact {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  
+  .meta-item-compact:hover {
+    color: #94a3b8;
   }
   
   .meta-item-compact svg {
@@ -4556,8 +4593,16 @@
   }
   
   .meta-sep {
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.3);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #334155;
+  }
+
+  .meta-sep-gray {
+    color: #475569;
+    font-size: 8px;
+    margin: 0 4px;
   }
   
   /* Dropdown de duración personalizado */
@@ -5462,54 +5507,58 @@
     transform: translateY(0);
   }
   
-  /* Tooltip de formato */
+  /* Botones de info/tutorial - posición absoluta para no mover otras capas */
   .info-tooltip-container {
-    position: relative;
-    flex-shrink: 0;
-    align-self: flex-start;
-    margin-top: 0.25rem;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
-    flex-direction: row;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
   }
   
   .info-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
-    padding: 0.5rem;
-    color: rgba(255, 255, 255, 0.7);
+    background: rgba(20, 20, 30, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 8px;
+    color: rgba(255, 255, 255, 0.85);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
+    backdrop-filter: blur(8px);
   }
   
   .info-btn :global(svg),
   .info-btn svg {
-    width: 20px !important;
-    height: 20px !important;
+    width: 18px !important;
+    height: 18px !important;
+    stroke-width: 2.5;
   }
   
   .info-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: rgba(255, 255, 255, 0.95);
+    background: rgba(40, 40, 60, 0.95);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: white;
+    transform: scale(1.05);
   }
   
   .info-btn.tutorial-btn {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.3);
-    color: #a78bfa;
-  }
-  
-  .info-btn.tutorial-btn:hover {
     background: rgba(139, 92, 246, 0.25);
     border-color: rgba(139, 92, 246, 0.5);
     color: #c4b5fd;
+  }
+  
+  .info-btn.tutorial-btn:hover {
+    background: rgba(139, 92, 246, 0.4);
+    border-color: rgba(139, 92, 246, 0.7);
+    color: white;
   }
   
   .format-tooltip-overlay {
@@ -5805,9 +5854,26 @@
   .vote-cards-container:not(.maximized) {
     position: relative !important;
     width: auto !important;
-    height: auto !important;
-    display: block !important;
+    /* Altura fija - NO usar auto */
+    height: 400px !important;
+    min-height: 400px !important;
+    display: flex !important;
+    flex-direction: column !important;
     overflow: visible !important;
+  }
+  
+  @media (max-height: 800px) {
+    .vote-cards-container:not(.maximized) {
+      height: 350px !important;
+      min-height: 350px !important;
+    }
+  }
+  
+  @media (max-height: 700px) {
+    .vote-cards-container:not(.maximized) {
+      height: 320px !important;
+      min-height: 320px !important;
+    }
   }
   
   /* Backdrop negro detrás del contenedor maximizado */
