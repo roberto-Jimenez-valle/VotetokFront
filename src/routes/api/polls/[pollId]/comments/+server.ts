@@ -58,23 +58,25 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 
 // POST - Crear nuevo comentario
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
   const pollId = parseInt(params.pollId);
   
   if (isNaN(pollId)) {
     return json({ error: 'ID de encuesta inválido' }, { status: 400 });
   }
   
+  // 🔐 AUTENTICACIÓN OBLIGATORIA - usar userId del JWT, no del body
+  const userId = locals.user?.userId || locals.user?.id;
+  if (!userId) {
+    return json({ error: 'Debes iniciar sesión para comentar' }, { status: 401 });
+  }
+  
   try {
     const body = await request.json();
-    const { content, parentCommentId, userId } = body;
+    const { content, parentCommentId } = body;
     
     if (!content || !content.trim()) {
       return json({ error: 'El comentario no puede estar vacío' }, { status: 400 });
-    }
-    
-    if (!userId) {
-      return json({ error: 'Debes iniciar sesión para comentar' }, { status: 401 });
     }
     
     // Verificar que la encuesta existe

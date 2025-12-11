@@ -1,7 +1,7 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 
-export const POST: RequestHandler = async ({ params, request, getClientAddress, locals }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
     const { id } = params;
     
@@ -73,9 +73,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress, 
   const isMultiplePoll = option.poll.type === 'multiple';
   console.log('[API Vote] 📊 Tipo de encuesta:', option.poll.type, '| Múltiple:', isMultiplePoll);
 
-  // Verificar si el usuario ya votó
-  const ipAddress = getClientAddress();
-  console.log('[API Vote] 🔍 Verificando voto existente para userId:', userId, 'IP:', ipAddress);
+  // Verificar si el usuario ya votó (solo por userId, no por IP)
   
   let existingVote;
   
@@ -119,13 +117,11 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress, 
     isUpdate = true;
     
     // Actualizar el voto existente con la nueva opción
-    // IMPORTANTE: Incluir ipAddress para que se pueda encontrar después
     vote = await prisma.vote.update({
       where: { id: existingVote.id },
       data: {
         optionId,
-        userId: userId || null,
-        ipAddress, // <-- Agregar IP para que GET pueda encontrarlo
+        userId: Number(userId),
         latitude,
         longitude,
         subdivisionId,
@@ -147,11 +143,10 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress, 
       data: {
         pollId: Number(id),
         optionId,
-        userId: userId || null,
+        userId: Number(userId),
         latitude,
         longitude,
         subdivisionId,
-        ipAddress,
         userAgent: request.headers.get('user-agent'),
       },
       include: {
