@@ -59,23 +59,17 @@
 	
 	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {
 		const state = event.detail.state;
-		console.log(`[+page] BottomSheet estado: ${state}, dropdownOpen: ${dropdownOpen}, forceHideNav: ${forceHideNav}`);
 		
 		// Actualizar si el sheet está expandido (para el Header)
 		sheetExpanded = state === 'expanded';
 		
 		// Si forceHideNav está activo, no cambiar nada
-		if (forceHideNav) {
-			console.log(`[+page] forceHideNav activo, ignorando cambio de BottomSheet`);
-			return;
-		}
+		if (forceHideNav) return;
+		
 		// Si el dropdown está abierto, no cambiar el estado del nav
 		if (!dropdownOpen) {
 			// Ocultar nav cuando está en peek, mostrar en otros estados
 			hideNav = state === 'peek';
-			console.log(`[+page] BottomSheet cambia hideNav a ${hideNav}`);
-		} else {
-			console.log(`[+page] Dropdown abierto, ignorando cambio de BottomSheet`);
 		}
 		// BottomSheet visible cuando NO está en estado "hidden"
 		bottomSheetVisible = state !== 'hidden';

@@ -42,9 +42,19 @@ export class BottomSheetController {
 
   private clampPx(v: number, a: number, b: number) { return Math.max(a, Math.min(b, v)); }
 
+  private getZoomFactor(): number {
+    // Obtener el zoom del body para ajustar cálculos en escritorio
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      const bodyZoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+      return bodyZoom;
+    }
+    return 1;
+  }
+
   setState(state: SheetState, isTransitioning: boolean = true) {
     this.state = state;
-    const containerH = Math.max(0, (window.innerHeight || 0)); // Ahora usa altura completa
+    const zoom = this.getZoomFactor();
+    const containerH = Math.max(0, (window.innerHeight || 0) / zoom); // Ajustar por zoom
     if (state === 'hidden') {
       // En hidden, quedarse a la misma altura que el nav mostrando solo la barra de arrastre
       this.y = containerH - this.bottomBarPx - 33; // 40px arriba del nav para mostrar la barra

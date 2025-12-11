@@ -129,11 +129,21 @@
   body {
     zoom: 1.1;
   }
+  
+  /* Contrarrestar zoom SOLO en el globo para evitar desajuste de clicks */
+  .globe-wrap {
+    zoom: calc(1 / 1.1);
+  }
 }
 
 @media screen and (min-width: 1200px) {
   body {
     zoom: 1.26;
+  }
+  
+  /* Contrarrestar zoom SOLO en el globo para evitar desajuste de clicks */
+  .globe-wrap {
+    zoom: calc(1 / 1.26);
   }
 }
 
