@@ -64,6 +64,10 @@
       if (!processed.includes('loading="')) {
         processed = processed.replace('<iframe', '<iframe loading="lazy" importance="low"');
       }
+      // Sandbox para prevenir navegación fuera de la página
+      if (!processed.includes('sandbox="')) {
+        processed = processed.replace('<iframe', '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
+      }
     }
 
     // Para iframes de Vimeo
@@ -92,6 +96,10 @@
       if (!processed.includes('loading="')) {
         processed = processed.replace('<iframe', '<iframe loading="lazy"');
       }
+      // Sandbox para prevenir navegación fuera de la página
+      if (!processed.includes('sandbox="')) {
+        processed = processed.replace('<iframe', '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
+      }
     }
 
     // Para iframes de Spotify
@@ -112,6 +120,10 @@
       if (!processed.includes('loading="')) {
         processed = processed.replace('<iframe', '<iframe loading="lazy"');
       }
+      // Sandbox para prevenir navegación fuera de la página
+      if (!processed.includes('sandbox="')) {
+        processed = processed.replace('<iframe', '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
+      }
     }
 
     // Para iframes de SoundCloud
@@ -121,6 +133,10 @@
       }
       if (!processed.includes('allow="')) {
         processed = processed.replace('<iframe', '<iframe allow="autoplay"');
+      }
+      // Sandbox para prevenir navegación fuera de la página
+      if (!processed.includes('sandbox="')) {
+        processed = processed.replace('<iframe', '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
       }
     }
 
@@ -140,6 +156,10 @@
       if (!processed.includes('loading="')) {
         processed = processed.replace('<iframe', '<iframe loading="lazy"');
       }
+      // Sandbox para prevenir navegación fuera de la página
+      if (!processed.includes('sandbox="')) {
+        processed = processed.replace('<iframe', '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
+      }
     }
 
     // Para iframes de Twitch
@@ -155,6 +175,10 @@
       }
       if (!processed.includes('loading="')) {
         processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
+      // Sandbox para prevenir navegación fuera de la página
+      if (!processed.includes('sandbox="')) {
+        processed = processed.replace('<iframe', '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
       }
     }
 
@@ -174,6 +198,10 @@
       }
       if (!processed.includes('loading="')) {
         processed = processed.replace('<iframe', '<iframe loading="lazy"');
+      }
+      // Sandbox para prevenir navegación fuera de la página
+      if (!processed.includes('sandbox="')) {
+        processed = processed.replace('<iframe', '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
       }
     }
 
@@ -198,6 +226,11 @@
     // Agregar loading="lazy" a cualquier iframe restante (ej: otros embeds)
     if (processed.includes("<iframe") && !processed.includes('loading="')) {
       processed = processed.replace(/<iframe/g, '<iframe loading="lazy"');
+    }
+    
+    // Sandbox para TODOS los iframes restantes que no lo tengan
+    if (processed.includes("<iframe") && !processed.includes('sandbox="')) {
+      processed = processed.replace(/<iframe/g, '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
     }
 
     // LIMPIEZA FINAL: Si autoplay está desactivado, eliminar TODOS los rastros de autoplay/mute
@@ -301,7 +334,7 @@
       // Detectar SoundCloud directamente y generar embed
       if (url.includes("soundcloud.com")) {
         embedType = "SoundCloud";
-        embedHTML = `<iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false"></iframe>`;
+        embedHTML = `<iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" src="https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false"></iframe>`;
         loading = false;
         return;
       }
@@ -311,7 +344,7 @@
         embedType = "TikTok";
         const videoId = url.match(/video\/(\d+)/)?.[1] || '';
         if (videoId) {
-          embedHTML = `<iframe src="https://www.tiktok.com/embed/v2/${videoId}" width="100%" height="100%" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
+          embedHTML = `<iframe src="https://www.tiktok.com/embed/v2/${videoId}" width="100%" height="100%" frameborder="0" allow="autoplay; encrypted-media; fullscreen" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowfullscreen></iframe>`;
           loading = false;
           return;
         }
@@ -328,11 +361,11 @@
         const clipMatch = url.match(/twitch\.tv\/[^\/]+\/clip\/([^\/\?]+)/) || url.match(/clips\.twitch\.tv\/([^\/\?]+)/);
         
         if (clipMatch) {
-          embedHTML = `<iframe src="https://clips.twitch.tv/embed?clip=${clipMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+          embedHTML = `<iframe src="https://clips.twitch.tv/embed?clip=${clipMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowfullscreen></iframe>`;
         } else if (videoMatch) {
-          embedHTML = `<iframe src="https://player.twitch.tv/?video=${videoMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+          embedHTML = `<iframe src="https://player.twitch.tv/?video=${videoMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowfullscreen></iframe>`;
         } else if (channelMatch) {
-          embedHTML = `<iframe src="https://player.twitch.tv/?channel=${channelMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+          embedHTML = `<iframe src="https://player.twitch.tv/?channel=${channelMatch[1]}&parent=${window.location.hostname}" width="100%" height="100%" frameborder="0" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowfullscreen></iframe>`;
         }
         loading = false;
         return;
@@ -351,7 +384,7 @@
         embedType = "Apple Music";
         // Convertir URL a embed URL
         const embedUrl = url.replace("music.apple.com", "embed.music.apple.com");
-        embedHTML = `<iframe src="${embedUrl}" width="100%" height="175" frameborder="0" allow="autoplay; encrypted-media" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation" style="border-radius: 12px;"></iframe>`;
+        embedHTML = `<iframe src="${embedUrl}" width="100%" height="175" frameborder="0" allow="autoplay; encrypted-media" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" style="border-radius: 12px;"></iframe>`;
         loading = false;
         return;
       }
@@ -364,11 +397,11 @@
         const playlistMatch = url.match(/playlist\/(\d+)/);
         
         if (trackMatch) {
-          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/track/${trackMatch[1]}" width="100%" height="130" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe>`;
+          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/track/${trackMatch[1]}" width="100%" height="130" frameborder="0" allowtransparency="true" allow="encrypted-media" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>`;
         } else if (albumMatch) {
-          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/album/${albumMatch[1]}" width="100%" height="300" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe>`;
+          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/album/${albumMatch[1]}" width="100%" height="300" frameborder="0" allowtransparency="true" allow="encrypted-media" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>`;
         } else if (playlistMatch) {
-          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/playlist/${playlistMatch[1]}" width="100%" height="300" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe>`;
+          embedHTML = `<iframe src="https://widget.deezer.com/widget/dark/playlist/${playlistMatch[1]}" width="100%" height="300" frameborder="0" allowtransparency="true" allow="encrypted-media" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>`;
         }
         loading = false;
         return;
@@ -379,7 +412,7 @@
         embedType = "Dailymotion";
         const videoMatch = url.match(/video\/([a-z0-9]+)/i) || url.match(/dai\.ly\/([a-z0-9]+)/i);
         if (videoMatch) {
-          embedHTML = `<iframe src="https://www.dailymotion.com/embed/video/${videoMatch[1]}" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+          embedHTML = `<iframe src="https://www.dailymotion.com/embed/video/${videoMatch[1]}" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowfullscreen></iframe>`;
         }
         loading = false;
         return;
