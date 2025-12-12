@@ -414,6 +414,21 @@
           {/if}
         </div>
       </div>
+      
+      <!-- === INDICADOR DE RESPUESTA CORRECTA (VIDEO) === -->
+      {#if userHasVoted && isCorrect}
+        <div class="correct-indicator-overlay">
+          <div class="correct-indicator-badge {isVoted ? 'correct' : 'incorrect'}">
+            {#if isVoted}
+              <Check size={14} />
+              <span>¡Acertaste!</span>
+            {:else}
+              <CircleCheck size={14} />
+              <span>Era la correcta</span>
+            {/if}
+          </div>
+        </div>
+      {/if}
     </div>
     
   {:else if hasMedia}
@@ -557,6 +572,21 @@
           {/if}
         </div>
       </div>
+      
+      <!-- === INDICADOR DE RESPUESTA CORRECTA (IMAGEN) === -->
+      {#if userHasVoted && isCorrect}
+        <div class="correct-indicator-overlay">
+          <div class="correct-indicator-badge {isVoted ? 'correct' : 'incorrect'}">
+            {#if isVoted}
+              <Check size={14} />
+              <span>¡Acertaste!</span>
+            {:else}
+              <CircleCheck size={14} />
+              <span>Era la correcta</span>
+            {/if}
+          </div>
+        </div>
+      {/if}
     </div>
   {:else}
     <!-- === LAYOUT TEXTO PURO (nuevo diseño React-style) === -->
@@ -650,6 +680,21 @@
           {/if}
         {/if}
       </div>
+      
+      <!-- === INDICADOR DE RESPUESTA CORRECTA (TEXTO) === -->
+      {#if userHasVoted && isCorrect}
+        <div class="correct-indicator-overlay">
+          <div class="correct-indicator-badge {isVoted ? 'correct' : 'incorrect'}">
+            {#if isVoted}
+              <Check size={14} />
+              <span>¡Acertaste!</span>
+            {:else}
+              <CircleCheck size={14} />
+              <span>Era la correcta</span>
+            {/if}
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
   
