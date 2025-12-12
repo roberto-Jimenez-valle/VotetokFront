@@ -5,7 +5,8 @@
 
 import { createAppSignatureHeaders } from './signature'
 import { get } from 'svelte/store'
-import { authToken } from '$lib/stores/auth'
+import { authToken, logout } from '$lib/stores/auth'
+import { loginModalOpen } from '$lib/stores/globalState'
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>
@@ -93,6 +94,14 @@ export async function apiCall(
   // Manejar errores comunes
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+
+    // 401 Unauthorized: Token expirado o inválido
+    if (response.status === 401) {
+      console.warn('[apiCall] ⚠️ 401 Unauthorized - Token expirado o inválido, cerrando sesión...')
+      logout()
+      loginModalOpen.set(true)
+      throw new ApiError('Sesión expirada. Por favor inicia sesión de nuevo.', 'SESSION_EXPIRED', 401, error)
+    }
 
     // Error específico con código
     if (error.code) {

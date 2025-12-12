@@ -66,10 +66,20 @@ export function initAuth() {
       const user = JSON.parse(userData)
       const normalizedUser = normalizeUser(user)
       if (normalizedUser) {
+        // Verificar si el token es válido (no expirado)
+        if (isTokenExpired(token)) {
+          console.warn('[Auth] ⚠️ Token expirado, limpiando sesión...')
+          logout()
+          return
+        }
+        
         authToken.set(token)
         currentUser.set(normalizedUser)
         isAuthenticated.set(true)
         console.log('[Auth] ✅ Usuario OAuth restaurado:', normalizedUser.username)
+        
+        // Validar token con el servidor en background
+        validateTokenWithServer(token)
         return
       }
     } catch (err) {
@@ -92,6 +102,58 @@ export function initAuth() {
     } catch (err) {
       console.warn('[Auth] ⚠️ Error parsing test user')
     }
+  }
+}
+
+/**
+ * Verificar si un token JWT está expirado
+ */
+function isTokenExpired(token: string): boolean {
+  try {
+    // Decodificar payload del JWT (parte central)
+    const payload = token.split('.')[1]
+    if (!payload) return true
+    
+    const decoded = JSON.parse(atob(payload))
+    if (!decoded.exp) return false // Sin expiración
+    
+    // Comparar con timestamp actual (exp está en segundos)
+    const now = Math.floor(Date.now() / 1000)
+    const isExpired = decoded.exp < now
+    
+    if (isExpired) {
+      console.log('[Auth] Token expirado:', new Date(decoded.exp * 1000).toLocaleString())
+    }
+    
+    return isExpired
+  } catch (err) {
+    console.warn('[Auth] Error decodificando token:', err)
+    return true // Si no se puede decodificar, considerarlo expirado
+  }
+}
+
+/**
+ * Validar token con el servidor en background
+ * Si el servidor rechaza el token, cerrar sesión
+ */
+async function validateTokenWithServer(token: string) {
+  try {
+    const response = await fetch('/api/auth/validate', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    
+    if (!response.ok) {
+      console.warn('[Auth] ⚠️ Servidor rechazó el token, cerrando sesión...')
+      logout()
+    } else {
+      console.log('[Auth] ✅ Token validado con el servidor')
+    }
+  } catch (err) {
+    // Error de red - no cerrar sesión, podría ser problema de conectividad
+    console.warn('[Auth] ⚠️ No se pudo validar token con servidor:', err)
   }
 }
 
