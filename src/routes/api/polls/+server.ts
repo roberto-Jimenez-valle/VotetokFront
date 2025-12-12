@@ -199,7 +199,6 @@ export const POST: RequestHandler = async (event) => {
               imageUrl: opt.imageUrl || null,
               createdBy: { connect: { id: opt.createdById || finalUserId } },
               displayOrder: opt.displayOrder ?? index,
-              isCorrect: opt.isCorrect || false,
             }))
           }
         },
