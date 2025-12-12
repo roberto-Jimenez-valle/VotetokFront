@@ -228,9 +228,13 @@
       processed = processed.replace(/<iframe/g, '<iframe loading="lazy"');
     }
     
-    // Sandbox para TODOS los iframes restantes que no lo tengan
-    if (processed.includes("<iframe") && !processed.includes('sandbox="')) {
-      processed = processed.replace(/<iframe/g, '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
+    // SANDBOX FINAL: Forzar sandbox restrictivo en TODOS los iframes
+    // Primero eliminar cualquier sandbox existente, luego agregar el nuestro
+    if (processed.includes("<iframe")) {
+      // Eliminar sandbox existentes (pueden ser permisivos)
+      processed = processed.replace(/\s*sandbox="[^"]*"/gi, '');
+      // Agregar nuestro sandbox restrictivo (sin allow-top-navigation)
+      processed = processed.replace(/<iframe/gi, '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
     }
 
     // LIMPIEZA FINAL: Si autoplay está desactivado, eliminar TODOS los rastros de autoplay/mute

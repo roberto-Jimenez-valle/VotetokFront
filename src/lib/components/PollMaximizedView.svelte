@@ -632,6 +632,11 @@
       return '';
     }
   }
+  
+  // Obtener el texto de la etiqueta sin la URL
+  function getLabelWithoutUrl(text: string): string {
+    return text.replace(/(https?:\/\/[^\s]+)/gi, '').trim();
+  }
 
   function getYoutubeId(url?: string): string {
     if (!url) return "";
@@ -1090,6 +1095,7 @@
           {@const isMusicType = ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
           {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
           {@const isImageType = type === 'image' && !isGifType}
+          {@const labelText = getLabelWithoutUrl(opt.label)}
           <div
             id="option-{opt.id}"
             class="w-full h-full flex-shrink-0 snap-center relative"
@@ -1115,7 +1121,7 @@
                       
                       <!-- Texto centrado -->
                       <div class="text-center-wrapper">
-                        <h1 class="{opt.label.length > 60 ? 'text-3xl' : opt.label.length > 40 ? 'text-4xl' : 'text-5xl'} font-bold text-white uppercase tracking-tighter leading-tight break-words text-center">
+                        <h1 class="{opt.label.length > 60 ? 'text-3xl' : opt.label.length > 40 ? 'text-4xl' : 'text-5xl'} font-bold text-white tracking-tighter leading-tight break-words text-center">
                           {opt.label}
                         </h1>
                       </div>
@@ -1209,10 +1215,29 @@
                       
                       <!-- Contenido debajo del video -->
                       <div class="card-video-bottom">
-                        <!-- Label -->
-                        <h2 class="{opt.label.length > 40 ? 'text-xl' : opt.label.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight card-bottom-label">
-                          {opt.label}
+                        <!-- Label (sin URL) -->
+                        <h2 class="{labelText.length > 40 ? 'text-xl' : labelText.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white tracking-tighter leading-tight card-bottom-label">
+                          {labelText}
                         </h2>
+                        
+                        <!-- Enlace debajo del texto para URLs con embed -->
+                        {#if shouldShowLink(opt.imageUrl)}
+                          <a 
+                            href={opt.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="link-below-text-max"
+                            onclick={(e) => e.stopPropagation()}
+                          >
+                            <img 
+                              src="https://www.google.com/s2/favicons?domain={getHostname(opt.imageUrl || '')}&sz=16" 
+                              alt="" 
+                              class="link-below-favicon-max"
+                            />
+                            <span class="link-below-domain-max">{getHostname(opt.imageUrl || '')}</span>
+                            <span class="link-below-arrow-max">↗</span>
+                          </a>
+                        {/if}
                         
                         <!-- Línea divisoria -->
                         <div class="card-divider-line"></div>
@@ -1313,9 +1338,9 @@
                       
                       <!-- Contenido inferior: label + línea + porcentaje + avatar -->
                       <div class="card-bottom-content">
-                        <!-- Label -->
-                        <h2 class="{opt.label.length > 40 ? 'text-xl' : opt.label.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white uppercase tracking-tighter leading-tight card-bottom-label">
-                          {opt.label}
+                        <!-- Label (sin URL) -->
+                        <h2 class="{labelText.length > 40 ? 'text-xl' : labelText.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white tracking-tighter leading-tight card-bottom-label">
+                          {labelText}
                         </h2>
                         
                         <!-- Enlace debajo del texto para URLs con embed -->
@@ -3298,6 +3323,56 @@
     border-radius: 32px;
     overflow: hidden;
   }
+  
+  /* Scrollbar personalizada para contenedores multimedia */
+  .card-video-area,
+  .card-media-fullscreen,
+  .card-image-fullscreen,
+  .card-content-area {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+  
+  .card-video-area::-webkit-scrollbar,
+  .card-media-fullscreen::-webkit-scrollbar,
+  .card-image-fullscreen::-webkit-scrollbar,
+  .card-content-area::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  
+  .card-video-area::-webkit-scrollbar-track,
+  .card-media-fullscreen::-webkit-scrollbar-track,
+  .card-image-fullscreen::-webkit-scrollbar-track,
+  .card-content-area::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .card-video-area::-webkit-scrollbar-thumb,
+  .card-media-fullscreen::-webkit-scrollbar-thumb,
+  .card-image-fullscreen::-webkit-scrollbar-thumb,
+  .card-content-area::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
+  
+  .card-video-area::-webkit-scrollbar-thumb:hover,
+  .card-media-fullscreen::-webkit-scrollbar-thumb:hover,
+  .card-image-fullscreen::-webkit-scrollbar-thumb:hover,
+  .card-content-area::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+  
+  /* También para iframes y embeds dentro */
+  .card-video-area :global(iframe),
+  .card-media-fullscreen :global(iframe) {
+    scrollbar-width: none;
+  }
+  
+  .card-video-area :global(iframe)::-webkit-scrollbar,
+  .card-media-fullscreen :global(iframe)::-webkit-scrollbar {
+    display: none;
+  }
 
   .card-video-area {
     flex: 0 0 55%;
@@ -3348,6 +3423,36 @@
   /* Ocultar contenido extra en video */
   .card-video-area :global(.linkedin-content),
   .card-video-area :global(.mini-card-content) {
+    display: none !important;
+  }
+
+  /* Ocultar overflow en contenedores de embeds (Spotify, SoundCloud, etc) */
+  .card-video-area :global(.media-embed),
+  .card-video-area :global(.embed-container),
+  .card-video-area :global(.spotify-embed),
+  .card-video-area :global([class*="spotify"]) {
+    overflow: hidden !important;
+    scrollbar-width: none !important;
+  }
+  
+  .card-video-area :global(.media-embed)::-webkit-scrollbar,
+  .card-video-area :global(.embed-container)::-webkit-scrollbar,
+  .card-video-area :global(.spotify-embed)::-webkit-scrollbar,
+  .card-video-area :global([class*="spotify"])::-webkit-scrollbar {
+    display: none !important;
+  }
+  
+  /* Forzar overflow hidden en todo el área de video */
+  .card-video-area,
+  .card-video-area * {
+    overflow: hidden !important;
+  }
+  
+  .card-video-area :global(*) {
+    scrollbar-width: none !important;
+  }
+  
+  .card-video-area :global(*)::-webkit-scrollbar {
     display: none !important;
   }
 

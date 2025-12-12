@@ -1187,7 +1187,6 @@
     font-size: 18px;
     font-weight: 800;
     color: white;
-    text-transform: uppercase;
     letter-spacing: -0.02em;
     line-height: 1.1;
     text-shadow: 
