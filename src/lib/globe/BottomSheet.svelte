@@ -398,10 +398,8 @@
               "Global",
             options: poll.options.map((opt: any, optIdx: number) => ({
               id: opt.id,
-              key:
-                opt.optionKey ||
-                opt.id?.toString() ||
-                `opt-${poll.id}-${optIdx}`,
+              key: opt.optionKey || opt.id?.toString() || `opt-${poll.id}-${optIdx}`,
+              optionKey: opt.optionKey, // Preservar optionKey original para lookup de amigos
               label: opt.optionLabel || opt.label || `Opción ${optIdx + 1}`,
               color:
                 opt.color ||
