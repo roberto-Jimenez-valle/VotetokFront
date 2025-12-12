@@ -197,9 +197,8 @@ export const POST: RequestHandler = async (event) => {
               optionLabel: opt.optionLabel,
               color: opt.color,
               imageUrl: opt.imageUrl || null,
-              createdById: opt.createdById || finalUserId,
+              createdBy: { connect: { id: opt.createdById || finalUserId } },
               displayOrder: opt.displayOrder ?? index,
-              // Campo para indicar si esta opción es la correcta
               isCorrect: opt.isCorrect || false,
             }))
           }
