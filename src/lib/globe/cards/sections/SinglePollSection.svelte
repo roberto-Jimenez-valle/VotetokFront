@@ -1264,8 +1264,11 @@
           {:else}
             <!-- Layout usando PollOptionCard unificado -->
             {@const allFriendsKeys = Object.keys(poll.friendsByOption || {})}
-            {@const friendsForOption = (poll.friendsByOption?.[option.key] || poll.friendsByOption?.[option.id] || poll.friendsByOption?.[option.optionKey] || poll.friendsByOption?.[String(option.key)] || poll.friendsByOption?.[String(option.id)] || []).filter((friend: any) => friend.id !== poll.user?.id)}
-            {@const _debug = allFriendsKeys.length > 0 && friendsForOption.length === 0 ? console.log('[SinglePoll] No match for option', option.key, option.id, option.optionKey, 'in friendsByOption keys:', allFriendsKeys) : null}
+            {@const realFriends = poll.friendsByOption?.[option.key] || poll.friendsByOption?.[option.id] || poll.friendsByOption?.[option.optionKey] || poll.friendsByOption?.[String(option.key)] || poll.friendsByOption?.[String(option.id)] || []}
+            <!-- TEST: Añadir amigo de prueba si no hay datos reales para verificar que el UI funciona -->
+            {@const testFriend = index === 0 ? [{ id: 'test-1', name: 'Test Friend', avatarUrl: null }] : []}
+            {@const friendsForOption = (realFriends.length > 0 ? realFriends : testFriend).filter((friend: any) => friend.id !== poll.user?.id)}
+            {@const _debug = console.log('[SinglePoll] Option', index, 'key:', option.key, 'optionKey:', option.optionKey, 'realFriends:', realFriends.length, 'testFriend:', testFriend.length, 'friendsByOption keys:', allFriendsKeys)}
             {@const userHasVoted = hasVotedAnyOption}
             {@const isThisOptionVoted = Array.isArray(pollVotedOption) 
               ? pollVotedOption.map(String).includes(String(option.key))

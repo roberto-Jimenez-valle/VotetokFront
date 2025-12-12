@@ -88,6 +88,13 @@
     size = 'normal'
   }: Props = $props();
 
+  // DEBUG: Ver qué friends recibe el componente
+  $effect(() => {
+    if (friends.length > 0) {
+      console.log('[PollOptionCard] friends received:', friends.length, 'userHasVoted:', userHasVoted, 'mode:', mode);
+    }
+  });
+
   // --- DETECCIÓN DE TIPO DE MEDIA ---
   type MediaPlatform = 'youtube' | 'vimeo' | 'spotify' | 'soundcloud' | 'tiktok' | 'twitch' | 'twitter' | 'applemusic' | 'deezer' | 'dailymotion' | 'bandcamp' | 'video' | 'gif' | 'image' | 'text';
   
@@ -607,7 +614,11 @@
                 >
                   {#each friends.slice(0, 3) as friend, i}
                     <div class="friend-avatar-wrapper" style="z-index: {10 - i};">
-                      <img src={friend.avatarUrl || DEFAULT_AVATAR} alt={friend.name} class="friend-avatar" loading="lazy" />
+                      {#if userHasVoted}
+                        <img src={friend.avatarUrl || DEFAULT_AVATAR} alt={friend.name} class="friend-avatar" loading="lazy" />
+                      {:else}
+                        <div class="friend-avatar-mystery"><span>?</span></div>
+                      {/if}
                     </div>
                   {/each}
                   {#if friends.length > 3}
@@ -615,6 +626,26 @@
                   {/if}
                 </button>
               {/if}
+            </div>
+          {:else if friends.length > 0}
+            <!-- Mostrar avatares con ? cuando NO ha votado pero hay amigos -->
+            <div class="card-bottom-row">
+              <div class="card-percentage-placeholder"></div>
+              <button 
+                type="button"
+                class="friends-avatars-btn"
+                disabled={true}
+                aria-label="Vota para ver quién eligió esta opción"
+              >
+                {#each friends.slice(0, 3) as friend, i}
+                  <div class="friend-avatar-wrapper" style="z-index: {10 - i};">
+                    <div class="friend-avatar-mystery"><span>?</span></div>
+                  </div>
+                {/each}
+                {#if friends.length > 3}
+                  <span class="friends-more">+{friends.length - 3}</span>
+                {/if}
+              </button>
             </div>
           {/if}
         {/if}
