@@ -60,7 +60,8 @@
         continue;
       }
       
-      const optionFriends = friendsByOption[opt.id] || friendsByOption[opt.key] || [];
+      const optionFriends = friendsByOption[opt.id] || friendsByOption[opt.key] || friendsByOption[String(opt.id)] || friendsByOption[String(opt.key)] || [];
+      console.log('[FriendsVotesModal] Option:', opt.id, opt.key, 'Friends:', optionFriends.length, 'All keys:', Object.keys(friendsByOption));
       for (const friend of optionFriends) {
         friends.push({
           ...friend,

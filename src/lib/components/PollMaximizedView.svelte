@@ -1913,7 +1913,7 @@
   <FriendsVotesModal 
     bind:isOpen={showFriendsVotesModal}
     pollTitle={pollTitle}
-    options={options.map(opt => ({ id: opt.id, key: opt.id, label: opt.label, color: opt.color, votes: opt.votes }))}
+    options={options.map(opt => ({ id: opt.id, key: opt.key || opt.optionKey || opt.id, label: opt.label, color: opt.color, votes: opt.votes }))}
     {friendsByOption}
     onClose={() => showFriendsVotesModal = false}
   />

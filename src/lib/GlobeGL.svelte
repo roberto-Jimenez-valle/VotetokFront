@@ -376,7 +376,7 @@
   const DETAILED_LABELS_ALT = 0.3; // mostrar etiquetas detalladas cuando altitud < 0.3
 
   // Límites de zoom del globo
-  const MIN_ZOOM_ALTITUDE = 0.4; // límite mínimo de zoom (más cerca) - ajustado para evitar acercamiento excesivo
+  const MIN_ZOOM_ALTITUDE = 0.08; // límite mínimo de zoom (más cerca) - permite acercarse mucho más
   const MAX_ZOOM_ALTITUDE = 4.0; // límite máximo de zoom (más lejos)
 
   // Caches para optimización (evitar recálculos)
@@ -5533,7 +5533,8 @@
           "/api/polls/" + poll.id + "/friends-votes?userId=" + currentUserId,
         );
         friendsByOption = friendsData.data || {};
-              }
+        console.log('[GlobeGL] friendsByOption loaded:', friendsByOption, 'keys:', Object.keys(friendsByOption));
+      }
     } catch (e) {
       // Silenciar error - no es crítico si falla
           }
@@ -5552,6 +5553,7 @@
           ...opt,
           id: opt.id || apiOption?.id,
           key: opt.key || apiOption?.optionKey || `opt-${idx}`,
+          optionKey: apiOption?.optionKey || opt.key || `opt-${idx}`,
           label:
             opt.label ||
             apiOption?.optionLabel ||

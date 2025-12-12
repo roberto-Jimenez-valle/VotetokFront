@@ -93,6 +93,10 @@
     if (poll) {
       addDebugLog(`📊 Poll ID: ${poll.id || 'N/A'}`);
       addDebugLog(`📋 Opciones: ${poll.options?.length || 0}`);
+      // Debug friendsByOption
+      console.log('[SinglePollSection] poll.friendsByOption:', poll.friendsByOption);
+      console.log('[SinglePollSection] poll.friendsByOption keys:', Object.keys(poll.friendsByOption || {}));
+      console.log('[SinglePollSection] option keys:', poll.options?.map((o: any) => ({ key: o.key, id: o.id, optionKey: o.optionKey })));
     }
   });
   
@@ -1259,7 +1263,7 @@
             </button>
           {:else}
             <!-- Layout usando PollOptionCard unificado -->
-            {@const friendsForOption = (poll.friendsByOption?.[option.key] || []).filter((friend: any) => friend.id !== poll.user?.id)}
+            {@const friendsForOption = (poll.friendsByOption?.[option.key] || poll.friendsByOption?.[option.id] || poll.friendsByOption?.[option.optionKey] || []).filter((friend: any) => friend.id !== poll.user?.id)}
             {@const userHasVoted = hasVotedAnyOption}
             {@const isThisOptionVoted = Array.isArray(pollVotedOption) 
               ? pollVotedOption.map(String).includes(String(option.key))
@@ -1727,7 +1731,7 @@
   pollTitle={poll.title || ''}
   options={poll.options?.map((opt: any) => ({ 
     id: opt.id || opt.key, 
-    key: opt.key, 
+    key: opt.key || opt.optionKey || opt.id, 
     label: opt.label || opt.optionLabel, 
     color: opt.color,
     votes: opt.voteCount || opt.votes || 0

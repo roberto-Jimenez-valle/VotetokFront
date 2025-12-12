@@ -1027,7 +1027,7 @@
         if ('rotateSpeed' in controls) controls.rotateSpeed = 1.0;
         if ('zoomSpeed' in controls) controls.zoomSpeed = 1.0;
         // Limitar zoom mínimo y máximo
-        if ('minDistance' in controls) controls.minDistance = 100;
+        if ('minDistance' in controls) controls.minDistance = 101; // Globe radius es ~100, mínimo 101 para no atravesar
         if ('maxDistance' in controls) controls.maxDistance = 500;
         if (typeof controls.update === 'function') controls.update();
         
