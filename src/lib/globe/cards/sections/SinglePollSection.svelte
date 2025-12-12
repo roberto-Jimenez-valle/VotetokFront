@@ -1263,7 +1263,9 @@
             </button>
           {:else}
             <!-- Layout usando PollOptionCard unificado -->
-            {@const friendsForOption = (poll.friendsByOption?.[option.key] || poll.friendsByOption?.[option.id] || poll.friendsByOption?.[option.optionKey] || []).filter((friend: any) => friend.id !== poll.user?.id)}
+            {@const allFriendsKeys = Object.keys(poll.friendsByOption || {})}
+            {@const friendsForOption = (poll.friendsByOption?.[option.key] || poll.friendsByOption?.[option.id] || poll.friendsByOption?.[option.optionKey] || poll.friendsByOption?.[String(option.key)] || poll.friendsByOption?.[String(option.id)] || []).filter((friend: any) => friend.id !== poll.user?.id)}
+            {@const _debug = allFriendsKeys.length > 0 && friendsForOption.length === 0 ? console.log('[SinglePoll] No match for option', option.key, option.id, option.optionKey, 'in friendsByOption keys:', allFriendsKeys) : null}
             {@const userHasVoted = hasVotedAnyOption}
             {@const isThisOptionVoted = Array.isArray(pollVotedOption) 
               ? pollVotedOption.map(String).includes(String(option.key))

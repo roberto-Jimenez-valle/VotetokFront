@@ -308,6 +308,9 @@
                     currentUserId,
                 );
                 friendsByOption = friendsData.data || {};
+                if (Object.keys(friendsByOption).length > 0) {
+                  console.log('[BottomSheet] friendsByOption for poll', poll.id, ':', friendsByOption, 'option keys:', poll.options?.map((o: any) => o.optionKey || o.key || o.id));
+                }
               }
             } catch (e) {
               // Silenciar error - no es crítico si falla
