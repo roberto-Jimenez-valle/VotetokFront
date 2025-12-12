@@ -235,6 +235,7 @@ export const createPollModalOpen = writable(false);
 export const searchModalOpen = writable(false);
 export const notificationsModalOpen = writable(false);
 export const profileModalOpen = writable(false);
+export const loginModalOpen = writable(false);
 export const selectedProfileUserId = writable<number | null>(null);
 
 // ========================================
@@ -335,6 +336,7 @@ export function resetAllStores() {
   searchModalOpen.set(false);
   notificationsModalOpen.set(false);
   profileModalOpen.set(false);
+  loginModalOpen.set(false);
   selectedProfileUserId.set(null);
   currentUser.set(null);
   isLoadingPolls.set(false);
