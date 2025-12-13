@@ -641,10 +641,19 @@
 
   function getYoutubeId(url?: string): string {
     if (!url) return "";
-    const regExp =
-      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return match && match[2].length === 11 ? match[2] : "";
+    // Incluye soporte para YouTube Shorts
+    const patterns = [
+      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?\/]*).*/,
+      /youtube\.com\/shorts\/([^#&?\/]+)/
+    ];
+    for (const regExp of patterns) {
+      const match = url.match(regExp);
+      if (match) {
+        const id = match[2] || match[1];
+        if (id && id.length === 11) return id;
+      }
+    }
+    return "";
   }
 
   function getVimeoId(url?: string): string {
