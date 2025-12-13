@@ -361,3 +361,84 @@ export function debugStores() {
   
   console.groupEnd();
 }
+
+// ========================================
+// FULLSCREEN IFRAME STATE
+// ========================================
+
+export interface FullscreenIframeState {
+  url: string;
+  optionId: string | number;
+  thumbnail: string;
+}
+
+export const fullscreenIframe = writable<FullscreenIframeState | null>(null);
+
+// ========================================
+// IFRAME PRELOAD (precarga en segundo plano)
+// ========================================
+
+export const preloadIframeUrl = writable<string | null>(null);
+
+// Precargar una URL de iframe en segundo plano
+export function preloadIframe(url: string) {
+  if (!url) return;
+  console.log('[globalState] Preloading iframe:', url);
+  preloadIframeUrl.set(url);
+}
+
+// Limpiar precarga
+export function clearPreloadIframe() {
+  preloadIframeUrl.set(null);
+}
+
+// Flag para evitar doble navegación
+let isClosingFromHistory = false;
+
+export function openFullscreenIframe(url: string, optionId: string | number, thumbnail: string) {
+  console.log('[globalState] Opening fullscreen iframe:', { url, optionId, thumbnail });
+  fullscreenIframe.set({ url, optionId, thumbnail });
+  
+  // Agregar entrada al historial para que el botón atrás cierre el fullscreen
+  if (typeof window !== 'undefined') {
+    history.pushState({ fullscreenIframe: true }, '', '');
+  }
+}
+
+export function closeFullscreenIframe() {
+  console.log('[globalState] Closing fullscreen iframe');
+  
+  // Si viene del botón "Volver" (no del popstate), quitar la entrada del historial
+  // sin navegar hacia atrás en la app
+  if (typeof window !== 'undefined' && !isClosingFromHistory) {
+    // Reemplazar el estado actual para limpiar el pushState del fullscreen
+    // pero sin hacer back() que afectaría al MaximizedView
+    history.replaceState(null, '', '');
+  }
+  
+  fullscreenIframe.set(null);
+  isClosingFromHistory = false;
+}
+
+// Handler para el botón atrás del navegador
+export function initFullscreenIframeHistoryHandler() {
+  if (typeof window === 'undefined') return;
+  
+  const handler = (event: PopStateEvent) => {
+    // Si hay fullscreen abierto, cerrarlo y detener propagación
+    let currentValue: FullscreenIframeState | null = null;
+    fullscreenIframe.subscribe(v => currentValue = v)();
+    
+    if (currentValue !== null) {
+      console.log('[globalState] Closing fullscreen via back button (same as Volver)');
+      // Detener propagación para que otros handlers no procesen este evento
+      event.stopImmediatePropagation();
+      isClosingFromHistory = true;
+      fullscreenIframe.set(null);
+    }
+  };
+  
+  // Usar capture: true para que este handler se ejecute PRIMERO
+  window.addEventListener('popstate', handler, { capture: true });
+  return () => window.removeEventListener('popstate', handler, { capture: true });
+}

@@ -41,15 +41,15 @@ export const OEMBED_PROVIDERS: OEmbedProvider[] = [
   // Twitter/X - Manejado especialmente en link-preview/+server.ts
   // El oEmbed de Twitter no devuelve thumbnail, se usa Open Graph en fetchSpecialPlatformData
   
-  // Spotify
+  // Spotify - height=232 para versión medium
   {
     name: 'Spotify',
     urlPatterns: [
       /^https?:\/\/open\.spotify\.com\/(track|album|playlist|episode|show)\/([^?]+)/
     ],
     endpoint: 'https://open.spotify.com/oembed',
-    maxWidth: 300,
-    maxHeight: 380
+    maxWidth: 400,
+    maxHeight: 232
   },
   
   // SoundCloud

@@ -1,11 +1,16 @@
 <script lang="ts">
 	import "../app.css";
 	import { onMount } from "svelte";
+	import { fade, fly, scale } from "svelte/transition";
+	import { cubicOut, quintOut, backOut } from "svelte/easing";
 	import UnifiedThemeToggle from "$lib/components/UnifiedThemeToggle.svelte";
 	import UnderConstruction from "$lib/UnderConstruction.svelte";
 	import InstallPWABanner from "$lib/InstallPWABanner.svelte";
+	import MediaEmbed from "$lib/components/MediaEmbed.svelte";
 	// Store unificado de autenticación
 	import { setCurrentUser, setAuth, initAuth } from "$lib/stores/auth";
+	// Store para fullscreen iframe
+	import { fullscreenIframe, closeFullscreenIframe, initFullscreenIframeHistoryHandler, preloadIframeUrl } from "$lib/stores/globalState";
 
 	let { children } = $props();
 	let hasAccess = $state(false);
@@ -183,8 +188,12 @@
 			false,
 		);
 
+		// Inicializar handler para cerrar fullscreen con botón atrás
+		const cleanupFullscreenHistory = initFullscreenIframeHistoryHandler();
+
 		return () => {
 			document.removeEventListener("touchstart", preventZoom);
+			cleanupFullscreenHistory?.();
 		};
 	});
 </script>
@@ -205,6 +214,192 @@
 	<InstallPWABanner />
 {/if}
 
+<!-- FULLSCREEN IFRAME OVERLAY (renderizado desde layout para evitar problemas de z-index) -->
+{#if $fullscreenIframe}
+	<div 
+		class="fullscreen-iframe-overlay" 
+		style="background-image: url('{$fullscreenIframe.thumbnail}');"
+		in:scale={{ duration: 450, start: 0.4, opacity: 1, easing: quintOut }}
+		out:scale={{ duration: 280, start: 0.85, opacity: 0, easing: cubicOut }}
+	>
+		<!-- Overlay oscuro suave sobre el thumbnail -->
+		<div 
+			class="fullscreen-overlay-dim"
+			in:fade={{ duration: 400, delay: 100 }}
+			out:fade={{ duration: 200 }}
+		></div>
+		
+		<button 
+			class="fullscreen-back-btn"
+			onclick={closeFullscreenIframe}
+			type="button"
+			aria-label="Volver a la encuesta"
+			in:fly={{ y: -40, duration: 500, delay: 200, easing: backOut }}
+			out:fly={{ y: -30, duration: 200, easing: cubicOut }}
+		>
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+				<path d="M19 12H5M12 19l-7-7 7-7"/>
+			</svg>
+			<span>Volver</span>
+		</button>
+		
+		<div 
+			class="fullscreen-iframe-container" 
+			in:scale={{ duration: 500, start: 0.8, opacity: 0, delay: 150, easing: quintOut }}
+			out:scale={{ duration: 200, start: 0.92, opacity: 0, easing: cubicOut }}
+		>
+			<MediaEmbed
+				url={$fullscreenIframe.url}
+				mode="full"
+				width="100%"
+				height="100%"
+				autoplay={true}
+				unmuted={true}
+			/>
+		</div>
+	</div>
+{/if}
+
+<!-- IFRAME PRELOAD OCULTO (precarga en segundo plano) -->
+{#if $preloadIframeUrl && !$fullscreenIframe}
+	<div class="preload-iframe-container">
+		<MediaEmbed
+			url={$preloadIframeUrl}
+			mode="full"
+			width="100%"
+			height="100%"
+			autoplay={false}
+		/>
+	</div>
+{/if}
+
 <style>
 	/* Estilos generales del layout */
+
+	.fullscreen-iframe-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		width: 100vw;
+		height: 100vh;
+		height: 100dvh;
+		z-index: 99999999999;
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.fullscreen-overlay-dim {
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.4);
+		z-index: 0;
+	}
+
+	.fullscreen-back-btn {
+		position: fixed;
+		top: env(safe-area-inset-top, 16px);
+		left: 16px;
+		margin-top: 16px;
+		z-index: 10;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 20px;
+		background: rgba(0, 0, 0, 0.5);
+		backdrop-filter: blur(20px);
+		-webkit-backdrop-filter: blur(20px);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 50px;
+		color: white;
+		font-size: 15px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+	}
+
+	.fullscreen-back-btn:hover {
+		background: rgba(255, 255, 255, 0.2);
+		transform: scale(1.08);
+		box-shadow: 0 6px 30px rgba(0, 0, 0, 0.5);
+	}
+
+	.fullscreen-back-btn:active {
+		transform: scale(0.95);
+	}
+
+	.fullscreen-back-btn svg {
+		width: 22px;
+		height: 22px;
+	}
+
+	.fullscreen-iframe-container {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 80px 16px 24px;
+		padding-top: calc(80px + env(safe-area-inset-top, 0px));
+		padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+		overflow: hidden;
+	}
+
+	.fullscreen-iframe-container :global(.media-embed),
+	.fullscreen-iframe-container :global(.embed-container) {
+		width: 100%;
+		max-width: 560px;
+		height: 100%;
+		max-height: calc(100vh - 120px);
+		max-height: calc(100dvh - 120px);
+		background: transparent !important;
+		border-radius: 20px;
+		overflow: hidden;
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+	}
+
+	.fullscreen-iframe-container :global(iframe) {
+		background: transparent !important;
+		border-radius: 20px;
+		width: 100% !important;
+		height: 100% !important;
+	}
+
+	/* Responsive para móviles */
+	@media (max-width: 600px) {
+		.fullscreen-iframe-container {
+			padding: 70px 8px 16px;
+			padding-top: calc(70px + env(safe-area-inset-top, 0px));
+		}
+
+		.fullscreen-iframe-container :global(.media-embed),
+		.fullscreen-iframe-container :global(.embed-container) {
+			max-width: 100%;
+			border-radius: 16px;
+		}
+
+		.fullscreen-back-btn {
+			padding: 10px 16px;
+			font-size: 14px;
+		}
+	}
+
+	/* Iframe de precarga oculto */
+	.preload-iframe-container {
+		position: fixed;
+		top: -9999px;
+		left: -9999px;
+		width: 1px;
+		height: 1px;
+		opacity: 0;
+		pointer-events: none;
+		overflow: hidden;
+	}
 </style>

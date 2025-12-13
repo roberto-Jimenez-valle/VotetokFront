@@ -3,6 +3,7 @@
   import { fade, fly } from "svelte/transition";
   import { onMount } from "svelte";
   import MediaEmbed from "./MediaEmbed.svelte";
+  import { openFullscreenIframe } from '$lib/stores/globalState';
 
   // --- INTERFACES ---
   interface PollOption {
@@ -183,6 +184,55 @@
   function handleOptionDragEnd() {
     draggedOptionIndex = null;
     dragOverOptionIndex = null;
+  }
+  
+  // Extraer ID de YouTube de una URL
+  function getYoutubeId(url: string): string | null {
+    if (!url) return null;
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?]+)/,
+      /youtube\.com\/shorts\/([^&\s?]+)/
+    ];
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
+  }
+  
+  // Obtener thumbnail de preview para una URL
+  function getPreviewThumbnail(url: string): string {
+    if (!url) return '';
+    
+    // YouTube thumbnail - directo sin API
+    const ytId = getYoutubeId(url);
+    if (ytId) {
+      return `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
+    }
+    
+    // Vimeo thumbnail
+    const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (vimeoMatch) {
+      return `https://vumbnail.com/${vimeoMatch[1]}.jpg`;
+    }
+    
+    // Spotify - usar imagen genérica con color
+    if (url.includes('spotify.com')) {
+      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="#1DB954" width="100" height="100"/><circle cx="50" cy="50" r="40" fill="#000" opacity="0.3"/></svg>');
+    }
+    
+    // SoundCloud
+    if (url.includes('soundcloud.com')) {
+      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="#ff5500" width="100" height="100"/></svg>');
+    }
+    
+    // TikTok
+    if (url.includes('tiktok.com')) {
+      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="#000000" width="100" height="100"/></svg>');
+    }
+    
+    // Placeholder genérico
+    return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="#333" width="100" height="100"/><polygon points="40,30 40,70 70,50" fill="#fff" opacity="0.8"/></svg>');
   }
 
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
@@ -660,35 +710,62 @@
                 </div>
                 
               {:else if isVideoType}
-                <!-- === LAYOUT VIDEO/SPOTIFY === -->
+                <!-- === LAYOUT VIDEO CON PREVIEW FLOTANTE (igual que en View) === -->
+                {@const platformColors: Record<string, string> = {
+                  youtube: '#FF0000', vimeo: '#1ab7ea', spotify: '#1DB954', soundcloud: '#ff5500',
+                  tiktok: '#000000', twitch: '#9146FF', twitter: '#000000', applemusic: '#FC3C44',
+                  deezer: '#FEAA2D', dailymotion: '#0066DC', bandcamp: '#1DA0C3', video: '#666666',
+                  image: '#666666'
+                }}
                 <div class="card-video-wrapper {isMusicType ? 'is-music' : ''}" class:has-yesno={opt.isYesNo} style="background-color: {opt.color};">
-                  <!-- Área de video/música -->
-                  <div class="card-video-area {isMusicType ? 'is-music' : ''}">
-                    {#if i === activeIndex}
-                      {#key `video-edit-${opt.id}-${activeIndex}`}
-                        <MediaEmbed
-                          url={mediaUrl}
-                          mode="full"
-                          width="100%"
-                          height="100%"
-                          autoplay={true}
-                        />
-                      {/key}
-                    {:else}
-                      <div class="w-full h-full flex items-center justify-center bg-black">
-                        <span class="text-white/50"></span>
-                      </div>
-                    {/if}
-                    
-                    <!-- Botón eliminar media -->
-                    <button
-                      type="button"
-                      class="remove-media-btn"
-                      onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
-                      aria-label="Eliminar media"
-                    >
-                      <X size={24} strokeWidth={1.5} />
-                    </button>
+                  <!-- Contenedor flotante del preview -->
+                  <div class="floating-preview-frame" role="region" aria-label="Preview de contenido">
+                    <div class="floating-preview-inner">
+                      {#if i === activeIndex}
+                        <!-- PREVIEW: Thumbnail con badge flotante (click abre fullscreen) -->
+                        {@const thumbUrl = getPreviewThumbnail(mediaUrl)}
+                        <button 
+                          class="embed-preview-container thumbnail-fullscreen-btn"
+                          onclick={(e) => { e.stopPropagation(); openFullscreenIframe(mediaUrl, opt.id, thumbUrl); }}
+                          type="button"
+                          aria-label="Reproducir contenido a pantalla completa"
+                          style="background-image: url('{thumbUrl}');"
+                        >
+                          <!-- Badge de plataforma -->
+                          <div class="platform-badge-edit" style="--platform-color: {platformColors[type] || '#666'}">
+                            {#if type === 'youtube'}
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                            {:else if type === 'vimeo'}
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.977 6.416c-.105 2.338-1.739 5.543-4.894 9.609-3.268 4.247-6.026 6.37-8.29 6.37-1.409 0-2.578-1.294-3.553-3.881L5.322 11.4C4.603 8.816 3.834 7.522 3.01 7.522c-.179 0-.806.378-1.881 1.132L0 7.197c1.185-1.044 2.351-2.084 3.501-3.128C5.08 2.701 6.266 1.984 7.055 1.91c1.867-.18 3.016 1.1 3.447 3.838.465 2.953.789 4.789.971 5.507.539 2.45 1.131 3.674 1.776 3.674.502 0 1.256-.796 2.265-2.385 1.004-1.589 1.54-2.797 1.612-3.628.144-1.371-.395-2.061-1.614-2.061-.574 0-1.167.121-1.777.391 1.186-3.868 3.434-5.757 6.762-5.637 2.473.06 3.628 1.664 3.493 4.797l-.013.01z"/></svg>
+                            {:else if type === 'spotify'}
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                            {:else if type === 'soundcloud'}
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.56 8.87V17h8.76c1.85-.13 2.68-1.27 2.68-2.67 0-1.48-1.12-2.67-2.53-2.67-.33 0-.65.08-.96.2-.11-2.02-1.69-3.63-3.66-3.63-1.24 0-2.34.64-2.99 1.64H11.56zm-1 0H9.4v8.13h1.16V8.87zm-2.16.52H7.24v7.61H8.4V9.39zm-2.16.91H5.08v6.7h1.16v-6.7zm-2.16.78H2.92v5.92h1.16v-5.92zm-2.16 1.3H.76v4.62h1.16v-4.62z"/></svg>
+                            {:else if type === 'tiktok'}
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>
+                            {:else if type === 'twitch'}
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
+                            {:else}
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            {/if}
+                          </div>
+                          
+                          </button>
+                        <!-- Botón eliminar media (fuera del botón de fullscreen) -->
+                        <button
+                          type="button"
+                          class="remove-media-btn-floating"
+                          onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
+                          aria-label="Eliminar media"
+                        >
+                          <X size={20} strokeWidth={2} />
+                        </button>
+                      {:else}
+                        <div class="w-full h-full flex items-center justify-center bg-black/50 rounded-2xl">
+                          <span class="text-white/50"></span>
+                        </div>
+                      {/if}
+                    </div>
                   </div>
                   
                   <!-- Contenido debajo del video -->
@@ -1337,6 +1414,120 @@
     padding: 16px 16px 20px;
     gap: 8px;
     border-radius: 0 0 28px 28px;
+  }
+
+  /* ========================================
+     FLOATING PREVIEW (idéntico a View)
+     ======================================== */
+  
+  .floating-preview-frame {
+    position: relative;
+    width: 90%;
+    max-width: 300px;
+    margin: 20px auto 20px;
+    aspect-ratio: 19 / 25;
+    border-radius: 40px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+  }
+
+  .floating-preview-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  .embed-preview-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: none;
+    cursor: pointer;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #1a1a2e;
+    border-radius: 16px;
+  }
+
+  .thumbnail-fullscreen-btn {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: none;
+    cursor: pointer;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #1a1a2e;
+    border-radius: 16px;
+  }
+
+  .thumbnail-fullscreen-btn:hover {
+    filter: brightness(0.9);
+  }
+
+  .platform-badge-edit {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--platform-color, #666);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 0 0 2px rgba(255, 255, 255, 0.2);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  }
+
+  .embed-preview-container:hover .platform-badge-edit {
+    transform: scale(1.1);
+    box-shadow: 
+      0 6px 16px rgba(0, 0, 0, 0.5),
+      0 0 0 3px rgba(255, 255, 255, 0.3);
+  }
+
+  .platform-badge-edit svg {
+    width: 26px;
+    height: 26px;
+    color: white;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+
+  .remove-media-btn-floating {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 36px;
+    height: 36px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 20;
+  }
+
+  .remove-media-btn-floating:hover {
+    background: rgba(239, 68, 68, 0.9);
+    transform: scale(1.1);
+  }
+
+  /* Ajustar el contenido inferior cuando hay preview flotante */
+  .card-video-wrapper .card-video-bottom {
+    padding-top: 8px;
   }
 
   /* ========================================
@@ -2438,15 +2629,14 @@
     opacity: 0.85;
   }
 
-  /* === BOTONES UNIFICADOS (igual que PollOptionCard) === */
+  /* === BOTONES UNIFICADOS - ESQUINA INFERIOR DERECHA === */
   .floating-actions-right {
     position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
+    right: 16px;
+    bottom: 16px;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: column-reverse;
+    gap: 10px;
     z-index: 30;
   }
 

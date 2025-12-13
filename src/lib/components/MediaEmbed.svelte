@@ -11,6 +11,7 @@
     height?: string;
     mode?: "full" | "preview" | "linkedin"; // full = 180px alto, preview = 130px, linkedin = preview horizontal
     autoplay?: boolean;
+    unmuted?: boolean; // Intentar autoplay CON audio (puede fallar por políticas del navegador)
   }
 
   let {
@@ -19,6 +20,7 @@
     width = "100%",
     height = "100%",
     autoplay = false, // Por defecto SIEMPRE false para ahorrar GPU
+    unmuted = false, // Por defecto muteado para cumplir políticas de autoplay
   }: Props = $props();
 
   let embedType: string = $state("");
@@ -51,7 +53,7 @@
           "controls=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&fs=1&disablekb=1&playsinline=1&enablejsapi=1&disableCastApi=1";
 
         if (autoplay) {
-          params += "&autoplay=1&mute=1"; // mute=1 necesario para iOS autoplay
+          params += unmuted ? "&autoplay=1&mute=0" : "&autoplay=1&mute=1";
         }
 
         return `src="${cleanUrl}${separator}${params}"`;
@@ -83,7 +85,7 @@
         let params = "controls=1&byline=0&portrait=0&title=0";
 
         if (autoplay) {
-          params += "&autoplay=1&muted=1"; // muted=1 necesario para iOS
+          params += unmuted ? "&autoplay=1&muted=0" : "&autoplay=1&muted=1";
         }
 
         return `src="${cleanUrl}${separator}${params}"`;
@@ -189,7 +191,7 @@
         const separator = cleanUrl.includes("?") ? "&" : "?";
         let params = "ui-start-screen-info=0&controls=1";
         if (autoplay) {
-          params += "&autoplay=1&mute=1";
+          params += unmuted ? "&autoplay=1&mute=0" : "&autoplay=1&mute=1";
         }
         return `src="${cleanUrl}${separator}${params}"`;
       });
@@ -228,13 +230,23 @@
       processed = processed.replace(/<iframe/g, '<iframe loading="lazy"');
     }
     
-    // SANDBOX FINAL: Forzar sandbox restrictivo en TODOS los iframes
-    // Primero eliminar cualquier sandbox existente, luego agregar el nuestro
+    // PROCESAR IFRAMES: Aplicar sandbox y estilos en un solo paso
     if (processed.includes("<iframe")) {
-      // Eliminar sandbox existentes (pueden ser permisivos)
+      // Eliminar atributos existentes que vamos a reemplazar
       processed = processed.replace(/\s*sandbox="[^"]*"/gi, '');
-      // Agregar nuestro sandbox restrictivo (sin allow-top-navigation)
-      processed = processed.replace(/<iframe/gi, '<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"');
+      processed = processed.replace(/\s*width="[^"]*"/gi, '');
+      processed = processed.replace(/\s*height="[^"]*"/gi, '');
+      processed = processed.replace(/\s*style="[^"]*"/gi, '');
+      
+      // Altura 100% para todos los iframes incluyendo Spotify
+      const iframeHeight = '100%';
+      const heightStyle = '100%';
+      
+      // Aplicar todos los atributos en un solo reemplazo
+      processed = processed.replace(
+        /<iframe\s*/gi, 
+        `<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowtransparency="true" width="100%" height="${iframeHeight}" style="position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:${heightStyle}!important;background:transparent!important;border:none!important;border-radius:12px!important;" `
+      );
     }
 
     // LIMPIEZA FINAL: Si autoplay está desactivado, eliminar TODOS los rastros de autoplay/mute
@@ -710,7 +722,6 @@
 >
   {#if loading}
     <div class="loading-state">
-      <div class="spinner"></div>
       <span>Cargando preview...</span>
     </div>
   {:else if error && !metadata}
@@ -841,7 +852,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-end;
     gap: 8px;
     color: rgba(255, 255, 255, 0.6);
     font-size: 0.875rem;
@@ -868,11 +879,8 @@
     width: 100%;
     height: 100%;
     position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
+    background: #121212;
     /* Ocultar scrollbars */
     scrollbar-width: none;
     -ms-overflow-style: none;

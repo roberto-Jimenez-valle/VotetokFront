@@ -950,6 +950,63 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
     return null;
   }
   
+  // SoundCloud - oEmbed no siempre devuelve thumbnail, usar Open Graph como fallback
+  if (urlObj.hostname.includes('soundcloud.com')) {
+    console.log('[Link Preview] 🎵 Detectado SoundCloud, obteniendo Open Graph...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const html = await response.text();
+        // Buscar og:image (artwork de la pista/playlist)
+        const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+        const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+        const ogDescription = html.match(/<meta\s+(?:property|name)=["']og:description["']\s+content=["']([^"']+)["']/i) ||
+                              html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:description["']/i);
+        
+        if (ogImage?.[1]) {
+          // SoundCloud usa imágenes en t500x500 o large, intentar obtener la versión grande
+          let imageUrl = ogImage[1];
+          // Convertir a versión grande si es posible
+          imageUrl = imageUrl.replace('-large.', '-t500x500.').replace('-badge.', '-t500x500.');
+          
+          console.log('[Link Preview] ✅ SoundCloud Open Graph image found:', imageUrl);
+          return {
+            url: targetUrl,
+            title: ogTitle?.[1] || 'SoundCloud',
+            description: ogDescription?.[1] || '',
+            image: imageUrl,
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(imageUrl)}`,
+            siteName: 'SoundCloud',
+            domain: 'soundcloud.com',
+            type: 'opengraph',
+            providerName: 'SoundCloud',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        } else {
+          console.log('[Link Preview] ⚠️ SoundCloud no tiene og:image');
+        }
+      }
+    } catch (err) {
+      console.warn('[Link Preview] SoundCloud Open Graph failed:', err);
+    }
+    // No retornar null aquí - dejar que intente oEmbed como fallback
+  }
+  
   // Apple Music - usar Open Graph
   if (urlObj.hostname.includes('music.apple.com')) {
     console.log('[Link Preview] 🍎 Detectado Apple Music, obteniendo Open Graph...');
