@@ -234,11 +234,125 @@
     // Placeholder genérico
     return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="#333" width="100" height="100"/><polygon points="40,30 40,70 70,50" fill="#fff" opacity="0.8"/></svg>');
   }
+  
+  // Cache de previews obtenidos de la API (para Spotify, SoundCloud, etc.)
+  let previewCache = $state<Record<string, { image: string; loading: boolean }>>({});
+  
+  // Placeholder según plataforma
+  function getPlaceholderForPlatform(url: string): string {
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.includes('spotify.com')) return 'https://placehold.co/640x360/1DB954/white?text=%E2%99%AB+Spotify';
+    if (lowerUrl.includes('soundcloud.com')) return 'https://placehold.co/640x360/ff5500/white?text=%E2%99%AB+SoundCloud';
+    if (lowerUrl.includes('tiktok.com')) return 'https://placehold.co/640x360/010101/white?text=%E2%96%B6+TikTok';
+    if (lowerUrl.includes('twitch.tv')) return 'https://placehold.co/640x360/9146FF/white?text=%E2%96%B6+Twitch';
+    if (lowerUrl.includes('instagram.com')) return 'https://placehold.co/640x360/E1306C/white?text=%F0%9F%93%B7+Instagram';
+    if (lowerUrl.includes('music.apple.com')) return 'https://placehold.co/640x360/FC3C44/white?text=%E2%99%AB+Apple+Music';
+    if (lowerUrl.includes('deezer.com')) return 'https://placehold.co/640x360/FEAA2D/000000?text=%E2%99%AB+Deezer';
+    if (lowerUrl.includes('bandcamp.com')) return 'https://placehold.co/640x360/1DA0C3/white?text=%E2%99%AB+Bandcamp';
+    if (lowerUrl.includes('dailymotion.com') || lowerUrl.includes('dai.ly')) return 'https://placehold.co/640x360/0066DC/white?text=%E2%96%B6+Dailymotion';
+    return 'https://placehold.co/640x360/1a1a2e/white?text=%E2%96%B6+Reproducir';
+  }
+  
+  // Obtener thumbnail real de la API
+  async function fetchPreviewThumbnail(optId: string, url: string) {
+    if (!url || !optId) return;
+    
+    // Si ya está en cache con imagen real, no hacer nada
+    if (previewCache[optId]?.image && !previewCache[optId].loading && !previewCache[optId].image.includes('placehold.co')) {
+      return;
+    }
+    
+    // Si está cargando, no hacer nada
+    if (previewCache[optId]?.loading) return;
+    
+    // YouTube y Vimeo tienen thumbnails directos, no necesitan API
+    const ytId = getYoutubeId(url);
+    if (ytId) {
+      previewCache = { ...previewCache, [optId]: { image: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`, loading: false } };
+      return;
+    }
+    
+    const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (vimeoMatch) {
+      previewCache = { ...previewCache, [optId]: { image: `https://vumbnail.com/${vimeoMatch[1]}.jpg`, loading: false } };
+      return;
+    }
+    
+    // Marcar como cargando
+    previewCache = { ...previewCache, [optId]: { image: '', loading: true } };
+    
+    try {
+      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+      if (response.ok) {
+        const result = await response.json();
+        const data = result.data || result;
+        let image = data.imageProxied || data.image || data.thumbnailUrl;
+        
+        if (!image || image.includes('placehold.co')) {
+          image = getPlaceholderForPlatform(url);
+        }
+        
+        previewCache = { ...previewCache, [optId]: { image, loading: false } };
+      } else {
+        previewCache = { ...previewCache, [optId]: { image: getPlaceholderForPlatform(url), loading: false } };
+      }
+    } catch (error) {
+      console.warn('[PollMaximizedEdit] Error fetching preview:', error);
+      previewCache = { ...previewCache, [optId]: { image: getPlaceholderForPlatform(url), loading: false } };
+    }
+  }
+  
+  // Obtener thumbnail final (cache o placeholder)
+  function getFinalThumbnail(optId: string, url: string): string {
+    // Primero intentar cache
+    if (previewCache[optId]?.image && !previewCache[optId].image.includes('placehold.co')) {
+      return previewCache[optId].image;
+    }
+    
+    // Luego intentar directo
+    const directThumb = getPreviewThumbnail(url);
+    if (directThumb && !directThumb.startsWith('data:')) {
+      return directThumb;
+    }
+    
+    // Si está en cache (aunque sea placeholder), usarlo
+    if (previewCache[optId]?.image) {
+      return previewCache[optId].image;
+    }
+    
+    // Fallback a placeholder
+    return getPlaceholderForPlatform(url);
+  }
 
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
   let scrollContainer: HTMLElement | null = null;
   let isScrollingProgrammatically = false;
   let prevOptionsLength = $state(options.length);
+
+  // Función para detectar si una URL tiene contenido embebible
+  function hasEmbeddableContent(url: string): boolean {
+    if (!url) return false;
+    const lowerUrl = url.toLowerCase();
+    return (
+      lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') ||
+      lowerUrl.includes('vimeo.com') || lowerUrl.includes('spotify.com') ||
+      lowerUrl.includes('soundcloud.com') || lowerUrl.includes('tiktok.com') ||
+      lowerUrl.includes('twitch.tv') || lowerUrl.includes('dailymotion.com') ||
+      lowerUrl.includes('dai.ly') || lowerUrl.includes('music.apple.com') ||
+      lowerUrl.includes('deezer.com') || lowerUrl.includes('bandcamp.com') ||
+      lowerUrl.includes('instagram.com')
+    );
+  }
+
+  // $effect para cargar previews de todas las opciones que tengan contenido embebible
+  $effect(() => {
+    for (const opt of options) {
+      const url = opt.imageUrl || extractUrlFromText(opt.label);
+      if (url && hasEmbeddableContent(url)) {
+        fetchPreviewThumbnail(opt.id, url);
+      }
+    }
+  });
 
   // Manejar botón atrás del navegador
   let isClosingViaBack = false;
@@ -723,7 +837,7 @@
                     <div class="floating-preview-inner">
                       {#if i === activeIndex}
                         <!-- PREVIEW: Thumbnail con badge flotante (click abre fullscreen) -->
-                        {@const thumbUrl = getPreviewThumbnail(mediaUrl)}
+                        {@const thumbUrl = getFinalThumbnail(opt.id, mediaUrl)}
                         <button 
                           class="embed-preview-container thumbnail-fullscreen-btn"
                           onclick={(e) => { e.stopPropagation(); openFullscreenIframe(mediaUrl, opt.id, thumbUrl); }}

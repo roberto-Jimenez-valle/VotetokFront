@@ -1115,6 +1115,108 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
     return null;
   }
   
+  // Instagram - oEmbed requiere autenticación desde 2020, usar Open Graph
+  if (urlObj.hostname.includes('instagram.com') || urlObj.hostname.includes('instagr.am')) {
+    console.log('[Link Preview] 📸 Detectado Instagram, obteniendo Open Graph...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+          'Accept': 'text/html'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const html = await response.text();
+        const ogImage = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i) ||
+                        html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i);
+        const ogTitle = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i) ||
+                        html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:title"/i);
+        const ogDesc = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]+)"/i) ||
+                       html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:description"/i);
+        
+        if (ogImage?.[1]) {
+          console.log('[Link Preview] ✅ Instagram Open Graph image found:', ogImage[1]);
+          return {
+            url: targetUrl,
+            title: ogTitle?.[1] || 'Instagram',
+            description: ogDesc?.[1] || '',
+            image: ogImage[1],
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            siteName: 'Instagram',
+            domain: 'instagram.com',
+            type: 'opengraph',
+            providerName: 'Instagram',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        } else {
+          console.log('[Link Preview] ⚠️ Instagram: No og:image found');
+        }
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.warn('[Link Preview] Instagram timeout');
+      } else {
+        console.warn('[Link Preview] Instagram error:', err.message);
+      }
+    }
+    return null;
+  }
+  
+  // Dailymotion - asegurar que obtiene thumbnail
+  if (urlObj.hostname.includes('dailymotion.com') || urlObj.hostname.includes('dai.ly')) {
+    console.log('[Link Preview] 🎬 Detectado Dailymotion, obteniendo Open Graph...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; VoteTokBot/1.0)',
+          'Accept': 'text/html'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const html = await response.text();
+        const ogImage = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i) ||
+                        html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i);
+        const ogTitle = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i) ||
+                        html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:title"/i);
+        
+        if (ogImage?.[1]) {
+          console.log('[Link Preview] ✅ Dailymotion Open Graph image found:', ogImage[1]);
+          return {
+            url: targetUrl,
+            title: ogTitle?.[1] || 'Dailymotion',
+            description: '',
+            image: ogImage[1],
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            siteName: 'Dailymotion',
+            domain: 'dailymotion.com',
+            type: 'opengraph',
+            providerName: 'Dailymotion',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[Link Preview] Dailymotion error:', err);
+    }
+    // Continuar con oEmbed como fallback
+  }
+  
   // Bandcamp - usar Open Graph
   if (urlObj.hostname.includes('bandcamp.com')) {
     console.log('[Link Preview] 🎸 Detectado Bandcamp, obteniendo Open Graph...');

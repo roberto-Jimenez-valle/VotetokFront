@@ -347,6 +347,20 @@
         return;
       }
 
+      // Detectar Spotify y generar embed directamente
+      if (url.includes("open.spotify.com") || url.includes("spotify.com")) {
+        embedType = "Spotify";
+        // Convertir URL normal a URL de embed
+        // Ej: https://open.spotify.com/track/xxx -> https://open.spotify.com/embed/track/xxx
+        let embedUrl = url;
+        if (!url.includes('/embed/')) {
+          embedUrl = url.replace('open.spotify.com/', 'open.spotify.com/embed/');
+        }
+        embedHTML = `<iframe src="${embedUrl}" width="100%" height="352" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" loading="lazy" style="border-radius: 12px;"></iframe>`;
+        loading = false;
+        return;
+      }
+
       // Detectar SoundCloud directamente y generar embed
       if (url.includes("soundcloud.com")) {
         embedType = "SoundCloud";
