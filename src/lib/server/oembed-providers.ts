@@ -13,13 +13,14 @@ export interface OEmbedProvider {
 }
 
 export const OEMBED_PROVIDERS: OEmbedProvider[] = [
-  // YouTube
+  // YouTube (incluye Shorts)
   {
     name: 'YouTube',
     urlPatterns: [
       /^https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([^&]+)/,
       /^https?:\/\/(?:www\.)?youtu\.be\/([^?]+)/,
-      /^https?:\/\/(?:www\.)?youtube\.com\/embed\/([^?]+)/
+      /^https?:\/\/(?:www\.)?youtube\.com\/embed\/([^?]+)/,
+      /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([^?]+)/
     ],
     endpoint: 'https://www.youtube.com/oembed',
     maxWidth: 1280,

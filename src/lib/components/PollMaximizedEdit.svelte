@@ -186,12 +186,12 @@
     dragOverOptionIndex = null;
   }
   
-  // Extraer ID de YouTube de una URL
+  // Extraer ID de YouTube de una URL (incluye Shorts)
   function getYoutubeId(url: string): string | null {
     if (!url) return null;
     const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?]+)/,
-      /youtube\.com\/shorts\/([^&\s?]+)/
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?\/]+)/,
+      /youtube\.com\/shorts\/([^&\s?\/]+)/
     ];
     for (const pattern of patterns) {
       const match = url.match(pattern);
