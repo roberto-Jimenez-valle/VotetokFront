@@ -646,6 +646,67 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
 async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewData | null> {
   const urlObj = new URL(targetUrl);
   
+  // Spotify - obtener thumbnail de Open Graph (oEmbed no lo incluye)
+  if (urlObj.hostname.includes('spotify.com') || urlObj.hostname.includes('spoti.fi')) {
+    console.log('[Link Preview] 🎵 Detectado Spotify, obteniendo thumbnail de Open Graph...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; VoteTokBot/1.0)',
+          'Accept': 'text/html'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const html = await response.text();
+        
+        // Extraer og:image
+        const ogImageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i) ||
+                            html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i);
+        const ogTitleMatch = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i) ||
+                            html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:title"/i);
+        const ogDescMatch = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]+)"/i) ||
+                           html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:description"/i);
+        
+        const image = ogImageMatch?.[1];
+        const title = ogTitleMatch?.[1] || 'Spotify';
+        const description = ogDescMatch?.[1] || '';
+        
+        if (image) {
+          console.log('[Link Preview] ✅ Spotify thumbnail found:', image);
+          return {
+            url: targetUrl,
+            title: title,
+            description: description,
+            image: image,
+            imageProxied: `/api/media-proxy?url=${encodeURIComponent(image)}`,
+            siteName: 'Spotify',
+            domain: 'spotify.com',
+            type: 'oembed',
+            providerName: 'Spotify',
+            isSafe: true,
+            nsfwScore: 0
+          };
+        } else {
+          console.log('[Link Preview] ⚠️ Spotify: No og:image found in HTML');
+        }
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.warn('[Link Preview] Spotify timeout');
+      } else {
+        console.warn('[Link Preview] Spotify error:', err.message);
+      }
+    }
+    // Si falla, continuar con el flujo normal de oEmbed
+  }
+  
   // Deezer - usar su API pública
   if (urlObj.hostname.includes('deezer.com')) {
     console.log('[Link Preview] 🎵 Detectado Deezer, usando API pública...');
