@@ -590,14 +590,14 @@
   }
 
   // --- DETECCIÓN DE TIPO DE MEDIA (SI NO VIENE EXPLÍCITO) ---
-  type MediaType = "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" | "tiktok" | "twitch" | "twitter" | "applemusic" | "deezer" | "dailymotion" | "bandcamp";
+  type MediaType = "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" | "tiktok" | "twitch" | "twitter" | "applemusic" | "deezer" | "dailymotion" | "bandcamp" | "generic-link";
   
   function getMediaType(opt: PollOption): MediaType {
     if (opt.type) return opt.type as MediaType;
     if (!opt.imageUrl) return "text";
     const url = opt.imageUrl.toLowerCase();
     // Video platforms
-    if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
+    if (url.includes("youtube.com") || url.includes("youtu.be") || url.includes("music.youtube.com")) return "youtube";
     if (url.includes("vimeo.com")) return "vimeo";
     if (url.includes("tiktok.com") || url.includes("vm.tiktok.com")) return "tiktok";
     if (url.includes("twitch.tv")) return "twitch";
@@ -610,7 +610,21 @@
     if (url.includes("music.apple.com")) return "applemusic";
     if (url.includes("deezer.com")) return "deezer";
     if (url.includes("bandcamp.com")) return "bandcamp";
-    return "image";
+    // Imagen directa o GIF
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url)) return "image";
+    if (url.includes('giphy.com') || url.includes('tenor.com')) return "image";
+    // Enlace genérico (no plataforma conocida ni imagen directa)
+    return "generic-link";
+  }
+  
+  // Detectar si un thumbnail es real (no placeholder)
+  function hasRealThumbnail(opt: PollOption): boolean {
+    const thumb = previewCache[opt.id]?.image || getPreviewThumbnail(opt);
+    if (!thumb) return false;
+    if (thumb.includes('placehold.co')) return false;
+    if (thumb.includes('placeholder')) return false;
+    if (thumb.startsWith('data:image/svg+xml')) return false; // SVGs generados son placeholders
+    return true;
   }
   
   // Detectar si debemos mostrar el enlace (cualquier URL válida excepto imágenes directas y GIFs)
@@ -1362,11 +1376,13 @@
       >
         {#each options as opt, i (opt.id)}
           {@const type = getMediaType(opt)}
-          {@const isVideoType = type !== 'image' && type !== 'text'}
+          {@const isVideoType = type !== 'image' && type !== 'text' && type !== 'generic-link'}
           {@const isMusicType = ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
           {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
           {@const isImageType = type === 'image' && !isGifType}
           {@const labelText = getLabelWithoutUrl(opt.label)}
+          {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasRealThumbnail(opt)}
+          {@const shouldShowAsText = type === 'text' || isGenericLinkWithoutThumb}
           <div
             id="option-{opt.id}"
             class="w-full h-full flex-shrink-0 snap-center relative"
@@ -1382,8 +1398,8 @@
                 <div class="option-card-rounded" style="--option-color: {hasVoted ? opt.color : '#555'};">
                   
                                     
-                  {#if type === "text"}
-                    <!-- === LAYOUT SOLO TEXTO === -->
+                  {#if shouldShowAsText}
+                    <!-- === LAYOUT SOLO TEXTO (o enlace genérico sin thumbnail) === -->
                     <!-- Área principal con color de fondo y comillas -->
                     <div class="card-content-area" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
                       <!-- Comillas decorativas -->
@@ -1392,9 +1408,28 @@
                       
                       <!-- Texto centrado -->
                       <div class="text-center-wrapper">
-                        <h1 class="{opt.label.length > 60 ? 'text-3xl' : opt.label.length > 40 ? 'text-4xl' : 'text-5xl'} font-bold text-white tracking-tighter leading-tight break-words text-center">
-                          {opt.label}
+                        <h1 class="{labelText.length > 60 ? 'text-3xl' : labelText.length > 40 ? 'text-4xl' : 'text-5xl'} font-bold text-white tracking-tighter leading-tight break-words text-center">
+                          {labelText || opt.label}
                         </h1>
+                        
+                        <!-- Enlace debajo del texto si existe -->
+                        {#if isGenericLinkWithoutThumb && opt.imageUrl}
+                          <a 
+                            href={opt.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="link-below-text-max"
+                            onclick={(e) => e.stopPropagation()}
+                          >
+                            <img 
+                              src="https://www.google.com/s2/favicons?domain={getHostname(opt.imageUrl || '')}&sz=16" 
+                              alt="" 
+                              class="link-below-favicon-max"
+                            />
+                            <span class="link-below-domain-max">{getHostname(opt.imageUrl || '')}</span>
+                            <span class="link-below-arrow-max">↗</span>
+                          </a>
+                        {/if}
                       </div>
                       
                       <!-- Línea divisoria en el borde inferior -->

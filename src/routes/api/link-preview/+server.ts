@@ -10,6 +10,7 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { findOEmbedProvider, buildOEmbedUrl, isSafeDomain } from '$lib/server/oembed-providers';
 import { isDomainAllowed } from '$lib/server/media-proxy-config';
+import { verifyDomain, quickVerify, getVerificationStats } from '$lib/server/domain-verification';
 
 // Cache simple en memoria
 const cache = new Map<string, {
@@ -1679,8 +1680,14 @@ async function fetchOpenGraph(targetUrl: string): Promise<LinkPreviewData> {
     // Extraer metadatos
     const metadata = extractMetadata(html, urlObj);
     
-    // Verificar seguridad del dominio
-    const isSafe = isSafeDomain(targetUrl) || isDomainAllowed(targetUrl);
+    // Verificar seguridad del dominio usando sistema automatizado
+    // Usa Lista Tranco (Top 1M) + Google Safe Browsing + VirusTotal
+    const verificationResult = await quickVerify(urlObj.hostname);
+    const isSafe = verificationResult.isSafe || isDomainAllowed(targetUrl) || isSafeDomain(targetUrl);
+    
+    if (verificationResult.trancoRank) {
+      console.log(`[Link Preview] 📊 Tranco rank: #${verificationResult.trancoRank} (${verificationResult.trustLevel})`);
+    }
     
     // Crear imagen proxied si existe
     let imageProxied: string | undefined;
@@ -1733,7 +1740,7 @@ async function fetchOpenGraph(targetUrl: string): Promise<LinkPreviewData> {
       description: 'Haz clic para ver en ' + title,
       domain: urlObj.hostname,
       type: 'generic',
-      isSafe: isSafeDomain(targetUrl),
+      isSafe: isSafeDomain(targetUrl) || isDomainAllowed(targetUrl),
       nsfwScore: 0
     };
   }

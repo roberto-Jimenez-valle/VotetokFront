@@ -437,13 +437,13 @@
   });
 
   // Detectar tipo de media
-  type MediaType = "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" | "tiktok" | "twitch" | "twitter" | "applemusic" | "deezer" | "dailymotion" | "bandcamp";
+  type MediaType = "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" | "tiktok" | "twitch" | "twitter" | "applemusic" | "deezer" | "dailymotion" | "bandcamp" | "generic-link";
   
   function getMediaType(opt: PollOption): MediaType {
     const url = (opt.imageUrl || extractUrlFromText(opt.label) || '').toLowerCase();
     if (!url) return "text";
     // Video platforms
-    if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
+    if (url.includes("youtube.com") || url.includes("youtu.be") || url.includes("music.youtube.com")) return "youtube";
     if (url.includes("vimeo.com")) return "vimeo";
     if (url.includes("tiktok.com") || url.includes("vm.tiktok.com")) return "tiktok";
     if (url.includes("twitch.tv")) return "twitch";
@@ -456,7 +456,21 @@
     if (url.includes("music.apple.com")) return "applemusic";
     if (url.includes("deezer.com")) return "deezer";
     if (url.includes("bandcamp.com")) return "bandcamp";
-    return "image";
+    // Imagen directa o GIF
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url)) return "image";
+    if (url.includes('giphy.com') || url.includes('tenor.com')) return "image";
+    // Enlace genérico (no plataforma conocida ni imagen directa)
+    return "generic-link";
+  }
+  
+  // Detectar si un thumbnail es real (no placeholder)
+  function hasRealThumbnail(optId: string, url: string): boolean {
+    const thumb = getFinalThumbnail(optId, url);
+    if (!thumb) return false;
+    if (thumb.includes('placehold.co')) return false;
+    if (thumb.includes('placeholder')) return false;
+    if (thumb.startsWith('data:image/svg+xml')) return false; // SVGs generados son placeholders
+    return true;
   }
 
   function getMediaUrl(opt: PollOption): string {
@@ -769,9 +783,11 @@
       {@const type = getMediaType(opt)}
       {@const mediaUrl = getMediaUrl(opt)}
       {@const labelText = getLabelWithoutUrl(opt.label)}
-      {@const isVideoType = type !== 'image' && type !== 'text'}
+      {@const isVideoType = type !== 'image' && type !== 'text' && type !== 'generic-link'}
       {@const isMusicType = ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
       {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
+      {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasRealThumbnail(opt.id, mediaUrl)}
+      {@const shouldShowAsText = type === 'text' || isGenericLinkWithoutThumb}
       
       <div
         class="w-full h-full flex-shrink-0 snap-center relative"
@@ -784,8 +800,8 @@
           <div class="option-card-container">
             <div class="option-card-rounded">
               
-              {#if type === "text"}
-                <!-- === LAYOUT SOLO TEXTO === -->
+              {#if shouldShowAsText}
+                <!-- === LAYOUT SOLO TEXTO (o enlace genérico sin thumbnail) === -->
                 <!-- Área principal con color de fondo y comillas -->
                 <div class="card-content-area" class:has-yesno={opt.isYesNo} style="background-color: {opt.color};">
                   <!-- Comillas decorativas -->
@@ -817,6 +833,35 @@
                       onclick={(e) => e.stopPropagation()}
                       rows="2"
                     ></textarea>
+                    
+                    <!-- Enlace debajo del texto si es enlace genérico -->
+                    {#if isGenericLinkWithoutThumb && mediaUrl}
+                      <div class="link-below-wrapper">
+                        <a 
+                          href={mediaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="link-below-text-edit"
+                          onclick={(e) => e.stopPropagation()}
+                        >
+                          <img 
+                            src="https://www.google.com/s2/favicons?domain={getHostname(mediaUrl)}&sz=16" 
+                            alt="" 
+                            class="link-below-favicon-edit"
+                          />
+                          <span class="link-below-domain-edit">{getHostname(mediaUrl)}</span>
+                          <span class="link-below-arrow-edit">↗</span>
+                        </a>
+                        <button 
+                          type="button"
+                          class="link-remove-btn-edit"
+                          onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
+                          aria-label="Eliminar enlace"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    {/if}
                   </div>
                   
                   <!-- Línea divisoria en el borde inferior -->
@@ -908,21 +953,31 @@
                     
                     <!-- Enlace debajo del texto para URLs -->
                     {#if shouldShowLink(mediaUrl)}
-                      <a 
-                        href={mediaUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="link-below-text-edit"
-                        onclick={(e) => e.stopPropagation()}
-                      >
-                        <img 
-                          src="https://www.google.com/s2/favicons?domain={getHostname(mediaUrl)}&sz=16" 
-                          alt="" 
-                          class="link-below-favicon-edit"
-                        />
-                        <span class="link-below-domain-edit">{getHostname(mediaUrl)}</span>
-                        <span class="link-below-arrow-edit">↗</span>
-                      </a>
+                      <div class="link-below-wrapper">
+                        <a 
+                          href={mediaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="link-below-text-edit"
+                          onclick={(e) => e.stopPropagation()}
+                        >
+                          <img 
+                            src="https://www.google.com/s2/favicons?domain={getHostname(mediaUrl)}&sz=16" 
+                            alt="" 
+                            class="link-below-favicon-edit"
+                          />
+                          <span class="link-below-domain-edit">{getHostname(mediaUrl)}</span>
+                          <span class="link-below-arrow-edit">↗</span>
+                        </a>
+                        <button 
+                          type="button"
+                          class="link-remove-btn-edit"
+                          onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
+                          aria-label="Eliminar enlace"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     {/if}
                   </div>
                 </div>
@@ -996,21 +1051,31 @@
                       
                       <!-- Enlace debajo del texto para URLs -->
                       {#if shouldShowLink(mediaUrl)}
-                        <a 
-                          href={mediaUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="link-below-text-edit"
-                          onclick={(e) => e.stopPropagation()}
-                        >
-                          <img 
-                            src="https://www.google.com/s2/favicons?domain={getHostname(mediaUrl)}&sz=16" 
-                            alt="" 
-                            class="link-below-favicon-edit"
-                          />
-                          <span class="link-below-domain-edit">{getHostname(mediaUrl)}</span>
-                          <span class="link-below-arrow-edit">↗</span>
-                        </a>
+                        <div class="link-below-wrapper">
+                          <a 
+                            href={mediaUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="link-below-text-edit"
+                            onclick={(e) => e.stopPropagation()}
+                          >
+                            <img 
+                              src="https://www.google.com/s2/favicons?domain={getHostname(mediaUrl)}&sz=16" 
+                              alt="" 
+                              class="link-below-favicon-edit"
+                            />
+                            <span class="link-below-domain-edit">{getHostname(mediaUrl)}</span>
+                            <span class="link-below-arrow-edit">↗</span>
+                          </a>
+                          <button 
+                            type="button"
+                            class="link-remove-btn-edit"
+                            onclick={(e) => { e.stopPropagation(); onRemoveMedia(opt.id); }}
+                            aria-label="Eliminar enlace"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       {/if}
                     </div>
                   </div>
@@ -1766,6 +1831,35 @@
     font-size: 12px;
     opacity: 0.7;
     flex-shrink: 0;
+  }
+
+  /* Wrapper para enlace con botón X */
+  .link-below-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .link-remove-btn-edit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    pointer-events: auto;
+  }
+
+  .link-remove-btn-edit:hover {
+    background: rgba(239, 68, 68, 0.8);
+    color: white;
   }
 
   /* Badge GIPHY logo en esquina superior derecha */

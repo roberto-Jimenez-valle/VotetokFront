@@ -202,6 +202,23 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     'wikimedia.org',
     'wikipedia.org',
     
+    // TradingView - gráficos financieros
+    '*.tradingview.com',
+    'tradingview.com',
+    'static.tradingview.com',
+    's3.tradingview.com',
+    
+    // CoinMarketCap - criptomonedas
+    '*.coinmarketcap.com',
+    'coinmarketcap.com',
+    's2.coinmarketcap.com',
+    's3.coinmarketcap.com',
+    
+    // CoinGecko - criptomonedas
+    '*.coingecko.com',
+    'coingecko.com',
+    'assets.coingecko.com',
+    
     // Otros servicios
     '*.railway.app',
     'railway.app',

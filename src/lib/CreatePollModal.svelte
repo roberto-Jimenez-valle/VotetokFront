@@ -2153,6 +2153,19 @@
                       option.imageUrl = '';
                       options = [...options];
                     }}
+                    onRemoveLink={() => {
+                      // Eliminar solo el enlace, mantener el texto
+                      loadingPreviews.delete(option.id);
+                      optionPreviews.delete(option.id);
+                      optionUrls.delete(option.id);
+                      optionUrls = optionUrls;
+                      const urlInLabel = extractUrlFromText(option.label);
+                      if (urlInLabel) {
+                        option.label = option.label.replace(urlInLabel, ' ').replace(/\s+/g, ' ').trim();
+                      }
+                      option.imageUrl = '';
+                      options = [...options];
+                    }}
                     onRemoveOption={() => { removeOption(option.id); }}
                     isCorrect={option.isCorrect || false}
                     onToggleCorrect={() => {

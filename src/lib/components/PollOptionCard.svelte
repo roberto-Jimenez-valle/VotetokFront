@@ -37,6 +37,7 @@
     onColorPickerOpen?: () => void;
     onGiphyPickerOpen?: () => void;
     onRemoveMedia?: () => void;
+    onRemoveLink?: () => void;  // Eliminar solo el enlace (mantener texto)
     onRemoveOption?: () => void;
     onToggleCorrect?: () => void;
     
@@ -74,6 +75,7 @@
     onColorPickerOpen,
     onGiphyPickerOpen,
     onRemoveMedia,
+    onRemoveLink,
     onRemoveOption,
     onToggleCorrect,
     isCorrect = false,
@@ -100,23 +102,24 @@
   
   function getMediaType(url: string): MediaPlatform {
     if (!url) return 'text';
+    const lowerUrl = url.toLowerCase();
     // Video platforms
-    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
-    if (url.includes('vimeo.com')) return 'vimeo';
-    if (url.includes('tiktok.com') || url.includes('vm.tiktok.com')) return 'tiktok';
-    if (url.includes('twitch.tv')) return 'twitch';
-    if (url.includes('dailymotion.com') || url.includes('dai.ly')) return 'dailymotion';
+    if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || lowerUrl.includes('music.youtube.com')) return 'youtube';
+    if (lowerUrl.includes('vimeo.com')) return 'vimeo';
+    if (lowerUrl.includes('tiktok.com') || lowerUrl.includes('vm.tiktok.com')) return 'tiktok';
+    if (lowerUrl.includes('twitch.tv')) return 'twitch';
+    if (lowerUrl.includes('dailymotion.com') || lowerUrl.includes('dai.ly')) return 'dailymotion';
     // Social
-    if (url.includes('twitter.com') || url.includes('x.com')) return 'twitter';
+    if (lowerUrl.includes('twitter.com') || lowerUrl.includes('x.com')) return 'twitter';
     // Audio platforms
-    if (url.includes('spotify.com')) return 'spotify';
-    if (url.includes('soundcloud.com')) return 'soundcloud';
-    if (url.includes('music.apple.com')) return 'applemusic';
-    if (url.includes('deezer.com')) return 'deezer';
-    if (url.includes('bandcamp.com')) return 'bandcamp';
+    if (lowerUrl.includes('spotify.com')) return 'spotify';
+    if (lowerUrl.includes('soundcloud.com')) return 'soundcloud';
+    if (lowerUrl.includes('music.apple.com')) return 'applemusic';
+    if (lowerUrl.includes('deezer.com')) return 'deezer';
+    if (lowerUrl.includes('bandcamp.com')) return 'bandcamp';
     // Direct media
-    if (/\.(mp4|webm|mov)([?#]|$)/i.test(url)) return 'video';
-    if (url.includes('giphy.com') || url.includes('tenor.com') || /\.gif([?#]|$)/i.test(url)) return 'gif';
+    if (/\.(mp4|webm|mov)([?#]|$)/i.test(lowerUrl)) return 'video';
+    if (lowerUrl.includes('giphy.com') || lowerUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(lowerUrl)) return 'gif';
     return 'image';
   }
 
@@ -129,20 +132,25 @@
   const isGifType = $derived(mediaType === 'gif');
   const isImageType = $derived(mediaType === 'image' || isThumbnailPlatform);
   const isTextOnly = $derived(mediaType === 'text');
-  const hasMedia = $derived(!!imageUrl);
+  // hasMedia es true solo si hay imagen/gif directa O si es plataforma con thumbnail
+  // Para enlaces genéricos sin thumbnail, se tratará como texto
+  const hasRawMedia = $derived(!!imageUrl);
+  // URL del enlace para mostrar en maximized (si es un enlace genérico)
+  const linkUrl = $derived(imageUrl && !imageUrl.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp)(\?|$)/i) ? imageUrl : null);
   
-  // Detectar si es un enlace genérico (debe mostrar favicon)
-  function isGenericLink(url: string): boolean {
+  // Detectar si es un enlace que debe mostrar el badge de enlace (favicon + dominio)
+  // Esto incluye enlaces genéricos Y plataformas conocidas sin thumbnail real
+  function shouldShowLinkBadge(url: string): boolean {
     if (!url) return false;
-    // Si es una imagen directa, no es un enlace genérico
+    // Si es una imagen directa, no mostramos badge
     if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url)) return false;
-    // Si es una plataforma conocida o GIF, no es genérico (ya tienen su propio badge)
-    if (isThumbnailPlatform || isGifType) return false;
-    // Todo lo demás es un enlace genérico (Wikipedia, GitHub, noticias, etc.)
+    // Si es GIF de GIPHY/Tenor, no mostramos badge
+    if (isGifType) return false;
+    // Para todo lo demás (incluyendo plataformas sin thumbnail), mostramos badge
     return true;
   }
   
-  const showGenericLinkBadge = $derived(isGenericLink(imageUrl));
+  const showGenericLinkBadge = $derived(shouldShowLinkBadge(imageUrl));
   
   // Obtener hostname de una URL
   function getHostname(url: string): string {
@@ -222,9 +230,14 @@
   }
 
   // Efecto para cargar el thumbnail real cuando el componente se monta
-  // Para videos embebidos Y plataformas de thumbnail (TikTok, Twitter, etc.)
+  // Para videos embebidos, plataformas de thumbnail Y enlaces genéricos
   $effect(() => {
-    if ((isVideoType || isThumbnailPlatform) && imageUrl && !fetchedThumbnail && !thumbnailLoading) {
+    // Cargar thumbnail para cualquier URL que no sea imagen/gif directa
+    const needsThumbnail = (isVideoType || isThumbnailPlatform || showGenericLinkBadge) && 
+                           !isGifType && 
+                           !imageUrl.match(/\.(jpg|jpeg|png|webp|svg|bmp)(\?|$)/i);
+    
+    if (needsThumbnail && imageUrl && !fetchedThumbnail && !thumbnailLoading) {
       thumbnailLoading = true;
       fetchRealThumbnail(imageUrl, mediaType).then(thumb => {
         fetchedThumbnail = thumb;
@@ -235,6 +248,23 @@
 
   // Thumbnail final: usar el obtenido de la API o el placeholder
   const videoThumbnail = $derived(fetchedThumbnail || getDefaultThumbnail(mediaType));
+  
+  // Detectar si el thumbnail es real o es un placeholder
+  const hasRealThumbnail = $derived(
+    fetchedThumbnail && 
+    !fetchedThumbnail.includes('placehold.co') && 
+    !fetchedThumbnail.includes('placeholder')
+  );
+  
+  // hasMedia final: true si hay imagen directa, gif, o thumbnail real
+  // Si es enlace (genérico o plataforma) sin thumbnail real -> mostrar como texto con enlace
+  const hasMedia = $derived(
+    hasRawMedia && (
+      isGifType || 
+      imageUrl.match(/\.(jpg|jpeg|png|webp|svg|bmp)(\?|$)/i) ||
+      hasRealThumbnail
+    )
+  );
 
   // Colores de marca por plataforma
   const platformColors: Record<string, string> = {
@@ -438,7 +468,7 @@
       <div class="option-background">
         <div class="noise-overlay"></div>
         <div class="media-embed-background">
-          {#if isThumbnailPlatform && videoThumbnail}
+          {#if isThumbnailPlatform && hasRealThumbnail}
             <!-- Thumbnail de plataforma a pantalla completa -->
             <div class="thumbnail-fullscreen" style="background-image: url('{videoThumbnail}');">
               <div class="platform-badge" style="--platform-color: {platformColors[mediaType] || '#666'}">
@@ -476,6 +506,7 @@
               width="100%"
               height="100%"
               {autoplay}
+              on:imageerror={() => { fetchedThumbnail = null; }}
             />
           {/if}
           
@@ -618,10 +649,58 @@
             maxlength="200"
             rows="2"
           ></textarea>
+          
+          <!-- Enlace debajo del texto si existe (para cards de texto con enlace genérico) -->
+          {#if linkUrl && showGenericLinkBadge}
+            <div class="link-below-mini">
+              <a 
+                href={linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link-below-anchor"
+                onclick={(e) => e.stopPropagation()}
+              >
+                <img 
+                  src="https://www.google.com/s2/favicons?domain={getHostname(linkUrl)}&sz=16" 
+                  alt="" 
+                  class="link-favicon"
+                />
+                <span class="link-domain">{getHostname(linkUrl)}</span>
+                <span class="link-arrow">↗</span>
+              </a>
+              <button 
+                type="button"
+                class="link-remove-btn"
+                onclick={(e) => { e.stopPropagation(); onRemoveLink?.(); }}
+                aria-label="Eliminar enlace"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          {/if}
         {:else}
           <h2 class="option-label-view">
             {displayLabel}
           </h2>
+          
+          <!-- Enlace debajo del texto en modo view (para SinglePollSection) -->
+          {#if linkUrl && showGenericLinkBadge}
+            <a 
+              href={linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link-below-anchor link-view-mode"
+              onclick={(e) => e.stopPropagation()}
+            >
+              <img 
+                src="https://www.google.com/s2/favicons?domain={getHostname(linkUrl)}&sz=16" 
+                alt="" 
+                class="link-favicon"
+              />
+              <span class="link-domain">{getHostname(linkUrl)}</span>
+              <span class="link-arrow">↗</span>
+            </a>
+          {/if}
         {/if}
         
         {#if mode === 'view'}
@@ -1763,6 +1842,80 @@
     color: rgba(255, 255, 255, 0.6);
     font-size: 12px;
     font-weight: 700;
+  }
+
+  /* Enlace debajo del texto en cards mini - estilo igual que MaximizedEdit */
+  .link-below-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .link-below-anchor {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .link-below-anchor:hover {
+    background: rgba(255, 255, 255, 0.22);
+    color: white;
+  }
+
+  .link-favicon {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .link-domain {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+
+  .link-arrow {
+    font-size: 10px;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  .link-remove-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .link-remove-btn:hover {
+    background: rgba(239, 68, 68, 0.8);
+    color: white;
+  }
+
+  /* Enlace en modo view (sin botón X) */
+  .link-view-mode {
+    margin-top: 8px;
   }
 
   .divider-line-new {
