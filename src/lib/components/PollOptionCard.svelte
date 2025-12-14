@@ -1856,16 +1856,16 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
+    padding: 5px 10px;
     background: rgba(255, 255, 255, 0.12);
-    border-radius: 14px;
+    border-radius: 12px;
     color: rgba(255, 255, 255, 0.9);
     text-decoration: none;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     transition: all 0.2s ease;
-    min-width: 0;
-    overflow: hidden;
+    width: fit-content;
+    max-width: 100%;
   }
 
   .link-below-anchor:hover {
