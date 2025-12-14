@@ -328,27 +328,22 @@
   let scrollContainer: HTMLElement | null = null;
   let isScrollingProgrammatically = false;
   let prevOptionsLength = $state(options.length);
+  
+  // Set para evitar fetch duplicados - previene bucle infinito
+  const fetchedUrls = new Set<string>();
 
-  // Función para detectar si una URL tiene contenido embebible
-  function hasEmbeddableContent(url: string): boolean {
-    if (!url) return false;
-    const lowerUrl = url.toLowerCase();
-    return (
-      lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') ||
-      lowerUrl.includes('vimeo.com') || lowerUrl.includes('spotify.com') ||
-      lowerUrl.includes('soundcloud.com') || lowerUrl.includes('tiktok.com') ||
-      lowerUrl.includes('twitch.tv') || lowerUrl.includes('dailymotion.com') ||
-      lowerUrl.includes('dai.ly') || lowerUrl.includes('music.apple.com') ||
-      lowerUrl.includes('deezer.com') || lowerUrl.includes('bandcamp.com') ||
-      lowerUrl.includes('instagram.com')
-    );
-  }
-
-  // $effect para cargar previews de todas las opciones que tengan contenido embebible
+  // $effect para cargar previews de todas las opciones que tengan URL (embebible o genérico)
   $effect(() => {
-    for (const opt of options) {
+    // Solo depender de options, no de previewCache
+    const optionsCopy = options.map(o => ({ id: o.id, imageUrl: o.imageUrl, label: o.label }));
+    
+    for (const opt of optionsCopy) {
       const url = opt.imageUrl || extractUrlFromText(opt.label);
-      if (url && hasEmbeddableContent(url)) {
+      const cacheKey = `${opt.id}:${url}`;
+      
+      if (url && !fetchedUrls.has(cacheKey)) {
+        fetchedUrls.add(cacheKey);
+        // Cargar preview para cualquier URL (embebible o generic-link)
         fetchPreviewThumbnail(opt.id, url);
       }
     }
@@ -487,6 +482,36 @@
     if (lowerUrl.includes('giphy.com') || lowerUrl.includes('tenor.com')) return false;
     // Para todo lo demás mostramos enlace
     return true;
+  }
+  
+  // Detectar si una URL tiene contenido embebible (plataformas con iframe)
+  function hasEmbeddableContent(url: string | undefined): boolean {
+    if (!url) return false;
+    const lowerUrl = url.toLowerCase();
+    return (
+      lowerUrl.includes('youtube.com') ||
+      lowerUrl.includes('youtu.be') ||
+      lowerUrl.includes('vimeo.com') ||
+      lowerUrl.includes('spotify.com') ||
+      lowerUrl.includes('soundcloud.com') ||
+      lowerUrl.includes('tiktok.com') ||
+      lowerUrl.includes('twitch.tv') ||
+      lowerUrl.includes('dailymotion.com') ||
+      lowerUrl.includes('dai.ly') ||
+      lowerUrl.includes('music.apple.com') ||
+      lowerUrl.includes('deezer.com') ||
+      lowerUrl.includes('bandcamp.com') ||
+      lowerUrl.includes('ted.com/talks')
+    );
+  }
+  
+  // Handler para click en área de media: si no tiene embed, abrir enlace
+  function handleMediaClick(url: string | undefined, e: MouseEvent) {
+    if (!url) return;
+    if (!hasEmbeddableContent(url)) {
+      e.stopPropagation();
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   }
   
   // Obtener hostname de una URL
@@ -780,13 +805,17 @@
     onscroll={handleScroll}
   >
     {#each options as opt, i (opt.id)}
+      <!-- Key block forces re-render when previewCache updates for this option -->
+      {#key previewCache[opt.id]?.image}
       {@const type = getMediaType(opt)}
       {@const mediaUrl = getMediaUrl(opt)}
       {@const labelText = getLabelWithoutUrl(opt.label)}
-      {@const isVideoType = type !== 'image' && type !== 'text' && type !== 'generic-link'}
+      {@const hasThumb = hasRealThumbnail(opt.id, mediaUrl)}
+      {@const isGenericLinkWithThumb = type === 'generic-link' && hasThumb}
+      {@const isVideoType = (type !== 'image' && type !== 'text' && type !== 'generic-link') || isGenericLinkWithThumb}
       {@const isMusicType = ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
       {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
-      {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasRealThumbnail(opt.id, mediaUrl)}
+      {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasThumb}
       {@const shouldShowAsText = type === 'text' || isGenericLinkWithoutThumb}
       
       <div
@@ -874,20 +903,28 @@
                   youtube: '#FF0000', vimeo: '#1ab7ea', spotify: '#1DB954', soundcloud: '#ff5500',
                   tiktok: '#000000', twitch: '#9146FF', twitter: '#000000', applemusic: '#FC3C44',
                   deezer: '#FEAA2D', dailymotion: '#0066DC', bandcamp: '#1DA0C3', video: '#666666',
-                  image: '#666666'
+                  image: '#666666', 'generic-link': '#666666'
                 }}
+                {@const canEmbed = hasEmbeddableContent(mediaUrl)}
+                {@const thumbUrl = getFinalThumbnail(opt.id, mediaUrl)}
                 <div class="card-video-wrapper {isMusicType ? 'is-music' : ''}" class:has-yesno={opt.isYesNo} style="background-color: {opt.color};">
                   <!-- Contenedor flotante del preview -->
                   <div class="floating-preview-frame" role="region" aria-label="Preview de contenido">
                     <div class="floating-preview-inner">
-                      {#if i === activeIndex}
-                        <!-- PREVIEW: Thumbnail con badge flotante (click abre fullscreen) -->
-                        {@const thumbUrl = getFinalThumbnail(opt.id, mediaUrl)}
+                      <!-- PREVIEW: Thumbnail con badge flotante (siempre visible en Edit) -->
+                      {#if thumbUrl}
                         <button 
                           class="embed-preview-container thumbnail-fullscreen-btn"
-                          onclick={(e) => { e.stopPropagation(); openFullscreenIframe(mediaUrl, opt.id, thumbUrl); }}
+                          onclick={(e) => { 
+                            e.stopPropagation(); 
+                            if (canEmbed) {
+                              openFullscreenIframe(mediaUrl, opt.id, thumbUrl);
+                            } else if (mediaUrl) {
+                              window.open(mediaUrl, '_blank', 'noopener,noreferrer');
+                            }
+                          }}
                           type="button"
-                          aria-label="Reproducir contenido a pantalla completa"
+                          aria-label={canEmbed ? "Reproducir contenido a pantalla completa" : "Abrir enlace"}
                           style="background-image: url('{thumbUrl}');"
                         >
                           <!-- Badge de plataforma -->
@@ -904,6 +941,9 @@
                               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>
                             {:else if type === 'twitch'}
                               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
+                            {:else if type === 'generic-link' || !canEmbed}
+                              <!-- Icono de enlace externo para enlaces genéricos -->
+                              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zm-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7h-7z"/></svg>
                             {:else}
                               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                             {/if}
@@ -920,8 +960,9 @@
                           <X size={20} strokeWidth={2} />
                         </button>
                       {:else}
-                        <div class="w-full h-full flex items-center justify-center bg-black/50 rounded-2xl">
-                          <span class="text-white/50"></span>
+                        <!-- Placeholder mientras carga el thumbnail -->
+                        <div class="w-full h-full flex items-center justify-center rounded-2xl" style="background-color: {opt.color};">
+                          <span class="text-white/50 text-sm">Cargando...</span>
                         </div>
                       {/if}
                     </div>
@@ -987,7 +1028,13 @@
                 <!-- Wrapper con borde del color de la opción -->
                 <div class="card-media-border" class:has-yesno={opt.isYesNo} style="--border-color: {opt.color};">
                   <!-- Imagen a pantalla completa con contenido overlay -->
-                  <div class="card-media-fullscreen">
+                  <!-- Click abre enlace directamente si no tiene embed -->
+                  <div 
+                    class="card-media-fullscreen"
+                    onclick={(e) => handleMediaClick(mediaUrl, e)}
+                    role={!hasEmbeddableContent(mediaUrl) ? "link" : undefined}
+                    style={!hasEmbeddableContent(mediaUrl) ? "cursor: pointer;" : ""}
+                  >
                     <!-- Imagen de fondo -->
                     <div class="card-image-fullscreen">
                       {#if i === activeIndex}
@@ -1001,8 +1048,9 @@
                           />
                         {/key}
                       {:else}
-                        <div class="w-full h-full flex items-center justify-center bg-black">
-                          <span class="text-white/50"></span>
+                        <!-- Placeholder mientras carga -->
+                        <div class="w-full h-full flex items-center justify-center rounded-2xl" style="background-color: {opt.color};">
+                          <span class="text-white/50 text-sm">Cargando...</span>
                         </div>
                       {/if}
                       
@@ -1212,6 +1260,7 @@
           </div>
         </div>
       </div>
+      {/key}
     {/each}
   </div>
   
@@ -1432,7 +1481,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 130px 12px 80px;
+    padding: 145px 12px 70px;
   }
 
   /* Card con bordes redondeados - igual para todos los tipos */
@@ -1462,7 +1511,7 @@
     overflow: hidden;
     border: none;
     outline: none;
-    /* Sin border-radius propio, el padre lo tiene */
+    border-radius: 32px 32px 0 0;
   }
 
   .quote-decoration {
@@ -2116,12 +2165,29 @@
     .quote-decoration {
       font-size: 140px;
     }
+    
+    .floating-preview-frame {
+      max-width: 380px;
+      min-height: 300px;
+    }
+  }
+  
+  /* Desktop grande */
+  @media (min-width: 1024px) {
+    .floating-preview-frame {
+      max-width: 420px;
+      min-height: 350px;
+    }
   }
   
   /* Responsive - Mobile */
   @media (max-width: 480px) {
     .option-card-container {
-      padding: 118px 8px 70px;
+      padding: 130px 10px 60px;
+    }
+    
+    .option-card-rounded {
+      border-radius: 12px;
     }
     
     .quote-decoration {

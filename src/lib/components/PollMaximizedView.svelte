@@ -695,6 +695,9 @@
   // Cache de previews obtenidos de la API
   let previewCache = $state<Record<string, { image: string; title?: string; loading: boolean }>>({});
   
+  // Set para trackear qué opciones ya fueron procesadas (evita re-fetches)
+  const processedOptions = new Set<string>();
+  
   // --- IFRAME FULLSCREEN (usa store global) ---
   function handleOpenFullscreenIframe(opt: PollOption) {
     console.log('[PollMaximizedView] Opening fullscreen iframe', opt);
@@ -832,13 +835,20 @@
   async function fetchPreviewForOption(opt: PollOption) {
     if (!opt?.imageUrl || !opt?.id) return;
     
-    // Si ya está en cache con imagen real, no hacer nada
+    // Si ya fue procesada, no hacer nada (evita bucles)
+    if (processedOptions.has(opt.id)) return;
+    
+    // Si ya está en cache con imagen real, marcar como procesada y no hacer nada
     if (previewCache[opt.id]?.image && !previewCache[opt.id].loading && !previewCache[opt.id].image.includes('placehold.co')) {
+      processedOptions.add(opt.id);
       return;
     }
     
     // Si está cargando, no hacer nada
     if (previewCache[opt.id]?.loading) return;
+    
+    // Marcar como procesada ANTES de hacer fetch
+    processedOptions.add(opt.id);
     
     // Primero intentar thumbnail directo (YouTube, Vimeo, Dailymotion)
     const directThumb = getDirectThumbnail(opt.imageUrl);
@@ -909,11 +919,21 @@
     }
   }
   
-  // Cargar previews para TODAS las opciones con contenido embebible al iniciar
+  // Detectar si una opción necesita cargar preview (cualquier URL que no sea imagen directa)
+  function needsPreviewFetch(opt: PollOption): boolean {
+    if (!opt?.imageUrl) return false;
+    const url = opt.imageUrl.toLowerCase();
+    // Si es imagen directa, no necesita fetch
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url)) return false;
+    // Todo lo demás necesita fetch (plataformas conocidas y enlaces genéricos)
+    return true;
+  }
+  
+  // Cargar previews para TODAS las opciones que necesiten fetch al iniciar
   $effect(() => {
-    // Cargar previews de todas las opciones que tengan contenido embebible
+    // Cargar previews de todas las opciones que tengan URL (excepto imágenes directas)
     for (const opt of options) {
-      if (hasEmbeddableContent(opt)) {
+      if (needsPreviewFetch(opt)) {
         fetchPreviewForOption(opt);
       }
     }
@@ -1376,12 +1396,14 @@
       >
         {#each options as opt, i (opt.id)}
           {@const type = getMediaType(opt)}
-          {@const isVideoType = type !== 'image' && type !== 'text' && type !== 'generic-link'}
+          {@const hasThumb = hasRealThumbnail(opt)}
+          {@const isGenericLinkWithThumb = type === 'generic-link' && hasThumb}
+          {@const isVideoType = (type !== 'image' && type !== 'text' && type !== 'generic-link') || isGenericLinkWithThumb}
           {@const isMusicType = ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
           {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
           {@const isImageType = type === 'image' && !isGifType}
           {@const labelText = getLabelWithoutUrl(opt.label)}
-          {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasRealThumbnail(opt)}
+          {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasThumb}
           {@const shouldShowAsText = type === 'text' || isGenericLinkWithoutThumb}
           <div
             id="option-{opt.id}"
@@ -1509,22 +1531,32 @@
                         aria-label="Preview de contenido"
                       >
                         <div class="floating-preview-inner">
-                          {#if i === activeIndex}
-                            {#if hasEmbeddableContent(opt)}
-                              <!-- PREVIEW: Thumbnail con badge flotante (click abre fullscreen) -->
-                              {@const thumbUrl = previewCache[opt.id]?.image || getPreviewThumbnail(opt)}
+                          <!-- Mostrar thumbnail siempre que esté disponible -->
+                          {#if (previewCache[opt.id]?.image || getPreviewThumbnail(opt)) && (hasEmbeddableContent(opt) || isGenericLinkWithThumb)}
+                            {@const thumbUrl = previewCache[opt.id]?.image || getPreviewThumbnail(opt)}
+                            <!-- PREVIEW: Thumbnail con badge flotante -->
+                            <!-- Si tiene embed (plataformas conocidas) -> abre fullscreen iframe -->
+                            <!-- Si es enlace genérico sin embed -> abre enlace directamente -->
                               {@const platformType = getMediaType(opt)}
+                              {@const canEmbed = hasEmbeddableContent(opt)}
                               {@const platformColors: Record<string, string> = {
                                 youtube: '#FF0000', vimeo: '#1ab7ea', spotify: '#1DB954', soundcloud: '#ff5500',
                                 tiktok: '#000000', twitch: '#9146FF', twitter: '#000000', applemusic: '#FC3C44',
                                 deezer: '#FEAA2D', dailymotion: '#0066DC', bandcamp: '#1DA0C3', video: '#666666',
-                                image: '#666666'
+                                image: '#666666', 'generic-link': '#666666'
                               }}
                               <button 
                                 class="embed-preview-container thumbnail-fullscreen-btn"
-                                onclick={(e) => { e.stopPropagation(); handleOpenFullscreenIframe(opt); }}
+                                onclick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (canEmbed) {
+                                    handleOpenFullscreenIframe(opt);
+                                  } else if (opt.imageUrl) {
+                                    window.open(opt.imageUrl, '_blank', 'noopener,noreferrer');
+                                  }
+                                }}
                                 type="button"
-                                aria-label="Reproducir contenido a pantalla completa"
+                                aria-label={canEmbed ? "Reproducir contenido a pantalla completa" : "Abrir enlace"}
                                 style="background-image: url('{thumbUrl}');"
                               >
                                 <!-- Badge de plataforma -->
@@ -1551,15 +1583,18 @@
                                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.006 13.24c-1.47 0-2.66-1.2-2.66-2.67s1.2-2.67 2.66-2.67 2.67 1.19 2.67 2.67c0 1.47-1.2 2.67-2.67 2.67zM18 2H6C3.79 2 2 3.79 2 6v12c0 2.21 1.79 4 4 4h12c2.21 0 4-1.79 4-4V6c0-2.21-1.79-4-4-4zm-5.99 14.91c-3.32 0-6.01-2.69-6.01-6.01 0-3.32 2.69-6.01 6.01-6.01 3.32 0 6.01 2.69 6.01 6.01 0 3.32-2.69 6.01-6.01 6.01z"/></svg>
                                 {:else if platformType === 'bandcamp'}
                                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5H0z"/></svg>
+                                {:else if platformType === 'generic-link' || !canEmbed}
+                                  <!-- Icono de enlace externo para enlaces genéricos -->
+                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zm-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7h-7z"/></svg>
                                 {:else}
                                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                                 {/if}
                               </div>
                             </button>
-                            {/if}
                           {:else}
-                            <div class="w-full h-full flex items-center justify-center bg-black/50 rounded-2xl">
-                              <span class="text-white/50"></span>
+                            <!-- Placeholder mientras carga el thumbnail -->
+                            <div class="w-full h-full flex items-center justify-center rounded-2xl" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
+                              <span class="text-white/50 text-sm">Cargando...</span>
                             </div>
                           {/if}
                         </div>
@@ -1673,8 +1708,9 @@
                             />
                           {/key}
                         {:else}
-                          <div class="w-full h-full flex items-center justify-center bg-black">
-                            <span class="text-white/50"></span>
+                          <!-- Placeholder mientras carga -->
+                          <div class="w-full h-full flex items-center justify-center rounded-2xl" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
+                            <span class="text-white/50 text-sm">Cargando...</span>
                           </div>
                         {/if}
                         
@@ -4411,6 +4447,19 @@
     
     .card-bottom-label {
       font-size: 38px;
+    }
+    
+    .floating-preview-frame {
+      max-width: 380px;
+      min-height: 300px;
+    }
+  }
+  
+  /* Desktop grande */
+  @media (min-width: 1024px) {
+    .floating-preview-frame {
+      max-width: 420px;
+      min-height: 350px;
     }
   }
 

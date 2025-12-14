@@ -4,6 +4,10 @@
 
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
 
+  // Cache global para deduplicar peticiones de thumbnail
+  const thumbnailCache = new Map<string, Promise<string>>();
+  const thumbnailResults = new Map<string, string>();
+
   // --- INTERFACES ---
   interface Friend {
     id: string;
@@ -205,28 +209,51 @@
   let thumbnailLoading = $state(false);
 
   // Obtener thumbnail real - TODAS las plataformas pasan por el backend
+  // Usa cache global para evitar peticiones duplicadas
   async function fetchRealThumbnail(url: string, type: string): Promise<string> {
-    try {
-      console.log('[PollOptionCard] 📡 Fetching thumbnail for:', type, url);
-      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
-      if (response.ok) {
-        const result = await response.json();
-        const data = result.data || result;
-        // Prioridad: imageProxied > image > thumbnailUrl
-        const thumbnail = data.imageProxied || data.image || data.thumbnailUrl || data.thumbnail_url;
-        if (thumbnail) {
-          console.log('[PollOptionCard] ✅ Thumbnail found:', thumbnail);
-          return thumbnail;
-        }
-        console.log('[PollOptionCard] ⚠️ No thumbnail in response');
-      } else {
-        console.warn('[PollOptionCard] ❌ link-preview failed:', response.status);
-      }
-    } catch (err) {
-      console.warn('[PollOptionCard] Error fetching thumbnail:', err);
+    // Verificar cache de resultados primero
+    if (thumbnailResults.has(url)) {
+      return thumbnailResults.get(url)!;
     }
     
-    return getDefaultThumbnail(type);
+    // Verificar si ya hay una petición en curso para esta URL
+    if (thumbnailCache.has(url)) {
+      return thumbnailCache.get(url)!;
+    }
+    
+    // Crear nueva petición y guardarla en cache
+    const fetchPromise = (async () => {
+      try {
+        console.log('[PollOptionCard] 📡 Fetching thumbnail for:', type, url);
+        const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+        if (response.ok) {
+          const result = await response.json();
+          const data = result.data || result;
+          // Prioridad: imageProxied > image > thumbnailUrl
+          const thumbnail = data.imageProxied || data.image || data.thumbnailUrl || data.thumbnail_url;
+          if (thumbnail) {
+            console.log('[PollOptionCard] ✅ Thumbnail found:', thumbnail);
+            thumbnailResults.set(url, thumbnail);
+            return thumbnail;
+          }
+          console.log('[PollOptionCard] ⚠️ No thumbnail in response');
+        } else {
+          console.warn('[PollOptionCard] ❌ link-preview failed:', response.status);
+        }
+      } catch (err) {
+        console.warn('[PollOptionCard] Error fetching thumbnail:', err);
+      } finally {
+        // Limpiar cache de peticiones en curso después de un tiempo
+        setTimeout(() => thumbnailCache.delete(url), 1000);
+      }
+      
+      const defaultThumb = getDefaultThumbnail(type);
+      thumbnailResults.set(url, defaultThumb);
+      return defaultThumb;
+    })();
+    
+    thumbnailCache.set(url, fetchPromise);
+    return fetchPromise;
   }
 
   // Efecto para cargar el thumbnail real cuando el componente se monta
@@ -237,7 +264,13 @@
                            !isGifType && 
                            !imageUrl.match(/\.(jpg|jpeg|png|webp|svg|bmp)(\?|$)/i);
     
-    if (needsThumbnail && imageUrl && !fetchedThumbnail && !thumbnailLoading) {
+    // Verificar si ya tenemos resultado en cache global (evita bucles)
+    if (imageUrl && thumbnailResults.has(imageUrl) && !fetchedThumbnail) {
+      fetchedThumbnail = thumbnailResults.get(imageUrl)!;
+      return;
+    }
+    
+    if (needsThumbnail && imageUrl && !fetchedThumbnail && !thumbnailLoading && !thumbnailResults.has(imageUrl)) {
       thumbnailLoading = true;
       fetchRealThumbnail(imageUrl, mediaType).then(thumb => {
         fetchedThumbnail = thumb;

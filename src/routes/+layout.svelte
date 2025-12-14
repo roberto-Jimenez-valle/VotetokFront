@@ -346,43 +346,27 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 80px 16px 24px;
-		padding-top: calc(80px + env(safe-area-inset-top, 0px));
-		padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 		overflow: hidden;
 	}
 
 	.fullscreen-iframe-container :global(.media-embed),
 	.fullscreen-iframe-container :global(.embed-container) {
 		width: 100%;
-		max-width: 560px;
 		height: 100%;
-		max-height: calc(100vh - 120px);
-		max-height: calc(100dvh - 120px);
 		background: transparent !important;
-		border-radius: 20px;
 		overflow: hidden;
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
 	}
 
 	.fullscreen-iframe-container :global(iframe) {
 		background: transparent !important;
-		border-radius: 20px;
 		width: 100% !important;
 		height: 100% !important;
 	}
 
-	/* Responsive para móviles */
+	/* Móvil - espacio para botón volver */
 	@media (max-width: 600px) {
 		.fullscreen-iframe-container {
-			padding: 70px 8px 16px;
-			padding-top: calc(70px + env(safe-area-inset-top, 0px));
-		}
-
-		.fullscreen-iframe-container :global(.media-embed),
-		.fullscreen-iframe-container :global(.embed-container) {
-			max-width: 100%;
-			border-radius: 16px;
+			padding-top: calc(60px + env(safe-area-inset-top, 0px));
 		}
 
 		.fullscreen-back-btn {

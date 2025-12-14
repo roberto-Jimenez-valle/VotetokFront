@@ -225,6 +225,29 @@
       }
     }
 
+    // Para iframes de Bandcamp
+    if (processed.includes("bandcamp.com/EmbeddedPlayer")) {
+      // Bandcamp no tiene autoplay URL param, pero sí permite allow="autoplay"
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay"');
+      }
+    }
+
+    // Para iframes de TED
+    if (processed.includes("embed.ted.com")) {
+      // TED usa autoPlay=true en la URL
+      if (autoplay) {
+        processed = processed.replace(/src="([^"]+)"/, (match, url) => {
+          let cleanUrl = url.replace(/[&?]autoPlay=(true|false)/gi, '');
+          const separator = cleanUrl.includes("?") ? "&" : "?";
+          return `src="${cleanUrl}${separator}autoPlay=true"`;
+        });
+      }
+      if (!processed.includes('allow="')) {
+        processed = processed.replace('<iframe', '<iframe allow="autoplay; fullscreen"');
+      }
+    }
+
     // Agregar loading="lazy" a cualquier iframe restante (ej: otros embeds)
     if (processed.includes("<iframe") && !processed.includes('loading="')) {
       processed = processed.replace(/<iframe/g, '<iframe loading="lazy"');
@@ -452,6 +475,13 @@
       if (url.includes("bandcamp.com")) {
         embedType = "Bandcamp";
         // Bandcamp requiere oEmbed para obtener el ID correcto
+        await fetchMetadata(url);
+        return;
+      }
+
+      // Detectar TED Talks y generar embed
+      if (url.includes("ted.com/talks")) {
+        embedType = "TED";
         await fetchMetadata(url);
         return;
       }
@@ -754,10 +784,25 @@
         </a>
       {/if}
     </div>
-  {:else if embedHTML && embedHTML.trim() !== ""}
-    <!-- Renderizar cualquier HTML de embed (oEmbed, etc.) -->
+  {:else if embedHTML && embedHTML.trim() !== "" && mode === "full"}
+    <!-- Renderizar iframe SOLO en modo full (fullscreen) -->
     <div class="embed-container">
       {@html processEmbedHTML(embedHTML)}
+    </div>
+  {:else if embedHTML && embedHTML.trim() !== "" && mode !== "full" && metadata?.image}
+    <!-- En modo preview/mini: mostrar thumbnail en lugar de iframe -->
+    <div class="image-with-link">
+      <div class="image-container">
+        <img
+          src={metadata.image}
+          alt={metadata.title || embedType}
+          loading="lazy"
+          onerror={(e) => {
+            const img = e.target as HTMLImageElement;
+            img.style.display = 'none';
+          }}
+        />
+      </div>
     </div>
   {:else if (embedType === "generic" || embedType === "opengraph" || embedType === "text" || embedType === "website") && metadata}
     {@const hasRealImage = metadata.image && !metadata.image.includes('placehold.co')}

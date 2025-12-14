@@ -403,6 +403,12 @@ function isTrustedRedirector(hostname: string): boolean {
   return false;
 }
 
+// Helper para generar URL de imagen proxied con trusted=1
+// Esto permite que cualquier dominio funcione sin necesidad de whitelist manual
+function getProxiedImageUrl(imageUrl: string): string {
+  return `/api/media-proxy?url=${encodeURIComponent(imageUrl)}&trusted=1`;
+}
+
 export interface LinkPreviewData {
   url: string;
   originalUrl?: string; // URL original antes de resolución (si hubo redirección)
@@ -553,7 +559,7 @@ export const GET: RequestHandler = async ({ url: requestUrl }) => {
               if (ogData.image) {
                 // Combinar: datos de oEmbed + imagen de Open Graph
                 oembedData.image = ogData.image;
-                oembedData.imageProxied = `/api/media-proxy?url=${encodeURIComponent(ogData.image)}`;
+                oembedData.imageProxied = getProxiedImageUrl(ogData.image);
                 console.log('[Link Preview] ✅ Imagen añadida desde Open Graph:', ogData.image);
                 
                 // También agregar descripción si falta
@@ -686,7 +692,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: title,
             description: description,
             image: image,
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(image)}`,
+            imageProxied: getProxiedImageUrl(image),
             siteName: 'Spotify',
             domain: 'spotify.com',
             type: 'oembed',
@@ -738,7 +744,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: data.title || 'Deezer',
             description: data.artist?.name || data.description || '',
             image: image,
-            imageProxied: image ? `/api/media-proxy?url=${encodeURIComponent(image)}` : undefined,
+            imageProxied: image ? getProxiedImageUrl(image) : undefined,
             siteName: 'Deezer',
             domain: 'deezer.com',
             type: 'oembed',
@@ -788,7 +794,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: data.title || 'TikTok',
             description: data.author_name || '',
             image: data.thumbnail_url,
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(data.thumbnail_url)}`,
+            imageProxied: getProxiedImageUrl(data.thumbnail_url),
             siteName: 'TikTok',
             domain: 'tiktok.com',
             type: 'oembed',
@@ -874,7 +880,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: tweet?.text?.substring(0, 100) || 'X',
             description: tweet?.author?.name || '',
             image: mediaUrl,
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(mediaUrl)}`,
+            imageProxied: getProxiedImageUrl(mediaUrl),
             siteName: 'X',
             domain: 'x.com',
             type: 'oembed',
@@ -944,7 +950,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
               title: ogTitle?.[1] || 'Twitch Clip',
               description: '',
               image: imageUrl,
-              imageProxied: `/api/media-proxy?url=${encodeURIComponent(imageUrl)}`,
+              imageProxied: getProxiedImageUrl(imageUrl),
               siteName: 'Twitch',
               domain: 'twitch.tv',
               type: 'opengraph',
@@ -994,7 +1000,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: ogTitle?.[1] || 'Twitch',
             description: '',
             image: imageUrl,
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(imageUrl)}`,
+            imageProxied: getProxiedImageUrl(imageUrl),
             siteName: 'Twitch',
             domain: 'twitch.tv',
             type: 'opengraph',
@@ -1051,7 +1057,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: ogTitle?.[1] || 'SoundCloud',
             description: ogDescription?.[1] || '',
             image: imageUrl,
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(imageUrl)}`,
+            imageProxied: getProxiedImageUrl(imageUrl),
             siteName: 'SoundCloud',
             domain: 'soundcloud.com',
             type: 'opengraph',
@@ -1100,7 +1106,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: ogTitle?.[1] || 'Apple Music',
             description: '',
             image: ogImage[1],
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            imageProxied: getProxiedImageUrl(ogImage[1]),
             siteName: 'Apple Music',
             domain: 'music.apple.com',
             type: 'opengraph',
@@ -1149,7 +1155,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: ogTitle?.[1] || 'Instagram',
             description: ogDesc?.[1] || '',
             image: ogImage[1],
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            imageProxied: getProxiedImageUrl(ogImage[1]),
             siteName: 'Instagram',
             domain: 'instagram.com',
             type: 'opengraph',
@@ -1202,7 +1208,7 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
             title: ogTitle?.[1] || 'Dailymotion',
             description: '',
             image: ogImage[1],
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            imageProxied: getProxiedImageUrl(ogImage[1]),
             siteName: 'Dailymotion',
             domain: 'dailymotion.com',
             type: 'opengraph',
@@ -1218,9 +1224,9 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
     // Continuar con oEmbed como fallback
   }
   
-  // Bandcamp - usar Open Graph
+  // Bandcamp - extraer embed HTML directamente de la página
   if (urlObj.hostname.includes('bandcamp.com')) {
-    console.log('[Link Preview] 🎸 Detectado Bandcamp, obteniendo Open Graph...');
+    console.log('[Link Preview] 🎸 Detectado Bandcamp, extrayendo embed...');
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -1237,30 +1243,106 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
       
       if (response.ok) {
         const html = await response.text();
+        
+        // Extraer og:image y og:title
         const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
                         html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
         const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
                         html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
         
-        if (ogImage?.[1]) {
-          console.log('[Link Preview] ✅ Bandcamp Open Graph image found:', ogImage[1]);
+        // Extraer album/track ID del HTML - buscar en data-tralbum-param o en el script
+        let albumId: string | null = null;
+        let trackId: string | null = null;
+        
+        // Buscar album ID en data attributes
+        const albumMatch = html.match(/album[_-]?id["\s:=]+(\d+)/i) ||
+                          html.match(/data-tralbum-param[^>]*album["\s:=]+(\d+)/i) ||
+                          html.match(/"album_id"\s*:\s*(\d+)/i);
+        if (albumMatch) {
+          albumId = albumMatch[1];
+        }
+        
+        // Buscar track ID si es una página de track
+        const trackMatch = html.match(/track[_-]?id["\s:=]+(\d+)/i) ||
+                          html.match(/"id"\s*:\s*(\d+).*?"item_type"\s*:\s*"track"/i);
+        if (trackMatch && targetUrl.includes('/track/')) {
+          trackId = trackMatch[1];
+        }
+        
+        // Generar embed HTML si tenemos el ID
+        let embedHtml: string | null = null;
+        if (albumId) {
+          const embedType = trackId ? `track=${trackId}` : `album=${albumId}`;
+          embedHtml = `<iframe style="border: 0; width: 100%; height: 442px;" src="https://bandcamp.com/EmbeddedPlayer/${embedType}/size=large/bgcol=181a1b/linkcol=056cc4/artwork=big/transparent=true/" seamless></iframe>`;
+          console.log('[Link Preview] ✅ Bandcamp embed generado:', embedType);
+        }
+        
+        if (ogImage?.[1] || embedHtml) {
           return {
             url: targetUrl,
             title: ogTitle?.[1] || 'Bandcamp',
             description: '',
-            image: ogImage[1],
-            imageProxied: `/api/media-proxy?url=${encodeURIComponent(ogImage[1])}`,
+            image: ogImage?.[1] || '',
+            imageProxied: ogImage?.[1] ? getProxiedImageUrl(ogImage[1]) : '',
             siteName: 'Bandcamp',
             domain: 'bandcamp.com',
-            type: 'opengraph',
+            type: embedHtml ? 'oembed' : 'opengraph',
             providerName: 'Bandcamp',
+            embedHtml: embedHtml || undefined,
+            html: embedHtml || undefined,
             isSafe: true,
             nsfwScore: 0
           };
         }
       }
     } catch (err) {
-      console.warn('[Link Preview] Bandcamp Open Graph failed:', err);
+      console.warn('[Link Preview] Bandcamp embed extraction failed:', err);
+    }
+    return null;
+  }
+  
+  // TED.com - usar oEmbed oficial
+  if (urlObj.hostname.includes('ted.com') && targetUrl.includes('/talks/')) {
+    console.log('[Link Preview] 🎤 Detectado TED Talk, obteniendo oEmbed...');
+    try {
+      const oembedUrl = `https://www.ted.com/services/v1/oembed.json?url=${encodeURIComponent(targetUrl)}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(oembedUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Link Preview] ✅ TED oEmbed response:', data.title);
+        
+        return {
+          url: targetUrl,
+          title: data.title || 'TED Talk',
+          description: data.description || '',
+          image: data.thumbnail_url || '',
+          imageProxied: data.thumbnail_url ? getProxiedImageUrl(data.thumbnail_url) : '',
+          siteName: 'TED',
+          domain: 'ted.com',
+          type: 'oembed',
+          providerName: 'TED',
+          embedHtml: data.html || undefined,
+          html: data.html || undefined,
+          width: data.width,
+          height: data.height,
+          isSafe: true,
+          nsfwScore: 0
+        };
+      }
+    } catch (err) {
+      console.warn('[Link Preview] TED oEmbed failed:', err);
     }
     return null;
   }
@@ -1321,7 +1403,7 @@ async function fetchOEmbed(provider: any, targetUrl: string): Promise<LinkPrevie
     }
     
     if (thumbnailUrl) {
-      imageProxied = `/api/media-proxy?url=${encodeURIComponent(thumbnailUrl)}`;
+      imageProxied = getProxiedImageUrl(thumbnailUrl);
       console.log('[Link Preview] 🖼️ oEmbed image found:', {
         original: thumbnailUrl,
         proxied: imageProxied
@@ -1692,7 +1774,7 @@ async function fetchOpenGraph(targetUrl: string): Promise<LinkPreviewData> {
     // Crear imagen proxied si existe
     let imageProxied: string | undefined;
     if (metadata.image) {
-      imageProxied = `/api/media-proxy?url=${encodeURIComponent(metadata.image)}`;
+      imageProxied = getProxiedImageUrl(metadata.image);
       console.log('[Link Preview] 🖼️ Open Graph image found:', {
         original: metadata.image,
         proxied: imageProxied
