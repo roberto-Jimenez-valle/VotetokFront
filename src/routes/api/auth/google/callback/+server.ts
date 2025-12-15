@@ -150,13 +150,13 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       role: (user.role as any) || 'user',
     })
 
-    // 5. Guardar tokens en cookies httpOnly
+    // 5. Guardar tokens en cookies httpOnly (sesión larga tipo "recordarme")
     cookies.set('voutop-auth-token', jwtAccessToken, {
       path: '/',
       httpOnly: true,
       secure: url.protocol === 'https:',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 días
+      maxAge: 60 * 60 * 24 * 365, // 1 año
     })
 
     cookies.set('voutop-refresh-token', jwtRefreshToken, {
@@ -164,7 +164,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       httpOnly: true,
       secure: url.protocol === 'https:',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 días
+      maxAge: 60 * 60 * 24 * 365, // 1 año
     })
 
     // 6. Redirigir a la app con datos del usuario en la URL para que el frontend los guarde

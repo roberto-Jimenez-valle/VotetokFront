@@ -20,25 +20,24 @@ export interface JWTPayload {
 }
 
 /**
- * Generar Access Token (24 horas de validez en desarrollo, 15 min en producción)
+ * Generar Access Token (30 días de validez - sesión larga tipo "recordarme")
  */
 export async function generateAccessToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise<string> {
-  const isDev = process.env.NODE_ENV !== 'production'
   return new SignJWT(payload as any)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime(isDev ? '24h' : '15m')
+    .setExpirationTime('30d') // 30 días
     .sign(JWT_SECRET)
 }
 
 /**
- * Generar Refresh Token (7 días de validez)
+ * Generar Refresh Token (1 año de validez - para mantener sesión activa)
  */
 export async function generateRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise<string> {
   return new SignJWT(payload as any)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime('365d') // 1 año
     .sign(JWT_SECRET)
 }
 
