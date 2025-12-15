@@ -9,6 +9,7 @@
   import StatsBottomModal from '$lib/components/StatsBottomModal.svelte';
   import CommentsModal from '$lib/components/CommentsModal.svelte';
   import Portal from '$lib/components/Portal.svelte';
+  import ShareModal from '$lib/components/ShareModal.svelte';
     
   const dispatch = createEventDispatcher();
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
@@ -16,6 +17,7 @@
   let showVoteConfirmation: boolean = false;
   let showVoteRemoval: boolean = false;
   let showCommentsModal: boolean = false;
+  let showShareModal: boolean = false;
   let voteConfirmationColor: string = '#10b981';
   let voteRemovalColor: string = '#ef4444';
   let tooltipTimeout: any = null;
@@ -605,32 +607,10 @@
     }
   }
 
-  // Función de compartir con Open Graph
-  async function sharePoll(event: MouseEvent) {
+  // Función de compartir - abre el modal de compartir
+  function sharePoll(event: MouseEvent) {
     event.stopPropagation();
-    
-    const shareUrl = `${window.location.origin}/poll/${poll.id}`;
-    const shareTitle = poll.question || poll.title;
-    const shareText = poll.description || `Vota en esta encuesta: ${shareTitle}`;
-
-    // Intentar usar Web Share API (disponible en móviles y algunos navegadores desktop)
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: shareTitle,
-          text: shareText,
-          url: shareUrl
-        });
-              } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-                    // Fallback: copiar al portapapeles
-          copyToClipboard(shareUrl);
-        }
-      }
-    } else {
-      // Fallback: copiar al portapapeles
-      copyToClipboard(shareUrl);
-    }
+    showShareModal = true;
   }
 
   function copyToClipboard(text: string) {
@@ -1765,6 +1745,15 @@
 <Portal>
   <CommentsModal 
     bind:isOpen={showCommentsModal}
+    pollId={poll.id}
+    pollTitle={poll.title || poll.question || ''}
+  />
+</Portal>
+
+<!-- MODAL DE COMPARTIR -->
+<Portal>
+  <ShareModal 
+    bind:isOpen={showShareModal}
     pollId={poll.id}
     pollTitle={poll.title || poll.question || ''}
   />

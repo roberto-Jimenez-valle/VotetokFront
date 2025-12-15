@@ -22,27 +22,39 @@
   <title>{poll.title} - VouTop</title>
   <meta name="description" content={poll.description || `Vota en esta encuesta: ${poll.title}`} />
   
-  <!-- Open Graph para Facebook/WhatsApp -->
-  <meta property="og:type" content="article" />
+  <!-- oEmbed Discovery - permite que plataformas extraigan embed automáticamente (como Spotify) -->
+  <link rel="alternate" type="application/json+oembed" href={`${baseUrl}/api/oembed?url=${encodeURIComponent(`${baseUrl}/poll/${poll.id}`)}&format=json`} title={poll.title} />
+  
+  <!-- Open Graph para Facebook/WhatsApp/Discord/Slack -->
+  <meta property="og:type" content="website" />
   <meta property="og:title" content={poll.title} />
-  <meta property="og:description" content={poll.description || `Vota en esta encuesta: ${poll.title}`} />
+  <meta property="og:description" content={poll.description || `¡Vota ahora! ${poll.options?.length || 0} opciones disponibles`} />
   <meta property="og:url" content={`${baseUrl}/poll/${poll.id}`} />
   <meta property="og:image" content={`${baseUrl}/api/polls/${poll.id}/og-image`} />
   <meta property="og:image:secure_url" content={`${baseUrl}/api/polls/${poll.id}/og-image`} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:site_name" content="VouTop" />
+  <meta property="og:locale" content="es_ES" />
   
   <!-- Twitter Cards -->
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@voutop" />
   <meta name="twitter:title" content={poll.title} />
-  <meta name="twitter:description" content={poll.description || `Vota en esta encuesta: ${poll.title}`} />
+  <meta name="twitter:description" content={poll.description || `¡Vota ahora! ${poll.options?.length || 0} opciones disponibles`} />
   <meta name="twitter:image" content={`${baseUrl}/api/polls/${poll.id}/og-image`} />
+  <meta name="twitter:image:alt" content={`Encuesta: ${poll.title}`} />
   
-  <!-- WhatsApp específico -->
-  <meta property="og:image:alt" content={`Preview de la encuesta: ${poll.title}`} />
-  <meta property="og:locale" content="es_ES" />
+  <!-- Discord específico -->
+  <meta name="theme-color" content="#6366f1" />
+  
+  <!-- Embed player para plataformas que lo soporten -->
+  <meta property="og:video" content={`${baseUrl}/embed/poll/${poll.id}`} />
+  <meta property="og:video:secure_url" content={`${baseUrl}/embed/poll/${poll.id}`} />
+  <meta property="og:video:type" content="text/html" />
+  <meta property="og:video:width" content="400" />
+  <meta property="og:video:height" content="352" />
 </svelte:head>
 
 <!-- Pantalla de carga mientras redirige -->
