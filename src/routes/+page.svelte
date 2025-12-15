@@ -61,9 +61,16 @@
 	
 	function handlePollCreated(event: CustomEvent<any>) {
 		const newPoll = event.detail;
-		console.log('Poll created:', newPoll);
-		// Aquí podrías recargar las encuestas o mostrar un mensaje de éxito
-		// TODO: Implementar lógica para mostrar la encuesta recién creada en el globo
+		console.log('[+page] 🎉 Poll created:', newPoll);
+		
+		// Abrir la encuesta recién creada en el globo (como Instagram muestra tu publicación)
+		if (newPoll && globeGLComponent && globeGLComponent.openPollInGlobe) {
+			// Pequeño delay para que el modal termine de cerrarse
+			setTimeout(() => {
+				globeGLComponent.openPollInGlobe(newPoll);
+				console.log('[+page] ✅ Encuesta abierta en el globo');
+			}, 500);
+		}
 	}
 	
 	function handleSheetStateChange(event: CustomEvent<{ state: string }>) {

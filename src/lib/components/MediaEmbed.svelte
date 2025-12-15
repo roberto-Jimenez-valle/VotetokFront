@@ -3,6 +3,25 @@
   export const failedImageUrls = new Set();
   export const processedUrls = new Map();
   export const pendingFetches = new Map();
+  
+  // Dominios de imagen que siempre devuelven 403 - no intentar cargar
+  const BLOCKED_IMAGE_DOMAINS = [
+    'cdninstagram.com',
+    'scontent.cdninstagram.com',
+    'scontent-',
+    'fbcdn.net',
+  ];
+  
+  // Verificar si una URL de imagen está bloqueada
+  export function isBlockedImageUrl(imageUrl: string): boolean {
+    if (!imageUrl) return false;
+    try {
+      const hostname = new URL(imageUrl).hostname.toLowerCase();
+      return BLOCKED_IMAGE_DOMAINS.some(domain => hostname.includes(domain));
+    } catch {
+      return false;
+    }
+  }
 </script>
 
 <script lang="ts">
@@ -694,6 +713,15 @@
   // Detectar cuando cambia la URL (con protección contra loops usando cache global)
   $effect(() => {
     if (!url || processingUrl) return;
+    
+    // Si es una URL de imagen de Instagram CDN, NO intentar cargar (causa loops 403)
+    if (isBlockedImageUrl(url)) {
+      console.log('[MediaEmbed] 🚫 URL de Instagram CDN bloqueada:', url.substring(0, 60));
+      loading = false;
+      error = true; // Marcar como error para mostrar placeholder
+      lastProcessedUrl = url;
+      return;
+    }
     
     // Si ya tenemos resultado cacheado, usarlo directamente
     const cached = processedUrls.get(url);

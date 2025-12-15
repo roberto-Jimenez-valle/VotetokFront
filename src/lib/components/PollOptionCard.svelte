@@ -142,15 +142,28 @@
   // URL del enlace para mostrar en maximized (si es un enlace genérico)
   const linkUrl = $derived(imageUrl && !imageUrl.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp)(\?|$)/i) ? imageUrl : null);
   
+  // Detectar si es una imagen de Instagram/Facebook CDN (siempre devuelve 403)
+  function isBlockedImageDomain(url: string): boolean {
+    if (!url) return false;
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      return hostname.includes('cdninstagram.com') || 
+             hostname.includes('scontent') || 
+             hostname.includes('fbcdn.net');
+    } catch {
+      return false;
+    }
+  }
+  
   // Detectar si es un enlace que debe mostrar el badge de enlace (favicon + dominio)
   // Esto incluye enlaces genéricos Y plataformas conocidas sin thumbnail real
   function shouldShowLinkBadge(url: string): boolean {
     if (!url) return false;
-    // Si es una imagen directa, no mostramos badge
-    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url)) return false;
+    // Si es una imagen directa (no bloqueada), no mostramos badge
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url) && !isBlockedImageDomain(url)) return false;
     // Si es GIF de GIPHY/Tenor, no mostramos badge
     if (isGifType) return false;
-    // Para todo lo demás (incluyendo plataformas sin thumbnail), mostramos badge
+    // Para todo lo demás (incluyendo plataformas sin thumbnail o imágenes bloqueadas), mostramos badge
     return true;
   }
   
@@ -307,8 +320,9 @@
   
   // hasMedia final: true si hay imagen directa, gif, o thumbnail real
   // Si es enlace (genérico o plataforma) sin thumbnail real -> mostrar como texto con enlace
+  // Si es imagen de Instagram CDN bloqueada -> mostrar como texto con enlace
   const hasMedia = $derived(
-    hasRawMedia && (
+    hasRawMedia && !isBlockedImageDomain(imageUrl) && (
       isGifType || 
       imageUrl.match(/\.(jpg|jpeg|png|webp|svg|bmp)(\?|$)/i) ||
       hasRealThumbnail

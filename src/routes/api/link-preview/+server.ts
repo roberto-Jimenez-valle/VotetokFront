@@ -403,10 +403,11 @@ function isTrustedRedirector(hostname: string): boolean {
   return false;
 }
 
-// Dominios que bloquean proxies (devuelven 403) - usar imagen directa sin proxy
-const NO_PROXY_IMAGE_DOMAINS = [
+// Dominios que bloquean proxies (devuelven 403) - usar placeholder
+const BLOCKED_IMAGE_DOMAINS = [
   'cdninstagram.com',
   'scontent.cdninstagram.com', 
+  'scontent-',  // Todos los scontent-*.cdninstagram.com
   'instagram.com',
   'fbcdn.net',
 ];
@@ -420,11 +421,11 @@ function getProxiedImageUrl(imageUrl: string): string {
     const urlObj = new URL(imageUrl);
     const hostname = urlObj.hostname.toLowerCase();
     
-    // Si es un dominio que bloquea proxies, devolver URL directa (sin proxy)
-    // El navegador puede cargarla directamente en muchos casos
-    if (NO_PROXY_IMAGE_DOMAINS.some(domain => hostname.includes(domain))) {
-      console.log('[Link Preview] 📷 Imagen de dominio sin proxy, usando URL directa:', hostname);
-      return imageUrl; // Devolver URL original, sin proxy
+    // Si es un dominio de Instagram/Facebook CDN, usar placeholder
+    // Estos dominios SIEMPRE devuelven 403 y causan loops infinitos
+    if (BLOCKED_IMAGE_DOMAINS.some(domain => hostname.includes(domain))) {
+      console.log('[Link Preview] 🚫 Imagen de Instagram CDN bloqueada, usando placeholder:', hostname);
+      return ''; // Devolver vacío para que use el placeholder de la plataforma
     }
   } catch {
     // Si la URL no es válida, continuar
@@ -1174,12 +1175,15 @@ async function fetchSpecialPlatformData(targetUrl: string): Promise<LinkPreviewD
         
         if (ogImage?.[1]) {
           console.log('[Link Preview] ✅ Instagram Open Graph image found:', ogImage[1]);
+          // Instagram CDN images always return 403, so don't include them
+          const imageProxied = getProxiedImageUrl(ogImage[1]);
+          const hasValidImage = imageProxied !== ''; // Empty means blocked
           return {
             url: targetUrl,
             title: ogTitle?.[1] || 'Instagram',
             description: ogDesc?.[1] || '',
-            image: ogImage[1],
-            imageProxied: getProxiedImageUrl(ogImage[1]),
+            image: hasValidImage ? ogImage[1] : '', // Don't include blocked images
+            imageProxied: imageProxied,
             siteName: 'Instagram',
             domain: 'instagram.com',
             type: 'opengraph',
