@@ -601,6 +601,15 @@
   // Detectar y cargar preview para una opción
   async function detectAndLoadOptionPreview(optionId: string, text: string) {
     const urls = extractUrls(text);
+    
+    // Si ya hay una URL guardada para esta opción, no hacer nada más
+    // (el usuario puede escribir texto adicional sin perder el preview)
+    const savedUrl = optionUrls.get(optionId);
+    if (savedUrl && urls.length === 0) {
+      // Ya hay URL guardada y el texto no tiene URL nueva - mantener preview
+      return;
+    }
+    
     if (urls.length > 0) {
       const url = urls[0];
       
@@ -617,17 +626,20 @@
           linkPreviews.set(url, preview);
           linkPreviews = linkPreviews;
           
-          // 🆕 También actualizar el Map persistente
+          // También actualizar el Map persistente
           optionUrls.set(optionId, url);
           optionUrls = optionUrls;
-                  }
+        }
         
         loadingPreviews.delete(optionId);
         loadingPreviews = loadingPreviews;
       }
     } else {
-      optionPreviews.delete(optionId);
-      optionPreviews = optionPreviews;
+      // Solo borrar preview si NO hay URL guardada en el Map persistente
+      if (!optionUrls.has(optionId)) {
+        optionPreviews.delete(optionId);
+        optionPreviews = optionPreviews;
+      }
     }
   }
   
@@ -1477,35 +1489,23 @@
                   
       // Para cada opción, detectar y GUARDAR URL (sin debounce)
       for (const option of options) {
-                
+        // Si ya hay URL guardada para esta opción, NO hacer nada (preservar)
+        if (optionUrls.has(option.id)) {
+          continue;
+        }
+        
         // Buscar URL en múltiples fuentes
         const urlsInLabel = option.label ? extractUrls(option.label) : [];
         const urlInImageUrl = option.imageUrl ? option.imageUrl : null;
-        // 🆕 También buscar en preview existente (si ya está cargado)
         const existingPreview = optionPreviews.get(option.id);
         const urlInPreview = existingPreview?.url || null;
         
-                
         // Prioridad: preview cacheado > imageUrl > label
-        // Cambio de prioridad para que use el preview si existe
-        let urlToSave = null;
-        if (urlInPreview) {
-          urlToSave = urlInPreview;
-                  } else if (urlInImageUrl) {
-          urlToSave = urlInImageUrl;
-                  } else if (urlsInLabel.length > 0) {
-          urlToSave = urlsInLabel[0];
-                  } else {
-                  }
+        let urlToSave = urlInPreview || urlInImageUrl || (urlsInLabel.length > 0 ? urlsInLabel[0] : null);
         
         // Guardar URL en el Map persistente
         if (urlToSave) {
           optionUrls.set(option.id, urlToSave);
-        } else {
-          // Si no hay URL, eliminar del Map
-          if (optionUrls.has(option.id)) {
-            optionUrls.delete(option.id);
-                      }
         }
       }
       
@@ -2192,6 +2192,10 @@
                     onLabelChange={(newLabel) => {
                       option.label = newLabel;
                       options = [...options];
+                      // Solo detectar URLs si NO hay preview ya guardado
+                      if (!optionUrls.has(option.id)) {
+                        detectAndLoadOptionPreview(option.id, newLabel);
+                      }
                     }}
                     onColorPickerOpen={() => { colorPickerOpenFor = option.id; }}
                     onGiphyPickerOpen={() => { openGiphyPicker(option.id); }}

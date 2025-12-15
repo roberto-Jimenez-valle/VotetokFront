@@ -179,6 +179,22 @@
 
   const displayLabel = $derived(getLabelWithoutUrl(label));
   
+  // Mostrar siempre el label sin URL en el textarea (displayLabel ya lo hace)
+  // No necesitamos estado local - usamos displayLabel directamente
+  
+  // Función para preservar URL al cambiar el label
+  function handleLabelInput(newText: string) {
+    // Buscar URL existente en el label actual
+    const currentUrl = extractUrlFromText(label);
+    if (currentUrl) {
+      // Preservar la URL: texto nuevo + URL existente
+      const newLabel = newText.trim() ? `${newText.trim()} ${currentUrl}` : currentUrl;
+      onLabelChange?.(newLabel);
+    } else {
+      onLabelChange?.(newText);
+    }
+  }
+  
   // Color neutro cuando no ha votado (solo en modo view)
   const NEUTRAL_COLOR = '#3a3d42';
   const displayColor = $derived(mode === 'edit' || userHasVoted ? color : NEUTRAL_COLOR);
@@ -421,13 +437,13 @@
         {#if mode === 'edit'}
           <!-- Contador encima del texto -->
           <div class="char-counter-above">
-            <span>{label.length}/200</span>
+            <span>{displayLabel.length}/200</span>
           </div>
           <textarea
             class="option-label-edit"
             placeholder="Opción {optionIndex + 1}..."
             value={displayLabel}
-            oninput={(e) => onLabelChange?.((e.target as HTMLTextAreaElement).value)}
+            oninput={(e) => handleLabelInput((e.target as HTMLTextAreaElement).value)}
             onclick={(e) => e.stopPropagation()}
             maxlength="200"
           ></textarea>
@@ -582,13 +598,13 @@
         {#if mode === 'edit'}
           <!-- Contador encima del texto -->
           <div class="char-counter-above">
-            <span>{label.length}/200</span>
+            <span>{displayLabel.length}/200</span>
           </div>
           <textarea
             class="option-label-edit"
             placeholder="Opción {optionIndex + 1}..."
             value={displayLabel}
-            oninput={(e) => onLabelChange?.((e.target as HTMLTextAreaElement).value)}
+            oninput={(e) => handleLabelInput((e.target as HTMLTextAreaElement).value)}
             onclick={(e) => e.stopPropagation()}
             maxlength="200"
           ></textarea>
@@ -665,14 +681,14 @@
         {#if mode === 'edit'}
           <!-- Contador de caracteres encima del texto -->
           <div class="char-counter-new">
-            <span>{label.length}/200</span>
+            <span>{displayLabel.length}/200</span>
           </div>
           <textarea
             class="option-label-edit-new option-label-autosize"
             placeholder="Opción {optionIndex + 1}..."
             value={displayLabel}
             oninput={(e) => {
-              onLabelChange?.((e.target as HTMLTextAreaElement).value);
+              handleLabelInput((e.target as HTMLTextAreaElement).value);
               // Auto-resize textarea
               const target = e.target as HTMLTextAreaElement;
               target.style.height = 'auto';
