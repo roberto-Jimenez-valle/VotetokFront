@@ -69,6 +69,14 @@
 			setTimeout(() => {
 				globeGLComponent.openPollInGlobe(newPoll);
 				console.log('[+page] ✅ Encuesta abierta en el globo');
+				
+				// Expandir el BottomSheet para que se vea la encuesta
+				setTimeout(() => {
+					if (globeGLComponent.openBottomSheet) {
+						globeGLComponent.openBottomSheet();
+						console.log('[+page] ✅ BottomSheet expandido');
+					}
+				}, 300);
 			}, 500);
 		}
 	}

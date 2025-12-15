@@ -959,7 +959,8 @@
         location: location || undefined,
         options: validOptions.map((opt, index) => ({
           optionKey: opt.id,
-          optionLabel: opt.label.trim() || optionUrls.get(opt.id) || 'Opción sin texto',
+          // Quitar la URL del label antes de guardar (la URL se guarda en imageUrl)
+          optionLabel: getLabelWithoutUrl(opt.label).trim() || 'Opción sin texto',
           color: opt.color,
           displayOrder: index,
           imageUrl: optionUrls.get(opt.id) || opt.imageUrl || undefined,

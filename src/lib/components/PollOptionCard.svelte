@@ -192,9 +192,6 @@
 
   const displayLabel = $derived(getLabelWithoutUrl(label));
   
-  // Mostrar siempre el label sin URL en el textarea (displayLabel ya lo hace)
-  // No necesitamos estado local - usamos displayLabel directamente
-  
   // Función para preservar URL al cambiar el label
   function handleLabelInput(newText: string) {
     // Buscar URL existente en el label actual
