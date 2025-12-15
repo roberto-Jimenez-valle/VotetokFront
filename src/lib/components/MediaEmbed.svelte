@@ -1,3 +1,10 @@
+<script module>
+  // Cache GLOBAL a nivel de módulo (compartido entre TODAS las instancias del componente)
+  export const failedImageUrls = new Set();
+  export const processedUrls = new Map();
+  export const pendingFetches = new Map();
+</script>
+
 <script lang="ts">
   import { onMount, createEventDispatcher } from "svelte";
 
@@ -28,6 +35,10 @@
   let metadata: any = $state(null);
   let loading: boolean = $state(true);
   let error: boolean = $state(false);
+  
+  // Flag para evitar procesar la misma URL múltiples veces
+  let lastProcessedUrl: string = $state("");
+  let processingUrl: boolean = $state(false);
 
   // Procesar embedHTML para agregar/quitar autoplay y limpiar UI
   function processEmbedHTML(html: string): string {
@@ -295,6 +306,12 @@
    */
   function getProxiedImageUrl(imageUrl: string): string {
     if (!imageUrl) return imageUrl;
+    
+    // Si esta URL ya falló antes, usar placeholder
+    if (failedImageUrls.has(imageUrl)) {
+      console.log('[MediaEmbed] ⚠️ URL en cache de fallidas, usando placeholder:', imageUrl.substring(0, 50));
+      return 'https://placehold.co/400x300/1a1a2e/666?text=Error';
+    }
 
     try {
       const urlObj = new URL(imageUrl);
@@ -308,6 +325,20 @@
         "ui-avatars.com",
         "dummyimage.com",
       ];
+      
+      // Dominios que sabemos que bloquean proxies (Instagram CDN)
+      const blockedProxyDomains = [
+        "cdninstagram.com",
+        "instagram.com",
+        "fbcdn.net",
+      ];
+      
+      // Si es un dominio que bloquea proxies, marcar como fallida y usar placeholder
+      if (blockedProxyDomains.some(domain => hostname.includes(domain))) {
+        console.log('[MediaEmbed] 🚫 Dominio bloquea proxies:', hostname);
+        failedImageUrls.add(imageUrl);
+        return 'https://placehold.co/400x300/1a1a2e/666?text=Instagram';
+      }
 
       const needsProxy = !noProxyDomains.some(
         (domain) => hostname === domain || hostname.endsWith("." + domain),
@@ -660,10 +691,52 @@
     }
   }
 
-  // Detectar cuando cambia la URL
+  // Detectar cuando cambia la URL (con protección contra loops usando cache global)
   $effect(() => {
-    if (url) {
-      detectAndGenerateEmbed(url);
+    if (!url || processingUrl) return;
+    
+    // Si ya tenemos resultado cacheado, usarlo directamente
+    const cached = processedUrls.get(url);
+    if (cached) {
+      console.log('[MediaEmbed] ✅ Usando cache para:', url.substring(0, 50));
+      embedType = cached.embedType;
+      embedHTML = cached.embedHTML;
+      metadata = cached.metadata;
+      loading = false;
+      lastProcessedUrl = url;
+      return;
+    }
+    
+    // Si ya hay una petición en progreso para esta URL, esperar
+    const pending = pendingFetches.get(url);
+    if (pending) {
+      console.log('[MediaEmbed] ⏳ Esperando petición existente:', url.substring(0, 50));
+      pending.then(() => {
+        const result = processedUrls.get(url);
+        if (result) {
+          embedType = result.embedType;
+          embedHTML = result.embedHTML;
+          metadata = result.metadata;
+          loading = false;
+        }
+      });
+      return;
+    }
+    
+    // Nueva URL - procesar
+    if (url !== lastProcessedUrl) {
+      lastProcessedUrl = url;
+      processingUrl = true;
+      
+      const fetchPromise = detectAndGenerateEmbed(url).then(() => {
+        // Guardar en cache global
+        processedUrls.set(url, { embedType, embedHTML, metadata });
+      }).finally(() => {
+        processingUrl = false;
+        pendingFetches.delete(url);
+      });
+      
+      pendingFetches.set(url, fetchPromise);
     }
   });
 

@@ -23,16 +23,21 @@ interface GoogleUserInfo {
 export const GET: RequestHandler = async ({ url, cookies }) => {
   const code = url.searchParams.get('code')
   const error_param = url.searchParams.get('error')
+  const state = url.searchParams.get('state')
+  
+  // Detectar si viene de un popup
+  const isPopup = state === 'popup=1'
+  const baseRedirect = isPopup ? '/auth/callback' : '/'
 
   // Si el usuario canceló o hubo error
   if (error_param) {
     console.error('[Google Callback] Error:', error_param)
-    throw redirect(303, '/?error=google_auth_cancelled')
+    throw redirect(303, `${baseRedirect}?error=google_auth_cancelled`)
   }
 
   if (!code) {
     console.error('[Google Callback] No code received')
-    throw redirect(303, '/?error=google_auth_failed')
+    throw redirect(303, `${baseRedirect}?error=google_auth_failed`)
   }
 
   const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID
@@ -41,7 +46,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     console.error('[Google Callback] Credenciales de Google no configuradas')
-    throw redirect(303, '/?error=google_config_missing')
+    throw redirect(303, `${baseRedirect}?error=google_config_missing`)
   }
 
   try {
@@ -64,7 +69,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text()
       console.error('[Google Callback] Error obteniendo tokens:', errorData)
-      throw redirect(303, '/?error=google_token_failed')
+      throw redirect(303, `${baseRedirect}?error=google_token_failed`)
     }
 
     const tokens = await tokenResponse.json()
@@ -80,7 +85,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
     if (!userInfoResponse.ok) {
       console.error('[Google Callback] Error obteniendo info del usuario')
-      throw redirect(303, '/?error=google_userinfo_failed')
+      throw redirect(303, `${baseRedirect}?error=google_userinfo_failed`)
     }
 
     const googleUser: GoogleUserInfo = await userInfoResponse.json()
@@ -172,7 +177,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       role: user.role || 'user',
     }))
 
-    throw redirect(303, `/?auth=success&user=${userData}&token=${jwtAccessToken}`)
+    throw redirect(303, `${baseRedirect}?auth=success&user=${userData}&token=${jwtAccessToken}`)
 
   } catch (err: any) {
     console.error('[Google Callback] Error:', err)
@@ -181,6 +186,6 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       throw err
     }
     
-    throw redirect(303, '/?error=google_auth_error')
+    throw redirect(303, `${baseRedirect}?error=google_auth_error`)
   }
 }

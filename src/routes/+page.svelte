@@ -35,7 +35,16 @@
 	
 	// Manejar callback de autenticación OAuth
 	onMount(() => {
-		handleAuthCallback();
+		const result = handleAuthCallback();
+		
+		// Si había una acción pendiente de crear encuesta, abrir el modal
+		if (result?.pendingAction?.type === 'create_poll') {
+			console.log('[+page] 🔄 Abriendo modal de crear encuesta después del login');
+			// Dar tiempo para que el componente se monte completamente
+			setTimeout(() => {
+				isCreatePollModalOpen = true;
+			}, 150);
+		}
 	});
 	
 	// Referencia al componente GlobeGL

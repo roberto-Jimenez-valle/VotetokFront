@@ -3,7 +3,8 @@
   import { X, Plus, Trash2, Image as ImageIcon, Hash, Palette, Code, Eye, Loader2, Sparkles, Search, Maximize2, LayoutGrid, HelpCircle } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   // Store unificado de autenticación
-  import { currentUser, isAuthenticated } from '$lib/stores/auth';
+  import { currentUser, isAuthenticated, savePendingAction, checkSession } from '$lib/stores/auth';
+  import { pendingPollData } from '$lib/utils/handleAuthCallback';
   import { apiPost } from '$lib/api/client';
   import AuthModal from '$lib/AuthModal.svelte';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
@@ -884,12 +885,40 @@
   
   // Submit del formulario
   async function handleSubmit() {
-                        
+    // 🔍 VERIFICACIÓN PROACTIVA: Verificar sesión antes de cualquier acción
+    const session = checkSession();
+    
     // Verificar si el usuario está autenticado (store unificado)
     const currentUserData = $currentUser;
-    if (!currentUserData) {
-            showAuthModal = true;
-            return;
+    if (!currentUserData || !session.valid) {
+      console.log('[CreatePollModal] ⚠️ Usuario no autenticado o sesión expirada');
+      
+      // 💾 GUARDAR ESTADO antes del login OAuth
+      // Convertir Map a objeto para serialización JSON
+      const optionUrlsObj: Record<string, string> = {};
+      optionUrls.forEach((value, key) => {
+        optionUrlsObj[key] = value;
+      });
+      
+      savePendingAction({
+        type: 'create_poll',
+        data: {
+          title,
+          description,
+          category,
+          pollType,
+          duration,
+          hashtags,
+          location,
+          options: [...options], // Clonar array
+          optionUrls: optionUrlsObj,
+          imageUrl,
+        }
+      });
+      
+      console.log('[CreatePollModal] 💾 Estado de encuesta guardado para restaurar después del login');
+      showAuthModal = true;
+      return;
     }
     
         
@@ -1297,6 +1326,31 @@
     });
     
     isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // 🔄 RESTAURAR DATOS PENDIENTES después del login OAuth
+    if (pendingPollData.current) {
+      console.log('[CreatePollModal] 🔄 Restaurando datos de encuesta pendiente');
+      const data = pendingPollData.current;
+      
+      // Restaurar todos los campos
+      if (data.title) title = data.title;
+      if (data.description) description = data.description;
+      if (data.category) category = data.category;
+      if (data.pollType) pollType = data.pollType;
+      if (data.duration) duration = data.duration;
+      if (data.hashtags) hashtags = data.hashtags;
+      if (data.location) location = data.location;
+      if (data.options && data.options.length > 0) {
+        options = data.options;
+      }
+      if (data.optionUrls) {
+        optionUrls = new Map(Object.entries(data.optionUrls));
+      }
+      
+      // Limpiar datos pendientes
+      pendingPollData.current = null;
+      console.log('[CreatePollModal] ✅ Datos restaurados exitosamente');
+    }
     
     // Listener para botón atrás
     const handlePopState = () => {

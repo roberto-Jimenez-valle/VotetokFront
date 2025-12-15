@@ -3,11 +3,15 @@
  * Procesa los parámetros de la URL después del login con Google
  */
 
-import { setAuth } from '$lib/stores/auth'
+import { setAuth, getPendingAction, clearPendingAction, type PendingAction } from '$lib/stores/auth'
 import { browser } from '$app/environment'
+import { createPollModalOpen } from '$lib/stores/globalState'
 
-export function handleAuthCallback() {
-  if (!browser) return
+// Store para datos de encuesta pendiente (se usa desde CreatePollModal)
+export const pendingPollData = { current: null as any }
+
+export function handleAuthCallback(): { pendingAction: PendingAction | null } {
+  if (!browser) return { pendingAction: null }
 
   const params = new URLSearchParams(window.location.search)
   const authStatus = params.get('auth')
@@ -49,7 +53,30 @@ export function handleAuthCallback() {
       // Limpiar parámetros de la URL
       window.history.replaceState({}, '', window.location.pathname)
       
-      // Opcional: Mostrar mensaje de bienvenida
+      // Verificar si hay acción pendiente
+      const pendingAction = getPendingAction()
+      
+      if (pendingAction) {
+        console.log('[Auth Callback] 🔄 Restaurando acción pendiente:', pendingAction.type)
+        
+        // Guardar datos para que el componente los use
+        pendingPollData.current = pendingAction.data
+        
+        // Limpiar la acción pendiente
+        clearPendingAction()
+        
+        // Si era crear encuesta, abrir el modal
+        if (pendingAction.type === 'create_poll') {
+          console.log('[Auth Callback] 📝 Abriendo modal de crear encuesta con datos guardados')
+          // Dar tiempo para que se monte el componente
+          setTimeout(() => {
+            createPollModalOpen.set(true)
+          }, 100)
+        }
+        
+        return { pendingAction }
+      }
+      
       console.log(`¡Bienvenido, ${user.displayName || user.username}!`)
       
     } catch (err) {
@@ -57,4 +84,6 @@ export function handleAuthCallback() {
       alert('Error al procesar la autenticación')
     }
   }
+  
+  return { pendingAction: null }
 }

@@ -264,6 +264,133 @@ export function isUserLoggedIn(): boolean {
   return get(isAuthenticated)
 }
 
+// ========================================
+// PENDING ACTION SYSTEM
+// Para guardar estado antes del login OAuth
+// ========================================
+
+const PENDING_ACTION_KEY = 'voutop-pending-action'
+const PENDING_ACTION_TTL = 10 * 60 * 1000 // 10 minutos
+
+export interface PendingAction {
+  type: 'create_poll' | 'vote' | 'comment' | 'other'
+  data: any
+  timestamp: number
+  returnUrl?: string
+}
+
+/**
+ * Guardar acción pendiente antes del login OAuth
+ * Se restaurará automáticamente después del callback
+ */
+export function savePendingAction(action: Omit<PendingAction, 'timestamp'>) {
+  if (!browser) return
+  
+  const pendingAction: PendingAction = {
+    ...action,
+    timestamp: Date.now(),
+    returnUrl: window.location.href
+  }
+  
+  localStorage.setItem(PENDING_ACTION_KEY, JSON.stringify(pendingAction))
+  console.log('[Auth] 💾 Acción pendiente guardada:', action.type)
+}
+
+/**
+ * Obtener y limpiar acción pendiente después del login
+ * Retorna null si no hay acción o ha expirado
+ */
+export function getPendingAction(): PendingAction | null {
+  if (!browser) return null
+  
+  const stored = localStorage.getItem(PENDING_ACTION_KEY)
+  if (!stored) return null
+  
+  try {
+    const action: PendingAction = JSON.parse(stored)
+    
+    // Verificar si ha expirado
+    if (Date.now() - action.timestamp > PENDING_ACTION_TTL) {
+      console.log('[Auth] ⏰ Acción pendiente expirada, descartando')
+      clearPendingAction()
+      return null
+    }
+    
+    return action
+  } catch {
+    clearPendingAction()
+    return null
+  }
+}
+
+/**
+ * Limpiar acción pendiente
+ */
+export function clearPendingAction() {
+  if (!browser) return
+  localStorage.removeItem(PENDING_ACTION_KEY)
+}
+
+/**
+ * Verificar si la sesión está activa (token no expirado)
+ * Útil para verificación proactiva antes de acciones importantes
+ */
+export function checkSession(): { valid: boolean; expiresIn?: number; message?: string } {
+  if (!browser) return { valid: false, message: 'No browser environment' }
+  
+  const token = localStorage.getItem('voutop-auth-token')
+  if (!token) {
+    return { valid: false, message: 'No hay sesión activa' }
+  }
+  
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return { valid: false, message: 'Token inválido' }
+    
+    const decoded = JSON.parse(atob(payload))
+    if (!decoded.exp) return { valid: true } // Sin expiración
+    
+    const now = Math.floor(Date.now() / 1000)
+    const expiresIn = decoded.exp - now
+    
+    if (expiresIn <= 0) {
+      return { valid: false, message: 'Tu sesión ha expirado' }
+    }
+    
+    // Advertir si expira pronto (menos de 5 minutos)
+    if (expiresIn < 300) {
+      return { 
+        valid: true, 
+        expiresIn, 
+        message: `Tu sesión expira en ${Math.ceil(expiresIn / 60)} minutos` 
+      }
+    }
+    
+    return { valid: true, expiresIn }
+  } catch {
+    return { valid: false, message: 'Error verificando sesión' }
+  }
+}
+
+/**
+ * Verificar sesión y mostrar modal de login si es necesario
+ * Retorna true si la sesión es válida, false si necesita login
+ */
+export function requireSession(): boolean {
+  const session = checkSession()
+  
+  if (!session.valid) {
+    console.log('[Auth] ⚠️ Sesión inválida:', session.message)
+    return false
+  }
+  
+  if (session.message) {
+    console.log('[Auth] ⏰', session.message)
+  }
+  
+  return true
+}
+
 // Inicializar al cargar el módulo
 if (browser) {
   initAuth()

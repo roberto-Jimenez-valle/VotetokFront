@@ -10,10 +10,14 @@ import { env } from '$env/dynamic/private'
 export const GET: RequestHandler = async ({ url }) => {
   const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID
   const GOOGLE_REDIRECT_URI = env.GOOGLE_REDIRECT_URI || `${url.origin}/api/auth/google/callback`
+  
+  // Detectar si viene de un popup
+  const isPopup = url.searchParams.get('popup') === '1'
 
   if (!GOOGLE_CLIENT_ID) {
     console.error('[Google Auth] GOOGLE_CLIENT_ID no está configurado')
-    throw redirect(303, '/?error=google_config_missing')
+    const errorRedirect = isPopup ? '/auth/callback?error=google_config_missing' : '/?error=google_config_missing'
+    throw redirect(303, errorRedirect)
   }
 
   // Construir URL de autorización de Google
@@ -25,8 +29,13 @@ export const GET: RequestHandler = async ({ url }) => {
   googleAuthUrl.searchParams.set('scope', 'openid email profile')
   googleAuthUrl.searchParams.set('access_type', 'offline')
   googleAuthUrl.searchParams.set('prompt', 'consent')
+  
+  // Pasar el estado popup a través del parámetro state de OAuth
+  if (isPopup) {
+    googleAuthUrl.searchParams.set('state', 'popup=1')
+  }
 
-  console.log('[Google Auth] Redirigiendo a Google OAuth:', googleAuthUrl.toString())
+  console.log('[Google Auth] Redirigiendo a Google OAuth:', googleAuthUrl.toString(), isPopup ? '(popup)' : '')
 
   // Redirigir al usuario a Google
   throw redirect(303, googleAuthUrl.toString())

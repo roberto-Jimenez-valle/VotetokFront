@@ -22,6 +22,13 @@ const cache = new Map<string, {
   timestamp: number;
 }>();
 
+// Cache de URLs que han fallado (para evitar reintentos infinitos)
+const failedUrlsCache = new Map<string, {
+  timestamp: number;
+  errorCode: number;
+}>();
+const FAILED_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
   const targetUrl = url.searchParams.get('url');
   
@@ -69,10 +76,21 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
     });
   }
   
-  // 5. Verificar caché
+  // 5. Verificar si la URL falló recientemente
   const cacheKey = targetUrl;
-  const cached = cache.get(cacheKey);
   const now = Date.now();
+  
+  const failedEntry = failedUrlsCache.get(cacheKey);
+  if (failedEntry && (now - failedEntry.timestamp) < FAILED_CACHE_TTL) {
+    console.log('[Media Proxy] 🚫 URL en cache de fallidas, rechazando:', targetUrl.substring(0, 80));
+    throw error(failedEntry.errorCode, {
+      message: 'URL previamente fallida (cache)',
+      code: 'CACHED_FAILURE'
+    });
+  }
+  
+  // 6. Verificar caché de éxitos
+  const cached = cache.get(cacheKey);
   
   if (cached && (now - cached.timestamp) < MEDIA_PROXY_CONFIG.cacheMaxAge * 1000) {
     console.log('[Media Proxy] Cache hit:', targetUrl);
@@ -110,6 +128,13 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
     
     // 8. Verificar que la respuesta es exitosa
     if (!response.ok) {
+      // Guardar en cache de fallidas para evitar reintentos
+      failedUrlsCache.set(cacheKey, {
+        timestamp: now,
+        errorCode: response.status
+      });
+      console.log('[Media Proxy] 💾 Guardando URL fallida en cache:', response.status);
+      
       throw error(response.status, {
         message: `Error al obtener el recurso: ${response.statusText}`,
         code: 'UPSTREAM_ERROR'

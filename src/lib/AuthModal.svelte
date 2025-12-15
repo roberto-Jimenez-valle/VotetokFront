@@ -1,17 +1,19 @@
 <script lang="ts">
   import { fade, fly } from "svelte/transition";
-  import { X } from "lucide-svelte";
-  import { createEventDispatcher } from "svelte";
+  import { X, Loader2 } from "lucide-svelte";
+  import { createEventDispatcher, onMount, onDestroy } from "svelte";
+  import { setAuth } from "$lib/stores/auth";
 
-    interface AuthEventDetail {
+  interface AuthEventDetail {
     provider: string;
+    user?: any;
+    token?: string;
   }
 
   interface AuthEvents {
     login: AuthEventDetail;
   }
 
-  // Expose events to parent components (Svelte inspects $$Events)
   interface $$Events {
     login: CustomEvent<AuthEventDetail>;
   }
@@ -23,29 +25,93 @@
   }
 
   let { isOpen = $bindable(false) }: Props = $props();
+  
+  let isLoading = $state(false);
+  let authPopup: Window | null = null;
 
-  // DEBUG: Monitorear cuando el modal se abre/cierra
-  $effect(() => {
-    console.log("[AuthModal] isOpen cambió a:", isOpen);
+  // Escuchar mensajes del popup
+  function handleMessage(event: MessageEvent) {
+    // Verificar origen por seguridad
+    if (event.origin !== window.location.origin) return;
+    
+    const { type, token, user, error, message } = event.data;
+    
+    if (type === 'OAUTH_SUCCESS') {
+      console.log('[AuthModal] ✅ Login exitoso via popup:', user?.username);
+      
+      // Guardar auth en localStorage y store
+      setAuth(token, user);
+      
+      isLoading = false;
+      isOpen = false;
+      
+      // Notificar al componente padre
+      dispatch('login', { provider: 'google', user, token });
+    }
+    
+    if (type === 'OAUTH_ERROR') {
+      console.error('[AuthModal] ❌ Error en popup:', error, message);
+      isLoading = false;
+      alert(message || 'Error en la autenticación');
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('message', handleMessage);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('message', handleMessage);
+    if (authPopup && !authPopup.closed) {
+      authPopup.close();
+    }
   });
 
   function close() {
     console.log("[AuthModal] Cerrando modal");
     isOpen = false;
+    isLoading = false;
+    if (authPopup && !authPopup.closed) {
+      authPopup.close();
+    }
   }
 
   function handleGoogleLogin() {
-    console.log("[AuthModal] 🔵 CLICK DETECTADO - Iniciando login con Google");
-    console.log("[AuthModal] 🌐 window.location actual:", window.location.href);
-    console.log("[AuthModal] 🎯 Redirigiendo a:", "/api/auth/google");
-
-    try {
-      // Redirigir al endpoint de Google OAuth
-      window.location.href = "/api/auth/google";
-      console.log("[AuthModal] ✅ Redirección ejecutada");
-    } catch (error) {
-      console.error("[AuthModal] ❌ Error al redirigir:", error);
+    console.log("[AuthModal] 🔵 Abriendo popup de Google OAuth");
+    
+    isLoading = true;
+    
+    // Calcular posición centrada del popup
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    // Abrir popup con el endpoint de auth (que redirigirá al callback)
+    const popupUrl = '/api/auth/google?popup=1';
+    authPopup = window.open(
+      popupUrl,
+      'GoogleAuth',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=yes`
+    );
+    
+    if (!authPopup) {
+      console.error('[AuthModal] ❌ No se pudo abrir el popup (¿bloqueador de popups?)');
+      isLoading = false;
+      alert('No se pudo abrir la ventana de autenticación. Desactiva el bloqueador de popups e intenta de nuevo.');
+      return;
     }
+    
+    // Monitorear si el popup se cierra sin completar
+    const checkClosed = setInterval(() => {
+      if (authPopup?.closed) {
+        clearInterval(checkClosed);
+        if (isLoading) {
+          console.log('[AuthModal] Popup cerrado sin completar');
+          isLoading = false;
+        }
+      }
+    }, 500);
   }
 </script>
 

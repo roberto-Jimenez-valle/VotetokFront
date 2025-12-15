@@ -28,6 +28,13 @@ export interface LinkPreviewData {
 // Regex para detectar URLs
 const URL_REGEX = /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)/gi;
 
+// Cache global de peticiones en progreso (para evitar duplicados entre instancias)
+const pendingRequests = new Map<string, Promise<LinkPreviewData | null>>();
+// Cache de URLs que han fallado (para evitar reintentos)
+const failedUrls = new Set<string>();
+const FAILED_URL_TTL = 5 * 60 * 1000; // 5 minutos
+const failedUrlTimestamps = new Map<string, number>();
+
 // Regex mejorado para URLs en markdown
 const MARKDOWN_URL_REGEX = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g;
 
@@ -71,8 +78,40 @@ export function hasUrls(text: string): boolean {
 
 /**
  * Obtiene el preview de un enlace (con timeout de 15 segundos)
+ * Usa cache global para evitar peticiones duplicadas entre instancias
  */
 export async function fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
+  // Verificar si esta URL ya falló recientemente
+  const failedTimestamp = failedUrlTimestamps.get(url);
+  if (failedTimestamp && (Date.now() - failedTimestamp) < FAILED_URL_TTL) {
+    console.log('[LinkPreview] 🚫 URL en cache de fallidas:', url.substring(0, 50));
+    return null;
+  }
+  
+  // Si ya hay una petición en progreso para esta URL, esperar su resultado
+  const pending = pendingRequests.get(url);
+  if (pending) {
+    console.log('[LinkPreview] ⏳ Esperando petición existente para:', url.substring(0, 50));
+    return pending;
+  }
+  
+  // Crear nueva petición y guardarla en el cache
+  const requestPromise = _doFetchLinkPreview(url);
+  pendingRequests.set(url, requestPromise);
+  
+  try {
+    const result = await requestPromise;
+    return result;
+  } finally {
+    // Limpiar del cache de pendientes
+    pendingRequests.delete(url);
+  }
+}
+
+/**
+ * Implementación real del fetch (interna)
+ */
+async function _doFetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
   try {
     console.log('[LinkPreview] 🔍 Fetching preview for:', url);
     

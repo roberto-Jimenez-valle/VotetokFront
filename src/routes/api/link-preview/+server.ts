@@ -403,9 +403,33 @@ function isTrustedRedirector(hostname: string): boolean {
   return false;
 }
 
+// Dominios que bloquean proxies (devuelven 403)
+const BLOCKED_IMAGE_DOMAINS = [
+  'cdninstagram.com',
+  'scontent.cdninstagram.com', 
+  'instagram.com',
+  'fbcdn.net',
+  'xx.fbcdn.net',
+];
+
 // Helper para generar URL de imagen proxied con trusted=1
 // Esto permite que cualquier dominio funcione sin necesidad de whitelist manual
 function getProxiedImageUrl(imageUrl: string): string {
+  if (!imageUrl) return imageUrl;
+  
+  try {
+    const urlObj = new URL(imageUrl);
+    const hostname = urlObj.hostname.toLowerCase();
+    
+    // Si es un dominio que bloquea proxies, devolver placeholder
+    if (BLOCKED_IMAGE_DOMAINS.some(domain => hostname.includes(domain))) {
+      console.log('[Link Preview] 🚫 Imagen de dominio bloqueado, usando placeholder:', hostname);
+      return 'https://placehold.co/400x300/1a1a2e/666?text=Instagram';
+    }
+  } catch {
+    // Si la URL no es válida, continuar
+  }
+  
   return `/api/media-proxy?url=${encodeURIComponent(imageUrl)}&trusted=1`;
 }
 
