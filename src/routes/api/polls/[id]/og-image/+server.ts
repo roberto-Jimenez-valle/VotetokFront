@@ -127,6 +127,43 @@ function generateSVG(data: OGImageData): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
   };
 
+  // Dividir texto en líneas para las cards (máx 4 líneas, ~18 chars por línea)
+  const wrapText = (text: string, maxCharsPerLine: number, maxLines: number): string[] => {
+    if (!text) return [''];
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (testLine.length <= maxCharsPerLine) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+          if (lines.length >= maxLines) break;
+        }
+        currentLine = word.length > maxCharsPerLine ? word.substring(0, maxCharsPerLine) : word;
+      }
+    }
+    
+    if (currentLine && lines.length < maxLines) {
+      lines.push(currentLine);
+    }
+    
+    // Si hay más texto, añadir ellipsis a la última línea
+    if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
+      const lastLine = lines[maxLines - 1];
+      if (lastLine.length > maxCharsPerLine - 3) {
+        lines[maxLines - 1] = lastLine.substring(0, maxCharsPerLine - 3) + '...';
+      } else {
+        lines[maxLines - 1] = lastLine + '...';
+      }
+    }
+    
+    return lines.length > 0 ? lines : [''];
+  };
+
   const displayTitle = escapeXml(truncateText(title, 70));
   const displayAuthor = escapeXml(truncateText(author, 18));
   const cardColors = ['#22c55e', '#f59e0b', '#8b5cf6', '#ec4899'];
@@ -138,8 +175,17 @@ function generateSVG(data: OGImageData): string {
     const x = 400 + offset;
     const y = 140 + offset;
     const color = opt.color || cardColors[realIdx % cardColors.length];
-    const optText = escapeXml(truncateText(opt.text, 20));
     const isTop = realIdx === 0;
+    
+    // Dividir texto en hasta 4 líneas de ~18 caracteres
+    const textLines = wrapText(opt.text, 18, 4);
+    const lineHeight = 32;
+    const totalTextHeight = textLines.length * lineHeight;
+    const startY = y + 130 - (totalTextHeight / 2) + lineHeight; // Centrar verticalmente
+    
+    const textTspans = textLines.map((line, lineIdx) => 
+      `<tspan x="${x + 200}" dy="${lineIdx === 0 ? 0 : lineHeight}">${escapeXml(line)}</tspan>`
+    ).join('');
     
     return `
       <g opacity="${isTop ? 1 : 0.85}">
@@ -150,13 +196,15 @@ function generateSVG(data: OGImageData): string {
         <rect x="${x}" y="${y}" width="400" height="340" rx="20" fill="${color}"/>
         
         <!-- Comillas arriba -->
-        <text x="${x + 40}" y="${y + 60}" font-family="Georgia, serif" font-size="60" fill="white" opacity="0.3">"</text>
+        <text x="${x + 40}" y="${y + 50}" font-family="Georgia, serif" font-size="50" fill="white" opacity="0.25">"</text>
         
         <!-- Comillas abajo -->
-        <text x="${x + 320}" y="${y + 280}" font-family="Georgia, serif" font-size="60" fill="white" opacity="0.3">"</text>
+        <text x="${x + 320}" y="${y + 260}" font-family="Georgia, serif" font-size="50" fill="white" opacity="0.25">"</text>
         
-        <!-- Texto centrado -->
-        <text x="${x + 200}" y="${y + 180}" font-family="Segoe UI, Arial" font-size="28" font-weight="bold" fill="white" text-anchor="middle">${optText}</text>
+        <!-- Texto multilínea centrado -->
+        <text x="${x + 200}" y="${startY}" font-family="Segoe UI, Arial" font-size="24" font-weight="bold" fill="white" text-anchor="middle">
+          ${textTspans}
+        </text>
         
         <!-- Línea separadora -->
         <line x1="${x + 40}" y1="${y + 280}" x2="${x + 360}" y2="${y + 280}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>

@@ -8,6 +8,27 @@
   let selectedOption: string | null = null;
   let hasVoted = false;
   let isVoting = false;
+  let currentCardIndex = 0;
+  let scrollContainer: HTMLElement;
+  
+  // Calcular el índice de tarjeta visible durante el scroll
+  function handleScroll() {
+    if (!scrollContainer) return;
+    const cardWidth = scrollContainer.offsetWidth * 0.75; // 75% del ancho
+    const scrollLeft = scrollContainer.scrollLeft;
+    currentCardIndex = Math.round(scrollLeft / cardWidth);
+  }
+  
+  // Navegar a una tarjeta específica
+  function goToCard(index: number) {
+    if (!scrollContainer) return;
+    const cardWidth = scrollContainer.offsetWidth * 0.75;
+    scrollContainer.scrollTo({
+      left: index * cardWidth,
+      behavior: 'smooth'
+    });
+    currentCardIndex = index;
+  }
   
   // Formatear números
   function formatNumber(num: number): string {
@@ -67,11 +88,8 @@
 </svelte:head>
 
 <div class="embed-container {theme}" class:compact>
-  <!-- Header con logo -->
+  <!-- Header: Usuario izquierda, Logo derecha -->
   <header class="embed-header">
-    <button class="logo-link" onclick={openFullPoll} title="Abrir en VouTop">
-      <img src="{baseUrl}/logo_min.png" alt="VouTop" class="logo-img" />
-    </button>
     <div class="poll-info">
       {#if poll.user?.avatarUrl}
         <img src={poll.user.avatarUrl} alt="" class="avatar" />
@@ -86,28 +104,70 @@
         <span class="votes-count">{formatNumber(poll.totalVotes)} votos</span>
       </div>
     </div>
+    <button class="logo-link" onclick={openFullPoll} title="Abrir en VouTop">
+      <img src="{baseUrl}/logo_min.png" alt="VouTop" class="logo-img" />
+    </button>
   </header>
   
   <!-- Título -->
   <h1 class="poll-title">{poll.title}</h1>
   
-  <!-- Opciones -->
-  <div class="options-list">
-    {#each poll.options as option}
-      <button 
-        class="option-btn"
-        class:selected={selectedOption === option.key}
-        class:voted={hasVoted}
-        disabled={isVoting}
-        onclick={() => handleVote(option.key)}
-      >
-        <div class="option-bar" style="width: {hasVoted ? option.percentage : 0}%; background-color: {option.color};"></div>
-        <span class="option-text">{option.text}</span>
-        {#if hasVoted}
-          <span class="option-percent">{option.percentage}%</span>
-        {/if}
-      </button>
-    {/each}
+  <!-- Opciones como tarjetas estilo OG Image con scroll horizontal -->
+  <div class="options-scroll-wrapper">
+    <div 
+      class="options-scroll" 
+      bind:this={scrollContainer}
+      onscroll={handleScroll}
+    >
+      {#each poll.options as option, index}
+        <button 
+          class="option-card"
+          class:selected={selectedOption === option.key}
+          class:voted={hasVoted}
+          disabled={isVoting}
+          style="--card-color: {option.color}; background: {option.color};"
+          onclick={() => handleVote(option.key)}
+        >
+          <!-- Comilla superior -->
+          <span class="quote-top">"</span>
+          
+          <!-- Texto centrado -->
+          <div class="card-text-wrapper">
+            <span class="card-text">{option.text}</span>
+          </div>
+          
+          <!-- Comilla inferior -->
+          <span class="quote-bottom">"</span>
+          
+          <!-- Separador y porcentaje -->
+          <div class="card-footer">
+            <div class="separator-line"></div>
+            <div class="vote-stats">
+              <span class="percentage">{hasVoted ? option.percentage : 0}%</span>
+              <span class="votes-label">DE LOS VOTOS</span>
+            </div>
+          </div>
+          
+          {#if selectedOption === option.key}
+            <div class="selected-check">✓</div>
+          {/if}
+        </button>
+      {/each}
+    </div>
+    
+    <!-- Indicadores de paginación -->
+    {#if poll.options.length > 1}
+      <div class="scroll-indicators">
+        {#each poll.options as _, index}
+          <button 
+            class="indicator-dot"
+            class:active={currentCardIndex === index}
+            onclick={() => goToCard(index)}
+            aria-label="Ir a opción {index + 1}"
+          ></button>
+        {/each}
+      </div>
+    {/if}
   </div>
   
   <!-- Footer -->
@@ -135,10 +195,11 @@
   .embed-container {
     width: 100%;
     min-height: 100vh;
-    padding: 16px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
+    overflow: hidden;
   }
   
   /* Tema oscuro (default) */
@@ -163,51 +224,55 @@
     font-size: 14px;
   }
   
-  .embed-container.compact .option-btn {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-  
   /* Header */
   .embed-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
   }
   
   .poll-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
   }
   
   .avatar {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     object-fit: cover;
+    flex-shrink: 0;
   }
   
   .user-info {
     display: flex;
     flex-direction: column;
+    min-width: 0;
   }
   
   .username {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     display: flex;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .verified {
     color: #3b82f6;
-    font-size: 12px;
+    font-size: 11px;
+    flex-shrink: 0;
   }
   
   .votes-count {
-    font-size: 12px;
+    font-size: 11px;
     opacity: 0.7;
   }
   
@@ -215,11 +280,12 @@
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 8px;
+    padding: 2px;
+    border-radius: 6px;
     transition: transform 0.2s, opacity 0.2s;
     display: flex;
     align-items: center;
+    flex-shrink: 0;
   }
   
   .logo-link:hover {
@@ -228,97 +294,235 @@
   }
   
   .logo-img {
-    height: 32px;
+    height: 24px;
     width: auto;
     object-fit: contain;
   }
   
   .embed-container.compact .logo-img {
-    height: 24px;
+    height: 20px;
   }
   
   /* Título */
   .poll-title {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 700;
     line-height: 1.3;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   
-  /* Opciones */
-  .options-list {
+  /* Opciones con scroll horizontal - Estilo OG Image */
+  .options-scroll-wrapper {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    flex: 1;
+    gap: 12px;
+    min-height: 0;
   }
   
-  .option-btn {
+  .options-scroll {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 8px;
+    scrollbar-width: none;
+  }
+  
+  .options-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .option-card {
+    flex: 0 0 75%;
+    min-width: 75%;
+    scroll-snap-align: center;
     position: relative;
-    width: 100%;
-    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
     border: none;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 500;
-    text-align: left;
+    border-radius: 16px;
+    padding: 14px 18px;
     cursor: pointer;
     overflow: hidden;
-    transition: transform 0.15s, box-shadow 0.15s;
-  }
-  
-  .dark .option-btn {
-    background: rgba(255, 255, 255, 0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+    min-height: 150px;
     color: white;
+    text-align: center;
+    box-shadow: 6px 6px 16px rgba(0,0,0,0.4);
   }
   
-  .light .option-btn {
-    background: rgba(0, 0, 0, 0.05);
-    color: #1a1a2e;
+  .option-card:not(:disabled):hover {
+    transform: scale(1.02) translateY(-4px);
   }
   
-  .option-btn:not(:disabled):hover {
-    transform: scale(1.01);
-  }
-  
-  .dark .option-btn:not(:disabled):hover {
-    background: rgba(255, 255, 255, 0.12);
-  }
-  
-  .light .option-btn:not(:disabled):hover {
-    background: rgba(0, 0, 0, 0.08);
-  }
-  
-  .option-btn:disabled {
+  .option-card:disabled {
     cursor: default;
   }
   
-  .option-btn.selected {
-    box-shadow: 0 0 0 2px #6366f1;
+  .option-card.selected {
+    box-shadow: 0 0 0 4px white, 8px 8px 24px rgba(0,0,0,0.5);
   }
   
-  .option-bar {
+  /* Comillas decorativas */
+  .quote-top {
     position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    border-radius: 12px;
-    opacity: 0.3;
-    transition: width 0.5s ease-out;
+    top: 10px;
+    left: 14px;
+    font-family: Georgia, serif;
+    font-size: 32px;
+    opacity: 0.25;
+    line-height: 1;
+    color: white;
   }
   
-  .option-text {
+  .quote-bottom {
+    position: absolute;
+    bottom: 50px;
+    right: 14px;
+    font-family: Georgia, serif;
+    font-size: 32px;
+    opacity: 0.25;
+    line-height: 1;
+    color: white;
+  }
+  
+  /* Texto central */
+  .card-text-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 12px 12px;
     position: relative;
-    z-index: 1;
+    z-index: 2;
   }
   
-  .option-percent {
-    position: absolute;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
+  .card-text {
+    font-size: 15px;
     font-weight: 700;
-    font-size: 14px;
-    z-index: 1;
+    line-height: 1.5;
+    color: white;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  
+  /* Footer con porcentaje */
+  .card-footer {
+    margin-top: auto;
+  }
+  
+  .separator-line {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    margin-bottom: 8px;
+  }
+  
+  .vote-stats {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  
+  .percentage {
+    font-size: 20px;
+    font-weight: 800;
+    color: white;
+  }
+  
+  .votes-label {
+    font-size: 9px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.5px;
+  }
+  
+  /* Check de selección */
+  .selected-check {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--card-color);
+  }
+  
+  /* Indicadores de paginación */
+  .scroll-indicators {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  
+  .indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+  }
+  
+  .dark .indicator-dot {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  .light .indicator-dot {
+    background: rgba(0, 0, 0, 0.2);
+  }
+  
+  .indicator-dot.active {
+    width: 24px;
+    border-radius: 4px;
+  }
+  
+  .dark .indicator-dot.active {
+    background: white;
+  }
+  
+  .light .indicator-dot.active {
+    background: #1a1a2e;
+  }
+  
+  /* Versión compacta */
+  .embed-container.compact .option-card {
+    min-height: 160px;
+    padding: 16px 20px;
+  }
+  
+  .embed-container.compact .quote-top,
+  .embed-container.compact .quote-bottom {
+    font-size: 36px;
+  }
+  
+  .embed-container.compact .card-text {
+    font-size: 15px;
+  }
+  
+  .embed-container.compact .percentage {
+    font-size: 22px;
   }
   
   /* Footer */

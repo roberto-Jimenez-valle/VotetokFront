@@ -62,7 +62,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
     options: poll.options.map(option => ({
       id: option.id,
       key: option.optionKey,
-      text: option.optionText,
+      text: option.optionLabel || `Opción ${option.optionKey}`,
       color: option.color || '#6366f1',
       votes: option._count.votes,
       percentage: totalVotes > 0 ? Math.round((option._count.votes / totalVotes) * 100) : 0,
