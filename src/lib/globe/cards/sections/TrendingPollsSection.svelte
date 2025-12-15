@@ -244,27 +244,29 @@
     </div>
   {/if}
   
-  <!-- Información total debajo de trending -->
-  <div class="vote-summary-info">
-    <div class="vote-stats">
-      <div class="stat-badge">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <rect x="3" y="3" width="7" height="7"/>
-          <rect x="14" y="3" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/>
-        </svg>
-        <span>{formatNumber(trendingPolls.length)}</span>
-      </div>
-      <div class="stat-badge">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-        <span>{formatNumber(mainPollViews)}</span>
+  <!-- Información total debajo de trending - solo mostrar cuando hay encuesta activa -->
+  {#if showActivePoll}
+    <div class="vote-summary-info">
+      <div class="vote-stats">
+        <div class="stat-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <rect x="3" y="3" width="7" height="7"/>
+            <rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+          </svg>
+          <span>{formatNumber(trendingPolls.length)}</span>
+        </div>
+        <div class="stat-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>{formatNumber(mainPollViews)}</span>
+        </div>
       </div>
     </div>
-  </div>
+  {/if}
   
   <!-- Separador después de trending -->
   {#if hasMorePolls}
