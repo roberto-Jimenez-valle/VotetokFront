@@ -5563,6 +5563,7 @@
             opt.color || ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"][idx % 4],
           votes: votes,
           pct: pct,
+          imageUrl: opt.imageUrl || apiOption?.imageUrl || '', // Incluir imageUrl para thumbnails
         };
       }),
     };
