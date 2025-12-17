@@ -7,9 +7,10 @@
   export let options: any[] = [];
   export let activeIndex: number = 0;
   export let isTrendingMode: boolean = true; // true = solo colores, false = con thumbnails
+  export let externalThumbnailsCache: Record<string, string> = {}; // Cache externo para persistir thumbnails
   
-  // Estado local
-  let thumbnails: Record<string, string> = {};
+  // Estado local - inicializar desde cache externo
+  let thumbnails: Record<string, string> = { ...externalThumbnailsCache };
   let startX = 0;
   let startY = 0;
   let isAnimating = false;
@@ -42,45 +43,59 @@
     setTimeout(() => isAnimating = false, 400);
   }
   
+  // Variables para detectar dirección del gesto
+  let gestureDirection: 'horizontal' | 'vertical' | null = null;
+  
   function handleTouchStart(e: TouchEvent) {
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
+    gestureDirection = null; // Reset al iniciar
   }
   
   function handleTouchMove(e: TouchEvent) {
-    const deltaX = Math.abs(e.touches[0].clientX - startX);
-    const deltaY = Math.abs(e.touches[0].clientY - startY);
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = Math.abs(currentX - startX);
+    const deltaY = Math.abs(currentY - startY);
     
-    // Si el movimiento es más horizontal, prevenir scroll vertical
-    if (deltaX > deltaY && deltaX > 10) {
+    // Detectar dirección en el primer movimiento significativo
+    if (!gestureDirection && (deltaX > 10 || deltaY > 10)) {
+      gestureDirection = deltaX > deltaY ? 'horizontal' : 'vertical';
+    }
+    
+    // Solo prevenir scroll si es gesto horizontal (para cambiar cards)
+    // Si es vertical, dejar que pase al BottomSheet
+    if (gestureDirection === 'horizontal' && deltaX > 10) {
       e.preventDefault();
+      e.stopPropagation();
     }
   }
   
   function handleTouchEnd(e: TouchEvent) {
     const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
     const deltaX = endX - startX;
-    const deltaY = endY - startY;
     
-    // Swipe horizontal sensible (30px) y dominante sobre vertical
-    if (Math.abs(deltaX) > 30 && Math.abs(deltaX) > Math.abs(deltaY)) {
+    // Solo procesar si fue un gesto horizontal
+    if (gestureDirection === 'horizontal' && Math.abs(deltaX) > 30) {
       if (deltaX < 0) {
         nextCard();
       } else {
         prevCard();
       }
     }
+    
+    gestureDirection = null;
   }
   
   function handleWheel(e: WheelEvent) {
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-      if (e.deltaX > 20) nextCard();
-      else if (e.deltaX < -20) prevCard();
-    } else {
-      if (e.deltaY > 20) nextCard();
-      else if (e.deltaY < -20) prevCard();
+    // Solo responder a scroll horizontal, dejar vertical para el BottomSheet
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 20) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.deltaX > 0) nextCard();
+      else prevCard();
     }
+    // Si es scroll vertical, no hacer nada - dejar que pase al BottomSheet
   }
   
   function handleCardClick(index: number, option: any) {
@@ -156,8 +171,15 @@
     
     console.log('[TrendingCarousel3D] Cargando thumbnails, isTrendingMode:', isTrendingMode);
     console.log('[TrendingCarousel3D] Options:', options.map(o => ({ key: o.key, label: o.label, imageUrl: o.imageUrl, url: o.url })));
+    console.log('[TrendingCarousel3D] Cache externo:', Object.keys(externalThumbnailsCache));
     
     for (const option of options) {
+      // Si ya está en cache (externo o local), no volver a cargar
+      if (thumbnails[option.key]) {
+        console.log('[TrendingCarousel3D] Opción', option.key, 'ya en cache:', thumbnails[option.key]);
+        continue;
+      }
+      
       // Buscar URL en: imageUrl, url, o extraer del texto (label)
       let url = option.imageUrl || option.url || extractUrlFromText(option.label);
       console.log('[TrendingCarousel3D] Opción', option.key, 'URL encontrada:', url);
@@ -166,6 +188,8 @@
         // Es imagen directa, usar directamente
         thumbnails[option.key] = url;
         thumbnails = thumbnails;
+        // Notificar al padre para actualizar cache externo
+        dispatch('thumbnailLoaded', { key: option.key, url });
         console.log('[TrendingCarousel3D] Imagen directa:', url);
       } else if (url && canHaveThumbnail(url)) {
         // Es URL que puede tener thumbnail, obtenerlo de la API
@@ -173,6 +197,8 @@
         if (thumb) {
           thumbnails[option.key] = thumb;
           thumbnails = thumbnails;
+          // Notificar al padre para actualizar cache externo
+          dispatch('thumbnailLoaded', { key: option.key, url: thumb });
         }
       }
     }
@@ -230,49 +256,61 @@
           <!-- Modo con imagen de fondo -->
           <img src={cardImage} alt="" class="card-bg-image" loading="lazy" />
           <div class="card-gradient-overlay"></div>
-        {/if}
-        
-        <!-- Avatar badge (solo en trending) -->
-        {#if isTrendingMode}
-          <div class="avatar-badge">
-            {#if option.pollData?.user?.avatarUrl}
-              <img src={option.pollData.user.avatarUrl} alt="" class="avatar-img" />
-            {:else if option.pollData?.creator?.avatarUrl}
-              <img src={option.pollData.creator.avatarUrl} alt="" class="avatar-img" />
-            {:else}
-              <div class="avatar-placeholder">
-                {option.label?.charAt(0) || '?'}
-              </div>
-            {/if}
+          
+          <!-- Avatar badge (solo en trending con imagen) -->
+          {#if isTrendingMode}
+            <div class="avatar-badge">
+              {#if option.pollData?.user?.avatarUrl}
+                <img src={option.pollData.user.avatarUrl} alt="" class="avatar-img" />
+              {:else if option.pollData?.creator?.avatarUrl}
+                <img src={option.pollData.creator.avatarUrl} alt="" class="avatar-img" />
+              {:else}
+                <div class="avatar-placeholder">
+                  {option.label?.charAt(0) || '?'}
+                </div>
+              {/if}
+            </div>
+          {/if}
+          
+          <!-- Contenido con imagen -->
+          <div class="card-content with-image">
+            <span class="card-title">{cleanTextFromUrl(option.label) || 'Sin título'}</span>
+            <span class="card-votes">{option.displayText || '0 votos'}</span>
+          </div>
+        {:else}
+          <!-- Modo texto: comillas decorativas -->
+          <span class="quote-decoration quote-open">“</span>
+          <span class="quote-decoration quote-close">”</span>
+          
+          <!-- Contenido texto centrado -->
+          <div class="card-text-center">
+            <span class="card-title-text">{cleanTextFromUrl(option.label) || 'Sin título'}</span>
+          </div>
+          
+          <!-- Votos en la parte inferior (mismo estilo que con imagen) -->
+          <div class="card-content with-image">
+            <span class="card-votes">{option.displayText || '0 votos'}</span>
           </div>
         {/if}
-        
-        <!-- Contenido -->
-        <div class="card-content" class:with-image={hasImage}>
-          <span class="card-title">{cleanTextFromUrl(option.label) || 'Sin título'}</span>
-          <span class="card-votes">{option.displayText || '0 votos'}</span>
-        </div>
       </button>
     {/each}
   </div>
   
   <!-- Botones de navegación -->
-  <button class="nav-btn nav-prev" on:click|stopPropagation={prevCard} aria-label="Anterior" type="button">
-    ‹
-  </button>
-  <button class="nav-btn nav-next" on:click|stopPropagation={nextCard} aria-label="Siguiente" type="button">
-    ›
-  </button>
+  <button class="nav-btn nav-prev" on:click|stopPropagation={prevCard} aria-label="Anterior" type="button">‹</button>
+  <button class="nav-btn nav-next" on:click|stopPropagation={nextCard} aria-label="Siguiente" type="button">›</button>
   
-  <!-- Indicadores de posición -->
+  <!-- Indicadores de posición estilo oEmbed -->
   <div class="carousel-indicators">
-    {#each options as _, i}
+    {#each options as option, i}
       <button 
-        class="indicator-dot" 
+        class="progress-bar" 
         class:active={i === activeIndex}
+        class:past={i < activeIndex}
+        style="--bar-color: {option.color};"
         on:click|stopPropagation={() => { activeIndex = i; dispatch('indexChange', { index: i }); }}
         type="button"
-        aria-label="Ir a encuesta {i + 1}"
+        aria-label="Ir a opción {i + 1}"
       ></button>
     {/each}
   </div>
@@ -375,6 +413,28 @@
     border-radius: 10px;
   }
   
+  /* Comillas decorativas estilo oEmbed/PollMaximizedView */
+  .quote-decoration {
+    position: absolute;
+    font-size: 60px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.1);
+    line-height: 1;
+    pointer-events: none;
+    font-family: Georgia, serif;
+    z-index: 1;
+  }
+  
+  .quote-open {
+    top: -6px;
+    left: -2px;
+  }
+  
+  .quote-close {
+    bottom: -16px;
+    right: -2px;
+  }
+  
   .card-content.with-image {
     position: absolute;
     bottom: 0;
@@ -444,7 +504,32 @@
     margin-top: auto;
   }
   
-  /* Botones de navegación */
+  /* === Estilos para cards de solo texto === */
+  .card-text-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    z-index: 2;
+  }
+  
+  .card-title-text {
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  
+  /* Botones de navegación - mismo estilo que oEmbed */
   .nav-btn {
     position: absolute;
     top: 50%;
@@ -452,20 +537,25 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: rgba(0,0,0,0.6);
-    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     color: white;
     font-size: 18px;
+    font-weight: 300;
     cursor: pointer;
+    z-index: 300;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 300;
     transition: all 0.2s;
+    padding: 0;
+    padding-bottom: 2px;
   }
   
   .nav-btn:hover {
-    background: rgba(0,0,0,0.8);
+    background: rgba(255, 255, 255, 0.35);
+    transform: translateY(-50%) scale(1.1);
   }
   
   .nav-prev {
@@ -476,31 +566,61 @@
     right: 4px;
   }
   
-  /* Indicadores */
+  /* Indicadores estilo oEmbed con colores */
   .carousel-indicators {
     position: absolute;
-    bottom: -8px;
+    bottom: -12px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 6px;
+    justify-content: center;
+    align-items: center;
+    gap: 3px;
     z-index: 200;
+    width: 90%;
+    max-width: 250px;
   }
   
-  .indicator-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.3);
+  .progress-bar {
+    flex: 1;
+    max-width: 40px;
+    height: 4px;
+    border-radius: 2px;
     border: none;
     cursor: pointer;
     padding: 0;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.3);
+    position: relative;
+    overflow: hidden;
   }
   
-  .indicator-dot.active {
-    background: white;
-    transform: scale(1.3);
+  .progress-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--bar-color);
+    border-radius: 2px;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+  
+  .progress-bar:hover {
+    background: rgba(255, 255, 255, 0.5);
+  }
+  
+  .progress-bar.past::after {
+    transform: scaleX(1);
+  }
+  
+  .progress-bar.active {
+    background: rgba(255, 255, 255, 0.5);
+  }
+  
+  .progress-bar.active::after {
+    transform: scaleX(1);
+    box-shadow: 0 0 8px var(--bar-color);
   }
   
   /* Responsive */

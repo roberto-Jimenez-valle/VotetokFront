@@ -1139,6 +1139,23 @@
 
   // Estado de expansión de la barra de opciones
   let showPollOptionsExpanded = false;
+  
+  // Auto-expandir opciones cuando se abre una encuesta
+  let previousActivePollId: any = null;
+  $: {
+    if (activePoll?.id && activePoll.id !== previousActivePollId) {
+      // Nueva encuesta abierta - expandir opciones automáticamente
+      showPollOptionsExpanded = true;
+      dispatch("polldropdownstatechange", { open: true });
+    } else if (!activePoll && previousActivePollId) {
+      // Encuesta cerrada - colapsar opciones
+      showPollOptionsExpanded = false;
+    }
+    previousActivePollId = activePoll?.id || null;
+  }
+  
+  // Cache de thumbnails para el carrusel (persiste cuando se oculta/muestra)
+  let carouselThumbnailsCache: Record<string, string> = {};
 
   // Variables para detectar swipe en opciones expandidas
   let optionsTouchStartY = 0;
@@ -2691,18 +2708,32 @@
               displayText: optWithPct?.displayText || '0 votos',
             };
           }) : optionsWithPct}
-          <div class="poll-bar-options-expanded carousel-wrapper" onpointerdown={(e) => e.stopPropagation()} ontouchstart={(e) => e.stopPropagation()}>
+          <div class="poll-bar-options-expanded carousel-wrapper">
             <TrendingCarousel3D
               options={carouselOptions.sort((a: any, b: any) => b.pct - a.pct)}
               activeIndex={0}
               isTrendingMode={!activePoll}
+              externalThumbnailsCache={carouselThumbnailsCache}
               on:selectPoll={(e) => {
                 const option = e.detail.option;
                 if (!activePoll && option.pollData) {
+                  // Modo trending: abrir la encuesta
                   openTrendingPoll(option.pollData);
+                } else if (activePoll) {
+                  // Modo encuesta activa: abrir vista maximizada de la opción
+                  handleOpenPreviewModal({
+                    detail: { 
+                      option: { key: option.key, label: option.label },
+                      pollId: activePoll.id.toString() 
+                    }
+                  } as CustomEvent);
                 }
               }}
               on:requestExpand={() => dispatch("requestExpand")}
+              on:thumbnailLoaded={(e) => {
+                carouselThumbnailsCache[e.detail.key] = e.detail.url;
+                carouselThumbnailsCache = carouselThumbnailsCache;
+              }}
             />
           </div>
         {/if}

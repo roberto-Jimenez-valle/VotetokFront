@@ -348,17 +348,14 @@
             <div class="card-gradient-overlay"></div>
           {:else}
             <div class="card-color-bg" style="background: {option.color};"></div>
+            <!-- Comillas decorativas en esquinas -->
+            <span class="quote-mark quote-open">"</span>
+            <span class="quote-mark quote-close">"</span>
           {/if}
           
           <!-- Contenido superpuesto -->
           <div class="card-content">
-            {#if !hasImage}
-              <span class="quote-mark quote-open">"</span>
-            {/if}
             <span class="option-text">{cleanTextFromUrls(option.label || option.text)}</span>
-            {#if !hasImage}
-              <span class="quote-mark quote-close">"</span>
-            {/if}
           </div>
           
           <!-- Borde con color -->
@@ -682,6 +679,8 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    padding: 0;
+    padding-bottom: 3px;
   }
   
   .nav-btn:hover {
@@ -977,6 +976,9 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.3;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   
   /* Cards con imagen tienen texto en la parte inferior */
@@ -995,30 +997,37 @@
   .stack-card:not(.has-image) .option-text {
     text-align: center;
     font-size: 14px;
-    font-weight: 600;
-    line-height: 1.4;
-    -webkit-line-clamp: 6;
-    line-clamp: 6;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-shadow: none;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    word-break: break-word;
   }
   
-  /* Comillas decorativas para cards de texto */
+  /* Comillas decorativas para cards de texto - mismo estilo que TrendingCarousel3D */
   .quote-mark {
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 20px;
-    font-weight: 400;
-    color: rgba(255, 255, 255, 0.35);
+    position: absolute;
+    font-family: Georgia, 'Times New Roman', Times, serif !important;
+    font-size: 60px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.1);
     line-height: 1;
-    flex-shrink: 0;
+    pointer-events: none;
+    z-index: 1;
+    font-style: normal;
   }
   
   .quote-open {
-    align-self: flex-start;
-    margin-bottom: 2px;
+    top: -6px;
+    left: -2px;
   }
   
   .quote-close {
-    align-self: flex-end;
-    margin-top: 2px;
+    bottom: -16px;
+    right: -2px;
   }
   
   /* ===== VOTOS IZQUIERDA INCRUSTADO ===== */
