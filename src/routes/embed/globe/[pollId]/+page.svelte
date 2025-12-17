@@ -18,6 +18,15 @@
     expandedCard = !expandedCard;
   }
   
+  // Cerrar card expandida al hacer click fuera
+  function handleBackgroundClick(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    // Si está expandida y el click no fue en una card activa, cerrar
+    if (expandedCard && !target.closest('.stack-card.active')) {
+      expandedCard = false;
+    }
+  }
+  
   // ===== THUMBNAILS PARA URLS DE PLATAFORMAS =====
   let thumbnails: Record<string, string> = {};
   
@@ -258,7 +267,7 @@
 </div>
 
 <!-- UI flotante FUERA del contenedor del globo -->
-<div class="embed-ui" style="--embed-bg: {palette.bg}">
+<div class="embed-ui" style="--embed-bg: {palette.bg}" on:click={handleBackgroundClick}>
   <!-- Header minimalista -->
   <div class="header-top" class:visible={isReady}>
     <!-- Barra superior: logo + abrir -->
@@ -727,20 +736,7 @@
     z-index: 100;
   }
   
-  /* Al hacer hover o click se agranda, sube y viene al frente */
-  .stack-card.active:hover,
-  .stack-card.active:focus,
-  .stack-card.active:active {
-    transform: 
-      translateX(0)
-      translateY(-60px)
-      translateZ(200px)
-      rotateY(0deg)
-      scale(1.8);
-    z-index: 200;
-  }
-  
-  /* Card expandida al hacer click */
+  /* Card expandida al hacer click (solo con click, sin hover) */
   .stack-card.expanded {
     transform: 
       translateX(0)
@@ -751,17 +747,24 @@
     z-index: 200;
   }
   
-  /* Texto siempre pequeño en móvil para que se vea más contenido */
+  /* Texto más pequeño en cards normales */
+  .option-text {
+    font-size: 11px;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+  }
+  
+  /* En móvil aún más pequeño */
   @media (max-width: 600px) {
     .option-text {
-      font-size: 10px;
-      -webkit-line-clamp: 5;
-      line-clamp: 5;
+      font-size: 9px;
+      -webkit-line-clamp: 4;
+      line-clamp: 4;
     }
     
-    /* Aún más pequeño cuando está expandida para mostrar más */
+    /* Más texto visible cuando está expandida */
     .stack-card.expanded .option-text {
-      font-size: 8px;
+      font-size: 7px;
       -webkit-line-clamp: 8;
       line-clamp: 8;
     }
@@ -806,14 +809,6 @@
         translateX(0)
         translateZ(120px)
         rotateY(0deg);
-    }
-    
-    .stack-card.active:hover {
-      transform: 
-        translateX(0)
-        translateZ(150px)
-        rotateY(0deg)
-        scale(1.1);
     }
     
     .stack-card.past {
@@ -968,10 +963,6 @@
     border-radius: 16px;
     transition: transform 0.4s ease;
     z-index: 1;
-  }
-  
-  .stack-card.active:hover .card-bg-image {
-    transform: scale(1.05);
   }
   
   .option-text {
