@@ -75,6 +75,7 @@
     "@turf/helpers": "^7.2.0",
     "d3": "^7.9.0",
     "globe.gl": "^2.44.0",
+    "hashids": "^2.3.0",
     "html2canvas": "^1.4.1",
     "jose": "^6.1.0",
     "pmtiles": "^4.3.0",

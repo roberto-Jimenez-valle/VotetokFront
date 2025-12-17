@@ -1,5 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { encodePollId, encodeUserId, encodeOptionId } from '$lib/server/hashids';
 
 /**
  * GET /api/polls/for-you
@@ -189,16 +190,27 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     });
 
     // 7. Ordenar por score personalizado y tomar top
+    // Agregar hashIds para URLs públicas
     const recommendedPolls = pollsWithScore
       .filter(p => p.personalizedScore > 0) // Solo encuestas con algún match
       .sort((a, b) => b.personalizedScore - a.personalizedScore)
       .slice(0, limit)
       .map(poll => ({
         ...poll,
+        hashId: encodePollId(poll.id),
+        user: poll.user ? {
+          ...poll.user,
+          hashId: encodeUserId(poll.user.id),
+        } : null,
         options: poll.options.map(option => ({
           ...option,
+          hashId: encodeOptionId(option.id),
           voteCount: option._count.votes,
-          avatarUrl: option.createdBy?.avatarUrl || null
+          avatarUrl: option.createdBy?.avatarUrl || null,
+          createdBy: option.createdBy ? {
+            ...option.createdBy,
+            hashId: encodeUserId(option.createdBy.id),
+          } : null,
         }))
       }));
 
@@ -261,14 +273,24 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         take: remaining,
       });
 
-      // Agregar trending al final con score bajo (ya transformados)
+      // Agregar trending al final con score bajo (ya transformados con hashIds)
       trendingPolls.forEach(poll => {
         recommendedPolls.push({
           ...poll,
+          hashId: encodePollId(poll.id),
+          user: poll.user ? {
+            ...poll.user,
+            hashId: encodeUserId(poll.user.id),
+          } : null,
           options: poll.options.map(option => ({
             ...option,
+            hashId: encodeOptionId(option.id),
             voteCount: option._count.votes,
-            avatarUrl: option.createdBy?.avatarUrl || null
+            avatarUrl: option.createdBy?.avatarUrl || null,
+            createdBy: option.createdBy ? {
+              ...option.createdBy,
+              hashId: encodeUserId(option.createdBy.id),
+            } : null,
           })),
           personalizedScore: 0.1,
         });

@@ -1,9 +1,16 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal, encodePollId, encodeUserId, encodeOptionId } from '$lib/server/hashids';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
+  // Soporta tanto IDs numéricos (interno) como hashes
+  const pollId = parsePollIdInternal(params.id);
+  if (!pollId) {
+    throw error(400, 'Invalid poll ID');
+  }
+
   const poll = await prisma.poll.findUnique({
-    where: { id: Number(params.id) },
+    where: { id: pollId },
     include: {
       user: {
         select: {
@@ -54,7 +61,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   if (userId) {
     const existingVotes = await prisma.vote.findMany({
       where: {
-        pollId: Number(params.id),
+        pollId: pollId,
         userId: Number(userId)
       },
       include: {
@@ -78,15 +85,27 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   const userVote = userVotes.length > 0 ? userVotes[0] : null;
 
   // Transformar opciones para incluir voteCount, avatarUrl e imageUrl
+  // Usar IDs hasheados en la respuesta
   const transformedPoll = {
     ...poll,
+    id: poll.id, // ID numérico interno
+    hashId: encodePollId(poll.id), // ID hasheado para URLs públicas
     userVote, // Compatibilidad: primer voto o null
     userVotes, // Array de todos los votos (para múltiples)
+    user: poll.user ? {
+      ...poll.user,
+      hashId: encodeUserId(poll.user.id),
+    } : null,
     options: poll.options.map(option => ({
       ...option,
+      hashId: encodeOptionId(option.id),
       voteCount: option._count.votes,
       avatarUrl: option.createdBy?.avatarUrl || null,
       imageUrl: (option as any).imageUrl || null,
+      createdBy: option.createdBy ? {
+        ...option.createdBy,
+        hashId: encodeUserId(option.createdBy.id),
+      } : null,
     }))
   };
 
@@ -94,11 +113,16 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
+  const pollId = parsePollIdInternal(params.id);
+  if (!pollId) {
+    throw error(400, 'Invalid poll ID');
+  }
+
   const body = await request.json();
   const { title, description, category, status } = body;
 
   const poll = await prisma.poll.update({
-    where: { id: Number(params.id) },
+    where: { id: pollId },
     data: {
       ...(title && { title }),
       ...(description !== undefined && { description }),
@@ -115,8 +139,13 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 };
 
 export const DELETE: RequestHandler = async ({ params }) => {
+  const pollId = parsePollIdInternal(params.id);
+  if (!pollId) {
+    throw error(400, 'Invalid poll ID');
+  }
+
   await prisma.poll.delete({
-    where: { id: Number(params.id) },
+    where: { id: pollId },
   });
 
   return json({ success: true });

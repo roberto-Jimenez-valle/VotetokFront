@@ -1,11 +1,13 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { parsePollId, encodePollId } from '$lib/server/hashids';
 
 export const load: PageServerLoad = async ({ params, url }) => {
-  const pollId = Number(params.id);
+  // SOLO acepta hashIds - IDs numéricos son rechazados
+  const pollId = parsePollId(params.id);
   
-  if (isNaN(pollId)) {
+  if (!pollId) {
     throw error(400, 'ID de encuesta inválido');
   }
   
@@ -48,9 +50,10 @@ export const load: PageServerLoad = async ({ params, url }) => {
     throw error(404, 'Encuesta no encontrada');
   }
 
-  // Transformar opciones
+  // Transformar opciones y agregar hashId
   const transformedPoll = {
     ...poll,
+    hashId: encodePollId(poll.id), // ID hasheado para URLs públicas
     options: poll.options.map(option => ({
       ...option,
       voteCount: option._count.votes,

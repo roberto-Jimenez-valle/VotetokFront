@@ -3,17 +3,16 @@ import type { PageServerLoad } from './$types';
 import { prisma } from '$lib/server/prisma';
 import { EMBED_CONFIG } from '$lib/config/embed';
 import { getPalette, getDefaultPalette } from '$lib/config/palettes';
+import { parsePollId, encodePollId, encodeUserId } from '$lib/server/hashids';
 
 export const load: PageServerLoad = async ({ params, url }) => {
-  // Validar pollId con función segura
-  const validation = EMBED_CONFIG.validatePollId(params.pollId);
+  // SOLO acepta hashIds - IDs numéricos son rechazados
+  const pollId = parsePollId(params.pollId);
   
-  if (!validation.valid || validation.id === null) {
-    console.warn(`[Embed] ⚠️ ID inválido: ${params.pollId} - ${validation.error}`);
-    throw error(400, validation.error || 'ID de encuesta inválido');
+  if (!pollId) {
+    console.warn(`[Embed] ⚠️ ID inválido: ${params.pollId}`);
+    throw error(400, 'ID de encuesta inválido');
   }
-  
-  const pollId = validation.id;
   
   // Sanitizar parámetros de personalización
   const theme = EMBED_CONFIG.sanitizeTheme(url.searchParams.get('theme'));
@@ -74,15 +73,20 @@ export const load: PageServerLoad = async ({ params, url }) => {
   const totalVotes = poll._count.votes;
   
   // Transformar al formato esperado por el frontend
+  // Incluir hashId para URLs públicas
   const transformedPoll = {
     id: poll.id,
+    hashId: encodePollId(poll.id), // ID hasheado para URLs públicas
     title: poll.title,
     description: poll.description,
     createdAt: poll.createdAt.toISOString(),
     closedAt: poll.closedAt?.toISOString() || null,
     totalVotes,
     allowMultiple: poll.allowMultiple || false,
-    user: poll.user,
+    user: poll.user ? {
+      ...poll.user,
+      hashId: encodeUserId(poll.user.id),
+    } : null,
     options: poll.options.map(option => ({
       id: option.id,
       key: option.optionKey,

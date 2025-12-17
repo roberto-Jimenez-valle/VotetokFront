@@ -1,15 +1,17 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal, encodePollId } from '$lib/server/hashids';
 
 /**
  * Genera el código de embed para una encuesta
  * Similar a cómo Spotify genera su código de embed
  */
 export const GET: RequestHandler = async ({ params, url }) => {
-  const pollId = Number(params.id);
+  // Soporta tanto IDs numéricos (interno) como hashes
+  const pollId = parsePollIdInternal(params.id);
   
-  if (isNaN(pollId)) {
+  if (!pollId) {
     throw error(400, 'ID de encuesta inválido');
   }
 
@@ -25,6 +27,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
     throw error(404, 'Encuesta no encontrada');
   }
 
+  // Usar hashId para URLs públicas
+  const hashId = encodePollId(poll.id);
   const baseUrl = `${url.protocol}//${url.host}`;
   
   // Parámetros opcionales del embed
@@ -33,11 +37,11 @@ export const GET: RequestHandler = async ({ params, url }) => {
   const width = url.searchParams.get('width') || '100%';
   const height = url.searchParams.get('height') || '352';
 
-  // URL del embed
-  const embedUrl = `${baseUrl}/embed/poll/${poll.id}?theme=${theme}${compact ? '&compact=true' : ''}`;
+  // URL del embed - usar hashId
+  const embedUrl = `${baseUrl}/embed/poll/${hashId}?theme=${theme}${compact ? '&compact=true' : ''}`;
   
-  // URL para compartir (con Open Graph)
-  const shareUrl = `${baseUrl}/poll/${poll.id}`;
+  // URL para compartir (con Open Graph) - usar hashId
+  const shareUrl = `${baseUrl}/poll/${hashId}`;
 
   // Código iframe
   const iframeCode = `<iframe 

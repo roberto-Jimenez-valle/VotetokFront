@@ -1761,6 +1761,7 @@
   <ShareModal 
     bind:isOpen={showShareModal}
     pollId={poll.id}
+    pollHashId={poll.hashId || ''}
     pollTitle={poll.title || poll.question || ''}
   />
 </Portal>

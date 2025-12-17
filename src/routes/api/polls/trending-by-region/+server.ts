@@ -1,5 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { encodePollId, encodeUserId, encodeOptionId } from '$lib/server/hashids';
 
 /**
  * GET /api/polls/trending-by-region?region=Global&limit=5&hours=720
@@ -150,15 +151,26 @@ export const GET: RequestHandler = async ({ url }) => {
     });
 
     // Ordenar por score y tomar los top
+    // Agregar hashIds para URLs públicas
     const trendingPolls = pollsWithScore
       .sort((a, b) => b.trendingScore - a.trendingScore)
       .slice(0, limit)
       .map(poll => ({
         ...poll,
+        hashId: encodePollId(poll.id),
+        user: poll.user ? {
+          ...poll.user,
+          hashId: encodeUserId(poll.user.id),
+        } : null,
         options: poll.options.map((option: any) => ({
           ...option,
+          hashId: encodeOptionId(option.id),
           voteCount: option._count.votes,
-          avatarUrl: option.createdBy?.avatarUrl || null
+          avatarUrl: option.createdBy?.avatarUrl || null,
+          createdBy: option.createdBy ? {
+            ...option.createdBy,
+            hashId: encodeUserId(option.createdBy.id),
+          } : null,
         }))
       }));
 

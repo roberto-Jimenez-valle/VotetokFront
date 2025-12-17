@@ -126,24 +126,46 @@ export const EMBED_CONFIG = {
   },
   
   /**
-   * Valida el ID de una encuesta
+   * Valida el ID de una encuesta (soporta IDs numéricos y hashes)
    */
   validatePollId(pollId: string | number): { valid: boolean; id: number | null; error?: string } {
-    const id = typeof pollId === 'string' ? parseInt(pollId, 10) : pollId;
+    // Si es número, validar directamente
+    if (typeof pollId === 'number') {
+      if (pollId <= 0) {
+        return { valid: false, id: null, error: 'ID de encuesta debe ser positivo' };
+      }
+      if (pollId > 2147483647) {
+        return { valid: false, id: null, error: 'ID de encuesta fuera de rango' };
+      }
+      return { valid: true, id: pollId };
+    }
     
-    if (isNaN(id)) {
+    // Si es string, intentar parsear como número primero (legacy)
+    const numericId = parseInt(pollId, 10);
+    if (!isNaN(numericId) && numericId.toString() === pollId) {
+      if (numericId <= 0) {
+        return { valid: false, id: null, error: 'ID de encuesta debe ser positivo' };
+      }
+      if (numericId > 2147483647) {
+        return { valid: false, id: null, error: 'ID de encuesta fuera de rango' };
+      }
+      return { valid: true, id: numericId };
+    }
+    
+    // Si no es numérico, intentar decodificar como hash
+    // Importación dinámica para evitar problemas de ciclo
+    try {
+      // Validar formato básico del hash (solo caracteres alfanuméricos)
+      if (!/^[a-zA-Z0-9]+$/.test(pollId)) {
+        return { valid: false, id: null, error: 'ID de encuesta inválido' };
+      }
+      
+      // El hash se decodificará en el servidor
+      // Aquí solo validamos el formato
+      return { valid: true, id: null, hash: pollId } as any;
+    } catch {
       return { valid: false, id: null, error: 'ID de encuesta inválido' };
     }
-    
-    if (id <= 0) {
-      return { valid: false, id: null, error: 'ID de encuesta debe ser positivo' };
-    }
-    
-    if (id > 2147483647) { // Max INT en PostgreSQL
-      return { valid: false, id: null, error: 'ID de encuesta fuera de rango' };
-    }
-    
-    return { valid: true, id };
   },
   
   /**

@@ -5,6 +5,7 @@
   
   export let isOpen = false;
   export let pollId: number | string;
+  export let pollHashId: string = ''; // ID hasheado para URLs públicas
   export let pollTitle: string = '';
   
   const dispatch = createEventDispatcher();
@@ -18,9 +19,11 @@
   $: currentPalettes = embedTheme === 'light' ? LIGHT_PALETTES : DARK_PALETTES;
   $: selectedPalette = currentPalettes[selectedPaletteIndex] || currentPalettes[0];
   
+  // Usar hashId para URLs públicas si está disponible
+  $: publicId = pollHashId || pollId;
   $: baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  $: shareUrl = `${baseUrl}/poll/${pollId}`;
-  $: embedUrl = `${baseUrl}/embed/globe/${pollId}?theme=${embedTheme}&palette=${selectedPalette.name}`;
+  $: shareUrl = `${baseUrl}/poll/${publicId}`;
+  $: embedUrl = `${baseUrl}/embed/globe/${publicId}?theme=${embedTheme}&palette=${selectedPalette.name}`;
   $: embedCode = `<iframe src="${embedUrl}" width="320" height="600" frameborder="0" style="border-radius:12px"></iframe>`;
   
   function selectPalette(index: number) {

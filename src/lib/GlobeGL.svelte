@@ -1576,7 +1576,7 @@
           }
 
           const url = activePoll
-            ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(iso)}`
+            ? `/?poll=${encodeURIComponent(activePoll.hashId || activePoll.id)}&country=${encodeURIComponent(iso)}`
             : `/?country=${encodeURIComponent(iso)}`;
                     await goto(url, {
             replaceState: false,
@@ -2132,7 +2132,7 @@
           }
 
           const url = activePoll
-            ? `/?poll=${encodeURIComponent(activePoll.id)}&country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`
+            ? `/?poll=${encodeURIComponent(activePoll.hashId || activePoll.id)}&country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`
             : `/?country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`;
                     await goto(url, {
             replaceState: false,
@@ -5591,8 +5591,10 @@
 
     // HISTORY API: Guardar estado de encuesta en el historial
     // En modo embed, NO redirigir
+    // Usar hashId para URLs públicas si está disponible
     if (!embedMode && !isNavigatingFromHistory) {
-      const url = `/?poll=${encodeURIComponent(poll.id)}`;
+      const publicId = poll.hashId || poll.id;
+      const url = `/?poll=${encodeURIComponent(publicId)}`;
       const currentUrl =
         typeof window !== "undefined"
           ? window.location.pathname + window.location.search

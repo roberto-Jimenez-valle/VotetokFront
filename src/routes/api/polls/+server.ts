@@ -3,6 +3,7 @@ import { prisma } from '$lib/server/prisma';
 import { requireAuth } from '$lib/server/middleware/auth';
 import { rateLimitByUser } from '$lib/server/middleware/rateLimit';
 import { sanitizePollData } from '$lib/server/utils/sanitize';
+import { encodePollId, encodeUserId, encodeOptionId } from '$lib/server/hashids';
 import {
   validateTitle,
   validateDescription,
@@ -356,6 +357,7 @@ export const GET: RequestHandler = async ({ url }) => {
   ]);
 
   // Transformar datos: calcular voteCount para cada opción desde votos reales
+  // Agregar hashIds para URLs públicas
   const transformedPolls = polls.map(poll => {
     // Si es un rell sin opciones propias, usar las opciones del poll original
     let pollOptions = poll.options;
@@ -367,11 +369,21 @@ export const GET: RequestHandler = async ({ url }) => {
     
     return {
       ...poll,
+      hashId: encodePollId(poll.id), // ID hasheado para URLs públicas
+      user: poll.user ? {
+        ...poll.user,
+        hashId: encodeUserId(poll.user.id),
+      } : null,
       options: pollOptions.map((option: any) => ({
         ...option,
+        hashId: encodeOptionId(option.id),
         voteCount: option._count?.votes || 0,
         // Mantener avatarUrl del creador para compatibilidad con frontend
-        avatarUrl: option.createdBy?.avatarUrl || null
+        avatarUrl: option.createdBy?.avatarUrl || null,
+        createdBy: option.createdBy ? {
+          ...option.createdBy,
+          hashId: encodeUserId(option.createdBy.id),
+        } : null,
       }))
     };
   });

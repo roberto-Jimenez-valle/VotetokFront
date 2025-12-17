@@ -1,9 +1,14 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
-    const { id } = params;
+    // Soporta tanto IDs numéricos (interno) como hashes
+    const pollId = parsePollIdInternal(params.id);
+    if (!pollId) {
+      throw error(400, 'Invalid poll ID');
+    }
     
     // 🔐 AUTENTICACIÓN OBLIGATORIA
     const userId = locals?.user?.userId;
@@ -24,7 +29,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   const { optionId, latitude, longitude, subdivisionId } = body;
 
   console.log('[API Vote] 📥 Voto recibido:', {
-    pollId: id,
+    pollId,
     optionId,
     userId,
     latitude,
@@ -57,7 +62,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   const option = await prisma.pollOption.findFirst({
     where: { 
       id: optionId, 
-      pollId: Number(id) 
+      pollId: pollId 
     },
     include: {
       poll: true  // Incluir datos de la encuesta para saber si es múltiple
@@ -82,7 +87,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     // ENCUESTA MÚLTIPLE: buscar si ya votó por esta OPCIÓN específica
     existingVote = await prisma.vote.findFirst({
       where: {
-        pollId: Number(id),
+        pollId: pollId,
         optionId: optionId,
         userId: Number(userId)
       },
@@ -92,7 +97,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     // ENCUESTA SIMPLE: buscar si ya votó en cualquier opción
     existingVote = await prisma.vote.findFirst({
       where: {
-        pollId: Number(id),
+        pollId: pollId,
         userId: Number(userId)
       },
     });
@@ -141,7 +146,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     // Crear nuevo voto
     vote = await prisma.vote.create({
       data: {
-        pollId: Number(id),
+        pollId: pollId,
         optionId,
         userId: Number(userId),
         latitude,
@@ -185,7 +190,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   try {
-    const { id } = params;
+    const pollId = parsePollIdInternal(params.id);
+    if (!pollId) {
+      throw error(400, 'Invalid poll ID');
+    }
     
     // 🔐 AUTENTICACIÓN OBLIGATORIA
     const userId = locals?.user?.userId;
@@ -197,7 +205,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
     // IMPORTANTE: Convertir userId a Number para asegurar match correcto
     const existingVotes = await prisma.vote.findMany({
       where: {
-        pollId: Number(id),
+        pollId: pollId,
         userId: Number(userId)
       },
     });
