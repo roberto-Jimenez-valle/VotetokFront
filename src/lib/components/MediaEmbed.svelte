@@ -301,14 +301,11 @@
       processed = processed.replace(/\s*height="[^"]*"/gi, '');
       processed = processed.replace(/\s*style="[^"]*"/gi, '');
       
-      // Altura 100% para todos los iframes incluyendo Spotify
-      const iframeHeight = '100%';
-      const heightStyle = '100%';
-      
       // Aplicar todos los atributos en un solo reemplazo
+      // NO usar position:absolute para que funcione con flex containers
       processed = processed.replace(
         /<iframe\s*/gi, 
-        `<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowtransparency="true" width="100%" height="${iframeHeight}" style="position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:${heightStyle}!important;background:transparent!important;border:none!important;border-radius:12px!important;" `
+        `<iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allowtransparency="true" width="100%" height="100%" style="width:100%!important;height:100%!important;max-width:100vw!important;max-height:100vh!important;background:transparent!important;border:none!important;border-radius:12px!important;flex:1!important;" `
       );
     }
 

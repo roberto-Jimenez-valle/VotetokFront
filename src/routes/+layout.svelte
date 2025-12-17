@@ -341,32 +341,70 @@
 
 	.fullscreen-iframe-container {
 		position: absolute;
-		inset: 0;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		width: 100%;
+		height: 100%;
 		z-index: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		overflow: hidden;
+		padding: 20px;
+		box-sizing: border-box;
 	}
 
 	.fullscreen-iframe-container :global(.media-embed),
 	.fullscreen-iframe-container :global(.embed-container) {
-		width: 100%;
-		height: 100%;
+		position: relative !important;
+		width: 100% !important;
+		height: 100% !important;
+		max-width: min(100%, calc(100vh * 16 / 9)) !important;
+		max-height: 100% !important;
 		background: transparent !important;
 		overflow: hidden;
+		display: flex !important;
+		align-items: center !important;
+		justify-content: center !important;
 	}
 
 	.fullscreen-iframe-container :global(iframe) {
-		background: transparent !important;
+		position: relative !important;
+		background: #000 !important;
 		width: 100% !important;
 		height: 100% !important;
+		max-width: 100% !important;
+		max-height: 100% !important;
+		aspect-ratio: 16 / 9;
+		object-fit: contain !important;
+	}
+
+	/* Desktop - limitar ancho máximo para mejor visualización */
+	@media (min-width: 601px) {
+		.fullscreen-iframe-container {
+			padding: 40px;
+		}
+
+		.fullscreen-iframe-container :global(.media-embed),
+		.fullscreen-iframe-container :global(.embed-container) {
+			max-width: min(95vw, calc((100vh - 80px) * 16 / 9)) !important;
+			max-height: calc(100vh - 80px) !important;
+		}
 	}
 
 	/* Móvil - espacio para botón volver */
 	@media (max-width: 600px) {
 		.fullscreen-iframe-container {
-			padding-top: calc(60px + env(safe-area-inset-top, 0px));
+			padding: 10px;
+			padding-top: calc(70px + env(safe-area-inset-top, 0px));
+		}
+
+		.fullscreen-iframe-container :global(.media-embed),
+		.fullscreen-iframe-container :global(.embed-container) {
+			max-width: 100% !important;
+			max-height: calc(100dvh - 80px - env(safe-area-inset-top, 0px)) !important;
 		}
 
 		.fullscreen-back-btn {
