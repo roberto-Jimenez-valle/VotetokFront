@@ -206,6 +206,9 @@
   export let geo: any = null;
   export let dataJson: any = null;
   export let autoLoad: boolean = true; // si true y no hay props, carga desde store
+  export let embedMode: boolean = false; // Modo embed: solo globo y bottomsheet, sin controles
+  export let initialPoll: any = null; // Encuesta inicial para modo embed (se abre automáticamente)
+  export let embedPalette: any = null; // Paleta de colores para modo embed
   // Loader opcional para datos por región (bbox) cuando el usuario se acerca (no usado actualmente)
   export const loadRegionData:
     | null
@@ -1557,7 +1560,8 @@
         ];
 
         // HISTORY API: Guardar estado en el historial del navegador (solo si no viene de popstate)
-        if (!skipHistoryPush && !isNavigatingFromHistory) {
+        // En modo embed, NO redirigir
+        if (!embedMode && !skipHistoryPush && !isNavigatingFromHistory) {
           const historyState: any = {
             level: "country",
             countryIso: iso,
@@ -2110,7 +2114,8 @@
         ];
 
         // HISTORY API: Guardar estado en el historial del navegador (solo si no viene de popstate)
-        if (!skipHistoryPush && !isNavigatingFromHistory) {
+        // En modo embed, NO redirigir
+        if (!embedMode && !skipHistoryPush && !isNavigatingFromHistory) {
           const historyState: any = {
             level: "subdivision",
             countryIso: countryIso,
@@ -2484,7 +2489,8 @@
 
       // HISTORY API: Volver al estado mundial (solo si no viene de popstate)
       // IMPORTANTE: Si hay una encuesta activa, NO sobrescribir el estado
-      if (!isNavigatingFromHistory && !activePoll) {
+      // En modo embed, NO redirigir
+      if (!embedMode && !isNavigatingFromHistory && !activePoll) {
                 await goto("/", {
           replaceState: false,
           noScroll: true,
@@ -3342,6 +3348,9 @@
 
   // Close dropdown when clicking outside
   function handleClickOutside(event: MouseEvent) {
+    // En modo embed, ignorar clicks fuera del canvas del globo
+    if (embedMode) return;
+    
     if (showDropdown) {
       const target = event.target as HTMLElement;
       const dropdown = target.closest(".breadcrumb-dropdown-wrapper");
@@ -4756,7 +4765,8 @@
     lastProcessedPollId = null;
 
     // HISTORY API: Volver a modo trending (solo si no viene de popstate y no se va a abrir otra encuesta)
-    if (!isNavigatingFromHistory && !skipTrendingLoad) {
+    // En modo embed, NO redirigir a la página principal
+    if (!embedMode && !isNavigatingFromHistory && !skipTrendingLoad) {
       const currentUrl =
         typeof window !== "undefined"
           ? window.location.pathname + window.location.search
@@ -4938,6 +4948,12 @@
   
   // Función para cargar datos de trending (múltiples encuestas agregadas)
   async function loadTrendingData() {
+    // CRÍTICO: No cargar trending en modo embed
+    if (embedMode) {
+      console.log('[loadTrendingData] ⏸️ Ignorando - modo embed activo');
+      return;
+    }
+    
     // CRÍTICO: No cargar trending si se está cargando una encuesta específica
     if (isLoadingSpecificPoll) {
       console.log('[loadTrendingData] ⏸️ Ignorando - se está cargando una encuesta específica');
@@ -5573,7 +5589,8 @@
     activePollOptions = formattedPoll.options;
 
     // HISTORY API: Guardar estado de encuesta en el historial
-    if (!isNavigatingFromHistory) {
+    // En modo embed, NO redirigir
+    if (!embedMode && !isNavigatingFromHistory) {
       const url = `/?poll=${encodeURIComponent(poll.id)}`;
       const currentUrl =
         typeof window !== "undefined"
@@ -6380,16 +6397,19 @@
   }
 
   const initialColors = getInitialThemeColors();
+  
+  // En modo embed, usar la paleta proporcionada
+  const effectiveColors = embedMode && embedPalette ? embedPalette : initialColors;
 
   // Controles de color (color pickers) y opacidad (sliders) - Inicializados con tema guardado o Carbon
   let capColor = themeConfig.theme.colors.accent.blue;
   let capOpacityPct = 100;
-  let sphereColor = initialColors.sphere;
+  let sphereColor = effectiveColors.sphere;
   let sphereOpacityPct = 100;
-  let strokeColor = initialColors.stroke;
-  let bgColor = initialColors.bg;
-  let polygonNoDataColor = initialColors.noData;
-  let atmosphereColor = initialColors.atmosphere;
+  let strokeColor = effectiveColors.stroke;
+  let bgColor = effectiveColors.bg;
+  let polygonNoDataColor = effectiveColors.noData;
+  let atmosphereColor = effectiveColors.atmosphere;
   let atmosphereAltitude = 0.12; // Altura sutil para atmósfera
   let isDarkTheme = initialColors.isDark; // Estado del tema desde localStorage o true por defecto
   let isLightTheme = !isDarkTheme;
@@ -7000,6 +7020,8 @@
   let isProfileModalOpen = false;
   let selectedProfileUserId: number | null = null;
   function handleScroll() {
+    // En modo embed, no capturar eventos de scroll
+    if (embedMode) return;
     const y = window.scrollY || 0;
     // Ya no alternamos barras con el scroll; solo actualizamos el estado interno
     lastScrollY = y;
@@ -7008,6 +7030,8 @@
   let wheelAcc = 0;
   const switchThreshold = 40; // px acumulados antes de alternar
   function handleWheel(e: WheelEvent) {
+    // En modo embed, no capturar eventos de wheel
+    if (embedMode) return;
     wheelAcc += e.deltaY;
     // Sin alternar: resetear acumulador si se supera umbral para evitar overflow
     if (wheelAcc > switchThreshold || wheelAcc < -switchThreshold) {
@@ -7016,9 +7040,13 @@
   }
   let touchStartY = 0;
   function onTouchStart(e: TouchEvent) {
+    // En modo embed, no capturar eventos de touch
+    if (embedMode) return;
     touchStartY = e.touches?.[0]?.clientY ?? 0;
   }
   function onTouchMove(e: TouchEvent) {
+    // En modo embed, no capturar eventos de touch
+    if (embedMode) return;
     const y = e.touches?.[0]?.clientY ?? 0;
     const dy = y - touchStartY;
     // No alternar con gestos; solo actualizar ancla para no acumular delta indefinidamente
@@ -7576,7 +7604,9 @@
     
     // ============================================
     // HISTORY API - Navegación SPA con botón atrás
+    // (Deshabilitado en modo embed para evitar conflictos)
     // ============================================
+    if (!embedMode) {
     popstateHandler = async (event: PopStateEvent) => {
 
       if (!navigationManager) return;
@@ -7699,6 +7729,7 @@
       history.replaceState(initialState, "", currentUrl);
             // DEBUG: Verificar URL después del replaceState
           }
+    } // Fin del if (!embedMode) para History API
 
     // Inicializar controlador de bottom sheet
     sheetCtrl = new BottomSheetController({
@@ -7829,19 +7860,63 @@
           // Esperar un momento para que los polígonos se rendericen
           await new Promise((resolve) => setTimeout(resolve, 100));
 
+          // En modo embed, marcar inmediatamente que estamos cargando una encuesta
+          if (embedMode && initialPoll) {
+            isLoadingSpecificPoll = true;
+            console.log('[Embed] 🔒 Marcando isLoadingSpecificPoll=true para prevenir trending');
+          }
+
           // Verificar si hay parámetro ?poll= en la URL ANTES de cargar trending
           const urlParams = new URLSearchParams(window.location.search);
           const hasPollParam = urlParams.get("poll");
 
           // AHORA cargar trending solo si NO hay encuesta activa Y NO hay parámetro poll en URL
-          if (!activePoll && !hasPollParam) {
-                        await loadTrendingData();
+          // En modo embed, NO cargar trending - se mostrará solo la encuesta inicial
+          if (!embedMode && !activePoll && !hasPollParam) {
+            await loadTrendingData();
 
             // Forzar actualización de colores después de cargar trending
             await new Promise((resolve) => requestAnimationFrame(resolve));
             await updateGlobeColors();
           } else if (hasPollParam) {
                       }
+          
+          // En modo embed, abrir la encuesta inicial automáticamente
+          if (embedMode && initialPoll) {
+            console.log('[Embed] 📊 Abriendo encuesta inicial:', initialPoll.id);
+            
+            // Marcar que estamos cargando encuesta específica para bloquear trending
+            isLoadingSpecificPoll = true;
+            
+            // Esperar a que los polígonos del mundo estén cargados
+            let attempts = 0;
+            while ((!worldPolygons || worldPolygons.length === 0) && attempts < 30) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              attempts++;
+            }
+            console.log('[Embed] 🌍 worldPolygons disponibles:', worldPolygons?.length || 0);
+            
+            // Crear opciones formateadas
+            const options = initialPoll.options?.map((opt: any) => ({
+              key: opt.key,
+              label: opt.label || opt.text,
+              color: opt.color,
+              votes: opt.votes || 0
+            })) || [];
+            
+            // Crear evento sintético
+            const syntheticEvent = new CustomEvent("openpoll", {
+              detail: { poll: initialPoll, options },
+            }) as CustomEvent<{ poll: any; options: any[] }>;
+            
+            await handleOpenPollInGlobe(syntheticEvent);
+            
+            // Forzar actualización de colores después de abrir la encuesta
+            await new Promise(resolve => setTimeout(resolve, 300));
+            await updateGlobeColors();
+            globe?.refreshPolyColors?.();
+            console.log('[Embed] 🎨 Colores actualizados');
+          }
         }
       }
     } else {
@@ -8259,6 +8334,7 @@
   {selectedCityId}
   {centerPolygonId}
   {isDarkTheme}
+  {embedMode}
   bottomSheetState={SHEET_STATE}
   onPolyCapColor={(feat) => {
     const props = feat?.properties || {};
@@ -8700,7 +8776,8 @@
           ];
 
           // HISTORY API: Guardar en historial
-          if (!isNavigatingFromHistory) {
+          // En modo embed, NO redirigir
+          if (!embedMode && !isNavigatingFromHistory) {
             const historyState = {
               level: "country",
               countryIso: iso,
@@ -9449,7 +9526,8 @@
 
 <!-- SearchBar movido al BottomSheet -->
 
-<!-- Tabs compactos (Para ti → menú) junto a la lupa -->
+<!-- Tabs compactos (Para ti → menú) junto a la lupa - Ocultos en modo embed -->
+{#if !embedMode}
 <div
   class="tabs-float"
   class:blocked-during-animation={isZooming}
@@ -9532,7 +9610,9 @@
     {/if}
   </div>
 </div>
+{/if}
 
+{#if !embedMode}
 <div class:blocked-during-animation={isZooming}>
   <TagBar
     bind:activeTag
@@ -9549,7 +9629,9 @@
     {markSeen}
   />
 </div>
+{/if}
 
+{#if !embedMode}
 <BottomSheet
   state={SHEET_STATE}
   y={sheetY}
@@ -9625,6 +9707,7 @@
   }}
   on:openPollInGlobe={handleOpenPollInGlobe}
 />
+{/if}
 
 <!-- Dropdown flotante renderizado fuera del BottomSheet -->
 {#if showDropdown}

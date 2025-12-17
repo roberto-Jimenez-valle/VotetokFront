@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
   import { createEventDispatcher } from 'svelte';
+  import { DARK_PALETTES, LIGHT_PALETTES } from '$lib/config/palettes';
   
   export let isOpen = false;
   export let pollId: number | string;
@@ -10,14 +11,26 @@
   
   let activeTab: 'share' | 'embed' = 'share';
   let embedTheme: 'dark' | 'light' = 'dark';
-  let embedCompact = false;
+  let selectedPaletteIndex = 0;
   let copied = false;
   let copiedEmbed = false;
   
+  $: currentPalettes = embedTheme === 'light' ? LIGHT_PALETTES : DARK_PALETTES;
+  $: selectedPalette = currentPalettes[selectedPaletteIndex] || currentPalettes[0];
+  
   $: baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   $: shareUrl = `${baseUrl}/poll/${pollId}`;
-  $: embedUrl = `${baseUrl}/embed/poll/${pollId}?theme=${embedTheme}${embedCompact ? '&compact=true' : ''}`;
-  $: embedCode = `<iframe src="${embedUrl}" width="100%" height="${embedCompact ? '280' : '352'}" frameborder="0" style="border-radius:12px"></iframe>`;
+  $: embedUrl = `${baseUrl}/embed/globe/${pollId}?theme=${embedTheme}&palette=${selectedPalette.name}`;
+  $: embedCode = `<iframe src="${embedUrl}" width="320" height="600" frameborder="0" style="border-radius:12px"></iframe>`;
+  
+  function selectPalette(index: number) {
+    selectedPaletteIndex = index;
+  }
+  
+  function switchTheme(theme: 'dark' | 'light') {
+    embedTheme = theme;
+    selectedPaletteIndex = 0;
+  }
   
   function close() {
     isOpen = false;
@@ -205,22 +218,33 @@
     {:else}
       <!-- Embed Tab -->
       <div class="tab-content">
-        <p class="embed-description">Copia el código para embeber esta encuesta en tu web o blog.</p>
-        
-        <!-- Options -->
-        <div class="embed-options">
-          <label class="option-label">
-            <span>Tema:</span>
-            <select bind:value={embedTheme}>
-              <option value="dark">Oscuro</option>
-              <option value="light">Claro</option>
-            </select>
-          </label>
-          
-          <label class="option-checkbox">
-            <input type="checkbox" bind:checked={embedCompact} />
-            <span>Versión compacta</span>
-          </label>
+        <!-- Controles compactos: Tema + Paleta -->
+        <div class="embed-controls">
+          <div class="theme-toggle-compact">
+            <button 
+              class="theme-btn-compact {embedTheme === 'dark' ? 'active' : ''}" 
+              onclick={() => switchTheme('dark')}
+              type="button"
+              title="Tema oscuro"
+            >🌙</button>
+            <button 
+              class="theme-btn-compact {embedTheme === 'light' ? 'active' : ''}" 
+              onclick={() => switchTheme('light')}
+              type="button"
+              title="Tema claro"
+            >☀️</button>
+          </div>
+          <div class="palette-row">
+            {#each currentPalettes.slice(0, 8) as palette, i}
+              <button 
+                class="palette-dot-compact {selectedPaletteIndex === i ? 'active' : ''}"
+                style="background: {palette.bg};"
+                onclick={() => selectPalette(i)}
+                title={palette.name}
+                type="button"
+              ></button>
+            {/each}
+          </div>
         </div>
         
         <!-- Preview -->
@@ -228,7 +252,7 @@
           <iframe 
             src={embedUrl} 
             width="100%" 
-            height={embedCompact ? 280 : 352}
+            height="600"
             frameborder="0"
             title="Preview del embed"
           ></iframe>
@@ -408,61 +432,82 @@
   .social-btn.telegram { color: #0088cc; }
   .social-btn.facebook { color: #1877f2; }
   
-  .embed-description {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 14px;
-    margin: 0 0 16px 0;
-  }
-  
-  .embed-options {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-  
-  .option-label {
+  /* Controles compactos de embed */
+  .embed-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 14px;
-  }
-  
-  .option-label select {
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 8px;
-    color: white;
-    font-size: 14px;
   }
   
-  .option-checkbox {
+  .theme-toggle-compact {
+    display: flex;
+    gap: 4px;
+  }
+  
+  .theme-btn-compact {
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 14px;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    font-size: 16px;
     cursor: pointer;
+    transition: all 0.2s;
   }
   
-  .option-checkbox input {
-    width: 18px;
-    height: 18px;
-    accent-color: #6366f1;
+  .theme-btn-compact:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .theme-btn-compact.active {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border-color: transparent;
+  }
+  
+  .palette-row {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+  
+  .palette-dot-compact {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .palette-dot-compact:hover {
+    transform: scale(1.15);
+  }
+  
+  .palette-dot-compact.active {
+    border-color: white;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
   }
   
   .embed-preview {
-    border-radius: 12px;
+    border-radius: 36px;
     overflow: hidden;
     margin-bottom: 16px;
     background: #0a0a0f;
+    border: none;
   }
   
   .embed-preview iframe {
     display: block;
-    border-radius: 12px;
+    border-radius: 36px;
+    border: none;
+    outline: none;
   }
   
   .code-box {

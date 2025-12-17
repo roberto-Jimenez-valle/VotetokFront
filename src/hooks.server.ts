@@ -7,10 +7,48 @@ import type { Handle } from '@sveltejs/kit'
 import { requireAppSignature } from '$lib/server/middleware/appAuth'
 import { extractAuthOptional } from '$lib/server/middleware/auth'
 import { rateLimitByIP, rateLimitByUser, rateLimitGlobal } from '$lib/server/middleware/rateLimit'
+import { EMBED_CONFIG } from '$lib/config/embed'
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url
   const ip = event.getClientAddress()
+  const origin = event.request.headers.get('origin') || ''
+  const referer = event.request.headers.get('referer') || ''
+  
+  // ============================================
+  // 0. EMBED SECURITY (rutas /embed/*)
+  // ============================================
+  const isEmbedRoute = pathname.startsWith('/embed/')
+  
+  if (isEmbedRoute) {
+    // Validar origen si está configurado
+    const isAllowedOrigin = EMBED_CONFIG.validateOrigin(origin, referer)
+    
+    if (!isAllowedOrigin && EMBED_CONFIG.STRICT_MODE) {
+      console.warn(`[Embed Security] ⚠️ Origen no permitido: ${origin || referer || 'desconocido'}`)
+      return new Response('Forbidden: Origin not allowed', { 
+        status: 403,
+        headers: { 'Content-Type': 'text/plain' }
+      })
+    }
+    
+    // Rate limiting específico para embeds (más restrictivo)
+    try {
+      await rateLimitByIP(ip, 'embed', { 
+        max: EMBED_CONFIG.RATE_LIMIT.MAX_REQUESTS, 
+        windowMs: EMBED_CONFIG.RATE_LIMIT.WINDOW_MS 
+      })
+    } catch (err) {
+      console.warn(`[Embed Security] 🚫 Rate limit excedido para IP: ${ip}`)
+      return new Response('Too Many Requests', { 
+        status: 429,
+        headers: { 
+          'Content-Type': 'text/plain',
+          'Retry-After': '60'
+        }
+      })
+    }
+  }
 
   // DESARROLLO: Deshabilitar rate limiting y app auth en localhost e IPs locales
   const isLocalIP = event.url.hostname === 'localhost' ||
@@ -113,31 +151,40 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Log de request exitoso
     console.log(`[${new Date().toISOString()}] ${event.request.method} ${pathname} - ${response.status} (${duration}ms)${user ? ` - User ${user.userId}` : ' - Anonymous'}`)
 
-    // Agregar headers de seguridad y CSP permisivo para embeds
+    // Agregar headers de seguridad
     if (user) {
       response.headers.set('X-User-Role', user.role)
     }
 
-    // CSP permisivo para YouTube, Spotify y otros embeds de medios
-    response.headers.set(
-      'Content-Security-Policy-Report-Only',
-      [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:",
-        "style-src 'self' 'unsafe-inline' https:",
-        "img-src 'self' data: https: http:",
-        "font-src 'self' data: https:",
-        "connect-src 'self' https: http: ws: wss:",
-        "media-src 'self' https: http: blob: data:",
-        "frame-src 'self' https://www.youtube.com https://open.spotify.com https://player.vimeo.com https://soundcloud.com https://www.tiktok.com https://player.twitch.tv https://clips.twitch.tv https://www.dailymotion.com https://embed.music.apple.com https://widget.deezer.com https://*.bandcamp.com",
-        "worker-src 'self' blob:",
-        "child-src 'self' blob: https:",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'self'"
-      ].join('; ')
-    )
+    // Headers específicos para embeds (rutas /embed/*)
+    if (isEmbedRoute) {
+      const embedHeaders = EMBED_CONFIG.getResponseHeaders(origin)
+      for (const [key, value] of Object.entries(embedHeaders)) {
+        response.headers.set(key, value)
+      }
+      console.log(`[Embed] ✅ Headers de seguridad aplicados para: ${pathname}`)
+    } else {
+      // CSP permisivo para YouTube, Spotify y otros embeds de medios (rutas normales)
+      response.headers.set(
+        'Content-Security-Policy-Report-Only',
+        [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:",
+          "style-src 'self' 'unsafe-inline' https:",
+          "img-src 'self' data: https: http:",
+          "font-src 'self' data: https:",
+          "connect-src 'self' https: http: ws: wss:",
+          "media-src 'self' https: http: blob: data:",
+          "frame-src 'self' https://www.youtube.com https://open.spotify.com https://player.vimeo.com https://soundcloud.com https://www.tiktok.com https://player.twitch.tv https://clips.twitch.tv https://www.dailymotion.com https://embed.music.apple.com https://widget.deezer.com https://*.bandcamp.com",
+          "worker-src 'self' blob:",
+          "child-src 'self' blob: https:",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'self'"
+        ].join('; ')
+      )
+    }
 
     return response
   } catch (err: any) {
