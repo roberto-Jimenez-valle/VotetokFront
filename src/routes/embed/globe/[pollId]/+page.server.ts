@@ -64,6 +64,11 @@ export const load: PageServerLoad = async ({ params, url }) => {
   
   // Log de acceso al embed
   console.log(`[Embed] 📊 Acceso a encuesta ${pollId} - "${poll.title.substring(0, 50)}..." - Cerrada: ${isClosed}`);
+  
+  // Log de opciones con sus imageUrls para debugging
+  poll.options.forEach((opt, i) => {
+    console.log(`[Embed] 📋 Opción ${i+1}: "${opt.optionLabel?.substring(0, 30)}" - imageUrl: ${opt.imageUrl || 'NO TIENE'}`);
+  });
 
   // Calcular total de votos y porcentajes
   const totalVotes = poll._count.votes;

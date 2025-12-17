@@ -27,25 +27,17 @@
     }
   }
   
-  // ===== THUMBNAILS PARA URLS DE PLATAFORMAS =====
+  // ===== THUMBNAILS PARA URLS =====
   let thumbnails: Record<string, string> = {};
   
-  // Detectar si es una URL de plataforma que necesita thumbnail
+  // Detectar si una URL necesita obtener thumbnail via API
+  // Retorna true para CUALQUIER URL que no sea imagen directa
   function needsThumbnail(url: string): boolean {
     if (!url) return false;
-    const lowerUrl = url.toLowerCase();
-    // Plataformas que necesitan thumbnail
-    if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) return true;
-    if (lowerUrl.includes('spotify.com')) return true;
-    if (lowerUrl.includes('vimeo.com')) return true;
-    if (lowerUrl.includes('tiktok.com')) return true;
-    if (lowerUrl.includes('soundcloud.com')) return true;
-    if (lowerUrl.includes('twitch.tv')) return true;
-    if (lowerUrl.includes('twitter.com') || lowerUrl.includes('x.com')) return true;
-    if (lowerUrl.includes('dailymotion.com')) return true;
-    // Si es imagen directa, no necesita thumbnail
+    // Si es imagen directa, no necesita fetch de thumbnail
     if (/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url)) return false;
-    return false;
+    // Cualquier otra URL (sitios web, plataformas, etc.) necesita thumbnail via API
+    return true;
   }
   
   // Verificar si es imagen directa
@@ -62,31 +54,39 @@
   }
   
   // Obtener thumbnail desde la API
-  async function fetchThumbnail(url: string): Promise<string | null> {
+  async function fetchThumbnail(url: string, optionKey: string): Promise<void> {
     try {
+      console.log('[Embed] 🔍 Fetching thumbnail for:', optionKey, url?.substring(0, 50));
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
       if (response.ok) {
         const result = await response.json();
         const data = result.data || result;
-        return data.imageProxied || data.image || data.thumbnailUrl || null;
+        const thumb = data.imageProxied || data.image || data.thumbnailUrl || null;
+        if (thumb) {
+          console.log('[Embed] ✅ Thumbnail found for:', optionKey, thumb?.substring(0, 50));
+          thumbnails[optionKey] = thumb;
+          thumbnails = { ...thumbnails }; // Trigger reactivity
+        } else {
+          console.log('[Embed] ⚠️ No thumbnail in response for:', optionKey);
+        }
+      } else {
+        console.log('[Embed] ❌ API error for:', optionKey, response.status);
       }
     } catch (err) {
-      console.warn('[Embed] Error fetching thumbnail:', err);
+      console.warn('[Embed] Error fetching thumbnail:', optionKey, err);
     }
-    return null;
   }
   
-  // Cargar todos los thumbnails al montar
+  // Cargar todos los thumbnails al montar (en paralelo)
   onMount(async () => {
-    for (const option of poll.options) {
-      if (option.imageUrl && needsThumbnail(option.imageUrl)) {
-        const thumb = await fetchThumbnail(option.imageUrl);
-        if (thumb) {
-          thumbnails[option.key] = thumb;
-          thumbnails = thumbnails; // Trigger reactivity
-        }
-      }
-    }
+    console.log('[Embed] 🚀 Loading thumbnails for', poll.options.length, 'options');
+    
+    const promises = poll.options
+      .filter(option => option.imageUrl && needsThumbnail(option.imageUrl))
+      .map(option => fetchThumbnail(option.imageUrl, option.key));
+    
+    await Promise.all(promises);
+    console.log('[Embed] ✅ Thumbnails loaded:', Object.keys(thumbnails).length);
   });
   
   // ===== CARD STACK FLIP EFFECT (CIRCULAR) =====

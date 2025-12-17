@@ -750,137 +750,15 @@ export async function quickVerify(hostname: string): Promise<{
   };
 }
 
-// ============================================================================
-// GOOGLE SEARCH FALLBACK
-// ============================================================================
-
-/**
- * Verifica si un dominio existe y es válido usando Google Search
- * Se usa como fallback cuando Tranco no tiene el dominio
- * 
- * Hace una búsqueda site:dominio y verifica si hay resultados
- */
-async function checkGoogleSearch(domain: string): Promise<{
-  isValid: boolean;
-  hasResults: boolean;
-  resultCount: number | null;
-}> {
-  try {
-    // Usar la URL de búsqueda de Google con site:dominio
-    const searchUrl = `https://www.google.com/search?q=site:${encodeURIComponent(domain)}`;
-    
-    console.log(`[DomainVerification] 🔍 Google Search fallback para: ${domain}`);
-    
-    const response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-      signal: AbortSignal.timeout(5000) // 5 segundos timeout
-    });
-    
-    if (!response.ok) {
-      console.log(`[DomainVerification] ⚠️ Google Search error: ${response.status}`);
-      return { isValid: false, hasResults: false, resultCount: null };
-    }
-    
-    const html = await response.text();
-    
-    // Verificar si hay resultados
-    // Google muestra "No results found" o similar cuando no hay resultados
-    const noResults = html.includes('did not match any documents') || 
-                      html.includes('No results found') ||
-                      html.includes('no encontró ningún documento') ||
-                      html.includes('Your search -') && html.includes('- did not match');
-    
-    // Intentar extraer el número de resultados
-    // Google muestra algo como "About 1,234,567 results"
-    const resultMatch = html.match(/About ([\d,]+) results/i) || 
-                        html.match(/Aproximadamente ([\d,\.]+) resultados/i);
-    
-    let resultCount: number | null = null;
-    if (resultMatch) {
-      resultCount = parseInt(resultMatch[1].replace(/[,\.]/g, ''), 10);
-    }
-    
-    const hasResults = !noResults && (resultCount === null || resultCount > 0);
-    
-    if (hasResults) {
-      console.log(`[DomainVerification] ✅ Google Search: ${domain} tiene resultados${resultCount ? ` (~${resultCount})` : ''}`);
-    } else {
-      console.log(`[DomainVerification] ❌ Google Search: ${domain} sin resultados`);
-    }
-    
-    return {
-      isValid: hasResults,
-      hasResults,
-      resultCount
-    };
-    
-  } catch (err: any) {
-    console.warn(`[DomainVerification] ⚠️ Google Search error: ${err.message}`);
-    // Si falla Google Search, no marcar como inválido automáticamente
-    return { isValid: false, hasResults: false, resultCount: null };
-  }
-}
-
-// Cache para resultados de Google Search
-const googleSearchCache = new Map<string, { isValid: boolean; timestamp: number }>();
-const GOOGLE_SEARCH_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas
-
-/**
- * Verifica un dominio con Google Search (con caché)
- */
-async function verifyWithGoogleSearch(domain: string): Promise<boolean> {
-  // Verificar caché
-  const cached = googleSearchCache.get(domain);
-  if (cached && (Date.now() - cached.timestamp) < GOOGLE_SEARCH_CACHE_TTL) {
-    return cached.isValid;
-  }
-  
-  const result = await checkGoogleSearch(domain);
-  
-  // Guardar en caché
-  googleSearchCache.set(domain, {
-    isValid: result.isValid,
-    timestamp: Date.now()
-  });
-  
-  return result.isValid;
-}
-
 /**
  * Verifica si un dominio es seguro (reemplazo de isSafeDomain)
  * Compatible con la API anterior
- * 
- * Flujo:
- * 1. Verificar en Tranco (Top 1M)
- * 2. Si no está en Tranco, verificar con Google Search
- * 3. Si Google tiene resultados, considerar válido
  */
 export async function isSafeDomainAuto(url: string): Promise<boolean> {
   try {
     const urlObj = new URL(url);
     const result = await quickVerify(urlObj.hostname);
-    
-    // Si está en Tranco, es seguro
-    if (result.isSafe) {
-      return true;
-    }
-    
-    // Si no está en Tranco, intentar con Google Search como fallback
-    const normalizedHost = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-    console.log(`[DomainVerification] 🔄 ${normalizedHost} no está en Tranco, probando Google Search...`);
-    
-    const googleResult = await verifyWithGoogleSearch(normalizedHost);
-    
-    if (googleResult) {
-      console.log(`[DomainVerification] ✅ ${normalizedHost} validado por Google Search`);
-      return true;
-    }
-    
-    return false;
+    return result.isSafe;
   } catch {
     return false;
   }
