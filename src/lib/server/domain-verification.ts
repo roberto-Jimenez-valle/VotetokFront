@@ -58,10 +58,19 @@ export interface VirusTotalResult {
 // CACHE Y ESTADO
 // ============================================================================
 
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+
+// Ruta del archivo de caché persistente
+const TRANCO_CACHE_FILE = join(process.cwd(), 'prisma', 'tranco-cache.json');
+
 // Cache de la lista Tranco en memoria (dominio -> ranking)
 let trancoList: Map<string, number> = new Map();
 let trancoLastUpdate: number = 0;
 let trancoLoading: Promise<void> | null = null;
+let trancoLastError: number = 0;
+const TRANCO_ERROR_COOLDOWN = 5 * 60 * 1000; // 5 minutos de cooldown
+let fallbackListLoaded = false;
 
 // Cache de verificaciones
 const verificationCache = new Map<string, DomainVerificationResult>();
@@ -74,55 +83,291 @@ const verificationCache = new Map<string, DomainVerificationResult>();
  * Descarga y parsea la lista Tranco (Top 1M sitios)
  * La lista se actualiza diariamente en https://tranco-list.eu/
  */
+/**
+ * Carga la lista Tranco desde el caché persistente (archivo JSON)
+ */
+function loadTrancoFromCache(): { list: Map<string, number>; timestamp: number } | null {
+  try {
+    if (!existsSync(TRANCO_CACHE_FILE)) {
+      return null;
+    }
+    
+    const data = JSON.parse(readFileSync(TRANCO_CACHE_FILE, 'utf-8'));
+    const list = new Map<string, number>(Object.entries(data.domains));
+    
+    console.log(`[DomainVerification] 📂 Caché cargado: ${list.size} dominios (${new Date(data.timestamp).toISOString()})`);
+    return { list, timestamp: data.timestamp };
+  } catch (err) {
+    console.warn('[DomainVerification] Error cargando caché:', err);
+    return null;
+  }
+}
+
+/**
+ * Guarda la lista Tranco en caché persistente (archivo JSON)
+ */
+function saveTrancoToCache(list: Map<string, number>): void {
+  try {
+    const data = {
+      timestamp: Date.now(),
+      count: list.size,
+      domains: Object.fromEntries(list)
+    };
+    writeFileSync(TRANCO_CACHE_FILE, JSON.stringify(data), 'utf-8');
+    console.log(`[DomainVerification] 💾 Caché guardado: ${list.size} dominios`);
+  } catch (err) {
+    console.warn('[DomainVerification] Error guardando caché:', err);
+  }
+}
+
+/**
+ * Descarga la lista Tranco desde la web
+ */
 async function downloadTrancoList(): Promise<Map<string, number>> {
+  const now = Date.now();
+  
+  // Si hubo un error reciente, usar caché/fallback sin reintentar
+  if (trancoLastError > 0 && (now - trancoLastError) < TRANCO_ERROR_COOLDOWN) {
+    if (!fallbackListLoaded) {
+      console.log('[DomainVerification] ⏳ Cooldown activo, cargando fallback...');
+      const fallback = createFallbackList();
+      fallbackListLoaded = true;
+      return fallback;
+    }
+    return trancoList.size > 0 ? trancoList : createFallbackList();
+  }
+  
+  // Intentar cargar desde caché persistente primero
+  const cached = loadTrancoFromCache();
+  if (cached && (now - cached.timestamp) < TRANCO_UPDATE_INTERVAL) {
+    console.log('[DomainVerification] ✅ Usando caché válido (menos de 24h)');
+    return cached.list;
+  }
+  
   console.log('[DomainVerification] 📥 Descargando lista Tranco...');
   
   try {
-    // Primero intentamos el CSV directo (más rápido)
-    const csvUrl = 'https://tranco-list.eu/download/W4QW4/1000000';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     
-    const response = await fetch(csvUrl, {
-      headers: {
-        'User-Agent': 'VoteTok/1.0 (Domain Verification Service)',
-        'Accept': 'text/csv'
-      }
+    // URL directa del top 10k (más pequeño y confiable)
+    const response = await fetch('https://raw.githubusercontent.com/AUC-MISC/Tranco-Top-10000/main/tranco_top10000.csv', {
+      signal: controller.signal,
+      headers: { 'Accept': 'text/csv, text/plain, */*' }
     });
     
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}`);
     }
     
     const csv = await response.text();
     const list = new Map<string, number>();
     
-    // Parsear CSV: cada línea es "rank,domain"
-    const lines = csv.trim().split('\n');
-    for (const line of lines) {
+    for (const line of csv.trim().split('\n')) {
       const [rankStr, domain] = line.split(',');
       if (domain && rankStr) {
         const rank = parseInt(rankStr, 10);
         if (!isNaN(rank)) {
-          // Guardar dominio normalizado
           list.set(domain.trim().toLowerCase(), rank);
         }
       }
     }
     
-    console.log(`[DomainVerification] ✅ Lista Tranco cargada: ${list.size} dominios`);
-    return list;
+    if (list.size > 0) {
+      // Combinar con fallback para tener más dominios
+      const fallback = createFallbackList();
+      for (const [domain, rank] of fallback) {
+        if (!list.has(domain)) {
+          list.set(domain, 10000 + rank); // Añadir después del top 10k
+        }
+      }
+      
+      console.log(`[DomainVerification] ✅ Lista Tranco: ${list.size} dominios`);
+      saveTrancoToCache(list);
+      trancoLastError = 0;
+      return list;
+    }
+    
+    throw new Error('Lista vacía');
     
   } catch (err: any) {
     console.error('[DomainVerification] ❌ Error descargando Tranco:', err.message);
+    trancoLastError = now;
     
-    // Fallback: usar lista en caché si existe
-    if (trancoList.size > 0) {
-      console.log('[DomainVerification] ⚠️ Usando lista Tranco en caché');
-      return trancoList;
+    // Usar caché antiguo si existe
+    if (cached) {
+      console.log('[DomainVerification] ⚠️ Usando caché antiguo');
+      return cached.list;
     }
     
-    // Si no hay caché, devolver lista vacía (usará otros métodos de verificación)
-    return new Map();
+    // Último recurso: fallback hardcodeado
+    console.log('[DomainVerification] ⚠️ Usando fallback hardcodeado');
+    return createFallbackList();
   }
+}
+
+/**
+ * Lista fallback extensa de dominios populares (~500 dominios)
+ * Se usa cuando Tranco no está disponible
+ */
+function createFallbackList(): Map<string, number> {
+  const fallbackDomains = [
+    // === TOP GLOBAL ===
+    'google.com', 'youtube.com', 'facebook.com', 'twitter.com', 'instagram.com',
+    'wikipedia.org', 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com',
+    'x.com', 'whatsapp.com', 'yahoo.com', 'bing.com', 'duckduckgo.com',
+    'microsoft.com', 'apple.com', 'netflix.com', 'office.com', 'live.com',
+    
+    // === VIDEO/STREAMING ===
+    'twitch.tv', 'vimeo.com', 'dailymotion.com', 'hulu.com', 'disneyplus.com',
+    'hbomax.com', 'max.com', 'peacocktv.com', 'paramountplus.com', 'primevideo.com',
+    'crunchyroll.com', 'funimation.com', 'bilibili.com', 'niconico.jp',
+    
+    // === MÚSICA ===
+    'spotify.com', 'soundcloud.com', 'bandcamp.com', 'deezer.com', 'pandora.com',
+    'music.apple.com', 'tidal.com', 'last.fm', 'genius.com', 'discogs.com',
+    'mixcloud.com', 'audiomack.com',
+    
+    // === REDES SOCIALES ===
+    'discord.com', 'telegram.org', 'snapchat.com', 'pinterest.com', 'tumblr.com',
+    'threads.net', 'mastodon.social', 'bsky.app', 'weibo.com', 'vk.com',
+    
+    // === ENTRETENIMIENTO/CINE ===
+    'imdb.com', 'rottentomatoes.com', 'metacritic.com', 'letterboxd.com',
+    'trakt.tv', 'themoviedb.org', 'tvdb.com', 'thetvdb.com', 'fandango.com',
+    'justwatch.com', 'reelgood.com',
+    
+    // === GAMING ===
+    'steampowered.com', 'steamcommunity.com', 'store.steampowered.com',
+    'epicgames.com', 'gog.com', 'itch.io', 'humble.com', 'origin.com',
+    'ea.com', 'ubisoft.com', 'blizzard.com', 'battle.net',
+    'minecraft.net', 'mojang.com', 'roblox.com', 'rbxcdn.com',
+    'playstation.com', 'xbox.com', 'nintendo.com', 'nintendo.co.jp',
+    'ign.com', 'gamespot.com', 'kotaku.com', 'polygon.com', 'pcgamer.com',
+    'gamesradar.com', 'eurogamer.net', 'rockpapershotgun.com',
+    
+    // === NOTICIAS ===
+    'bbc.com', 'bbc.co.uk', 'cnn.com', 'nytimes.com', 'washingtonpost.com',
+    'theguardian.com', 'reuters.com', 'apnews.com', 'aljazeera.com',
+    'forbes.com', 'bloomberg.com', 'wsj.com', 'ft.com', 'economist.com',
+    'usatoday.com', 'nbcnews.com', 'cbsnews.com', 'abcnews.go.com',
+    'npr.org', 'pbs.org', 'time.com', 'newsweek.com', 'theatlantic.com',
+    'vox.com', 'axios.com', 'politico.com', 'thehill.com',
+    
+    // === TECH NEWS ===
+    'techcrunch.com', 'theverge.com', 'wired.com', 'arstechnica.com',
+    'engadget.com', 'mashable.com', 'cnet.com', 'zdnet.com', 'gizmodo.com',
+    'thenextweb.com', 'venturebeat.com', 'siliconvalley.com',
+    
+    // === DESARROLLO ===
+    'github.com', 'gitlab.com', 'bitbucket.org', 'stackoverflow.com',
+    'stackexchange.com', 'dev.to', 'hashnode.com', 'medium.com',
+    'npmjs.com', 'pypi.org', 'rubygems.org', 'crates.io', 'nuget.org',
+    'docker.com', 'hub.docker.com', 'kubernetes.io', 'vercel.com',
+    'netlify.com', 'heroku.com', 'railway.app', 'render.com',
+    'codepen.io', 'jsfiddle.net', 'codesandbox.io', 'replit.com',
+    'glitch.com', 'stackblitz.com',
+    
+    // === DISEÑO ===
+    'figma.com', 'canva.com', 'dribbble.com', 'behance.net', 'deviantart.com',
+    'artstation.com', 'creativebloq.com', 'designernews.co', 'awwwards.com',
+    'adobe.com', 'sketch.com', 'invisionapp.com', 'framer.com',
+    
+    // === PRODUCTIVIDAD ===
+    'notion.so', 'trello.com', 'asana.com', 'monday.com', 'clickup.com',
+    'airtable.com', 'miro.com', 'lucid.app', 'dropbox.com', 'box.com',
+    'evernote.com', 'todoist.com', 'slack.com', 'zoom.us', 'teams.microsoft.com',
+    
+    // === E-COMMERCE ===
+    'ebay.com', 'etsy.com', 'aliexpress.com', 'alibaba.com', 'wish.com',
+    'walmart.com', 'target.com', 'bestbuy.com', 'costco.com', 'homedepot.com',
+    'lowes.com', 'ikea.com', 'wayfair.com', 'overstock.com',
+    'newegg.com', 'bhphotovideo.com', 'adorama.com',
+    
+    // === FINANZAS ===
+    'paypal.com', 'stripe.com', 'square.com', 'venmo.com', 'cashapp.com',
+    'coinbase.com', 'binance.com', 'kraken.com', 'robinhood.com',
+    'fidelity.com', 'schwab.com', 'vanguard.com', 'etrade.com',
+    'bankofamerica.com', 'chase.com', 'wellsfargo.com', 'citi.com',
+    'tradingview.com', 'investing.com', 'marketwatch.com', 'seekingalpha.com',
+    
+    // === EDUCACIÓN ===
+    'coursera.org', 'udemy.com', 'edx.org', 'khanacademy.org', 'skillshare.com',
+    'masterclass.com', 'lynda.com', 'pluralsight.com', 'codecademy.com',
+    'freecodecamp.org', 'w3schools.com', 'mdn.io', 'developer.mozilla.org',
+    'ted.com', 'duolingo.com', 'quizlet.com', 'chegg.com',
+    
+    // === REFERENCIA ===
+    'quora.com', 'answers.com', 'britannica.com', 'dictionary.com',
+    'thesaurus.com', 'merriam-webster.com', 'oxforddictionaries.com',
+    'archive.org', 'wikimedia.org', 'wikidata.org', 'wolframalpha.com',
+    
+    // === SALUD ===
+    'healthline.com', 'webmd.com', 'wbmdstatic.com', 'mayoclinic.org',
+    'nih.gov', 'medlineplus.gov', 'cdc.gov', 'who.int', 'drugs.com',
+    'everydayhealth.com', 'medicalnewstoday.com', 'health.com',
+    
+    // === IMÁGENES/MEMES ===
+    'imgur.com', 'giphy.com', 'tenor.com', 'gfycat.com', 'knowyourmeme.com',
+    'kym-cdn.com', '9gag.com', 'funnyjunk.com', 'cheezburger.com',
+    'unsplash.com', 'pexels.com', 'pixabay.com', 'flickr.com',
+    'shutterstock.com', 'gettyimages.com', 'istockphoto.com',
+    
+    // === VIAJES ===
+    'booking.com', 'airbnb.com', 'tripadvisor.com', 'expedia.com',
+    'hotels.com', 'kayak.com', 'skyscanner.com', 'google.com/travel',
+    
+    // === COMIDA ===
+    'doordash.com', 'ubereats.com', 'grubhub.com', 'postmates.com',
+    'yelp.com', 'allrecipes.com', 'food.com', 'epicurious.com',
+    'bonappetit.com', 'seriouseats.com', 'foodnetwork.com',
+    
+    // === DEPORTES ===
+    'espn.com', 'sports.yahoo.com', 'bleacherreport.com', 'cbssports.com',
+    'nba.com', 'nfl.com', 'mlb.com', 'nhl.com', 'fifa.com', 'uefa.com',
+    
+    // === CDNs E INFRAESTRUCTURA ===
+    'cloudflare.com', 'cloudflare-dns.com', 'cdnjs.cloudflare.com',
+    'akamai.net', 'akamaized.net', 'fastly.net', 'cloudfront.net',
+    'jsdelivr.net', 'unpkg.com', 'bootstrapcdn.com', 'fontawesome.com',
+    'googleusercontent.com', 'gstatic.com', 'googleapis.com',
+    'fbcdn.net', 'twimg.com', 'redd.it', 'redditmedia.com',
+    'pinimg.com', 'wp.com', 'wordpress.com', 'gravatar.com',
+    'media-amazon.com', 'ssl-images-amazon.com', 'images-amazon.com',
+    'media-imdb.com',
+    
+    // === CDNs EDUCATIVOS ===
+    'udemy.com', 'udimg.com', 'udemycdn.com', // Udemy
+    'coursera-course-photos.s3.amazonaws.com', 'coursera.org',
+    'edx.org', 'edxuploads.s3.amazonaws.com',
+    'skillshare.com', 'static.skillshare.com',
+    'lynda.com', 'pluralsight.com',
+    
+    // === MARCAS Y EMPRESAS ===
+    'ferrero.com', 'nutella.com', 'kinder.com', // Ferrero
+    'nestle.com', 'coca-cola.com', 'pepsi.com',
+    'mcdonalds.com', 'starbucks.com', 'nike.com', 'adidas.com',
+    'apple.com', 'samsung.com', 'sony.com', 'lg.com',
+    'toyota.com', 'ford.com', 'bmw.com', 'mercedes-benz.com',
+    'ikea.com', 'zara.com', 'hm.com', 'uniqlo.com',
+    
+    // === OTROS POPULARES ===
+    'weather.com', 'accuweather.com', 'wunderground.com',
+    'maps.google.com', 'openstreetmap.org', 'mapbox.com',
+    'craigslist.org', 'nextdoor.com', 'meetup.com',
+    'goodreads.com', 'librarything.com', 'scribd.com',
+    'archive.today', 'web.archive.org'
+  ];
+  
+  const list = new Map<string, number>();
+  fallbackDomains.forEach((domain, index) => {
+    list.set(domain, index + 1);
+  });
+  
+  console.log(`[DomainVerification] 📝 Fallback: ${list.size} dominios`);
+  return list;
 }
 
 /**
@@ -505,15 +750,137 @@ export async function quickVerify(hostname: string): Promise<{
   };
 }
 
+// ============================================================================
+// GOOGLE SEARCH FALLBACK
+// ============================================================================
+
+/**
+ * Verifica si un dominio existe y es válido usando Google Search
+ * Se usa como fallback cuando Tranco no tiene el dominio
+ * 
+ * Hace una búsqueda site:dominio y verifica si hay resultados
+ */
+async function checkGoogleSearch(domain: string): Promise<{
+  isValid: boolean;
+  hasResults: boolean;
+  resultCount: number | null;
+}> {
+  try {
+    // Usar la URL de búsqueda de Google con site:dominio
+    const searchUrl = `https://www.google.com/search?q=site:${encodeURIComponent(domain)}`;
+    
+    console.log(`[DomainVerification] 🔍 Google Search fallback para: ${domain}`);
+    
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+      signal: AbortSignal.timeout(5000) // 5 segundos timeout
+    });
+    
+    if (!response.ok) {
+      console.log(`[DomainVerification] ⚠️ Google Search error: ${response.status}`);
+      return { isValid: false, hasResults: false, resultCount: null };
+    }
+    
+    const html = await response.text();
+    
+    // Verificar si hay resultados
+    // Google muestra "No results found" o similar cuando no hay resultados
+    const noResults = html.includes('did not match any documents') || 
+                      html.includes('No results found') ||
+                      html.includes('no encontró ningún documento') ||
+                      html.includes('Your search -') && html.includes('- did not match');
+    
+    // Intentar extraer el número de resultados
+    // Google muestra algo como "About 1,234,567 results"
+    const resultMatch = html.match(/About ([\d,]+) results/i) || 
+                        html.match(/Aproximadamente ([\d,\.]+) resultados/i);
+    
+    let resultCount: number | null = null;
+    if (resultMatch) {
+      resultCount = parseInt(resultMatch[1].replace(/[,\.]/g, ''), 10);
+    }
+    
+    const hasResults = !noResults && (resultCount === null || resultCount > 0);
+    
+    if (hasResults) {
+      console.log(`[DomainVerification] ✅ Google Search: ${domain} tiene resultados${resultCount ? ` (~${resultCount})` : ''}`);
+    } else {
+      console.log(`[DomainVerification] ❌ Google Search: ${domain} sin resultados`);
+    }
+    
+    return {
+      isValid: hasResults,
+      hasResults,
+      resultCount
+    };
+    
+  } catch (err: any) {
+    console.warn(`[DomainVerification] ⚠️ Google Search error: ${err.message}`);
+    // Si falla Google Search, no marcar como inválido automáticamente
+    return { isValid: false, hasResults: false, resultCount: null };
+  }
+}
+
+// Cache para resultados de Google Search
+const googleSearchCache = new Map<string, { isValid: boolean; timestamp: number }>();
+const GOOGLE_SEARCH_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas
+
+/**
+ * Verifica un dominio con Google Search (con caché)
+ */
+async function verifyWithGoogleSearch(domain: string): Promise<boolean> {
+  // Verificar caché
+  const cached = googleSearchCache.get(domain);
+  if (cached && (Date.now() - cached.timestamp) < GOOGLE_SEARCH_CACHE_TTL) {
+    return cached.isValid;
+  }
+  
+  const result = await checkGoogleSearch(domain);
+  
+  // Guardar en caché
+  googleSearchCache.set(domain, {
+    isValid: result.isValid,
+    timestamp: Date.now()
+  });
+  
+  return result.isValid;
+}
+
 /**
  * Verifica si un dominio es seguro (reemplazo de isSafeDomain)
  * Compatible con la API anterior
+ * 
+ * Flujo:
+ * 1. Verificar en Tranco (Top 1M)
+ * 2. Si no está en Tranco, verificar con Google Search
+ * 3. Si Google tiene resultados, considerar válido
  */
 export async function isSafeDomainAuto(url: string): Promise<boolean> {
   try {
     const urlObj = new URL(url);
     const result = await quickVerify(urlObj.hostname);
-    return result.isSafe;
+    
+    // Si está en Tranco, es seguro
+    if (result.isSafe) {
+      return true;
+    }
+    
+    // Si no está en Tranco, intentar con Google Search como fallback
+    const normalizedHost = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    console.log(`[DomainVerification] 🔄 ${normalizedHost} no está en Tranco, probando Google Search...`);
+    
+    const googleResult = await verifyWithGoogleSearch(normalizedHost);
+    
+    if (googleResult) {
+      console.log(`[DomainVerification] ✅ ${normalizedHost} validado por Google Search`);
+      return true;
+    }
+    
+    return false;
   } catch {
     return false;
   }

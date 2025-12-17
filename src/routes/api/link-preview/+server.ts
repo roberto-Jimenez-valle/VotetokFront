@@ -20,7 +20,7 @@ const cache = new Map<string, {
 
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 const TIMEOUT = 8000; // 8 segundos
-const MAX_HTML_SIZE = 1024 * 1024; // 1MB para HTML
+const MAX_HTML_SIZE = 100 * 1024; // 100KB - suficiente para meta tags en <head>
 const URL_RESOLVE_TIMEOUT = 5000; // 5 segundos para resolver URLs
 
 // Dominios conocidos que usan redirecciones (acortadores/tracking)
@@ -412,9 +412,9 @@ const BLOCKED_IMAGE_DOMAINS = [
   'fbcdn.net',
 ];
 
-// Helper para generar URL de imagen proxied con trusted=1
-// Esto permite que cualquier dominio funcione sin necesidad de whitelist manual
-function getProxiedImageUrl(imageUrl: string): string {
+// Helper para generar URL de imagen proxied
+// Si isTrusted=true, añade trusted=1 para permitir cualquier dominio
+function getProxiedImageUrl(imageUrl: string, isTrusted: boolean = true): string {
   if (!imageUrl) return imageUrl;
   
   try {
@@ -431,7 +431,9 @@ function getProxiedImageUrl(imageUrl: string): string {
     // Si la URL no es válida, continuar
   }
   
-  return `/api/media-proxy?url=${encodeURIComponent(imageUrl)}&trusted=1`;
+  // Si es un dominio de confianza (verificado por Tranco o whitelist), añadir trusted=1
+  const trustedParam = isTrusted ? '&trusted=1' : '';
+  return `/api/media-proxy?url=${encodeURIComponent(imageUrl)}${trustedParam}`;
 }
 
 export interface LinkPreviewData {
@@ -1778,13 +1780,36 @@ async function fetchOpenGraph(targetUrl: string): Promise<LinkPreviewData> {
       throw new Error('El recurso no es HTML');
     }
     
-    // Limitar tamaño del HTML
-    const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength > MAX_HTML_SIZE) {
-      throw new Error('HTML demasiado grande');
+    // Leer solo los primeros bytes del HTML (meta tags están en <head>)
+    // Esto evita descargar páginas muy grandes como IMDB
+    let html = '';
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No se puede leer el body');
     }
     
-    const html = new TextDecoder('utf-8').decode(arrayBuffer);
+    let bytesRead = 0;
+    const decoder = new TextDecoder('utf-8');
+    
+    try {
+      while (bytesRead < MAX_HTML_SIZE) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        html += decoder.decode(value, { stream: true });
+        bytesRead += value.length;
+        
+        // Si ya encontramos </head>, tenemos todos los meta tags
+        if (html.includes('</head>')) {
+          console.log(`[Link Preview] ✅ Encontrado </head> después de ${bytesRead} bytes`);
+          break;
+        }
+      }
+    } finally {
+      reader.cancel(); // Cancelar el resto de la descarga
+    }
+    
+    console.log(`[Link Preview] 📄 HTML leído: ${bytesRead} bytes`);
     const urlObj = new URL(targetUrl);
     
     // Extraer metadatos
@@ -1793,19 +1818,26 @@ async function fetchOpenGraph(targetUrl: string): Promise<LinkPreviewData> {
     // Verificar seguridad del dominio usando sistema automatizado
     // Usa Lista Tranco (Top 1M) + Google Safe Browsing + VirusTotal
     const verificationResult = await quickVerify(urlObj.hostname);
+    const isTrancoVerified = verificationResult.isSafe && verificationResult.trancoRank !== null;
     const isSafe = verificationResult.isSafe || isDomainAllowed(targetUrl) || isSafeDomain(targetUrl);
     
+    // Si está en Tranco o en whitelist, es un dominio de confianza para imágenes
+    const isTrustedForImages = isTrancoVerified || isDomainAllowed(targetUrl) || isSafeDomain(targetUrl);
+    
     if (verificationResult.trancoRank) {
-      console.log(`[Link Preview] 📊 Tranco rank: #${verificationResult.trancoRank} (${verificationResult.trustLevel})`);
+      console.log(`[Link Preview] 📊 Tranco rank: #${verificationResult.trancoRank} (${verificationResult.trustLevel}) - trusted=${isTrustedForImages}`);
+    } else {
+      console.log(`[Link Preview] ⚠️ Dominio no está en Tranco: ${urlObj.hostname} - trusted=${isTrustedForImages}`);
     }
     
-    // Crear imagen proxied si existe
+    // Crear imagen proxied si existe (usar trusted=1 si el dominio está verificado)
     let imageProxied: string | undefined;
     if (metadata.image) {
-      imageProxied = getProxiedImageUrl(metadata.image);
+      imageProxied = getProxiedImageUrl(metadata.image, isTrustedForImages);
       console.log('[Link Preview] 🖼️ Open Graph image found:', {
         original: metadata.image,
-        proxied: imageProxied
+        proxied: imageProxied,
+        trusted: isTrustedForImages
       });
     }
     

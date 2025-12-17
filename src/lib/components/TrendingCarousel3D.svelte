@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
+  import { markImageFailed, hasImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
   
   const dispatch = createEventDispatcher();
   
@@ -214,10 +215,19 @@
   });
   
   // Obtener thumbnail para una opción (solo en modo encuesta activa)
+  // NO devuelve URLs que han fallado 3+ veces para evitar loops
   function getCardImage(option: any): string | null {
     if (isTrendingMode) return null; // En trending no mostramos imágenes
-    if (thumbnails[option.key]) return thumbnails[option.key];
-    if (option.imageUrl && isDirectImage(option.imageUrl)) return option.imageUrl;
+    
+    // Verificar thumbnail en cache - solo si no ha fallado permanentemente
+    const cachedThumb = thumbnails[option.key];
+    if (cachedThumb && shouldRetryImage(cachedThumb)) return cachedThumb;
+    
+    // Verificar imageUrl directa - solo si no ha fallado permanentemente
+    if (option.imageUrl && isDirectImage(option.imageUrl) && shouldRetryImage(option.imageUrl)) {
+      return option.imageUrl;
+    }
+    
     return null;
   }
 </script>
@@ -225,11 +235,11 @@
 <!-- Carrusel 3D de Cards de Trending -->
 <div 
   class="carousel-container"
-  on:wheel|preventDefault|stopPropagation={handleWheel}
-  on:touchstart={handleTouchStart}
-  on:touchmove={handleTouchMove}
-  on:touchend={handleTouchEnd}
-  on:keydown={(e) => {
+  onwheel={(e: WheelEvent) => { e.preventDefault(); e.stopPropagation(); handleWheel(e); }}
+  ontouchstart={handleTouchStart}
+  ontouchmove={handleTouchMove}
+  ontouchend={handleTouchEnd}
+  onkeydown={(e: KeyboardEvent) => {
     if (e.key === 'ArrowLeft') prevCard();
     if (e.key === 'ArrowRight') nextCard();
   }}
@@ -248,22 +258,53 @@
         class:future={pos > 0}
         class:has-image={hasImage}
         style="--stack-pos: {pos}; --abs-pos: {Math.abs(pos)}; --card-color: {option.color}; border-color: {option.color}; {!hasImage ? `background: ${option.color};` : ''}"
-        on:click|stopPropagation={() => handleCardClick(i, option)}
-        on:dblclick|stopPropagation={() => handleCardDoubleClick(i, option)}
+        onclick={(e: MouseEvent) => { e.stopPropagation(); handleCardClick(i, option); }}
+        ondblclick={(e: MouseEvent) => { e.stopPropagation(); handleCardDoubleClick(i, option); }}
         type="button"
       >
         {#if hasImage}
           <!-- Modo con imagen de fondo -->
-          <img src={cardImage} alt="" class="card-bg-image" loading="lazy" />
+          <img 
+            src={cardImage} 
+            alt="" 
+            class="card-bg-image" 
+            loading="lazy"
+            onerror={(e: Event) => { 
+              if (e.target) {
+                (e.target as HTMLImageElement).style.display = 'none';
+                markImageFailed(cardImage || '');
+              }
+            }}
+          />
           <div class="card-gradient-overlay"></div>
           
           <!-- Avatar badge (solo en trending con imagen) -->
           {#if isTrendingMode}
             <div class="avatar-badge">
-              {#if option.pollData?.user?.avatarUrl}
-                <img src={option.pollData.user.avatarUrl} alt="" class="avatar-img" />
-              {:else if option.pollData?.creator?.avatarUrl}
-                <img src={option.pollData.creator.avatarUrl} alt="" class="avatar-img" />
+              {#if option.pollData?.user?.avatarUrl && shouldRetryImage(option.pollData.user.avatarUrl)}
+                <img 
+                  src={option.pollData.user.avatarUrl} 
+                  alt="" 
+                  class="avatar-img"
+                  onerror={(e: Event) => { 
+                    if (e.target) {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      markImageFailed(option.pollData?.user?.avatarUrl || '');
+                    }
+                  }}
+                />
+              {:else if option.pollData?.creator?.avatarUrl && shouldRetryImage(option.pollData.creator.avatarUrl)}
+                <img 
+                  src={option.pollData.creator.avatarUrl} 
+                  alt="" 
+                  class="avatar-img"
+                  onerror={(e: Event) => { 
+                    if (e.target) {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      markImageFailed(option.pollData?.creator?.avatarUrl || '');
+                    }
+                  }}
+                />
               {:else}
                 <div class="avatar-placeholder">
                   {option.label?.charAt(0) || '?'}
@@ -297,8 +338,8 @@
   </div>
   
   <!-- Botones de navegación -->
-  <button class="nav-btn nav-prev" on:click|stopPropagation={prevCard} aria-label="Anterior" type="button">‹</button>
-  <button class="nav-btn nav-next" on:click|stopPropagation={nextCard} aria-label="Siguiente" type="button">›</button>
+  <button class="nav-btn nav-prev" onclick={(e: MouseEvent) => { e.stopPropagation(); prevCard(); }} aria-label="Anterior" type="button">‹</button>
+  <button class="nav-btn nav-next" onclick={(e: MouseEvent) => { e.stopPropagation(); nextCard(); }} aria-label="Siguiente" type="button">›</button>
   
   <!-- Indicadores de posición estilo oEmbed -->
   <div class="carousel-indicators">
@@ -308,7 +349,7 @@
         class:active={i === activeIndex}
         class:past={i < activeIndex}
         style="--bar-color: {option.color};"
-        on:click|stopPropagation={() => { activeIndex = i; dispatch('indexChange', { index: i }); }}
+        onclick={(e: MouseEvent) => { e.stopPropagation(); activeIndex = i; dispatch('indexChange', { index: i }); }}
         type="button"
         aria-label="Ir a opción {i + 1}"
       ></button>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ExternalLink, AlertTriangle, Loader2, X } from 'lucide-svelte';
   import { getDomainName, truncateText } from '$lib/services/linkPreview';
+  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
   
   // Tipo de datos del preview
   interface LinkPreviewData {
@@ -38,8 +39,10 @@
   }
   
   function handleImageError(e: Event) {
-    console.error('[LinkPreview] Error al cargar imagen:', preview.imageProxied || preview.image, e);
+    const imgUrl = preview.imageProxied || preview.image;
+    console.error('[LinkPreview] Error al cargar imagen:', imgUrl, e);
     imageError = true;
+    if (imgUrl) markImageFailed(imgUrl);
   }
   
   function openLink() {
@@ -73,7 +76,7 @@
   {/if}
   
   <!-- Imagen -->
-  {#if preview.image && !imageError}
+  {#if preview.image && !imageError && shouldRetryImage(preview.imageProxied || preview.image || '')}
     <div class="preview-image">
       {#if !imageLoaded}
         <div class="image-loader">

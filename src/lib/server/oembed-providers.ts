@@ -326,7 +326,116 @@ export const SAFE_DOMAINS_FALLBACK = [
   'apple.com',
   'amazon.com',
   'linkedin.com',
-  'netflix.com'
+  'netflix.com',
+  
+  // Entretenimiento y medios
+  'imdb.com',
+  'rottentomatoes.com',
+  'metacritic.com',
+  'letterboxd.com',
+  'trakt.tv',
+  'tmdb.org',
+  'themoviedb.org',
+  'tvdb.com',
+  'thetvdb.com',
+  'hbomax.com',
+  'max.com',
+  'disneyplus.com',
+  'hulu.com',
+  'primevideo.com',
+  'peacocktv.com',
+  'paramountplus.com',
+  'crunchyroll.com',
+  'funimation.com',
+  
+  // Noticias y medios
+  'bbc.com',
+  'bbc.co.uk',
+  'cnn.com',
+  'nytimes.com',
+  'theguardian.com',
+  'washingtonpost.com',
+  'reuters.com',
+  'apnews.com',
+  'bloomberg.com',
+  'forbes.com',
+  'businessinsider.com',
+  'techcrunch.com',
+  'theverge.com',
+  'wired.com',
+  'arstechnica.com',
+  'engadget.com',
+  'mashable.com',
+  'cnet.com',
+  
+  // E-commerce
+  'ebay.com',
+  'etsy.com',
+  'aliexpress.com',
+  'walmart.com',
+  'target.com',
+  'bestbuy.com',
+  
+  // Música
+  'deezer.com',
+  'bandcamp.com',
+  'mixcloud.com',
+  'last.fm',
+  'genius.com',
+  'discogs.com',
+  
+  // Gaming
+  'steam.com',
+  'steampowered.com',
+  'epicgames.com',
+  'gog.com',
+  'itch.io',
+  'playstation.com',
+  'xbox.com',
+  'nintendo.com',
+  'ign.com',
+  'gamespot.com',
+  'kotaku.com',
+  'polygon.com',
+  
+  // Educación y referencia
+  'medium.com',
+  'substack.com',
+  'quora.com',
+  'stackoverflow.com',
+  'stackexchange.com',
+  'archive.org',
+  'wikimedia.org',
+  'britannica.com',
+  
+  // Redes sociales adicionales
+  'pinterest.com',
+  'tumblr.com',
+  'discord.com',
+  'telegram.org',
+  'whatsapp.com',
+  'snapchat.com',
+  'threads.net',
+  'mastodon.social',
+  
+  // Productividad
+  'notion.so',
+  'figma.com',
+  'canva.com',
+  'dribbble.com',
+  'behance.net',
+  'deviantart.com',
+  'artstation.com',
+  
+  // Otros populares
+  'imgur.com',
+  'giphy.com',
+  'tenor.com',
+  'gfycat.com',
+  'flickr.com',
+  'unsplash.com',
+  'pexels.com',
+  'pixabay.com'
 ];
 
 /**

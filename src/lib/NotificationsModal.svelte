@@ -3,6 +3,7 @@
   import { X, Bell, Heart, MessageCircle, UserPlus, TrendingUp, Check } from 'lucide-svelte';
   import { createEventDispatcher, onMount } from 'svelte';
   import UserProfileModal from '$lib/UserProfileModal.svelte';
+  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
   
   const dispatch = createEventDispatcher();
   
@@ -263,7 +264,11 @@
               aria-label="Ver perfil de {notification.user.name}"
               onkeydown={(e) => e.key === 'Enter' && handleAvatarClick(notification.id, e)}
             >
-              <img src={notification.user.avatar} alt={notification.user.name} />
+              <img 
+                src={shouldRetryImage(notification.user.avatar) ? notification.user.avatar : '/default-avatar.svg'} 
+                alt={notification.user.name}
+                onerror={(e: Event) => { if (e.target) { (e.target as HTMLImageElement).src = '/default-avatar.svg'; markImageFailed(notification.user.avatar); }}}
+              />
               <div class="notification-icon" class:vote={notification.type === 'vote'} class:like={notification.type === 'like'} class:follow={notification.type === 'follow'} class:comment={notification.type === 'comment'}>
                 {#if notification.icon}
                   {@const Icon = notification.icon}

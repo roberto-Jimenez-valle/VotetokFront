@@ -26,10 +26,19 @@
 
 <script lang="ts">
   import { onMount, createEventDispatcher } from "svelte";
+  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
 
   const dispatch = createEventDispatcher<{
     imageerror: { url: string };
   }>();
+
+  // Efecto para verificar si la URL ya ha fallado y notificar inmediatamente
+  $effect(() => {
+    if (url && !shouldRetryImage(url)) {
+      console.log('[MediaEmbed] URL ya fallida, disparando imageerror:', url.substring(0, 50));
+      dispatch('imageerror', { url });
+    }
+  });
 
   interface Props {
     url: string;
@@ -54,6 +63,7 @@
   let metadata: any = $state(null);
   let loading: boolean = $state(true);
   let error: boolean = $state(false);
+  let imageFailedLocal: boolean = $state(false); // Estado local para forzar re-render cuando imagen falla
   
   // Flag para evitar procesar la misma URL múltiples veces
   let lastProcessedUrl: string = $state("");
@@ -885,12 +895,22 @@
         </a>
       {/if}
     </div>
-  {:else if embedHTML && embedHTML.trim() !== "" && mode === "full"}
-    <!-- Renderizar iframe SOLO en modo full (fullscreen) -->
+  {:else if embedHTML && embedHTML.trim() !== "" && mode === "full" && shouldRetryImage(url)}
+    <!-- Renderizar iframe SOLO en modo full (fullscreen) y si la URL no ha fallado -->
     <div class="embed-container">
       {@html processEmbedHTML(embedHTML)}
     </div>
-  {:else if embedHTML && embedHTML.trim() !== "" && mode !== "full" && metadata?.image}
+  {:else if mode === "full" && !shouldRetryImage(url)}
+    <!-- URL ya fallida en modo full: mostrar mensaje de error -->
+    <div class="error-state">
+      <span>⚠️ Contenido no disponible</span>
+      {#if url}
+        <a href={url} target="_blank" rel="noopener noreferrer" class="error-link">
+          Abrir enlace ↗
+        </a>
+      {/if}
+    </div>
+  {:else if embedHTML && embedHTML.trim() !== "" && mode !== "full" && metadata?.image && !imageFailedLocal && shouldRetryImage(metadata.image || '')}
     <!-- En modo preview/mini: mostrar thumbnail en lugar de iframe -->
     <div class="image-with-link">
       <div class="image-container">
@@ -901,12 +921,29 @@
           onerror={(e) => {
             const img = e.target as HTMLImageElement;
             img.style.display = 'none';
+            if (metadata.image) markImageFailed(metadata.image);
+            imageFailedLocal = true; // Forzar re-render para mostrar fallback
+            dispatch('imageerror', { url: metadata.image });
           }}
         />
       </div>
     </div>
+  {:else if embedHTML && embedHTML.trim() !== "" && mode !== "full" && metadata}
+    <!-- Imagen falló o no disponible: mostrar enlace de texto -->
+    <div class="compact-link-container">
+      <a 
+        href={metadata.url || url} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        class="compact-link-button"
+        onclick={(e) => e.stopPropagation()}
+      >
+        <span class="compact-link-text">{metadata.title || embedType}</span>
+        <span class="compact-link-arrow">↗</span>
+      </a>
+    </div>
   {:else if (embedType === "generic" || embedType === "opengraph" || embedType === "text" || embedType === "website") && metadata}
-    {@const hasRealImage = metadata.image && !metadata.image.includes('placehold.co')}
+    {@const hasRealImage = metadata.image && !metadata.image.includes('placehold.co') && !imageFailedLocal && shouldRetryImage(metadata.image || '')}
     
     {#if hasRealImage}
       <!-- Con imagen: mostrar imagen grande + enlace abajo -->
@@ -919,6 +956,8 @@
             onerror={(e) => {
               const img = e.target as HTMLImageElement;
               img.style.display = 'none';
+              if (metadata.image) markImageFailed(metadata.image);
+              imageFailedLocal = true; // Forzar re-render
               dispatch('imageerror', { url: metadata.image });
             }}
           />

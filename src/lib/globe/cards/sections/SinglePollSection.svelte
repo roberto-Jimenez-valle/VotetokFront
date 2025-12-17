@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { currentUser } from '$lib/stores';
+  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
   import MediaEmbed from '$lib/components/MediaEmbed.svelte';
   import FriendsVotesModal from '$lib/components/FriendsVotesModal.svelte';
   import PollOptionCard from '$lib/components/PollOptionCard.svelte';
@@ -777,8 +778,13 @@
         }}
         aria-label="Ver perfil de {poll.user?.displayName || poll.user?.username || 'usuario'}"
       >
-        {#if poll.user?.avatarUrl}
-          <img src={poll.user.avatarUrl} alt={poll.user.displayName || 'Avatar'} loading="lazy" />
+        {#if poll.user?.avatarUrl && shouldRetryImage(poll.user.avatarUrl)}
+          <img 
+            src={poll.user.avatarUrl} 
+            alt={poll.user.displayName || 'Avatar'} 
+            loading="lazy"
+            onerror={(e: Event) => { if (e.target) { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; markImageFailed(poll.user?.avatarUrl || ''); }}}
+          />
         {:else}
           <img src={DEFAULT_AVATAR} alt="Avatar" loading="lazy" />
         {/if}

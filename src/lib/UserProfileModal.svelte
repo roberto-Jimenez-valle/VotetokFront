@@ -6,6 +6,7 @@
   import SinglePollSection from '$lib/globe/cards/sections/SinglePollSection.svelte';
   import { apiCall, apiDelete } from '$lib/api/client';
   import { currentUser } from '$lib/stores';
+  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
   
   const dispatch = createEventDispatcher();
   
@@ -361,7 +362,11 @@
           <!-- Avatar y botón de seguir -->
           <div class="profile-top">
             <div class="profile-avatar">
-              <img src={userData.avatarUrl || `https://i.pravatar.cc/150?u=${userData.username}`} alt={userData.displayName} />
+              <img 
+                src={userData.avatarUrl && shouldRetryImage(userData.avatarUrl) ? userData.avatarUrl : `https://i.pravatar.cc/150?u=${userData.username}`} 
+                alt={userData.displayName}
+                onerror={(e: Event) => { if (e.target && userData.avatarUrl) { (e.target as HTMLImageElement).src = `https://i.pravatar.cc/150?u=${userData.username}`; markImageFailed(userData.avatarUrl); }}}
+              />
               {#if userData.verified}
                 <div class="verified-badge">
                   <Check size={14} />

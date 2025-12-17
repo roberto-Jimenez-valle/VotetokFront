@@ -223,6 +223,120 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     '*.railway.app',
     'railway.app',
     
+    // IMDB y entretenimiento
+    '*.imdb.com',
+    '*.media-imdb.com',
+    '*.media-amazon.com',
+    'imdb.com',
+    'media-imdb.com',
+    'm.media-amazon.com',
+    
+    // Rotten Tomatoes / Fandango
+    '*.rottentomatoes.com',
+    '*.flixster.com',
+    'rottentomatoes.com',
+    'flixster.com',
+    'staticr1.rottentomatoes.com',
+    
+    // TMDB
+    '*.themoviedb.org',
+    '*.tmdb.org',
+    'image.tmdb.org',
+    'themoviedb.org',
+    
+    // Metacritic
+    '*.metacritic.com',
+    'metacritic.com',
+    
+    // Letterboxd
+    '*.letterboxd.com',
+    '*.ltrbxd.com',
+    'letterboxd.com',
+    'a.ltrbxd.com',
+    's.ltrbxd.com',
+    
+    // Noticias y medios
+    '*.bbc.co.uk',
+    '*.bbc.com',
+    '*.bbci.co.uk',
+    '*.cnn.com',
+    '*.nytimes.com',
+    '*.washingtonpost.com',
+    '*.theguardian.com',
+    '*.reuters.com',
+    '*.forbes.com',
+    '*.bloomberg.com',
+    'ichef.bbci.co.uk',
+    
+    // Tech news
+    '*.theverge.com',
+    '*.vox-cdn.com',
+    '*.techcrunch.com',
+    '*.wired.com',
+    '*.arstechnica.com',
+    '*.engadget.com',
+    '*.cnet.com',
+    
+    // Steam / Gaming
+    '*.steampowered.com',
+    '*.steamstatic.com',
+    '*.steamcdn-a.akamaihd.net',
+    'cdn.akamai.steamstatic.com',
+    'steamcdn-a.akamaihd.net',
+    '*.epicgames.com',
+    '*.unrealengine.com',
+    '*.ign.com',
+    '*.gamespot.com',
+    
+    // E-commerce adicional
+    '*.ebay.com',
+    '*.ebayimg.com',
+    '*.ebaystatic.com',
+    '*.etsy.com',
+    '*.etsystatic.com',
+    
+    // Medium / Substack
+    '*.medium.com',
+    '*.miro.medium.com',
+    '*.substack.com',
+    '*.substackcdn.com',
+    
+    // Memes y cultura internet
+    '*.knowyourmeme.com',
+    '*.kym-cdn.com',
+    'knowyourmeme.com',
+    'kym-cdn.com',
+    'i.kym-cdn.com',
+    '*.9gag.com',
+    '9gag.com',
+    
+    // Salud y medicina
+    '*.healthline.com',
+    'healthline.com',
+    'assets.healthline.com',
+    '*.webmd.com',
+    'webmd.com',
+    '*.wbmdstatic.com',
+    'wbmdstatic.com',
+    'img.lb.wbmdstatic.com',
+    '*.mayoclinic.org',
+    'mayoclinic.org',
+    '*.nih.gov',
+    'nih.gov',
+    '*.medlineplus.gov',
+    'medlineplus.gov',
+    
+    // Gaming
+    '*.minecraft.net',
+    'minecraft.net',
+    'www.minecraft.net',
+    '*.mojang.com',
+    'mojang.com',
+    '*.roblox.com',
+    'roblox.com',
+    '*.rbxcdn.com',
+    'rbxcdn.com',
+    
     // Dominio propio de VouTop
     'voutop.com',
     '*.voutop.com',
@@ -268,19 +382,130 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
   timeout: 8000,
   
   // Hosts permitidos para iframes (embeds seguros)
+  // Esta lista se usa como fallback - dominios en Tranco Top 1M también se permiten
   allowedIframeHosts: [
+    // Video
     'www.youtube.com',
     'youtube.com',
+    'youtube-nocookie.com',
     'player.vimeo.com',
     'vimeo.com',
-    'open.spotify.com',
-    'w.soundcloud.com',
-    'soundcloud.com',
     'player.twitch.tv',
     'twitch.tv',
+    'clips.twitch.tv',
+    'www.dailymotion.com',
+    'dailymotion.com',
+    'geo.dailymotion.com',
+    
+    // Música y Audio
+    'open.spotify.com',
+    'embed.spotify.com',
+    'w.soundcloud.com',
+    'soundcloud.com',
+    'bandcamp.com',
+    'embed.music.apple.com',
     'player.megaphone.fm',
     'megaphone.fm',
-    'omny.fm'
+    'omny.fm',
+    'embed.podcasts.apple.com',
+    'anchor.fm',
+    'player.simplecast.com',
+    'share.transistor.fm',
+    
+    // Redes sociales
+    'www.tiktok.com',
+    'tiktok.com',
+    'www.instagram.com',
+    'instagram.com',
+    'www.facebook.com',
+    'facebook.com',
+    'fb.watch',
+    'twitter.com',
+    'x.com',
+    'platform.twitter.com',
+    'www.linkedin.com',
+    'linkedin.com',
+    'www.pinterest.com',
+    'pinterest.com',
+    'assets.pinterest.com',
+    'www.reddit.com',
+    'reddit.com',
+    'embed.reddit.com',
+    
+    // Entretenimiento
+    'www.imdb.com',
+    'imdb.com',
+    'embed.imdb.com',
+    'www.rottentomatoes.com',
+    'rottentomatoes.com',
+    
+    // Mapas y ubicación
+    'www.google.com',
+    'maps.google.com',
+    'www.openstreetmap.org',
+    'openstreetmap.org',
+    
+    // Documentos y presentaciones
+    'docs.google.com',
+    'drive.google.com',
+    'onedrive.live.com',
+    'www.slideshare.net',
+    'slideshare.net',
+    'speakerdeck.com',
+    'prezi.com',
+    'www.canva.com',
+    'canva.com',
+    
+    // Código y desarrollo
+    'codepen.io',
+    'jsfiddle.net',
+    'codesandbox.io',
+    'stackblitz.com',
+    'replit.com',
+    'glitch.com',
+    'gist.github.com',
+    
+    // Noticias y medios
+    'www.bbc.com',
+    'bbc.com',
+    'www.cnn.com',
+    'cnn.com',
+    'www.nytimes.com',
+    'nytimes.com',
+    'www.theguardian.com',
+    'theguardian.com',
+    
+    // Educación
+    'www.ted.com',
+    'ted.com',
+    'embed.ted.com',
+    'www.khanacademy.org',
+    'khanacademy.org',
+    'www.coursera.org',
+    'coursera.org',
+    
+    // Gaming
+    'store.steampowered.com',
+    'steamcommunity.com',
+    'clips.twitch.tv',
+    
+    // Finanzas
+    'www.tradingview.com',
+    'tradingview.com',
+    's.tradingview.com',
+    
+    // Otros
+    'www.figma.com',
+    'figma.com',
+    'embed.figma.com',
+    'miro.com',
+    'app.miro.com',
+    'www.loom.com',
+    'loom.com',
+    'giphy.com',
+    'media.giphy.com',
+    'tenor.com',
+    'imgur.com'
   ]
 };
 
@@ -327,7 +552,7 @@ export function isMimeTypeAllowed(contentType: string): boolean {
 }
 
 /**
- * Verifica si un host de iframe es seguro
+ * Verifica si un host de iframe es seguro (síncrono - solo whitelist)
  */
 export function isIframeHostAllowed(url: string): boolean {
   try {
@@ -337,6 +562,35 @@ export function isIframeHostAllowed(url: string): boolean {
     return MEDIA_PROXY_CONFIG.allowedIframeHosts.some(host => {
       return hostname === host || hostname.endsWith('.' + host);
     });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verifica si un host de iframe es seguro (asíncrono - incluye Tranco)
+ * Permite iframes de dominios en el Top 1M de Tranco automáticamente
+ */
+export async function isIframeHostAllowedAsync(url: string): Promise<boolean> {
+  // Primero verificar whitelist estática (más rápido)
+  if (isIframeHostAllowed(url)) {
+    return true;
+  }
+  
+  // Si no está en whitelist, verificar Tranco
+  try {
+    const { quickVerify } = await import('./domain-verification');
+    const urlObj = new URL(url);
+    const result = await quickVerify(urlObj.hostname);
+    
+    // Si está en Top 1M de Tranco, permitir el iframe
+    if (result.isSafe && result.trancoRank !== null) {
+      console.log(`[IframeCheck] ✅ ${urlObj.hostname} permitido (Tranco #${result.trancoRank})`);
+      return true;
+    }
+    
+    console.log(`[IframeCheck] ❌ ${urlObj.hostname} no permitido (no está en whitelist ni Tranco)`);
+    return false;
   } catch {
     return false;
   }

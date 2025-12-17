@@ -14,6 +14,7 @@ import {
   getSecureFetchHeaders,
   MEDIA_PROXY_CONFIG
 } from '$lib/server/media-proxy-config';
+import { quickVerify } from '$lib/server/domain-verification';
 
 // Cache en memoria simple (en producción usar Redis o similar)
 const cache = new Map<string, {
@@ -27,7 +28,11 @@ const failedUrlsCache = new Map<string, {
   timestamp: number;
   errorCode: number;
 }>();
-const FAILED_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+const FAILED_CACHE_TTL = 30 * 1000; // 30 segundos (reducido para permitir retry rápido)
+
+// Cache de dominios rechazados (para evitar logs repetitivos)
+const rejectedDomainsCache = new Map<string, number>(); // hostname -> timestamp
+const REJECTED_LOG_COOLDOWN = 60 * 1000; // Solo loguear cada 60 segundos por dominio
 
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
   const targetUrl = url.searchParams.get('url');
@@ -51,21 +56,45 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
     });
   }
   
-  // 3. Verificar que el dominio está en la whitelist
-  // Si viene con trusted=1, permite cualquier dominio (viene de fuente confiable como search.app)
+  // 3. Verificar que el dominio está en la whitelist o Tranco
+  // Si viene con trusted=1, permite cualquier dominio (viene de fuente confiable)
   const isTrusted = url.searchParams.get('trusted') === '1';
   
-  if (!isTrusted && !isDomainAllowed(targetUrl)) {
-    console.warn('[Media Proxy] Dominio no permitido:', validUrl.hostname);
-    throw error(403, {
-      message: `Dominio no permitido: ${validUrl.hostname}`,
-      code: 'DOMAIN_NOT_ALLOWED',
-      hint: 'Solo se permiten dominios de la whitelist configurada'
-    });
+  let isAllowed = isTrusted || isDomainAllowed(targetUrl);
+  
+  // Si no está en whitelist ni es trusted, verificar con sistema Tranco/fallback
+  if (!isAllowed) {
+    try {
+      const verification = await quickVerify(validUrl.hostname);
+      if (verification.isSafe) {
+        isAllowed = true;
+        if (verification.trancoRank) {
+          console.log(`[Media Proxy] ✅ Tranco #${verification.trancoRank}: ${validUrl.hostname}`);
+        } else {
+          console.log(`[Media Proxy] ✅ Fallback permitido: ${validUrl.hostname}`);
+        }
+      }
+    } catch (err) {
+      // Si falla verificación, NO permitir (seguridad)
+      console.warn(`[Media Proxy] ❌ Verificación falló para: ${validUrl.hostname}`);
+    }
   }
   
-  if (isTrusted) {
-    console.log('[Media Proxy] Trusted source, allowing domain:', validUrl.hostname);
+  if (!isAllowed) {
+    const hostname = validUrl.hostname;
+    const now = Date.now();
+    const lastLog = rejectedDomainsCache.get(hostname) || 0;
+    
+    // Solo loguear si pasó el cooldown (evita spam en logs)
+    if (now - lastLog > REJECTED_LOG_COOLDOWN) {
+      console.warn(`[Media Proxy] ❌ Dominio rechazado: ${hostname}`);
+      rejectedDomainsCache.set(hostname, now);
+    }
+    
+    throw error(403, {
+      message: `Dominio no permitido: ${hostname}`,
+      code: 'DOMAIN_NOT_ALLOWED'
+    });
   }
   
   // 4. Verificar protocolo (solo HTTPS)
@@ -77,16 +106,23 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
   }
   
   // 5. Verificar si la URL falló recientemente
+  // NOTA: Si el dominio ahora está permitido, ignorar el caché de fallidas
   const cacheKey = targetUrl;
   const now = Date.now();
   
   const failedEntry = failedUrlsCache.get(cacheKey);
   if (failedEntry && (now - failedEntry.timestamp) < FAILED_CACHE_TTL) {
-    console.log('[Media Proxy] 🚫 URL en cache de fallidas, rechazando:', targetUrl.substring(0, 80));
-    throw error(failedEntry.errorCode, {
-      message: 'URL previamente fallida (cache)',
-      code: 'CACHED_FAILURE'
-    });
+    // Si el dominio ahora está permitido (whitelist actualizado), limpiar caché y continuar
+    if (isAllowed) {
+      failedUrlsCache.delete(cacheKey);
+      console.log('[Media Proxy] 🔄 Dominio ahora permitido, limpiando caché:', validUrl.hostname);
+    } else {
+      console.log('[Media Proxy] 🚫 URL en cache de fallidas, rechazando:', targetUrl.substring(0, 80));
+      throw error(failedEntry.errorCode, {
+        message: 'URL previamente fallida (cache)',
+        code: 'CACHED_FAILURE'
+      });
+    }
   }
   
   // 6. Verificar caché de éxitos

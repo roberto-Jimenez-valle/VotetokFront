@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X, Trash2, Sparkles, Play, CircleCheck, Ban, Palette, ThumbsUp, ThumbsDown, Check } from 'lucide-svelte';
   import MediaEmbed from './MediaEmbed.svelte';
+  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
 
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e5e7eb"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%239ca3af"/%3E%3C/svg%3E';
 
@@ -233,6 +234,7 @@
   // Estado para thumbnail obtenido de la API
   let fetchedThumbnail = $state<string | null>(null);
   let thumbnailLoading = $state(false);
+  let thumbnailFailed = $state(false); // Si el thumbnail falló después de cargarse
 
   // Obtener thumbnail real - TODAS las plataformas pasan por el backend
   // Usa cache global para evitar peticiones duplicadas
@@ -318,8 +320,9 @@
   // hasMedia final: true si hay imagen directa, gif, o thumbnail real
   // Si es enlace (genérico o plataforma) sin thumbnail real -> mostrar como texto con enlace
   // Si es imagen de Instagram CDN bloqueada -> mostrar como texto con enlace
+  // Si thumbnailFailed es true -> mostrar como texto (sin intentar cargar imagen)
   const hasMedia = $derived(
-    hasRawMedia && !isBlockedImageDomain(imageUrl) && (
+    !thumbnailFailed && hasRawMedia && !isBlockedImageDomain(imageUrl) && (
       isGifType || 
       imageUrl.match(/\.(jpg|jpeg|png|webp|svg|bmp)(\?|$)/i) ||
       hasRealThumbnail
@@ -491,7 +494,13 @@
               {#each friends.slice(0, 3) as friend, i}
                 <div class="friend-avatar-wrapper" style="z-index: {10 - i};">
                   {#if userHasVoted}
-                    <img src={friend.avatarUrl || DEFAULT_AVATAR} alt={friend.name} class="friend-avatar" loading="lazy" />
+                    <img 
+                      src={friend.avatarUrl && shouldRetryImage(friend.avatarUrl) ? friend.avatarUrl : DEFAULT_AVATAR} 
+                      alt={friend.name} 
+                      class="friend-avatar" 
+                      loading="lazy"
+                      onerror={(e: Event) => { if (e.target && friend.avatarUrl) { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; markImageFailed(friend.avatarUrl); }}}
+                    />
                   {:else}
                     <div class="friend-avatar-mystery"><span>?</span></div>
                   {/if}
@@ -528,8 +537,15 @@
       <div class="option-background">
         <div class="noise-overlay"></div>
         <div class="media-embed-background">
-          {#if isThumbnailPlatform && hasRealThumbnail}
+          {#if isThumbnailPlatform && hasRealThumbnail && !thumbnailFailed && shouldRetryImage(videoThumbnail || '')}
             <!-- Thumbnail de plataforma a pantalla completa -->
+            <!-- Pre-cargar imagen para detectar errores -->
+            <img 
+              src={videoThumbnail} 
+              alt="" 
+              style="display: none;" 
+              onerror={() => { thumbnailFailed = true; markImageFailed(videoThumbnail || ''); }}
+            />
             <div class="thumbnail-fullscreen" style="background-image: url('{videoThumbnail}');">
               <div class="platform-badge" style="--platform-color: {platformColors[mediaType] || '#666'}">
                 {#if mediaType === 'youtube'}
@@ -566,7 +582,7 @@
               width="100%"
               height="100%"
               {autoplay}
-              on:imageerror={() => { fetchedThumbnail = null; }}
+              on:imageerror={() => { fetchedThumbnail = null; thumbnailFailed = true; }}
             />
           {/if}
           
@@ -650,7 +666,13 @@
               {#each friends.slice(0, 3) as friend, i}
                 <div class="friend-avatar-wrapper" style="z-index: {10 - i};">
                   {#if userHasVoted}
-                    <img src={friend.avatarUrl || DEFAULT_AVATAR} alt={friend.name} class="friend-avatar" loading="lazy" />
+                    <img 
+                      src={friend.avatarUrl && shouldRetryImage(friend.avatarUrl) ? friend.avatarUrl : DEFAULT_AVATAR} 
+                      alt={friend.name} 
+                      class="friend-avatar" 
+                      loading="lazy"
+                      onerror={(e: Event) => { if (e.target && friend.avatarUrl) { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; markImageFailed(friend.avatarUrl); }}}
+                    />
                   {:else}
                     <div class="friend-avatar-mystery"><span>?</span></div>
                   {/if}
@@ -784,7 +806,13 @@
                   {#each friends.slice(0, 3) as friend, i}
                     <div class="friend-avatar-wrapper" style="z-index: {10 - i};">
                       {#if userHasVoted}
-                        <img src={friend.avatarUrl || DEFAULT_AVATAR} alt={friend.name} class="friend-avatar" loading="lazy" />
+                        <img 
+                      src={friend.avatarUrl && shouldRetryImage(friend.avatarUrl) ? friend.avatarUrl : DEFAULT_AVATAR} 
+                      alt={friend.name} 
+                      class="friend-avatar" 
+                      loading="lazy"
+                      onerror={(e: Event) => { if (e.target && friend.avatarUrl) { (e.target as HTMLImageElement).src = DEFAULT_AVATAR; markImageFailed(friend.avatarUrl); }}}
+                    />
                       {:else}
                         <div class="friend-avatar-mystery"><span>?</span></div>
                       {/if}

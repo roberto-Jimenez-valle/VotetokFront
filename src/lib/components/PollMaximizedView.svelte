@@ -50,6 +50,7 @@
   import StatsBottomModal from "./StatsBottomModal.svelte";
   import { apiPost, apiDelete } from '$lib/api/client';
   import { openFullscreenIframe as openFullscreenIframeStore, preloadIframe, clearPreloadIframe } from '$lib/stores/globalState';
+  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
 
   // --- INTERFACES ---
   interface PollOption {
@@ -167,6 +168,55 @@
   let totalVotes = $derived(options.reduce((a, b) => a + (b.votes || 0), 0));
   let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
+  
+  // Estado para rastrear thumbnails fallidos por opción (objeto reactivo)
+  let failedThumbnails = $state<Record<string, boolean>>({});
+  
+  // Función para marcar thumbnail como fallido
+  function markThumbnailFailed(optionId: string, imageUrl: string) {
+    failedThumbnails = { ...failedThumbnails, [optionId]: true };
+    markImageFailed(imageUrl);
+    console.log('[PollMaximizedView] Thumbnail fallido:', optionId, imageUrl?.substring(0, 50));
+  }
+  
+  // Verificar si el thumbnail de una opción ha fallado
+  function hasThumbnailFailed(opt: PollOption): boolean {
+    if (failedThumbnails[opt.id]) return true;
+    if (opt.imageUrl && !shouldRetryImage(opt.imageUrl)) return true;
+    return false;
+  }
+  
+  // Funciones helper para determinar el tipo de layout (reactivas a failedThumbnails)
+  function shouldShowAsTextLayout(opt: PollOption): boolean {
+    const type = getMediaType(opt);
+    const failed = failedThumbnails[opt.id] === true;
+    if (failed) return true;
+    if (type === 'text') return true;
+    if (type === 'generic-link' && !hasRealThumbnail(opt)) return true;
+    return false;
+  }
+  
+  function shouldShowAsVideoLayout(opt: PollOption): boolean {
+    if (failedThumbnails[opt.id] === true) return false;
+    const type = getMediaType(opt);
+    const hasThumb = hasRealThumbnail(opt);
+    const isGenericWithThumb = type === 'generic-link' && hasThumb;
+    return (type !== 'image' && type !== 'text' && type !== 'generic-link') || isGenericWithThumb;
+  }
+  
+  function shouldShowAsImageLayout(opt: PollOption): boolean {
+    if (failedThumbnails[opt.id] === true) return false;
+    const type = getMediaType(opt);
+    const url = opt.imageUrl?.toLowerCase() || '';
+    const isGif = url.includes('giphy.com') || url.includes('tenor.com') || /\.gif([?#]|$)/i.test(url);
+    return type === 'image' && !isGif;
+  }
+  
+  function shouldShowAsGifLayout(opt: PollOption): boolean {
+    if (failedThumbnails[opt.id] === true) return false;
+    const url = opt.imageUrl?.toLowerCase() || '';
+    return url.includes('giphy.com') || url.includes('tenor.com') || /\.gif([?#]|$)/i.test(url);
+  }
   
   // Estado para añadir nueva opción colaborativa
   let isAddingOption = $state(false);
@@ -617,13 +667,20 @@
     return "generic-link";
   }
   
-  // Detectar si un thumbnail es real (no placeholder)
+  // Detectar si un thumbnail es real (no placeholder) Y no ha fallado
   function hasRealThumbnail(opt: PollOption): boolean {
+    // Si la opción ya está marcada como fallida, no tiene thumbnail real
+    if (failedThumbnails[opt.id]) return false;
+    
     const thumb = previewCache[opt.id]?.image || getPreviewThumbnail(opt);
     if (!thumb) return false;
     if (thumb.includes('placehold.co')) return false;
     if (thumb.includes('placeholder')) return false;
     if (thumb.startsWith('data:image/svg+xml')) return false; // SVGs generados son placeholders
+    
+    // Verificar si la URL del thumbnail ya ha fallado en el store global
+    if (!shouldRetryImage(thumb)) return false;
+    
     return true;
   }
   
@@ -873,46 +930,50 @@
           // Obtener la imagen del preview - priorizar imageProxied, luego image
           let image = data.imageProxied || data.image;
           
-          // Si no hay imagen, usar placeholder de la plataforma
-          if (!image || image.includes('undefined') || image === 'null') {
-            image = getPlaceholderForPlatform(opt.imageUrl);
+          // Si no hay imagen real, marcar como fallido y mostrar como texto
+          if (!image || image.includes('undefined') || image === 'null' || image.includes('placehold.co')) {
+            console.log('[PollMaximizedView] 🚫 Sin imagen real para:', opt.id, opt.imageUrl?.substring(0, 40));
+            failedThumbnails = { ...failedThumbnails, [opt.id]: true };
+            previewCache = { 
+              ...previewCache, 
+              [opt.id]: { image: '', loading: false } 
+            };
+          } else {
+            previewCache = { 
+              ...previewCache, 
+              [opt.id]: { 
+                image, 
+                title: data.title,
+                loading: false 
+              } 
+            };
           }
-          
-          previewCache = { 
-            ...previewCache, 
-            [opt.id]: { 
-              image, 
-              title: data.title,
-              loading: false 
-            } 
-          };
         } else {
-          // Sin datos, usar placeholder
+          // Sin datos, marcar como fallido
+          console.log('[PollMaximizedView] 🚫 Sin datos de preview para:', opt.id);
+          failedThumbnails = { ...failedThumbnails, [opt.id]: true };
           previewCache = { 
             ...previewCache, 
-            [opt.id]: { 
-              image: getPlaceholderForPlatform(opt.imageUrl), 
-              loading: false 
-            } 
+            [opt.id]: { image: '', loading: false } 
           };
         }
       } else {
-        // Error de respuesta, usar placeholder
+        // Error de respuesta, marcar como fallido
+        console.log('[PollMaximizedView] 🚫 Error de API para:', opt.id);
+        failedThumbnails = { ...failedThumbnails, [opt.id]: true };
         previewCache = { 
           ...previewCache, 
-          [opt.id]: { 
-            image: getPlaceholderForPlatform(opt.imageUrl), 
-            loading: false 
-          } 
+          [opt.id]: { image: '', loading: false } 
         };
       }
     } catch (error) {
       console.warn('[PollMaximizedView] Error fetching preview:', error);
-      // Usar placeholder en caso de error
+      // Error, marcar como fallido
+      failedThumbnails = { ...failedThumbnails, [opt.id]: true };
       previewCache = { 
         ...previewCache, 
         [opt.id]: { 
-          image: getPlaceholderForPlatform(opt.imageUrl), 
+          image: '', 
           loading: false 
         } 
       };
@@ -1395,16 +1456,18 @@
         aria-activedescendant={options[activeIndex]?.id ? `option-${options[activeIndex].id}` : undefined}
       >
         {#each options as opt, i (opt.id)}
+          {#key `${opt.id}-${failedThumbnails[opt.id] === true}`}
           {@const type = getMediaType(opt)}
-          {@const hasThumb = hasRealThumbnail(opt)}
-          {@const isGenericLinkWithThumb = type === 'generic-link' && hasThumb}
-          {@const isVideoType = (type !== 'image' && type !== 'text' && type !== 'generic-link') || isGenericLinkWithThumb}
-          {@const isMusicType = ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
-          {@const isGifType = opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
-          {@const isImageType = type === 'image' && !isGifType}
           {@const labelText = getLabelWithoutUrl(opt.label)}
+          {@const mediaFailed = failedThumbnails[opt.id] === true}
+          {@const hasThumb = !mediaFailed && hasRealThumbnail(opt)}
+          {@const isGenericLinkWithThumb = type === 'generic-link' && hasThumb}
+          {@const isVideoType = !mediaFailed && ((type !== 'image' && type !== 'text' && type !== 'generic-link') || isGenericLinkWithThumb)}
+          {@const isMusicType = !mediaFailed && ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
+          {@const isGifType = !mediaFailed && opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
+          {@const isImageType = !mediaFailed && type === 'image' && !isGifType}
           {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasThumb}
-          {@const shouldShowAsText = type === 'text' || isGenericLinkWithoutThumb}
+          {@const shouldShowAsText = type === 'text' || isGenericLinkWithoutThumb || mediaFailed}
           <div
             id="option-{opt.id}"
             class="w-full h-full flex-shrink-0 snap-center relative"
@@ -1531,9 +1594,29 @@
                         aria-label="Preview de contenido"
                       >
                         <div class="floating-preview-inner">
-                          <!-- Mostrar thumbnail siempre que esté disponible -->
-                          {#if (previewCache[opt.id]?.image || getPreviewThumbnail(opt)) && (hasEmbeddableContent(opt) || isGenericLinkWithThumb)}
+                          <!-- Mostrar thumbnail siempre que esté disponible y no haya fallado -->
+                          {#if !mediaFailed && (previewCache[opt.id]?.image || getPreviewThumbnail(opt)) && (hasEmbeddableContent(opt) || isGenericLinkWithThumb)}
                             {@const thumbUrl = previewCache[opt.id]?.image || getPreviewThumbnail(opt)}
+                            <!-- Imagen oculta para detectar errores de carga -->
+                            <img 
+                              src={thumbUrl} 
+                              alt="" 
+                              style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;" 
+                              onerror={() => {
+                                console.log('[PollMaximizedView] 🚫 Imagen error:', opt.id, thumbUrl?.substring(0, 50));
+                                failedThumbnails = { ...failedThumbnails, [opt.id]: true };
+                                if (thumbUrl) markImageFailed(thumbUrl);
+                              }}
+                              onload={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                // Si la imagen es muy pequeña (1x1 pixel tracking) o no tiene dimensiones, marcar como fallida
+                                if (img.naturalWidth < 10 || img.naturalHeight < 10) {
+                                  console.log('[PollMaximizedView] 🚫 Imagen inválida (muy pequeña):', opt.id, img.naturalWidth, 'x', img.naturalHeight);
+                                  failedThumbnails = { ...failedThumbnails, [opt.id]: true };
+                                  if (thumbUrl) markImageFailed(thumbUrl);
+                                }
+                              }}
+                            />
                             <!-- PREVIEW: Thumbnail con badge flotante -->
                             <!-- Si tiene embed (plataformas conocidas) -> abre fullscreen iframe -->
                             <!-- Si es enlace genérico sin embed -> abre enlace directamente -->
@@ -1705,6 +1788,7 @@
                               width="100%"
                               height="100%"
                               autoplay={isVideoContent(opt)}
+                              on:imageerror={() => { if (opt.imageUrl) markThumbnailFailed(opt.id, opt.imageUrl); }}
                             />
                           {/key}
                         {:else}
@@ -1805,6 +1889,7 @@
             </div>
 
           </div>
+          {/key}
         {/each}
 
         <!-- Slide para añadir nueva opción (colaborativas) -->
