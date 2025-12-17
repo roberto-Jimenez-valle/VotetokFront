@@ -5387,7 +5387,7 @@
 
   const BOTTOM_BAR_PX = 0; // altura del menú inferior
   const EXPAND_SNAP_PX = 10; // umbral de arrastre hacia arriba para expandir totalmente (más sensible)
-  const COLLAPSED_VISIBLE_RATIO = 0.27; // en estado colapsado, se ve el 30% superior de la sheet
+  const COLLAPSED_VISIBLE_RATIO = 0.35; // en estado colapsado, se ve el 30% superior de la sheet
   const PEEK_VISIBLE_RATIO = 0.1; // tercer stop: 10% visible
   // Inicializa fuera de pantalla para evitar parpadeo visible al cargar
   let sheetY = 10000; // translateY actual en px (0 = expandido, >0 hacia abajo)
@@ -5469,6 +5469,7 @@
         label: string;
         color: string;
         votes: number;
+        imageUrl?: string;
       }>;
     }>,
   ) {
@@ -9701,7 +9702,11 @@
     // Establecer variable global
     if (typeof window !== "undefined") {
       (window as any).globalNavDropdownOpen = e.detail.open;
-          }
+    }
+    // Si se abre el carrusel y el sheet está más abajo que collapsed, subirlo
+    if (e.detail.open && SHEET_STATE === "peek") {
+      setSheetState("collapsed");
+    }
     // También dispatch al padre
     dispatch("dropdownstatechange", { open: e.detail.open });
   }}

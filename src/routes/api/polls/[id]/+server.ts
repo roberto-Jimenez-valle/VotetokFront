@@ -77,7 +77,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   // Para compatibilidad, también incluir userVote (el primero o null)
   const userVote = userVotes.length > 0 ? userVotes[0] : null;
 
-  // Transformar opciones para incluir voteCount y avatarUrl
+  // Transformar opciones para incluir voteCount, avatarUrl e imageUrl
   const transformedPoll = {
     ...poll,
     userVote, // Compatibilidad: primer voto o null
@@ -86,6 +86,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
       ...option,
       voteCount: option._count.votes,
       avatarUrl: option.createdBy?.avatarUrl || null,
+      imageUrl: (option as any).imageUrl || null,
     }))
   };
 

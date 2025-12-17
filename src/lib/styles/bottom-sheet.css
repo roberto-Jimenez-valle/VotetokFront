@@ -967,6 +967,15 @@
     -ms-overflow-style: none;
   }
   
+  /* Estilos para el carrusel 3D */
+  .poll-bar-options-expanded.carousel-wrapper {
+    display: block;
+    padding: 8px 8px 30px 8px;
+    margin-top: 0;
+    overflow: visible;
+    min-height: 200px;
+  }
+  
   .poll-bar-options-expanded::-webkit-scrollbar {
     display: none;
   }

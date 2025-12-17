@@ -12,6 +12,7 @@
   import SinglePollSection from "./cards/sections/SinglePollSection.svelte";
   import WhoToFollowSection from "./cards/sections/WhoToFollowSection.svelte";
   import AdCard from "./cards/sections/AdCard.svelte";
+  import TrendingCarousel3D from "$lib/components/TrendingCarousel3D.svelte";
   // Componentes dinámicos para lazy load y evitar dependencia circular
   let AuthModal: any = null;
   let UserProfileModal: any = null;
@@ -936,12 +937,20 @@
     if (state === "expanded") {
       // Cuando está expandido, el nav sigue su lógica normal de scroll
       // No forzar ningún valor aquí
+    } else if (state === "peek" || state === "hidden") {
+      // Si el sheet está por debajo de collapsed, cerrar el carrusel y mostrar nav
+      if (showPollOptionsExpanded) {
+        showPollOptionsExpanded = false;
+        dispatch("polldropdownstatechange", { open: false });
+      }
+      showNavBar = true;
+      lastScrollTop = 0;
     } else if (showPollOptionsExpanded) {
-      // Si el desplegable de poll options está abierto y NO está expandido, ocultar nav
-            showNavBar = false;
+      // Si el desplegable de poll options está abierto en collapsed, ocultar nav
+      showNavBar = false;
     } else {
       // Si el desplegable está cerrado y NO está expandido, mostrar nav
-            showNavBar = true;
+      showNavBar = true;
       lastScrollTop = 0;
     }
   }
@@ -2594,6 +2603,8 @@
               : "0 votos",
           pollData: (opt as any).pollData,
           avatarUrl: (opt as any).avatarUrl,
+          imageUrl: (opt as any).imageUrl,
+          url: (opt as any).url,
         };
       })}
       {@const pollTitle =
@@ -2666,165 +2677,33 @@
           </div>
         </button>
 
-        <!-- Opciones expandidas -->
+        <!-- Opciones expandidas - Carrusel 3D -->
         {#if showPollOptionsExpanded}
-          <div
-            class="poll-bar-options-expanded"
-            bind:this={optionsScrollElement}
-            onpointerdown={(e) => {
-              e.stopPropagation();
-            }}
-            ontouchstart={(e) => {
-              const target = e.currentTarget as HTMLElement;
-              optionsTouchStartY = e.touches[0].clientY;
-              optionsScrollTop = target.scrollLeft; // Cambio: scrollLeft en lugar de scrollTop
-              isScrollingOptions = false;
-              optionsTouchMoved = false;
-
-              // Detener propagación completamente
-              e.stopPropagation();
-              e.stopImmediatePropagation();
-            }}
-            onpointermove={(e) => {
-              e.stopPropagation();
-            }}
-            ontouchmove={(e) => {
-              const target = e.currentTarget as HTMLElement;
-              const currentY = e.touches[0].clientY;
-              const deltaY = currentY - optionsTouchStartY;
-
-              optionsTouchMoved = true;
-
-              // Lógica simplificada para scroll horizontal:
-              // Swipe vertical hacia arriba (>50px) → Colapsar opciones
-              // El scroll horizontal se maneja automáticamente por el navegador
-
-              if (deltaY < -50) {
-                // Swipe fuerte hacia arriba → Colapsar opciones
-                showPollOptionsExpanded = false;
-                // Notificar al padre
-                dispatch("polldropdownstatechange", { open: false });
-                              }
-
-              // SIEMPRE detener propagación completamente - NO permitir arrastrar BottomSheet
-              e.stopPropagation();
-              e.stopImmediatePropagation();
-            }}
-            onpointerup={(e) => {
-              isScrollingOptions = false;
-              optionsTouchMoved = false;
-              e.stopPropagation();
-              e.stopImmediatePropagation();
-            }}
-            ontouchend={(e) => {
-              isScrollingOptions = false;
-              optionsTouchMoved = false;
-              e.stopPropagation();
-              e.stopImmediatePropagation();
-            }}
-          >
-            {#each optionsWithPct.sort((a, b) => b.pct - a.pct) as option, index}
-              <button
-                class="poll-bar-option-item"
-                class:is-trending-poll={!activePoll && option.pollData}
-                onclick={(e) => {
-                  e.stopPropagation();
-
-                  // Detectar doble click
-                  const optionKey = option.key;
-
-                  if (lastClickedOption === optionKey) {
-                    optionClickCount++;
-                  } else {
-                    optionClickCount = 1;
-                    lastClickedOption = optionKey;
-                  }
-
-                  if (optionClickTimer) {
-                    clearTimeout(optionClickTimer);
-                    optionClickTimer = null;
-                  }
-
-                  if (optionClickCount === 2) {
-                    // Doble click detectado - expandir BottomSheet
-                                        dispatch("requestExpand");
-                    optionClickCount = 0;
-                    lastClickedOption = null;
-                  } else {
-                    // Primer click - esperar por segundo click
-                    optionClickTimer = window.setTimeout(() => {
-                      // Click simple - abrir trending poll si aplica
-                      if (!activePoll && option.pollData) {
-                        openTrendingPoll(option.pollData);
-                      }
-                      optionClickCount = 0;
-                      lastClickedOption = null;
-                    }, DOUBLE_CLICK_DELAY);
-                  }
-                }}
-                style="border: 2px solid {option.color};"
-              >
-                <!-- Avatar en esquina superior derecha como badge -->
-                <div class="poll-bar-option-avatar-badge">
-                  {#if !activePoll && option.pollData}
-                    <!-- Modo trending: avatar del creador -->
-                    {#if option.pollData.user?.avatarUrl}
-                      <img
-                        src={option.pollData.user.avatarUrl}
-                        alt={option.pollData.user.displayName || option.label}
-                        class="poll-bar-option-avatar-small"
-                      />
-                    {:else if option.pollData.creator?.avatarUrl}
-                      <img
-                        src={option.pollData.creator.avatarUrl}
-                        alt={option.pollData.creator.name || option.label}
-                        class="poll-bar-option-avatar-small"
-                      />
-                    {:else}
-                      <div
-                        class="poll-bar-option-avatar-placeholder-small"
-                        style="background-color: {option.color};"
-                      >
-                        {option.label.charAt(0)}
-                      </div>
-                    {/if}
-                  {:else}
-                    <!-- Modo encuesta: avatar de la opción -->
-                    {#if option.avatarUrl}
-                      <img
-                        src={option.avatarUrl}
-                        alt={option.label}
-                        class="poll-bar-option-avatar-small"
-                      />
-                    {:else}
-                      <div
-                        class="poll-bar-option-avatar-placeholder-small"
-                        style="background-color: {option.color};"
-                      >
-                        {option.label.charAt(0)}
-                      </div>
-                    {/if}
-                  {/if}
-                </div>
-
-                <div class="poll-bar-option-info">
-                  <span class="poll-bar-option-label">{option.label}</span>
-                </div>
-
-                <!-- Barra de progreso abajo con votos al lado -->
-                <div class="poll-bar-option-progress-container">
-                  <div class="poll-bar-option-progress-bar">
-                    <div
-                      class="poll-bar-option-progress-fill"
-                      style="width: {option.pct}%; background-color: {option.color};"
-                    ></div>
-                  </div>
-                  <span class="poll-bar-option-votes-count"
-                    >{option.displayText || "0"}</span
-                  >
-                </div>
-              </button>
-            {/each}
+          {@const carouselOptions = activePoll ? activePoll.options.map((opt: any, idx: number) => {
+            const optWithPct = optionsWithPct.find((o: any) => o.key === opt.key || o.key === opt.optionKey);
+            return {
+              key: opt.key || opt.optionKey || `opt-${idx}`,
+              label: opt.label || opt.optionLabel || opt.optionText,
+              color: opt.color,
+              imageUrl: opt.imageUrl,
+              pct: optWithPct?.pct || 0,
+              votes: optWithPct?.votes || opt.votes || 0,
+              displayText: optWithPct?.displayText || '0 votos',
+            };
+          }) : optionsWithPct}
+          <div class="poll-bar-options-expanded carousel-wrapper" onpointerdown={(e) => e.stopPropagation()} ontouchstart={(e) => e.stopPropagation()}>
+            <TrendingCarousel3D
+              options={carouselOptions.sort((a: any, b: any) => b.pct - a.pct)}
+              activeIndex={0}
+              isTrendingMode={!activePoll}
+              on:selectPoll={(e) => {
+                const option = e.detail.option;
+                if (!activePoll && option.pollData) {
+                  openTrendingPoll(option.pollData);
+                }
+              }}
+              on:requestExpand={() => dispatch("requestExpand")}
+            />
           </div>
         {/if}
       </div>
