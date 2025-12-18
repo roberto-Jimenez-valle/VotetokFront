@@ -2614,10 +2614,7 @@
           color: opt.color,
           votes: count,
           pct: pct,
-          displayText:
-            count > 0
-              ? `${formatNumber(count)} ${count === 1 ? "voto" : "votos"}`
-              : "0 votos",
+          displayText: pct > 0 ? `${Math.round(pct)}%` : "0%",
           pollData: (opt as any).pollData,
           avatarUrl: (opt as any).avatarUrl,
           imageUrl: (opt as any).imageUrl,
@@ -2666,36 +2663,8 @@
           {/if}
         </div>
 
-        <!-- Barra horizontal de colores (clickeable para expandir) -->
-        <button
-          class="poll-bar-chart"
-          onclick={(e) => {
-            e.stopPropagation();
-            showPollOptionsExpanded = !showPollOptionsExpanded;
-            // Notificar al padre para ocultar/mostrar el nav
-            dispatch("polldropdownstatechange", {
-              open: showPollOptionsExpanded,
-            });
-                      }}
-          aria-expanded={showPollOptionsExpanded}
-          aria-label="Ver opciones de la encuesta"
-        >
-          <div class="poll-bar-segments">
-            {#each barSegments as segment}
-              <div
-                class="poll-bar-segment"
-                style="width: {segment.pct}%; background-color: {segment.color};"
-                title="{segment.label}: {segment.pct.toFixed(1)}%"
-              ></div>
-            {/each}
-          </div>
-          <div class="poll-bar-icon">
-            {showPollOptionsExpanded ? "▲" : "▼"}
-          </div>
-        </button>
-
-        <!-- Opciones expandidas - Carrusel 3D -->
-        {#if showPollOptionsExpanded}
+        <!-- Carrusel 3D de opciones -->
+        {#if optionsWithPct.length > 0}
           {@const carouselOptions = activePoll ? activePoll.options.map((opt: any, idx: number) => {
             const optWithPct = optionsWithPct.find((o: any) => o.key === opt.key || o.key === opt.optionKey);
             return {
@@ -2705,15 +2674,19 @@
               imageUrl: opt.imageUrl,
               pct: optWithPct?.pct || 0,
               votes: optWithPct?.votes || opt.votes || 0,
-              displayText: optWithPct?.displayText || '0 votos',
+              displayText: optWithPct?.displayText || '0%',
             };
           }) : optionsWithPct}
+          {@const carouselHasVoted = activePoll ? (Array.isArray(userVotes[activePoll.id]) ? userVotes[activePoll.id].length > 0 : !!userVotes[activePoll.id]) : false}
+          {@const carouselTotalVotes = activePoll ? (activePoll.totalVotes || activePoll.options?.reduce((sum: number, o: any) => sum + (o.votes || 0), 0) || 0) : 0}
           <div class="poll-bar-options-expanded carousel-wrapper">
             <TrendingCarousel3D
               options={carouselOptions.sort((a: any, b: any) => b.pct - a.pct)}
               activeIndex={0}
               isTrendingMode={!activePoll}
               externalThumbnailsCache={carouselThumbnailsCache}
+              hasVoted={carouselHasVoted}
+              totalVotes={carouselTotalVotes}
               on:selectPoll={(e) => {
                 const option = e.detail.option;
                 if (!activePoll && option.pollData) {
@@ -2738,49 +2711,8 @@
           </div>
         {/if}
       </div>
-    {:else if selectedCityName && cityChartSegments.length}
-      <!-- Barra de ciudad (cuando NO hay encuesta seleccionada) -->
-      <div
-        class="drag-chart"
-        role="img"
-        aria-label={"Distribución en " + selectedCityName}
-      >
-        {#each cityChartSegments as seg}
-          <div
-            class="drag-seg"
-            style={"width:" + seg.pct + "%; background:" + seg.color}
-            title={seg.key + ": " + seg.pct.toFixed(1) + "%"}
-          ></div>
-        {/each}
-      </div>
-    {:else if selectedCountryName && countryChartSegments.length}
-      <!-- Barra de país (cuando NO hay encuesta seleccionada) -->
-      <div
-        class="drag-chart"
-        role="img"
-        aria-label={"Distribución en " + selectedCountryName}
-      >
-        {#each countryChartSegments as seg}
-          <div
-            class="drag-seg"
-            style={"width:" + seg.pct + "%; background:" + seg.color}
-            title={seg.key + ": " + seg.pct.toFixed(1) + "%"}
-          ></div>
-        {/each}
-      </div>
-    {:else if worldChartSegments.length}
-      <!-- Barra global (cuando NO hay encuesta seleccionada) -->
-      <div class="drag-chart" role="img" aria-label="Distribución global">
-        {#each worldChartSegments as seg}
-          <div
-            class="drag-seg"
-            style={"width:" + seg.pct + "%; background:" + seg.color}
-            title={seg.key + ": " + seg.pct.toFixed(1) + "%"}
-          ></div>
-        {/each}
-      </div>
     {:else}
-      <!-- Fallback: grabber tradicional si no hay datos -->
+      <!-- Grabber tradicional -->
       <div class="sheet-grabber"></div>
     {/if}
   </div>

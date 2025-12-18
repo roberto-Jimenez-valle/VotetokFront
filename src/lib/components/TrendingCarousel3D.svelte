@@ -9,6 +9,8 @@
   export let activeIndex: number = 0;
   export let isTrendingMode: boolean = true; // true = solo colores, false = con thumbnails
   export let externalThumbnailsCache: Record<string, string> = {}; // Cache externo para persistir thumbnails
+  export let hasVoted: boolean = false; // Si el usuario ha votado
+  export let totalVotes: number = 0; // Total de votos para calcular porcentajes
   
   // Estado local - inicializar desde cache externo
   let thumbnails: Record<string, string> = { ...externalThumbnailsCache };
@@ -17,6 +19,7 @@
   let isAnimating = false;
   
   $: totalCards = options?.length || 0;
+  $: showColorsAndPercentages = isTrendingMode || hasVoted;
   
   // Calcular posiciones de cada card en el stack
   $: cardPositions = options?.map((_: any, i: number) => {
@@ -316,7 +319,7 @@
           <!-- Contenido con imagen -->
           <div class="card-content with-image">
             <span class="card-title">{cleanTextFromUrl(option.label) || 'Sin título'}</span>
-            <span class="card-votes">{option.displayText || '0 votos'}</span>
+            <span class="card-votes">{option.displayText || '0%'}</span>
           </div>
         {:else}
           <!-- Modo texto: comillas decorativas -->
@@ -330,7 +333,7 @@
           
           <!-- Votos en la parte inferior (mismo estilo que con imagen) -->
           <div class="card-content with-image">
-            <span class="card-votes">{option.displayText || '0 votos'}</span>
+            <span class="card-votes">{option.displayText || '0%'}</span>
           </div>
         {/if}
       </button>
@@ -341,18 +344,25 @@
   <button class="nav-btn nav-prev" onclick={(e: MouseEvent) => { e.stopPropagation(); prevCard(); }} aria-label="Anterior" type="button">‹</button>
   <button class="nav-btn nav-next" onclick={(e: MouseEvent) => { e.stopPropagation(); nextCard(); }} aria-label="Siguiente" type="button">›</button>
   
-  <!-- Indicadores de posición estilo oEmbed -->
-  <div class="carousel-indicators">
+  <!-- Indicadores de posición estilo PollMaximizedView -->
+  <div class="carousel-indicators" class:show-colors={showColorsAndPercentages}>
     {#each options as option, i}
+      {@const isActive = i === activeIndex}
+      {@const flexWeight = showColorsAndPercentages ? Math.max(option.pct || option.votes || 1, 2) : 1}
       <button 
         class="progress-bar" 
-        class:active={i === activeIndex}
+        class:active={isActive}
         class:past={i < activeIndex}
-        style="--bar-color: {option.color};"
+        style="flex: {flexWeight} 1 0%; --bar-color: {option.color}; opacity: {isActive ? 1 : (showColorsAndPercentages ? 0.5 : 0.6)}; transform: {isActive ? 'scaleY(1.4)' : 'scaleY(1)'};"
         onclick={(e: MouseEvent) => { e.stopPropagation(); activeIndex = i; dispatch('indexChange', { index: i }); }}
         type="button"
         aria-label="Ir a opción {i + 1}"
-      ></button>
+      >
+        <span 
+          class="progress-fill"
+          style="width: 100%; background-color: {showColorsAndPercentages ? option.color : (isActive ? '#fff' : 'rgba(255, 255, 255, 0.3)')};"
+        ></span>
+      </button>
     {/each}
   </div>
 </div>
@@ -607,61 +617,46 @@
     right: 4px;
   }
   
-  /* Indicadores estilo oEmbed con colores */
+  /* Indicadores estilo PollMaximizedView */
   .carousel-indicators {
     position: absolute;
-    bottom: -12px;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: -14px;
+    left: 0;
+    right: 0;
     display: flex;
-    justify-content: center;
-    align-items: center;
     gap: 3px;
     z-index: 200;
-    width: 90%;
-    max-width: 250px;
+    width: 100%;
+    padding: 0 8px;
+    box-sizing: border-box;
   }
   
   .progress-bar {
-    flex: 1;
-    max-width: 40px;
-    height: 4px;
-    border-radius: 2px;
+    height: 6px;
+    border-radius: 3px;
     border: none;
     cursor: pointer;
     padding: 0;
-    transition: all 0.3s ease;
-    background: rgba(255, 255, 255, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.15);
     position: relative;
     overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   }
-  
-  .progress-bar::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--bar-color);
-    border-radius: 2px;
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.3s ease;
+
+  .progress-fill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   .progress-bar:hover {
-    background: rgba(255, 255, 255, 0.5);
-  }
-  
-  .progress-bar.past::after {
-    transform: scaleX(1);
+    opacity: 0.85 !important;
   }
   
   .progress-bar.active {
-    background: rgba(255, 255, 255, 0.5);
-  }
-  
-  .progress-bar.active::after {
-    transform: scaleX(1);
-    box-shadow: 0 0 8px var(--bar-color);
+    box-shadow: 0 2px 6px rgba(255, 255, 255, 0.2);
   }
   
   /* Responsive */

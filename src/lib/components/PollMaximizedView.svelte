@@ -1312,39 +1312,6 @@
       <div
         class="absolute top-0 left-0 w-full z-50 flex flex-col pointer-events-none"
       >
-        <!-- DataBar -->
-        <div
-          class="w-full px-2 flex gap-0.5 h-1.5 pointer-events-none mt-2 z-50"
-        >
-          {#each options as opt, idx}
-            {@const isActive = idx === activeIndex}
-            {@const flexWeight = hasVoted
-              ? Math.max(opt.votes || 0, totalVotes * 0.02)
-              : 1}
-            <div
-              class="h-full transition-all duration-700 ease-out overflow-hidden relative rounded-sm"
-              style:flex="{flexWeight} 1 0%"
-              style:background-color={hasVoted ? opt.color : "rgba(255, 255, 255, 0.2)"}
-              style:transform={hasVoted && isActive
-                ? "scaleY(1.5)"
-                : "scaleY(1)"}
-              style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);"
-            >
-              <div
-                class="h-full transition-all duration-300"
-                style:width={hasVoted
-                  ? "100%"
-                  : idx < activeIndex
-                    ? "100%"
-                    : isActive
-                      ? "100%"
-                      : "0%"}
-                style:background-color={hasVoted ? "transparent" : "#fff"}
-              ></div>
-            </div>
-          {/each}
-        </div>
-
         <!-- QuestionHeader - Nuevo diseño tipo Twitter -->
         <div class="question-header-new z-40 relative pointer-events-none">
           <!-- Fila superior: Back + Avatar + Username + Metadata + Menu -->

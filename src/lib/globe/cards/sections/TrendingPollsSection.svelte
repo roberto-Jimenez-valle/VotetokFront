@@ -230,16 +230,23 @@
     {/each}
   </div>
   
-  <!-- Indicadores de paginación -->
+  <!-- Indicadores de paginación estilo PollMaximizedView -->
   {#if shouldPaginateMain}
-    <div class="pagination-dots {paginatedMainOptions.totalPages > 25 ? 'many-pages' : ''}">
+    <div class="options-indicators-trending">
       {#each Array(paginatedMainOptions.totalPages) as _, pageIndex}
-        <button 
-          class="pagination-dot {pageIndex === currentPageMain ? 'active' : ''}"
+        {@const isActive = pageIndex === currentPageMain}
+        <button
+          class="option-indicator-trending {isActive ? 'active' : ''}"
+          style="flex: 1 1 0%; opacity: {isActive ? 1 : 0.4}; transform: {isActive ? 'scaleY(1.3)' : 'scaleY(1)'};"
           onclick={() => handlePageChange(pageIndex)}
           type="button"
           aria-label="Página {pageIndex + 1}"
-        ></button>
+        >
+          <span
+            class="indicator-fill-trending"
+            style="width: {pageIndex <= currentPageMain ? '100%' : '0%'}; background-color: {isActive ? '#fff' : 'rgba(255, 255, 255, 0.3)'};"
+          ></span>
+        </button>
       {/each}
     </div>
   {/if}
@@ -277,3 +284,42 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* Indicadores estilo PollMaximizedView */
+  .options-indicators-trending {
+    display: flex;
+    gap: 3px;
+    width: 100%;
+    padding: 8px 12px 4px 12px;
+    box-sizing: border-box;
+  }
+
+  .option-indicator-trending {
+    height: 6px;
+    border: none;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .option-indicator-trending.active {
+    box-shadow: 0 2px 6px rgba(255, 255, 255, 0.2);
+  }
+  
+  .indicator-fill-trending {
+    display: block;
+    height: 100%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 3px;
+  }
+
+  .option-indicator-trending:hover {
+    opacity: 0.85 !important;
+  }
+</style>
