@@ -467,7 +467,7 @@ header {
   position: fixed;
   top: 4px;
   right: 10px; /* pegado al borde derecho */
-  z-index: 10000; /* por debajo del BottomSheet expandido */
+  z-index: 30000; /* por encima del BottomSheet (20000) */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -715,12 +715,13 @@ header {
 @media (max-width: 767px) {
   .bottom-sheet.solid {
     /* Cuando está expandido (solid), limitar altura para dejar ver el globo */
-    top: calc(25vh - 15px) !important; /* Subir 15px el inicio del sheet */
-    height: calc(75vh + 15px) !important; /* Compensar aumentando la altura total */
+    top: calc(25vh - 55px) !important; /* Subir 35px el inicio del sheet (20px más) */
+    height: calc(75vh + 55px) !important; /* Compensar aumentando la altura total */
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
     transform: translateY(0) !important; /* No necesita translateY adicional */
     -webkit-transform: translateY(0) !important;
+    z-index: 15000 !important; /* Menor que tabs-float (30000) para que el dropdown se vea */
   }
   
   /* Asegurar transición suave del BottomSheet en móvil - sincronizada con globo */
@@ -1019,6 +1020,17 @@ header {
 
 .sheet-drag-area:active {
   cursor: grabbing;
+}
+
+/* Drag area cuando está expandido - padding normal */
+.sheet-drag-area.drag-area-minimal {
+  padding: 12px 16px 12px !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+.sheet-drag-area.drag-area-minimal .poll-options-bar-container {
+  display: none !important;
 }
 
 /* Indicador visual de arrastre (drag handle) */

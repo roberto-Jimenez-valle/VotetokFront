@@ -67,7 +67,7 @@ export class BottomSheetController {
       // En collapsed, restar la altura del nav para que el contenido quede visible encima del nav
       this.y = containerH * (1 - this.collapsedVisibleRatio) - this.bottomBarPx;
     }
-    else this.y = 0; // expanded: completamente hasta arriba
+    else this.y = 0; // expanded: 20px más arriba del tope
     this.onChange(this.state, this.y, isTransitioning);
   }
 

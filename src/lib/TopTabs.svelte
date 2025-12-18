@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import { onMount } from 'svelte';
 
   export let active: 'Para ti' | 'Tendencias' | 'Amigos' | 'Live' = 'Para ti';
+  
+  // Referencia al menú para moverlo al body
+  let menuElement: HTMLDivElement | null = null;
   export let options: Array<'Para ti' | 'Tendencias' | 'Amigos' | 'Live'> = ['Para ti','Tendencias','Amigos','Live'];
   // Label personalizado para mostrar en el trigger (ej: "Encuesta" cuando hay poll activa)
   export let customActiveLabel: string | null = null;
@@ -19,7 +22,7 @@
   // Estado del toggle minimal "# / @"
   export let symbolMode: '#' | '@' = '#';
 
-  function toggle() { 
+  async function toggle() { 
     open = !open;
     // Notificar a otros dropdowns que se cierre
     if (open) {
@@ -27,6 +30,11 @@
       // Notificar que el menú se abrió (para cargar filtros de tiempo)
       if (active === 'Tendencias') {
         dispatch('menuOpen', true);
+      }
+      // Mover menú al body después de que Svelte lo renderice
+      await tick();
+      if (menuElement && menuElement.parentNode !== document.body) {
+        document.body.appendChild(menuElement);
       }
     }
   }
@@ -76,9 +84,8 @@
   function onWindowClick(e: MouseEvent) {
     if (!rootEl) return;
     if (!(e.target instanceof Node)) return;
-    // Verificar si el clic fue en el menú flotante
-    const menu = document.querySelector('.menu');
-    if (menu && menu.contains(e.target)) return;
+    // Verificar si el clic fue en el menú flotante (ahora en el body)
+    if (menuElement && menuElement.contains(e.target)) return;
     if (!rootEl.contains(e.target)) open = false;
   }
   
@@ -135,27 +142,28 @@
     color: var(--neo-text-light, #9ca3af);
     opacity: 0.8;
   }
-  .menu {
-    position: fixed;
-    top: 50px;
-    right: 10px;
-    min-width: 160px;
-    max-width: 200px;
+  :global(.toptabs-menu) {
+    position: fixed !important;
+    top: 50px !important;
+    right: 10px !important;
+    min-width: 220px;
+    max-width: 220px;
     border: none;
     background: var(--neo-bg, #e0e5ec);
     border-radius: 16px;
     padding: 8px;
     display: grid;
     gap: 4px;
-    z-index: 999999;
+    z-index: 2147483647 !important; /* Máximo z-index posible - por encima de TODO */
     isolation: isolate;
+    pointer-events: auto !important;
     
     /* Neumorfismo elevado */
     box-shadow: 
       6px 6px 18px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
       -6px -6px 18px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
   }
-  .menu button {
+  :global(.toptabs-menu button) {
     text-align: left;
     padding: 12px 16px;
     border-radius: 10px;
@@ -168,31 +176,31 @@
     transition: all 0.15s ease;
     white-space: nowrap;
   }
-  .menu button[aria-checked="true"] {
+  :global(.toptabs-menu button[aria-checked="true"]) {
     font-weight: 700;
     box-shadow: 
       inset 2px 2px 5px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
       inset -2px -2px 5px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
   }
-  .menu button:hover { 
+  :global(.toptabs-menu button:hover) { 
     background: var(--neo-bg, #e0e5ec);
     box-shadow: 
       inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
       inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
   }
-  .menu button:active {
+  :global(.toptabs-menu button:active) {
     box-shadow: 
       inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
       inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
   }
   
   /* Separador y sección de tiempo */
-  .time-section {
+  :global(.toptabs-menu .time-section) {
     border-top: 1px solid var(--neo-shadow-dark, rgba(163, 177, 198, 0.3));
     margin-top: 6px;
     padding-top: 8px;
   }
-  .time-section-label {
+  :global(.toptabs-menu .time-section-label) {
     font-size: 11px;
     color: var(--neo-text-light, #9ca3af);
     padding: 4px 16px 8px;
@@ -200,24 +208,24 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-  .time-options {
+  :global(.toptabs-menu .time-options) {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     padding: 0 12px 8px;
   }
-  .time-option {
+  :global(.toptabs-menu .time-option) {
     padding: 6px 10px !important;
     font-size: 12px !important;
     border-radius: 6px !important;
     min-width: auto !important;
     flex: 0 0 auto;
   }
-  .time-option.selected {
+  :global(.toptabs-menu .time-option.selected) {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2)) !important;
     font-weight: 700 !important;
   }
-  .time-loading {
+  :global(.toptabs-menu .time-loading) {
     padding: 8px 16px;
     font-size: 12px;
     color: var(--neo-text-light, #9ca3af);
@@ -234,9 +242,9 @@
   </button>
 </div>
 
-<!-- Menú renderizado fuera del contenedor para evitar problemas de z-index -->
+<!-- Menú renderizado en portal para estar por encima de todo -->
 {#if open}
-  <div role="menu" class="menu">
+  <div role="menu" class="toptabs-menu" bind:this={menuElement}>
     {#each options as opt}
       <button role="menuitemradio" aria-checked={!customActiveLabel && active === opt} on:click={() => select(opt)}>{opt}</button>
     {/each}

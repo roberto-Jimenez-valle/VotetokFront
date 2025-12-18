@@ -106,6 +106,25 @@
     width: 100%;
     animation: slideInFromTop 0.3s ease;
     position: relative;
+    /* Transición suave para colapsar */
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+  }
+  
+  .poll-options-bar-container > * {
+    overflow: hidden;
+  }
+  
+  /* Contenedor oculto cuando expanded */
+  .poll-options-bar-container.container-hidden {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    padding: 0 !important;
+    pointer-events: none;
   }
   
   @keyframes slideInFromTop {
@@ -810,7 +829,24 @@
     width: 100%;
     animation: slideInFromTop 0.3s ease;
     position: relative;
-    overflow: visible;
+    /* Transición suave para colapsar */
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+  }
+  
+  .poll-options-bar-container > * {
+    overflow: hidden;
+  }
+  
+  .poll-options-bar-container.container-hidden {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    padding: 0 !important;
+    pointer-events: none;
   }
 
   @keyframes slideInFromTop {
@@ -970,29 +1006,31 @@
   
   /* Estilos para el carrusel 3D */
   .poll-bar-options-expanded.carousel-wrapper {
-    display: block;
+    display: grid;
+    grid-template-rows: 1fr;
     padding: 0.5em;
-    padding-bottom: 1em; /* Espacio extra para indicadores */
+    padding-bottom: 1em;
     margin-top: 0;
-    overflow: visible; /* Permitir que el carousel se vea completo */
-    min-height: 14em; /* ~224px, espacio para carousel + indicadores */
-    max-height: none; /* Sin límite de altura */
-    margin-bottom: 1em; /* Separación del nav */
-    /* Transición suave para ocultar/mostrar */
-    transition: opacity 0.25s ease, max-height 0.25s ease, margin 0.25s ease, padding 0.25s ease;
+    overflow: hidden;
+    margin-bottom: 1em;
+    /* Transición GPU-accelerada */
+    transition: grid-template-rows 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                margin 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     opacity: 1;
   }
   
-  /* Carrusel oculto con transición suave */
-  .poll-bar-options-expanded.carousel-wrapper.carousel-hidden {
-    opacity: 0;
-    max-height: 0 !important;
-    min-height: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+  .poll-bar-options-expanded.carousel-wrapper > * {
     overflow: hidden;
+  }
+  
+  /* Carrusel oculto - colapsa el espacio */
+  .poll-bar-options-expanded.carousel-wrapper.carousel-hidden {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    padding: 0 !important;
+    margin: 0 !important;
     pointer-events: none;
   }
   

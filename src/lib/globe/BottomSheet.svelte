@@ -2583,6 +2583,7 @@
   <!-- Header simplificado con indicador visual de arrastre -->
   <div
     class="sheet-drag-area"
+    class:drag-area-minimal={state === "expanded"}
     onpointerdown={onPointerDown}
     ontouchstart={onPointerDown}
   >
@@ -2638,7 +2639,7 @@
       {@const pollTitle =
         activePoll?.question || activePoll?.title || "Trending de encuestas"}
 
-      <div class="poll-options-bar-container">
+      <div class="poll-options-bar-container" class:container-hidden={state === "expanded"}>
         <!-- Título de la encuesta o trending -->
         <div class="poll-bar-title">
           <!-- Avatar del creador (si existe) -->
