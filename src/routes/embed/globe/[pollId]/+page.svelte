@@ -83,7 +83,7 @@
     
     const promises = poll.options
       .filter(option => option.imageUrl && needsThumbnail(option.imageUrl))
-      .map(option => fetchThumbnail(option.imageUrl, option.key));
+      .map(option => fetchThumbnail(option.imageUrl!, option.key));
     
     await Promise.all(promises);
     console.log('[Embed] ✅ Thumbnails loaded:', Object.keys(thumbnails).length);
@@ -275,7 +275,7 @@
       <a href="{baseUrl}" target="_blank" rel="noopener noreferrer" class="logo-link">
         <img src="{baseUrl}/logo.png" alt="VouTop" class="logo-img" />
       </a>
-      <a href="{baseUrl}/poll/{poll.id}" target="_blank" rel="noopener noreferrer" class="open-btn">
+      <a href="{baseUrl}/poll/{poll.hashId || poll.id}" target="_blank" rel="noopener noreferrer" class="open-btn">
         Abrir ↗
       </a>
     </div>

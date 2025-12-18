@@ -8,14 +8,22 @@
   const { poll, baseUrl } = data;
   
   // Usar hashId para URLs públicas
-  const publicId = poll.hashId || poll.id;
+  const publicId = poll.hashId;
+  
+  console.log('[Poll Page] Datos recibidos:', { pollId: poll.id, hashId: poll.hashId, publicId });
 
   onMount(() => {
     // Dar tiempo a los crawlers para leer los meta tags antes de redirigir
     // Los crawlers no ejecutan JavaScript, verán los meta tags
     // Los usuarios reales serán redirigidos después de un pequeño delay
+    console.log('[Poll Page] Redirigiendo con pollId:', publicId);
     setTimeout(() => {
-      goto(`/?poll=${publicId}`);
+      // Navegar a la página principal con el pollId en query param
+      // GlobeGL detectará esto y abrirá la encuesta
+      // Usar replaceState para que "atrás" no vuelva a esta página
+      const targetUrl = `/?poll=${encodeURIComponent(publicId)}`;
+      history.replaceState({ pollId: publicId, pollMode: 'specific' }, '', targetUrl);
+      window.location.href = targetUrl;
     }, 100);
   });
 </script>

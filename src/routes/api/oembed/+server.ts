@@ -1,12 +1,13 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { parsePollId, encodePollId } from '$lib/server/hashids';
 
 /**
  * oEmbed endpoint - permite que otras apps generen embeds automáticamente
  * Sigue la especificación oEmbed: https://oembed.com/
  * 
- * Uso: GET /api/oembed?url=https://votetok.com/poll/123
+ * Uso: GET /api/oembed?url=https://votetok.com/poll/ZWk4YXxJ (hashId)
  */
 export const GET: RequestHandler = async ({ url }) => {
   const targetUrl = url.searchParams.get('url');
@@ -22,13 +23,16 @@ export const GET: RequestHandler = async ({ url }) => {
     throw error(501, 'Solo se soporta formato JSON');
   }
 
-  // Extraer ID de la encuesta de la URL
-  const pollIdMatch = targetUrl.match(/\/poll\/(\d+)/);
+  // Extraer ID de la encuesta de la URL (soporta hashId y numérico)
+  const pollIdMatch = targetUrl.match(/\/poll\/([^\/\?]+)/);
   if (!pollIdMatch) {
     throw error(400, 'URL no válida. Debe ser del formato: /poll/{id}');
   }
   
-  const pollId = parseInt(pollIdMatch[1]);
+  const pollId = parsePollId(pollIdMatch[1]);
+  if (!pollId) {
+    throw error(400, 'ID de encuesta inválido');
+  }
 
   const poll = await prisma.poll.findUnique({
     where: { id: pollId },
@@ -57,7 +61,8 @@ export const GET: RequestHandler = async ({ url }) => {
   const width = Math.min(maxwidth, 600);
   const height = Math.min(maxheight, 352);
   
-  const embedUrl = `${baseUrl}/embed/poll/${poll.id}?theme=dark`;
+  const hashId = encodePollId(poll.id);
+  const embedUrl = `${baseUrl}/embed/poll/${hashId}?theme=dark`;
   const authorName = poll.user?.displayName || poll.user?.username || 'Usuario';
 
   // Respuesta oEmbed tipo "rich"
@@ -72,7 +77,7 @@ export const GET: RequestHandler = async ({ url }) => {
     html: `<iframe src="${embedUrl}" width="${width}" height="${height}" frameborder="0" allowtransparency="true" style="border-radius:12px"></iframe>`,
     width,
     height,
-    thumbnail_url: `${baseUrl}/api/polls/${poll.id}/og-image`,
+    thumbnail_url: `${baseUrl}/api/polls/${hashId}/og-image`,
     thumbnail_width: 1200,
     thumbnail_height: 630,
     cache_age: 3600, // 1 hora

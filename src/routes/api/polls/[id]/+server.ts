@@ -4,8 +4,11 @@ import { parsePollIdInternal, encodePollId, encodeUserId, encodeOptionId } from 
 
 export const GET: RequestHandler = async ({ params, locals }) => {
   // Soporta tanto IDs numéricos (interno) como hashes
+  console.log('[API GET Poll] Param ID recibido:', params.id);
   const pollId = parsePollIdInternal(params.id);
+  console.log('[API GET Poll] ID parseado:', pollId);
   if (!pollId) {
+    console.error('[API GET Poll] ❌ ID inválido:', params.id);
     throw error(400, 'Invalid poll ID');
   }
 

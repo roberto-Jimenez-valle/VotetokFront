@@ -4,7 +4,6 @@
   import { DARK_PALETTES, LIGHT_PALETTES } from '$lib/config/palettes';
   
   export let isOpen = false;
-  export let pollId: number | string;
   export let pollHashId: string = ''; // ID hasheado para URLs públicas
   export let pollTitle: string = '';
   
@@ -20,7 +19,7 @@
   $: selectedPalette = currentPalettes[selectedPaletteIndex] || currentPalettes[0];
   
   // Usar hashId para URLs públicas si está disponible
-  $: publicId = pollHashId || pollId;
+  $: publicId = pollHashId;
   $: baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   $: shareUrl = `${baseUrl}/poll/${publicId}`;
   $: embedUrl = `${baseUrl}/embed/globe/${publicId}?theme=${embedTheme}&palette=${selectedPalette.name}`;

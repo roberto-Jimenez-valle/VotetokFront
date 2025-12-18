@@ -67,10 +67,10 @@
         }
       } else {
         // Si falla (ej: no autenticado), abrir en nueva pestaña
-        window.open(`${baseUrl}/poll/${poll.id}`, '_blank');
+        window.open(`${baseUrl}/poll/${poll.hashId || poll.id}`, '_blank');
       }
     } catch (e) {
-      window.open(`${baseUrl}/poll/${poll.id}`, '_blank');
+      window.open(`${baseUrl}/poll/${poll.hashId || poll.id}`, '_blank');
     } finally {
       isVoting = false;
     }
@@ -78,7 +78,7 @@
   
   // Abrir encuesta completa
   function openFullPoll() {
-    window.open(`${baseUrl}/poll/${poll.id}`, '_blank');
+    window.open(`${baseUrl}/poll/${poll.hashId || poll.id}`, '_blank');
   }
 </script>
 

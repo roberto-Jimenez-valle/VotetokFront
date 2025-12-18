@@ -390,6 +390,7 @@
 
           const transformed = {
             id: poll.id.toString(),
+            hashId: poll.hashId || '', // Incluir hashId para URLs públicas
             question: poll.title,
             type: poll.type || "poll",
             region:
@@ -1114,6 +1115,8 @@
 
   // Función para abrir una encuesta adicional en el globo
   function openAdditionalPollInGlobe(poll: Poll) {
+    console.log('[BottomSheet] 🌐 openAdditionalPollInGlobe llamada con poll:', poll.id, poll.question?.substring(0, 30));
+    
     // Agregar la encuesta al inicio de additionalPolls si no existe ya
     if (!additionalPolls.find((p) => p.id === poll.id)) {
       additionalPolls = [poll, ...additionalPolls];
@@ -2224,6 +2227,7 @@
     // Transformar la encuesta a formato Poll y agregarla al inicio de additionalPolls
     const transformedPoll = {
       id: pollId,
+      hashId: pollData.hashId, // ID hasheado para URLs públicas
       question: pollData.question || pollData.title || "Encuesta",
       type: pollData.type || "poll",
       region:
@@ -3186,7 +3190,7 @@
             onclick={async () => {
               if (!selectedPollForOptions) return;
 
-              const shareUrl = `${window.location.origin}/poll/${selectedPollForOptions.id}`;
+              const shareUrl = `${window.location.origin}/poll/${selectedPollForOptions.hashId || selectedPollForOptions.id}`;
               const shareTitle =
                 selectedPollForOptions.question || selectedPollForOptions.title;
               const shareText =
@@ -3235,7 +3239,7 @@
             onclick={() => {
               if (!selectedPollForOptions) return;
 
-              const shareUrl = `${window.location.origin}/poll/${selectedPollForOptions.id}`;
+              const shareUrl = `${window.location.origin}/poll/${selectedPollForOptions.hashId || selectedPollForOptions.id}`;
               copyShareUrlToClipboard(shareUrl);
               closePollOptionsModal();
             }}
@@ -3551,7 +3555,7 @@
     onShare={async () => {
             if (!previewModalPoll) return;
 
-      const shareUrl = `${window.location.origin}/poll/${previewModalPoll.id}`;
+      const shareUrl = `${window.location.origin}/poll/${previewModalPoll.hashId || previewModalPoll.id}`;
       const shareTitle = previewModalPoll.question || previewModalPoll.title;
       const shareText =
         previewModalPoll.description || `Vota en esta encuesta: ${shareTitle}`;

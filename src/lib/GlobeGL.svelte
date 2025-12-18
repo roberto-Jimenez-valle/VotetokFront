@@ -1575,8 +1575,8 @@
             historyState.pollMode = "specific";
           }
 
-          const url = activePoll
-            ? `/?poll=${encodeURIComponent(activePoll.hashId || activePoll.id)}&country=${encodeURIComponent(iso)}`
+          const url = (activePoll && activePoll.hashId)
+            ? `/?country=${encodeURIComponent(iso)}#poll=${encodeURIComponent(activePoll.hashId)}`
             : `/?country=${encodeURIComponent(iso)}`;
                     await goto(url, {
             replaceState: false,
@@ -2131,8 +2131,8 @@
             historyState.pollMode = "specific";
           }
 
-          const url = activePoll
-            ? `/?poll=${encodeURIComponent(activePoll.hashId || activePoll.id)}&country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`
+          const url = (activePoll && activePoll.hashId)
+            ? `/?country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}#poll=${encodeURIComponent(activePoll.hashId)}`
             : `/?country=${encodeURIComponent(countryIso)}&subdivision=${encodeURIComponent(subdivisionId)}`;
                     await goto(url, {
             replaceState: false,
@@ -4767,21 +4767,19 @@
     // HISTORY API: Volver a modo trending (solo si no viene de popstate y no se va a abrir otra encuesta)
     // En modo embed, NO redirigir a la página principal
     if (!embedMode && !isNavigatingFromHistory && !skipTrendingLoad) {
-      const currentUrl =
-        typeof window !== "undefined"
-          ? window.location.pathname + window.location.search
-          : "";
+      const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
 
-      // Solo navegar si la URL es diferente
-      if (currentUrl !== "/") {
-                // Usar goto() en lugar de pushState para que $page se actualice
-        await goto("/", {
-          replaceState: false,
-          noScroll: true,
-          keepFocus: true,
-        });
-      } else {
-              }
+      // Solo navegar si estamos en /poll/xxx
+      if (currentPath.startsWith("/poll/")) {
+        // Usar pushState para cambiar URL sin recargar página
+        const historyState = {
+          level: "world",
+          pollMode: "trending",
+          timestamp: Date.now()
+        };
+        history.pushState(historyState, "", "/");
+        console.log('[closePoll] 📍 URL actualizada a: /');
+      }
     }
 
     // FASE 3: Limpiar contexto de encuesta usando store
@@ -5495,22 +5493,40 @@
     // CRÍTICO: Marcar que estamos cargando una encuesta específica
     // Esto previene que loadTrendingData se ejecute durante la carga
     isLoadingSpecificPoll = true;
-    console.log('[handleOpenPollInGlobe] 🔒 Iniciando carga de encuesta', poll.id);
+    
+    // Normalizar IDs a string para comparación consistente
+    const incomingPollId = String(poll.id);
+    const incomingHashId = poll.hashId || incomingPollId;
+    const activePollId = activePoll ? String(activePoll.id) : null;
+    
+    // CRÍTICO: Marcar como procesado ANTES de actualizar URL para evitar que hashchange re-cargue
+    lastProcessedPollId = incomingHashId;
+    
+    console.log('[handleOpenPollInGlobe] 🔒 Iniciando carga de encuesta', incomingPollId, {
+      hashId: incomingHashId,
+      activePollId,
+      isNavigatingFromHistory,
+      isSamePoll: activePollId === incomingPollId,
+      lastProcessedPollId
+    });
 
     // Si es la misma encuesta Y NO viene del historial, no hacer nada
-    if (activePoll && activePoll.id === poll.id && !isNavigatingFromHistory) {
+    if (activePollId && activePollId === incomingPollId && !isNavigatingFromHistory) {
+      console.log('[handleOpenPollInGlobe] ⏭️ Misma encuesta, ignorando');
       isLoadingSpecificPoll = false; // Limpiar flag
       return;
     }
 
     // Si viene del historial con la misma encuesta, forzar recarga
-    if (activePoll && activePoll.id === poll.id && isNavigatingFromHistory) {
-            // Continuar con la recarga completa
+    if (activePollId && activePollId === incomingPollId && isNavigatingFromHistory) {
+      console.log('[handleOpenPollInGlobe] 🔄 Misma encuesta desde historial, recargando');
+      // Continuar con la recarga completa
     }
 
     // Si hay una encuesta diferente abierta, cerrarla primero SIN cargar trending
-    if (activePoll && activePoll.id !== poll.id) {
-            await closePoll(true); // skipTrendingLoad = true
+    if (activePollId && activePollId !== incomingPollId) {
+      console.log('[handleOpenPollInGlobe] 🔄 Cerrando encuesta anterior:', activePollId);
+      await closePoll(true); // skipTrendingLoad = true
     }
 
     // GUARDAR CONTEXTO DE ENCUESTA ACTIVA (MODO EXCLUSIVO)
@@ -5591,25 +5607,23 @@
 
     // HISTORY API: Guardar estado de encuesta en el historial
     // En modo embed, NO redirigir
-    // Usar hashId para URLs públicas si está disponible
-    if (!embedMode && !isNavigatingFromHistory) {
-      const publicId = poll.hashId || poll.id;
-      const url = `/?poll=${encodeURIComponent(publicId)}`;
-      const currentUrl =
-        typeof window !== "undefined"
-          ? window.location.pathname + window.location.search
-          : "";
+    // Usar hashId para URLs públicas - formato /poll/hashId
+    if (!embedMode && !isNavigatingFromHistory && poll.hashId) {
+      const url = `/poll/${encodeURIComponent(poll.hashId)}`;
+      const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
 
-      // Solo navegar si la URL es diferente
-      if (currentUrl !== url) {
-                // Usar goto() en lugar de pushState para que $page se actualice
-        await goto(url, {
-          replaceState: false,
-          noScroll: true,
-          keepFocus: true,
-        });
-      } else {
-              }
+      // Solo actualizar URL si es diferente
+      if (currentPath !== url) {
+        // Usar pushState para cambiar URL sin recargar página
+        const historyState = {
+          level: navigationState.level,
+          pollId: poll.hashId,
+          pollMode: "specific",
+          timestamp: Date.now()
+        };
+        history.pushState(historyState, "", url);
+        console.log('[handleOpenPollInGlobe] 📍 URL actualizada a:', url);
+      }
     }
 
     // Actualizar colorMap con los colores de las opciones DE LA ENCUESTA
@@ -6887,6 +6901,7 @@
   // Interfaz para encuestas adicionales (scroll infinito)
   interface Poll {
     id: string;
+    hashId?: string;
     question: string;
     type: "poll" | "hashtag" | "trending";
     region: string;
@@ -7703,6 +7718,74 @@
 
     window.addEventListener("popstate", popstateHandler as any);
 
+    // Listener para cambios en el hash (#poll=xxx)
+    hashChangeHandler = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const pollIdParam = hashParams.get("poll");
+      
+      console.log('[GlobeGL] 🔄 hashchange detectado:', {
+        pollIdParam,
+        lastProcessedPollId,
+        isInitialMount,
+        isClosingPoll,
+        isLoadingSpecificPoll
+      });
+      
+      // Solo ignorar si estamos cerrando poll, NO durante mount inicial
+      // (para permitir redirects desde /poll/[id])
+      if (isClosingPoll) {
+        console.log('[GlobeGL] ⏭️ hashchange ignorado - isClosingPoll');
+        return;
+      }
+      
+      // Si ya estamos cargando esta encuesta, ignorar
+      if (isLoadingSpecificPoll && pollIdParam === lastProcessedPollId) {
+        console.log('[GlobeGL] ⏭️ hashchange ignorado - ya cargando esta encuesta');
+        return;
+      }
+      
+      if (pollIdParam && pollIdParam !== lastProcessedPollId) {
+        lastProcessedPollId = pollIdParam;
+        isNavigatingFromHistory = true;
+        isLoadingSpecificPoll = true;
+        
+        try {
+          if (activePoll) {
+            await closePoll(true);
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+          }
+          
+          // Cargar y abrir la encuesta
+          const response = await apiCall(`/api/polls/${pollIdParam}`);
+          if (response.ok) {
+            const pollData = await response.json();
+            const poll = pollData.data || pollData;
+            
+            const options = poll.options?.map((opt: any, idx: number) => ({
+              id: opt.id,
+              key: opt.optionKey || opt.key,
+              label: opt.optionLabel || opt.optionText || opt.label,
+              color: opt.color || ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"][idx % 4],
+              votes: opt.votes || opt._count?.votes || 0,
+            })) || [];
+            
+            const syntheticEvent = new CustomEvent("openpoll", {
+              detail: { poll, options },
+            });
+            
+            await handleOpenPollInGlobe(syntheticEvent as any);
+          }
+        } finally {
+          isNavigatingFromHistory = false;
+          isLoadingSpecificPoll = false;
+        }
+      } else if (!pollIdParam && lastProcessedPollId && activePoll) {
+        lastProcessedPollId = null;
+      }
+    };
+    
+    window.addEventListener("hashchange", hashChangeHandler);
+
     // DEBUG: Verificar URL al inicio del onMount
         // Establecer estado inicial en el historial si no existe
     if (!history.state) {
@@ -7710,12 +7793,13 @@
       // Usar window.location directamente para evitar problemas de sincronización con $page
       const currentUrl =
         typeof window !== "undefined"
-          ? window.location.pathname + window.location.search
+          ? window.location.pathname + window.location.search + window.location.hash
           : "/";
-      const urlParams = new URLSearchParams(
-        typeof window !== "undefined" ? window.location.search : "",
+      // Leer poll desde hash (#poll=xxx)
+      const hashParams = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.hash.slice(1) : "",
       );
-      const pollParam = urlParams.get("poll");
+      const pollParam = hashParams.get("poll");
 
             const initialState: any = {
         level: "world",
@@ -7869,9 +7953,14 @@
             console.log('[Embed] 🔒 Marcando isLoadingSpecificPoll=true para prevenir trending');
           }
 
-          // Verificar si hay parámetro ?poll= en la URL ANTES de cargar trending
-          const urlParams = new URLSearchParams(window.location.search);
-          const hasPollParam = urlParams.get("poll");
+          // Verificar si hay poll en la URL o state ANTES de cargar trending
+          const queryParams = new URLSearchParams(window.location.search);
+          const hasPollInQuery = queryParams.get("poll");
+          const hasPollInPath = window.location.pathname.startsWith('/poll/');
+          const hashParams = new URLSearchParams(window.location.hash.slice(1));
+          const hasPollInHash = hashParams.get("poll");
+          const hasPollInState = history.state?.pollId && history.state?.pollMode === 'specific';
+          const hasPollParam = hasPollInQuery || hasPollInPath || hasPollInHash || hasPollInState;
 
           // AHORA cargar trending solo si NO hay encuesta activa Y NO hay parámetro poll en URL
           // En modo embed, NO cargar trending - se mostrará solo la encuesta inicial
@@ -8080,10 +8169,49 @@
     // VERIFICAR PARÁMETRO POLL EN URL (AL FINAL DEL MOUNT)
     // ============================================
     // Esperar a que todo esté inicializado antes de abrir encuesta desde URL
-    // IMPORTANTE: Usar $page.url.searchParams en lugar de window.location para sincronización con SvelteKit
-    const pollIdParam = $page.url.searchParams.get("poll");
+    // Prioridad: 1) history.state, 2) pathname (/poll/xxx), 3) hash (#poll=xxx)
+    const currentPathname = window.location.pathname;
+    const currentHash = window.location.hash;
+    const currentHref = window.location.href;
+    const navState = history.state;
+    console.log('[GlobeGL] 🔍 onMount - Verificando URL:', { 
+      href: currentHref,
+      pathname: currentPathname,
+      hash: currentHash,
+      historyState: navState
+    });
+    
+    // Prioridad 1: Leer desde query params (?poll=xxx) - usado por redirect desde /poll/[id]
+    let pollIdParam: string | null = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    pollIdParam = urlParams.get("poll");
+    if (pollIdParam) {
+      console.log('[GlobeGL] 🔍 pollId desde query param:', pollIdParam);
+    }
+    // Prioridad 2: Leer desde history.state
+    if (!pollIdParam && navState?.pollId && navState?.pollMode === 'specific') {
+      pollIdParam = navState.pollId;
+      console.log('[GlobeGL] 🔍 pollId desde history.state:', pollIdParam);
+    }
+    // Prioridad 3: Leer desde pathname (/poll/xxx)
+    if (!pollIdParam) {
+      const pollPathMatch = currentPathname.match(/^\/poll\/([^\/]+)/);
+      if (pollPathMatch) {
+        pollIdParam = pollPathMatch[1];
+        console.log('[GlobeGL] 🔍 pollId desde pathname:', pollIdParam);
+      }
+    }
+    // Prioridad 4: Fallback desde hash (#poll=xxx) para compatibilidad
+    if (!pollIdParam) {
+      const mountHashParams = new URLSearchParams(currentHash.slice(1));
+      pollIdParam = mountHashParams.get("poll");
+      if (pollIdParam) {
+        console.log('[GlobeGL] 🔍 pollId desde hash:', pollIdParam);
+      }
+    }
+    console.log('[GlobeGL] 🔍 pollIdParam final:', pollIdParam);
 
-        if (pollIdParam) {
+    if (pollIdParam) {
 
       // Marcar como procesado para evitar doble carga en el watcher
       lastProcessedPollId = pollIdParam;
@@ -8114,11 +8242,14 @@
       }
 
             // Cargar y abrir la encuesta
+      console.log('[GlobeGL] 📡 Cargando encuesta desde URL hash:', pollIdParam);
       try {
         const response = await apiCall(`/api/polls/${pollIdParam}`);
+        console.log('[GlobeGL] 📡 Respuesta API:', response.status, response.ok);
         if (response.ok) {
           const pollData = await response.json();
           const poll = pollData.data || pollData;
+          console.log('[GlobeGL] ✅ Encuesta cargada:', poll.id, poll.question || poll.title);
 
                     // Recrear formato de opciones CON colores correctos
           const options =
@@ -8148,10 +8279,26 @@
 
           // Abrir la encuesta - handleOpenPollInGlobe manejará todo
           await handleOpenPollInGlobe(syntheticEvent);
+          
+          // Limpiar query param y actualizar URL a formato /poll/hashId
+          const hashId = poll.hashId || pollIdParam;
+          if (hashId && window.location.search.includes('poll=')) {
+            const cleanUrl = `/poll/${encodeURIComponent(hashId)}`;
+            history.replaceState(
+              { level: 'world', pollId: hashId, pollMode: 'specific' },
+              '',
+              cleanUrl
+            );
+            console.log('[GlobeGL] 📍 URL limpiada a:', cleanUrl);
+          }
 
-                  } else {
+        } else {
+          console.error('[GlobeGL] ❌ Error cargando encuesta:', response.status);
+          const errorText = await response.text();
+          console.error('[GlobeGL] ❌ Detalles:', errorText);
         }
       } catch (error) {
+        console.error('[GlobeGL] ❌ Error en API call:', error);
       } finally {
         // Limpiar flag
         isNavigatingFromHistory = false;
@@ -8168,13 +8315,16 @@
   });
 
   // ============================================
-  // WATCHER PARA CAMBIOS EN EL PARÁMETRO ?poll=
+  // WATCHER PARA CAMBIOS EN EL PARÁMETRO #poll=
   // ============================================
-  // Detecta cuando la URL cambia a /?poll=123 y abre la encuesta
+  // Detecta cuando la URL cambia a /#poll=123 y abre la encuesta
   // También detecta cuando se quita el parámetro y cierra la encuesta
   // SOLO se ejecuta después de la carga inicial para evitar doble procesamiento
   $: {
-    const pollIdParam = $page.url.searchParams.get("poll");
+    // Leer poll desde hash (#poll=xxx)
+    const hashStr = typeof window !== "undefined" ? window.location.hash.slice(1) : "";
+    const hashParams = new URLSearchParams(hashStr);
+    const pollIdParam = hashParams.get("poll");
 
         // Ignorar durante carga inicial
     if (isInitialMount) {
@@ -8276,6 +8426,8 @@
 
   // Store popstate handler reference for cleanup
   let popstateHandler: ((event: PopStateEvent) => Promise<void>) | null = null;
+  // Store hashchange handler reference for cleanup
+  let hashChangeHandler: (() => Promise<void>) | null = null;
 
   onDestroy(() => {
 
@@ -8303,6 +8455,10 @@
     // Remove popstate listener
     if (popstateHandler) {
       window.removeEventListener("popstate", popstateHandler as any);
+    }
+    // Remove hashchange listener
+    if (hashChangeHandler) {
+      window.removeEventListener("hashchange", hashChangeHandler as any);
     }
     // Remove dropdown coordination listeners
     if (closeTimeMenuOnClickOutside) {

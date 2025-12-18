@@ -102,6 +102,7 @@
     options: PollOption[];
     activeOptionId: string;
     pollId: number;
+    hashId?: string;
     pollTitle: string;
     pollType?: "simple" | "multiple" | "collaborative";
     pollRegion?: string;
@@ -135,6 +136,7 @@
     options,
     activeOptionId = $bindable(),
     pollId,
+    hashId,
     pollTitle,
     pollType = "simple",
     pollCreatedAt,
@@ -1162,7 +1164,7 @@
   // Copiar enlace al portapapeles
   async function copyLink() {
     try {
-      const url = `https://voutop.com/?poll=${pollId}`;
+      const url = `https://voutop.com/#poll=${hashId}`;
       await navigator.clipboard.writeText(url);
       isMoreMenuOpen = false;
       showShareToastNotification();
@@ -1171,7 +1173,7 @@
       console.error('Error copiando enlace:', err);
       // Fallback
       const textarea = document.createElement('textarea');
-      textarea.value = `https://voutop.com/?poll=${pollId}`;
+      textarea.value = `https://voutop.com/#poll=${hashId}`;
       textarea.style.position = 'fixed';
       textarea.style.top = '0';
       textarea.style.left = '-9999px';
@@ -1217,7 +1219,7 @@
   
   // Handler para compartir - copia texto formateado al portapapeles
   async function handleShareAction() {
-    const shareUrl = `https://voutop.com/?poll=${pollId}`;
+    const shareUrl = `https://voutop.com/#poll=${hashId}`;
     const shareTitle = pollTitle || 'Encuesta';
     
     // Emojis de números para las opciones

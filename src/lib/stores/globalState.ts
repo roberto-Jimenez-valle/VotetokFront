@@ -24,6 +24,7 @@ export interface NavigationState {
 
 export interface Poll {
   id: number | string;
+  hashId?: string;
   title: string;
   question?: string;
   description?: string;

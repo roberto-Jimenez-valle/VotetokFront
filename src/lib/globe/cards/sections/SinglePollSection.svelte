@@ -147,7 +147,7 @@
   // Copiar enlace al portapapeles
   async function copyPollLink() {
     try {
-      const url = `${window.location.origin}/?poll=${poll.id}`;
+      const url = `${window.location.origin}/#poll=${poll.hashId}`;
       await navigator.clipboard.writeText(url);
       isMoreMenuOpen = false;
       showShareToast();
@@ -155,7 +155,7 @@
     } catch (err) {
       // Fallback
       const textarea = document.createElement('textarea');
-      textarea.value = `${window.location.origin}/?poll=${poll.id}`;
+      textarea.value = `${window.location.origin}/#poll=${poll.hashId}`;
       textarea.style.position = 'fixed';
       textarea.style.top = '0';
       textarea.style.left = '-9999px';
