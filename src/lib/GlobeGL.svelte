@@ -5507,7 +5507,8 @@
       activePollId,
       isNavigatingFromHistory,
       isSamePoll: activePollId === incomingPollId,
-      lastProcessedPollId
+      lastProcessedPollId,
+      pollQuestion: poll.question?.substring(0, 50)
     });
 
     // Si es la misma encuesta Y NO viene del historial, no hacer nada
@@ -5533,13 +5534,18 @@
         // CARGAR DATOS COMPLETOS DE LA ENCUESTA DESDE LA API para obtener votos reales
     let pollDataFromApi = poll;
     try {
+      console.log('[handleOpenPollInGlobe] 📡 Cargando datos de API para poll:', poll.id);
       const response = await apiCall(`/api/polls/${poll.id}`);
       if (response.ok) {
         const result = await response.json();
         pollDataFromApi = result.data || result;
-              }
+        console.log('[handleOpenPollInGlobe] ✅ API respondió con poll:', pollDataFromApi.id, pollDataFromApi.question?.substring(0, 50));
+      } else {
+        console.warn('[handleOpenPollInGlobe] ⚠️ API respondió con error:', response.status);
+      }
     } catch (error) {
-          }
+      console.error('[handleOpenPollInGlobe] ❌ Error cargando API:', error);
+    }
 
     // Calcular totales de votos
     const totalVotes =
@@ -5596,12 +5602,12 @@
             opt.color || ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"][idx % 4],
           votes: votes,
           pct: pct,
-          imageUrl: opt.imageUrl || apiOption?.imageUrl || '', // Incluir imageUrl para thumbnails
+          imageUrl: opt.imageUrl || apiOption?.imageUrl || '',
         };
       }),
     };
 
-        // FASE 3: Usar store para abrir encuesta
+    // FASE 3: Usar store para abrir encuesta
     globalActivePoll.open(formattedPoll);
     activePollOptions = formattedPoll.options;
 
@@ -5622,7 +5628,6 @@
           timestamp: Date.now()
         };
         history.pushState(historyState, "", url);
-        console.log('[handleOpenPollInGlobe] 📍 URL actualizada a:', url);
       }
     }
 

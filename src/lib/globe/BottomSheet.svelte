@@ -1115,8 +1115,6 @@
 
   // Función para abrir una encuesta adicional en el globo
   function openAdditionalPollInGlobe(poll: Poll) {
-    console.log('[BottomSheet] 🌐 openAdditionalPollInGlobe llamada con poll:', poll.id, poll.question?.substring(0, 30));
-    
     // Agregar la encuesta al inicio de additionalPolls si no existe ya
     if (!additionalPolls.find((p) => p.id === poll.id)) {
       additionalPolls = [poll, ...additionalPolls];
@@ -1150,9 +1148,15 @@
       // Nueva encuesta abierta - expandir opciones automáticamente
       showPollOptionsExpanded = true;
       dispatch("polldropdownstatechange", { open: true });
+      
+      // CRÍTICO: Limpiar cache de thumbnails al cambiar de encuesta
+      // Las keys de opciones son genéricas (option_1, option_2, etc.) y se reutilizan entre encuestas
+      carouselThumbnailsCache = {};
     } else if (!activePoll && previousActivePollId) {
       // Encuesta cerrada - colapsar opciones
       showPollOptionsExpanded = false;
+      // También limpiar cache al cerrar
+      carouselThumbnailsCache = {};
     }
     previousActivePollId = activePoll?.id || null;
   }
