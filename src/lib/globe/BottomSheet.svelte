@@ -2677,8 +2677,8 @@
           {/if}
         </div>
 
-        <!-- Carrusel 3D de opciones - oculto solo cuando está expandido del todo -->
-        {#if optionsWithPct.length > 0 && state !== "expanded"}
+        <!-- Carrusel 3D de opciones - transición suave al expandir -->
+        {#if optionsWithPct.length > 0}
           {@const carouselOptions = activePoll ? activePoll.options.map((opt: any, idx: number) => {
             const optWithPct = optionsWithPct.find((o: any) => o.key === opt.key || o.key === opt.optionKey);
             return {
@@ -2693,7 +2693,7 @@
           }) : optionsWithPct}
           {@const carouselHasVoted = activePoll ? (Array.isArray(userVotes[activePoll.id]) ? userVotes[activePoll.id].length > 0 : !!userVotes[activePoll.id]) : false}
           {@const carouselTotalVotes = activePoll ? (activePoll.totalVotes || activePoll.options?.reduce((sum: number, o: any) => sum + (o.votes || 0), 0) || 0) : 0}
-          <div class="poll-bar-options-expanded carousel-wrapper">
+          <div class="poll-bar-options-expanded carousel-wrapper" class:carousel-hidden={state === "expanded"}>
             <TrendingCarousel3D
               options={carouselOptions.sort((a: any, b: any) => b.pct - a.pct)}
               activeIndex={0}

@@ -978,6 +978,22 @@
     min-height: 14em; /* ~224px, espacio para carousel + indicadores */
     max-height: none; /* Sin límite de altura */
     margin-bottom: 1em; /* Separación del nav */
+    /* Transición suave para ocultar/mostrar */
+    transition: opacity 0.25s ease, max-height 0.25s ease, margin 0.25s ease, padding 0.25s ease;
+    opacity: 1;
+  }
+  
+  /* Carrusel oculto con transición suave */
+  .poll-bar-options-expanded.carousel-wrapper.carousel-hidden {
+    opacity: 0;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    overflow: hidden;
+    pointer-events: none;
   }
   
   .poll-bar-options-expanded::-webkit-scrollbar {
