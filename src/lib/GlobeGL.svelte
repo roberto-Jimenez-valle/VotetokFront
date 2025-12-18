@@ -5383,10 +5383,10 @@
     }, delay);
   }
 
-  const BOTTOM_BAR_PX = 0; // altura del menú inferior
+  const BOTTOM_BAR_PX = 90; // altura del menú inferior (nav bar ~60px + margen)
   const EXPAND_SNAP_PX = 10; // umbral de arrastre hacia arriba para expandir totalmente (más sensible)
-  const COLLAPSED_VISIBLE_RATIO = 0.35; // en estado colapsado, se ve el 30% superior de la sheet
-  const PEEK_VISIBLE_RATIO = 0.1; // tercer stop: 10% visible
+  const COLLAPSED_VISIBLE_RATIO = 0.28; // en estado colapsado, se ve el 40% superior de la sheet
+  const PEEK_VISIBLE_RATIO = 0.20; // tercer stop: solo header visible (~5%)
   // Inicializa fuera de pantalla para evitar parpadeo visible al cargar
   let sheetY = 10000; // translateY actual en px (0 = expandido, >0 hacia abajo)
   let sheetIsTransitioning = false; // Controla si debe usar transición CSS
@@ -9707,71 +9707,19 @@
       bind:active={activeTopTab}
       options={["Para ti", "Tendencias", "Live"]}
       customActiveLabel={activePoll ? "Encuesta" : null}
+      bind:timeFilter={trendingTimeFilter}
+      timeFilterOptions={TIME_FILTER_OPTIONS}
+      {availableTimeFilters}
+      {isLoadingTimeFilters}
       on:change={handleTopTabChange}
+      on:menuOpen={async () => {
+        await loadAvailableTimeFilters();
+      }}
+      on:timeFilterChange={async (e) => {
+        trendingTimeFilter = e.detail as TimeFilterOption;
+        await refreshCurrentView();
+      }}
     />
-
-    {#if activeTopTab === "Tendencias"}
-      <div class="time-dropdown-wrapper">
-        <button
-          class="time-trigger"
-          on:click|stopPropagation={async () => {
-            const wasOpen = showTimeMenu;
-            showTimeMenu = !showTimeMenu;
-            if (showTimeMenu) {
-              window.dispatchEvent(new CustomEvent('closeOtherDropdowns', { detail: 'timeMenu' }));
-              // Cargar filtros disponibles al abrir el dropdown
-              await loadAvailableTimeFilters();
-            }
-          }}
-        >
-          <span>
-            {#if trendingTimeFilter === "1y"}1a
-            {:else if trendingTimeFilter === "5y"}5a
-            {:else}{trendingTimeFilter}
-            {/if}
-          </span>
-          <svg
-            class="caret"
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
-
-        {#if showTimeMenu}
-          <div class="time-menu" transition:fade={{ duration: 100 }}>
-            {#if isLoadingTimeFilters}
-              <div class="time-loading">Cargando...</div>
-            {:else}
-              {#each TIME_FILTER_OPTIONS.filter(t => availableTimeFilters[t]) as time}
-                <button
-                  class="time-option"
-                  class:selected={trendingTimeFilter === time}
-                  on:click|stopPropagation={async () => {
-                    trendingTimeFilter = time;
-                    showTimeMenu = false;
-                    // Recargar datos del nivel actual
-                    await refreshCurrentView();
-                  }}
-                >
-                  {#if time === "1y"}1a
-                  {:else if time === "5y"}5a
-                  {:else}{time}
-                  {/if}
-                </button>
-              {/each}
-            {/if}
-          </div>
-        {/if}
-      </div>
-    {/if}
   </div>
 </div>
 {/if}

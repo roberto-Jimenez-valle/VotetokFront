@@ -60,10 +60,13 @@ export class BottomSheetController {
       this.y = containerH - this.bottomBarPx - 33; // 40px arriba del nav para mostrar la barra
     }
     else if (state === 'peek') {
-      // En peek, el sheet se muestra un poco arriba del nav
-      this.y = containerH - this.bottomBarPx - 140; // 140px arriba del nav (antes 100px)
+      // En peek, solo se ve el header (usando peekVisibleRatio)
+      this.y = containerH * (1 - this.peekVisibleRatio) - this.bottomBarPx;
     }
-    else if (state === 'collapsed') this.y = containerH * (1 - this.collapsedVisibleRatio);
+    else if (state === 'collapsed') {
+      // En collapsed, restar la altura del nav para que el contenido quede visible encima del nav
+      this.y = containerH * (1 - this.collapsedVisibleRatio) - this.bottomBarPx;
+    }
     else this.y = 0; // expanded: completamente hasta arriba
     this.onChange(this.state, this.y, isTransitioning);
   }

@@ -1145,9 +1145,10 @@
   let previousActivePollId: any = null;
   $: {
     if (activePoll?.id && activePoll.id !== previousActivePollId) {
-      // Nueva encuesta abierta - expandir opciones automáticamente
-      showPollOptionsExpanded = true;
-      dispatch("polldropdownstatechange", { open: true });
+      // Nueva encuesta abierta - NO expandir automáticamente, dejar en collapsed
+      // El usuario puede expandir manualmente si quiere ver más
+      showPollOptionsExpanded = false;
+      dispatch("polldropdownstatechange", { open: false });
       
       // CRÍTICO: Limpiar cache de thumbnails al cambiar de encuesta
       // Las keys de opciones son genéricas (option_1, option_2, etc.) y se reutilizan entre encuestas
@@ -2585,6 +2586,11 @@
     onpointerdown={onPointerDown}
     ontouchstart={onPointerDown}
   >
+    <!-- Indicador visual de arrastre (drag handle) -->
+    <div class="drag-handle-indicator">
+      <div class="drag-handle-bar"></div>
+    </div>
+    
     <!-- Barra de opciones de encuesta (cuando hay una activa) -->
     {#if voteOptions.length > 0}
       <!-- Para la BARRA: usar legendItems (solo opciones con votos en el nivel actual) -->
@@ -2671,8 +2677,8 @@
           {/if}
         </div>
 
-        <!-- Carrusel 3D de opciones -->
-        {#if optionsWithPct.length > 0}
+        <!-- Carrusel 3D de opciones - oculto solo cuando está expandido del todo -->
+        {#if optionsWithPct.length > 0 && state !== "expanded"}
           {@const carouselOptions = activePoll ? activePoll.options.map((opt: any, idx: number) => {
             const optWithPct = optionsWithPct.find((o: any) => o.key === opt.key || o.key === opt.optionKey);
             return {

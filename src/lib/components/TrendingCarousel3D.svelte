@@ -371,11 +371,13 @@
   .carousel-container {
     position: relative;
     width: 100%;
-    height: 180px;
+    height: 12em; /* ~192px, usando em para escalar con fuente */
+    padding-bottom: 1.5em; /* Espacio para indicadores */
     perspective: 800px;
-    overflow: visible;
+    overflow: visible; /* Permitir que el contenido sea visible */
     touch-action: pan-y pinch-zoom;
     outline: none;
+    box-sizing: border-box;
   }
   
   .carousel-3d {
@@ -390,12 +392,12 @@
   
   .carousel-card {
     position: absolute;
-    width: 130px;
-    height: 130px;
+    width: 8.125em; /* ~130px */
+    height: 8.125em;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     transform-style: preserve-3d;
     cursor: pointer;
-    border-radius: 12px;
+    border-radius: 0.75em;
     overflow: hidden;
     border: 2px solid;
     padding: 10px;
@@ -620,20 +622,20 @@
   /* Indicadores estilo PollMaximizedView */
   .carousel-indicators {
     position: absolute;
-    bottom: -14px;
+    bottom: 0; /* Dentro del contenedor, no fuera */
     left: 0;
     right: 0;
     display: flex;
-    gap: 3px;
+    gap: 0.2em;
     z-index: 200;
     width: 100%;
-    padding: 0 8px;
+    padding: 0 0.5em;
     box-sizing: border-box;
   }
   
   .progress-bar {
-    height: 6px;
-    border-radius: 3px;
+    height: 0.375em; /* 6px */
+    border-radius: 0.1875em;
     border: none;
     cursor: pointer;
     padding: 0;
@@ -662,12 +664,13 @@
   /* Responsive */
   @media (max-width: 600px) {
     .carousel-container {
-      height: 140px;
+      height: 10em; /* ~160px en móvil */
+      padding-bottom: 1.1em;
     }
     
     .carousel-card {
-      width: 110px;
-      height: 110px;
+      width: 7em;
+      height: 7em;
     }
     
     .carousel-card.future,

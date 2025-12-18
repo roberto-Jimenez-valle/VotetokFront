@@ -6,7 +6,14 @@
   export let options: Array<'Para ti' | 'Tendencias' | 'Amigos' | 'Live'> = ['Para ti','Tendencias','Amigos','Live'];
   // Label personalizado para mostrar en el trigger (ej: "Encuesta" cuando hay poll activa)
   export let customActiveLabel: string | null = null;
-  const dispatch = createEventDispatcher<{ change: string; symbolChange: '#' | '@' }>();
+  
+  // Filtro de tiempo para Tendencias
+  export let timeFilter: '24h' | '7d' | '30d' | '90d' | '1y' | '5y' = '30d';
+  export let timeFilterOptions: Array<'24h' | '7d' | '30d' | '90d' | '1y' | '5y'> = ['24h', '7d', '30d', '90d', '1y', '5y'];
+  export let availableTimeFilters: Record<string, boolean> = { '24h': true, '7d': true, '30d': true, '90d': true, '1y': true, '5y': true };
+  export let isLoadingTimeFilters: boolean = false;
+  
+  const dispatch = createEventDispatcher<{ change: string; symbolChange: '#' | '@'; timeFilterChange: string; menuOpen: boolean }>();
   let open = false;
   let rootEl: HTMLDivElement | null = null;
   // Estado del toggle minimal "# / @"
@@ -17,6 +24,10 @@
     // Notificar a otros dropdowns que se cierre
     if (open) {
       window.dispatchEvent(new CustomEvent('closeOtherDropdowns', { detail: 'topTabs' }));
+      // Notificar que el menú se abrió (para cargar filtros de tiempo)
+      if (active === 'Tendencias') {
+        dispatch('menuOpen', true);
+      }
     }
   }
   
@@ -26,7 +37,36 @@
     active = tab;
     console.log('[TopTabs] 📤 Disparando evento change con:', tab);
     dispatch('change', tab);
+    // Solo cerrar si no es Tendencias (para permitir seleccionar tiempo)
+    if (tab !== 'Tendencias') {
+      open = false;
+    } else {
+      // Al cambiar a Tendencias, cargar filtros
+      dispatch('menuOpen', true);
+    }
+  }
+  
+  function selectTimeFilter(time: typeof timeFilterOptions[number]) {
+    console.log('[TopTabs] ⏱️ Time filter seleccionado:', time);
+    timeFilter = time;
+    dispatch('timeFilterChange', time);
     open = false;
+  }
+  
+  function formatTimeLabel(time: string): string {
+    if (time === '1y') return '1 año';
+    if (time === '5y') return '5 años';
+    if (time === '24h') return '24 horas';
+    if (time === '7d') return '7 días';
+    if (time === '30d') return '30 días';
+    if (time === '90d') return '90 días';
+    return time;
+  }
+  
+  function formatTimeShort(time: string): string {
+    if (time === '1y') return '1a';
+    if (time === '5y') return '5a';
+    return time;
   }
   function toggleSymbol() {
     symbolMode = symbolMode === '#' ? '@' : '#';
@@ -66,7 +106,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 12px;
+    padding: 8px 2px;
     height: 36px;
     border-radius: 0;
     border: none;
@@ -145,11 +185,49 @@
       inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
       inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
   }
+  
+  /* Separador y sección de tiempo */
+  .time-section {
+    border-top: 1px solid var(--neo-shadow-dark, rgba(163, 177, 198, 0.3));
+    margin-top: 6px;
+    padding-top: 8px;
+  }
+  .time-section-label {
+    font-size: 11px;
+    color: var(--neo-text-light, #9ca3af);
+    padding: 4px 16px 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .time-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px 8px;
+  }
+  .time-option {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    border-radius: 6px !important;
+    min-width: auto !important;
+    flex: 0 0 auto;
+  }
+  .time-option.selected {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2)) !important;
+    font-weight: 700 !important;
+  }
+  .time-loading {
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--neo-text-light, #9ca3af);
+    text-align: center;
+  }
 </style>
 
 <div class="tabs-dd" bind:this={rootEl}>
   <button class="tabs-trigger" class:has-custom-label={!!customActiveLabel} on:click={toggle} aria-haspopup="menu" aria-expanded={open}>
-    <span>{customActiveLabel || active}</span>
+    <span>{customActiveLabel || active}{#if active === 'Tendencias' && !customActiveLabel} ({formatTimeShort(timeFilter)}){/if}</span>
     <svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
@@ -162,5 +240,26 @@
     {#each options as opt}
       <button role="menuitemradio" aria-checked={!customActiveLabel && active === opt} on:click={() => select(opt)}>{opt}</button>
     {/each}
+    
+    {#if active === 'Tendencias'}
+      <div class="time-section">
+        <div class="time-section-label">Período</div>
+        <div class="time-options">
+          {#if isLoadingTimeFilters}
+            <div class="time-loading">Cargando...</div>
+          {:else}
+            {#each timeFilterOptions.filter(t => availableTimeFilters[t]) as time}
+              <button 
+                class="time-option" 
+                class:selected={timeFilter === time}
+                on:click|stopPropagation={() => selectTimeFilter(time)}
+              >
+                {formatTimeLabel(time)}
+              </button>
+            {/each}
+          {/if}
+        </div>
+      </div>
+    {/if}
   </div>
 {/if}

@@ -948,15 +948,15 @@
   }
 
   .poll-bar-options-expanded {
-    margin-top: 12px;
-    padding: 8px 12px 12px 16px;
+    margin-top: 0.75em;
+    padding: 0.5em 0.75em 0.75em 1em;
     display: flex;
     flex-direction: row;
-    gap: 12px;
+    gap: 0.75em;
     animation: expandSlide 0.3s ease;
-    max-height: 220px;
+    max-height: 14em; /* ~224px, usando em */
     overflow-x: auto;
-    overflow-y: visible;
+    overflow-y: hidden; /* Ocultar overflow vertical para evitar indicadores cortados */
     width: 100%;
     /* CRÍTICO para móvil: permitir scroll horizontal */
     touch-action: pan-x;
@@ -965,15 +965,19 @@
     /* Ocultar scrollbar */
     scrollbar-width: none;
     -ms-overflow-style: none;
+    box-sizing: border-box;
   }
   
   /* Estilos para el carrusel 3D */
   .poll-bar-options-expanded.carousel-wrapper {
     display: block;
-    padding: 8px 8px 30px 8px;
+    padding: 0.5em;
+    padding-bottom: 1em; /* Espacio extra para indicadores */
     margin-top: 0;
-    overflow: visible;
-    min-height: 200px;
+    overflow: visible; /* Permitir que el carousel se vea completo */
+    min-height: 14em; /* ~224px, espacio para carousel + indicadores */
+    max-height: none; /* Sin límite de altura */
+    margin-bottom: 1em; /* Separación del nav */
   }
   
   .poll-bar-options-expanded::-webkit-scrollbar {
