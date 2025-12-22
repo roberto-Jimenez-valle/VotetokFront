@@ -228,11 +228,11 @@
       height: 100vh;
       max-height: 100vh;
       border-radius: 0 1.25rem 0 0;
-      background: #181a20;
+      background: #000000;
     }
 
     :global(html.dark) .auth-modal-sheet {
-      background: #181a20;
+      background: #000000;
     }
   }
 

@@ -683,9 +683,7 @@
 >
   <!-- Header simple con logo y TopTabs - solo en vista feed -->
   {#if currentView === "feed"}
-    <header
-      class="z-50 bg-black/80 backdrop-blur-md flex-shrink-0 border-b border-white/5"
-    >
+    <header class="z-50 bg-black/80 backdrop-blur-md flex-shrink-0">
       <div
         class="feed-container-width mx-auto flex items-center justify-between px-4 h-[4rem]"
       >

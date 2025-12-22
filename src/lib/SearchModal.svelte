@@ -812,7 +812,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: #181a20;
+    background: #000000;
     z-index: 30001;
     display: flex;
     flex-direction: column;
@@ -845,7 +845,7 @@
     flex-shrink: 0;
     position: sticky;
     top: 0;
-    background: #181a20;
+    background: #000000;
     z-index: 11;
   }
 

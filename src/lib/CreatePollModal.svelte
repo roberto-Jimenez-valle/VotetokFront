@@ -3504,7 +3504,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: #0f1115;
+    background: #000000;
     z-index: 30001;
     display: flex;
     flex-direction: column;
