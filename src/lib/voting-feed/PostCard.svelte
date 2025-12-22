@@ -18,6 +18,7 @@
     Flame,
     Users,
     ArrowLeft,
+    ArrowLeftRight,
   } from "lucide-svelte";
   import type {
     Post,
@@ -211,6 +212,7 @@
       ListOrdered,
       Flame,
       Users,
+      ArrowLeftRight,
     };
     return icons[iconName] || BarChart2;
   }

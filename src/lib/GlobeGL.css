@@ -1,16 +1,15 @@
-
-
 .vote-card.small .percentage-display,
 .vote-card.small-wide .percentage-display {
   margin: 0;
 }
 
 /* Evitar que el contenido interno crezca más que la celda */
-.vote-cards-section > .vote-cards-grid .vote-card .card-content,
-.poll-item > .vote-cards-grid .vote-card .card-content {
+.vote-cards-section>.vote-cards-grid .vote-card .card-content,
+.poll-item>.vote-cards-grid .vote-card .card-content {
   flex: 1 1 auto;
   min-height: 0;
 }
+
 :global(html) {
   width: 100%;
   height: 100%;
@@ -25,12 +24,14 @@
 :global(body) {
   width: 100%;
   min-height: 100vh;
-  min-height: calc(var(--vh, 1vh) * 100); /* Fix teclado móvil */
+  min-height: calc(var(--vh, 1vh) * 100);
+  /* Fix teclado móvil */
   margin: 0;
   padding: 0;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  overflow: auto; /* Permitir scroll vertical */
+  overflow: auto;
+  /* Permitir scroll vertical */
   /* Safe area para notch/home bar */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
@@ -66,9 +67,11 @@
   bottom: 0;
   width: 100%;
   height: 100%;
-  z-index: 0; /* Sobre el fondo del body pero debajo del globe-wrap */
+  z-index: 0;
+  /* Sobre el fondo del body pero debajo del globe-wrap */
   transition: background-color 300ms ease;
-  pointer-events: none; /* No bloquear eventos */
+  pointer-events: none;
+  /* No bloquear eventos */
 }
 
 /* Prevenir scroll en el contenedor principal */
@@ -76,7 +79,8 @@
 :global(.min-h-screen) {
   width: 100%;
   min-height: 100vh;
-  min-height: calc(var(--vh, 1vh) * 100); /* Fix teclado móvil */
+  min-height: calc(var(--vh, 1vh) * 100);
+  /* Fix teclado móvil */
 }
 
 .globe-wrap {
@@ -88,7 +92,8 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  z-index: 1; /* Sobre el dynamic-background */
+  z-index: 1;
+  /* Sobre el dynamic-background */
   /* Configuraciones específicas para Safari y Edge */
   -webkit-transform: translateZ(0);
   -moz-transform: translateZ(0);
@@ -105,12 +110,14 @@
   .globe-wrap {
     will-change: height;
   }
-  
+
   .globe-wrap.sheet-expanded {
-    height: 25vh; /* Globo más pequeño - 25% del viewport */
-    bottom: auto; /* Deshabilitar bottom para usar solo top + height */
+    height: 25vh;
+    /* Globo más pequeño - 25% del viewport */
+    bottom: auto;
+    /* Deshabilitar bottom para usar solo top + height */
   }
-  
+
   /* Transición suave solo en el contenedor */
   .globe-wrap.sheet-expanded,
   .globe-wrap:not(.sheet-expanded) {
@@ -121,6 +128,7 @@
 
 /* Mover globo a la derecha cuando hay modal activa en desktop */
 @media (min-width: 768px) {
+
   body:has(.modal-overlay) .globe-wrap,
   body:has(.bottom-sheet.solid) .globe-wrap {
     transform: translateX(350px) translateZ(0);
@@ -160,6 +168,7 @@
   .globe-wrap {
     transform: none;
   }
+
   .globe-wrap canvas {
     image-rendering: -webkit-optimize-contrast;
     image-rendering: crisp-edges;
@@ -168,7 +177,6 @@
 
 /* Header con logo y avatares */
 header {
-  position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
@@ -186,6 +194,7 @@ header {
 
 /* Ocultar header y botón de temas en móvil cuando BottomSheet está expandido */
 @media (max-width: 767px) {
+
   body:has(.bottom-sheet.solid) header,
   body:has(.bottom-sheet.solid) .unified-toggle {
     opacity: 0;
@@ -199,7 +208,7 @@ header {
 @media (min-width: 768px) {
   /* NO mover el header cuando hay modal o BottomSheet */
   /* Solo queremos mover los avatares para que se centren sobre el globo */
-  
+
   /* Mover y centrar los avatares sobre el globo (350px a la derecha) */
   body:has(.modal-overlay) .avatars-scroll-wrapper,
   body:has(.bottom-sheet.solid) .avatars-scroll-wrapper {
@@ -207,7 +216,7 @@ header {
     -webkit-transform: translateX(350px);
     transition: transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
   }
-  
+
   /* Centrar los avatares en su contenedor */
   body:has(.modal-overlay) .avatars-scroll-container,
   body:has(.bottom-sheet.solid) .avatars-scroll-container {
@@ -239,6 +248,7 @@ header {
   font-family: system-ui, -apple-system, sans-serif;
   z-index: 1001;
 }
+
 .settings-overlay {
   position: fixed;
   top: 0;
@@ -248,15 +258,18 @@ header {
   background: transparent;
   z-index: 1000;
 }
+
 .panel-row {
   display: grid;
   grid-template-columns: 1fr 1fr auto auto;
   align-items: center;
   gap: 8px;
 }
+
 .panel-row input[type="range"] {
   width: 100%;
 }
+
 .val {
   opacity: 0.8;
   min-width: 36px;
@@ -267,9 +280,11 @@ header {
 .legend-panel {
   position: fixed;
   left: 10px;
-  left: calc(10px + env(safe-area-inset-left)); /* Safe area izquierda */
+  left: calc(10px + env(safe-area-inset-left));
+  /* Safe area izquierda */
   bottom: 80px;
-  bottom: calc(80px + env(safe-area-inset-bottom)); /* Safe area inferior */
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  /* Safe area inferior */
   min-width: 120px;
   max-width: 160px;
   padding: 0;
@@ -283,11 +298,13 @@ header {
   font-family: system-ui, -apple-system, sans-serif;
   z-index: 1000;
 }
+
 .legend-title {
   font-weight: 600;
   opacity: 0.9;
   margin-bottom: 6px;
 }
+
 .legend-item {
   display: grid;
   grid-template-columns: 14px 1fr auto;
@@ -295,36 +312,43 @@ header {
   align-items: center;
   padding: 2px 0;
 }
+
 .legend-color {
   width: 14px;
   height: 14px;
   border-radius: 3px;
   border: 1px solid #00000055;
 }
+
 .legend-key {
   opacity: 0.95;
 }
+
 .legend-count {
   opacity: 0.8;
 }
+
 .legend-gradient {
   height: 10px;
   border-radius: 5px;
   border: 1px solid #00000055;
   margin: 4px 0 2px;
 }
+
 .legend-grad-row {
   display: grid;
   grid-template-columns: 12px 1fr 12px;
   align-items: center;
   gap: 6px;
 }
+
 .legend-mark {
   opacity: 0.9;
   font-weight: 600;
   text-align: center;
   font-size: 12px;
 }
+
 .legend-grad-row {
   cursor: pointer;
 }
@@ -348,6 +372,7 @@ header {
   cursor: pointer;
   z-index: 1003;
 }
+
 .legend-menu-btn:hover {
   border-color: rgba(255, 255, 255, 0.42);
 }
@@ -375,6 +400,7 @@ header {
   cursor: pointer;
   z-index: 1003;
 }
+
 .settings-btn:hover {
   border-color: rgba(255, 255, 255, 0.42);
 }
@@ -402,6 +428,7 @@ header {
   -moz-transition: all 0.2s ease;
   transition: all 0.2s ease;
 }
+
 .locate-btn:hover {
   border-color: rgba(255, 255, 255, 0.42);
   background: rgba(0, 0, 0, 0.85);
@@ -417,6 +444,7 @@ header {
   transform: translate(-50%, -50%);
   pointer-events: auto;
 }
+
 :global(.vote-cluster) {
   min-width: 22px;
   height: 22px;
@@ -450,28 +478,36 @@ header {
   width: calc(100%);
   padding: 0;
   color: #e5e7eb;
-  background: transparent; /* sin fondo negro */
+  background: transparent;
+  /* sin fondo negro */
   border: none;
   border-radius: 0;
   backdrop-filter: none;
   z-index: 1002;
 }
+
 .top-search-btn {
-  display: none; /* Ocultar el botón de búsqueda de arriba */
+  display: none;
+  /* Ocultar el botón de búsqueda de arriba */
 }
+
 .top-search-btn:hover {
   opacity: 0.9;
 }
+
 /* Posicionar el dropdown de tabs pegado a la derecha */
 .tabs-float {
   position: fixed;
   top: 4px;
-  right: 10px; /* pegado al borde derecho */
-  z-index: 30000; /* por encima del BottomSheet (20000) */
+  right: 10px;
+  /* pegado al borde derecho */
+  z-index: 30000;
+  /* por encima del BottomSheet (20000) */
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .search-icon {
   position: absolute;
   left: 14px;
@@ -481,10 +517,12 @@ header {
   pointer-events: none;
   color: #ffffff;
 }
+
 .floating-search {
   position: fixed;
   top: 8px;
-  right: 10px; /* pegado al borde derecho, mismo que tabs-float */
+  right: 10px;
+  /* pegado al borde derecho, mismo que tabs-float */
   display: flex;
   align-items: center;
   padding: 8px 14px;
@@ -495,36 +533,47 @@ header {
   -webkit-transition: width 180ms ease, opacity 180ms ease;
   -moz-transition: width 180ms ease, opacity 180ms ease;
   transition: width 180ms ease, opacity 180ms ease;
-  z-index: 10010; /* por debajo del BottomSheet expandido */
-  border-radius: 20px; /* mismo que nav-chip */
-  height: auto; /* altura automática como nav-chip */
-  border: 1px solid rgba(255, 255, 255, 0.2); /* mismo borde que nav-chip.active */
-  background: rgba(0, 0, 0, 0.85); /* fondo más sólido para Safari */
+  z-index: 10010;
+  /* por debajo del BottomSheet expandido */
+  border-radius: 20px;
+  /* mismo que nav-chip */
+  height: auto;
+  /* altura automática como nav-chip */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  /* mismo borde que nav-chip.active */
+  background: rgba(0, 0, 0, 0.85);
+  /* fondo más sólido para Safari */
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* misma sombra que nav-chip.active */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* misma sombra que nav-chip.active */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
+
 .floating-search.open {
   width: clamp(220px, 33vw, 480px);
   opacity: 1;
   pointer-events: auto;
 }
+
 .floating-search:hover {
   border-color: rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.2);
 }
+
 .tag-search {
   flex: 1;
   min-width: 160px;
-  background: transparent; /* dejar ver el glass del contenedor */
+  background: transparent;
+  /* dejar ver el glass del contenedor */
   border: none;
   color: #ffffff;
   padding: 0 0 0 28px;
   border-radius: 0;
   outline: none;
   height: auto;
-  font-size: 16px; /* Mínimo 16px para evitar zoom en iOS */
+  font-size: 16px;
+  /* Mínimo 16px para evitar zoom en iOS */
   font-weight: 400;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   /* Quitar estilos nativos de Safari */
@@ -532,6 +581,7 @@ header {
   -moz-appearance: none;
   appearance: none;
 }
+
 .tags-row {
   display: flex;
   gap: 8px;
@@ -541,39 +591,49 @@ header {
   padding: 0 10px;
   white-space: nowrap;
   /* Ocultar barras de scroll en todos los navegadores */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE y Edge legacy */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE y Edge legacy */
 }
+
 .tags-row::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
 }
+
 .friends-row {
   display: flex;
-  gap: 1px; /* aún menos margen entre tiles */
+  gap: 1px;
+  /* aún menos margen entre tiles */
   align-items: center;
-  padding: 0px 0px 0px 0; /* sin margen a la izquierda y menos respiro a la derecha */
+  padding: 0px 0px 0px 0;
+  /* sin margen a la izquierda y menos respiro a la derecha */
   overflow-x: auto;
   scrollbar-width: none;
 }
+
 .friends-row::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
 }
+
 .friend {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
   min-width: 82px;
-  width: 98px; /* ancho fijo para controlar el truncado del texto */
+  width: 98px;
+  /* ancho fijo para controlar el truncado del texto */
   border: none;
   background: transparent;
   padding: 0;
   cursor: pointer;
 }
+
 .avatar {
   width: 68px;
   height: 68px;
@@ -585,6 +645,7 @@ header {
   position: relative;
   display: block;
 }
+
 .avatar-circle {
   width: 68px;
   height: 68px;
@@ -601,18 +662,22 @@ header {
   box-sizing: border-box;
   position: relative;
 }
+
 /* Ring profesional visto/no visto */
 /* Unseen: aro degradado tipo Instagram */
 .avatar.unseen,
 .avatar-circle.unseen {
-  padding: 2px; /* crea el aro alrededor */
+  padding: 2px;
+  /* crea el aro alrededor */
   background: conic-gradient(from 0deg, #22d3ee, #3b82f6, #a3e635, #22d3ee);
   border: none;
 }
+
 /* El contenido interior mantiene el fondo/imagen con un círculo completo */
 .avatar.unseen {
   background-clip: padding-box;
 }
+
 .avatar-circle.unseen {
   background-clip: padding-box;
 }
@@ -621,30 +686,33 @@ header {
 .avatar.seen,
 .avatar-circle.seen {
   padding: 2px;
-  background: linear-gradient(
-    180deg,
-    rgba(148, 163, 184, 0.45),
-    rgba(148, 163, 184, 0.25)
-  );
+  background: linear-gradient(180deg,
+      rgba(148, 163, 184, 0.45),
+      rgba(148, 163, 184, 0.25));
   border: none;
 }
+
 /* Fondo opaco específico para ubicaciones */
 .avatar-loc {
-  background: #000000; /* negro, opaco */
+  background: #000000;
+  /* negro, opaco */
   border-color: rgba(255, 255, 255, 0.4);
 }
+
 /* Icono circular (diana) para ubicaciones */
 .loc-icon {
   width: 30px;
   height: 30px;
   display: inline-block;
 }
+
 .friend-name {
   font:
     13px/1 system-ui,
     sans-serif;
   opacity: 0.95;
-  color: #cbd5e1; /* gris más oscuro para mayor legibilidad */
+  color: #cbd5e1;
+  /* gris más oscuro para mayor legibilidad */
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -652,20 +720,24 @@ header {
   width: 100%;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
+
 /* Desplazar la esfera ligeramente hacia abajo para dar respiro bajo el degradado */
 .globe-wrap :global(canvas) {
   transform: translateY(30px);
   margin-bottom: 0;
 }
+
 /* Degradado superior suave para evitar corte recto */
 .globe-top-fade {
   position: fixed;
   top: 20;
   left: 0;
   right: 0;
-  height: 136px; /* altura del degradado aumentada */
+  height: 136px;
+  /* altura del degradado aumentada */
   pointer-events: none;
-  z-index: 10; /* por encima del canvas, por debajo de la UI */
+  z-index: 10;
+  /* por encima del canvas, por debajo de la UI */
   transition: opacity 300ms ease, transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
@@ -677,15 +749,20 @@ header {
     -webkit-transform: translateY(-100%);
   }
 }
+
 /* Bottom sheet estilo Google Maps */
 .bottom-sheet {
   position: fixed;
-  top: 0; /* Extender hasta arriba */
+  top: 0;
+  /* Extender hasta arriba */
   left: 0;
   right: 0;
-  bottom: 0; /* Extender hasta abajo */
-  max-height: 100vh; /* Prevenir que se expanda más allá del viewport */
-  height: 100vh; /* Altura completa */
+  bottom: 0;
+  /* Extender hasta abajo */
+  max-height: 100vh;
+  /* Prevenir que se expanda más allá del viewport */
+  height: 100vh;
+  /* Altura completa */
   -webkit-transform: translateY(100vh);
   -moz-transform: translateY(100vh);
   -ms-transform: translateY(100vh);
@@ -693,66 +770,80 @@ header {
   -webkit-transition: -webkit-transform 0ms linear;
   -moz-transition: -moz-transform 0ms linear;
   transition: transform 0ms linear;
-  z-index: 20000; /* por encima de la barra inferior y cualquier overlay */
+  z-index: 20000;
+  /* por encima de la barra inferior y cualquier overlay */
   color: #e5e7eb;
-  border-top-left-radius: 0; /* Sin redondeo arriba cuando está expandido */
-  border-top-right-radius: 0; /* Sin redondeo arriba cuando está expandido */
+  border-top-left-radius: 0;
+  /* Sin redondeo arriba cuando está expandido */
+  border-top-right-radius: 0;
+  /* Sin redondeo arriba cuando está expandido */
   -webkit-backdrop-filter: blur(0px);
   backdrop-filter: blur(0px);
   display: flex;
   flex-direction: column;
-  pointer-events: none; /* NO capturar eventos, los hijos decidirán */
-  cursor: grab; /* Todo el sheet es arrastrable */
+  pointer-events: none;
+  /* NO capturar eventos, los hijos decidirán */
+  cursor: grab;
+  /* Todo el sheet es arrastrable */
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  user-select: none; /* Evitar selección de texto al arrastrar */
+  user-select: none;
+  /* Evitar selección de texto al arrastrar */
   /* Padding inferior para el menú de navegación - usar calc para safe-area */
-  padding-bottom: calc(4.5em + env(safe-area-inset-bottom, 0px)); /* ~72px + safe area para el nav */
+  padding-bottom: calc(4.5em + env(safe-area-inset-bottom, 0px));
+  /* ~72px + safe area para el nav */
 }
 
 /* Comportamiento tipo YouTube en móvil: BottomSheet debajo del globo comprimido */
 @media (max-width: 767px) {
   .bottom-sheet.solid {
     /* Cuando está expandido (solid), limitar altura para dejar ver el globo */
-    top: calc(25vh - 55px) !important; /* Subir 35px el inicio del sheet (20px más) */
-    height: calc(75vh + 55px) !important; /* Compensar aumentando la altura total */
+    top: calc(25vh - 55px) !important;
+    /* Subir 35px el inicio del sheet (20px más) */
+    height: calc(75vh + 55px) !important;
+    /* Compensar aumentando la altura total */
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
-    transform: translateY(0) !important; /* No necesita translateY adicional */
+    transform: translateY(0) !important;
+    /* No necesita translateY adicional */
     -webkit-transform: translateY(0) !important;
-    z-index: 15000 !important; /* Menor que tabs-float (30000) para que el dropdown se vea */
+    z-index: 15000 !important;
+    /* Menor que tabs-float (30000) para que el dropdown se vea */
   }
-  
+
   /* Asegurar transición suave del BottomSheet en móvil - sincronizada con globo */
   .bottom-sheet.solid.transitioning {
     will-change: top, height, transform;
     transition: top 250ms ease-out, height 250ms ease-out, transform 250ms ease-out, backdrop-filter 300ms ease !important;
     -webkit-transition: top 250ms ease-out, height 250ms ease-out, -webkit-transform 250ms ease-out, -webkit-backdrop-filter 300ms ease !important;
   }
-  
+
   /* La barra de drag área siempre arriba del sheet - transparente para heredar fondo */
   .bottom-sheet.solid .sheet-drag-area {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: transparent !important; /* Transparente para heredar del padre */
+    background: transparent !important;
+    /* Transparente para heredar del padre */
   }
-  
+
   /* Asegurar que el contenido scrolleable ocupa el espacio disponible */
   .bottom-sheet.solid .main-scroll-container {
-    max-height: calc(75vh - 105px); /* +15px disponibles por el aumento de altura */
+    max-height: calc(75vh - 105px);
+    /* +15px disponibles por el aumento de altura */
   }
-  
+
   .bottom-sheet.solid .sheet-content {
     max-height: calc(75vh - 105px);
   }
-  
+
   .bottom-sheet.solid .additional-polls-container {
-    max-height: calc(75vh - 165px); /* +15px por el aumento de altura */
+    max-height: calc(75vh - 165px);
+    /* +15px por el aumento de altura */
   }
 }
- 
+
 /* Desktop: Alinear a la izquierda y limitar ancho del bottom-sheet */
 @media (min-width: 768px) {
   .bottom-sheet {
@@ -761,9 +852,10 @@ header {
     width: 100%;
     max-width: 700px;
     border-top-left-radius: 0;
-    border-top-right-radius: 1.25rem; /* Esquina superior derecha redondeada */
+    border-top-right-radius: 1.25rem;
+    /* Esquina superior derecha redondeada */
   }
-  
+
   .bottom-sheet.transitioning {
     transition: transform 250ms ease-out, backdrop-filter 300ms ease;
     -webkit-transition: -webkit-transform 250ms ease-out, -webkit-backdrop-filter 300ms ease;
@@ -772,9 +864,10 @@ header {
 }
 
 /* Los hijos del bottom-sheet SÍ capturan eventos */
-.bottom-sheet > * {
+.bottom-sheet>* {
   pointer-events: auto;
 }
+
 .bottom-sheet:active {
   cursor: grabbing;
 }
@@ -815,8 +908,10 @@ header {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  user-select: none; /* Evitar selección de texto */
-  pointer-events: auto !important; /* Asegurar que recibe eventos */
+  user-select: none;
+  /* Evitar selección de texto */
+  pointer-events: auto !important;
+  /* Asegurar que recibe eventos */
   /* Asegurar que captura TODOS los eventos, incluso en espacios vacíos */
   background: transparent;
   position: relative;
@@ -832,7 +927,8 @@ header {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  user-select: none; /* Evitar selección de texto al arrastrar */
+  user-select: none;
+  /* Evitar selección de texto al arrastrar */
 }
 
 /* El contenedor de encuestas adicionales DEBE permitir scroll vertical */
@@ -847,19 +943,20 @@ header {
 /* Scroll manejado por el navegador para poll-items */
 
 .bottom-sheet.solid {
-  background: rgba(24, 26, 32, 0.85); /* Semi-transparente con glass effect */
+  background: rgba(24, 26, 32, 0.85);
+  /* Semi-transparente con glass effect */
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
   /* Asegurar que el scroll funciona cuando está expandido */
-  overflow: hidden; /* Ocultar overflow del sheet, el scroll está en main-scroll-container */
+  overflow: hidden;
+  /* Ocultar overflow del sheet, el scroll está en main-scroll-container */
 }
+
 .bottom-sheet.glass {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.45) 0%,
-    rgba(0, 0, 0, 0.7) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(0, 0, 0, 0.45) 0%,
+      rgba(0, 0, 0, 0.7) 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -868,39 +965,41 @@ header {
 }
 
 /* ===== Ajuste específico: small y small-wide dentro de grids (200px exactos) ===== */
-.vote-cards-section > .vote-cards-grid .vote-card.small,
-.vote-cards-section > .vote-cards-grid .vote-card.small-wide,
-.poll-item > .vote-cards-grid .vote-card.small,
-.poll-item > .vote-cards-grid .vote-card.small-wide,
+.vote-cards-section>.vote-cards-grid .vote-card.small,
+.vote-cards-section>.vote-cards-grid .vote-card.small-wide,
+.poll-item>.vote-cards-grid .vote-card.small,
+.poll-item>.vote-cards-grid .vote-card.small-wide,
 .vote-cards-grid.accordion .vote-card.small,
 .vote-cards-grid.accordion .vote-card.small-wide {
   height: 100%;
 }
 
-.vote-cards-section > .vote-cards-grid .vote-card.small .card-header,
-.vote-cards-section > .vote-cards-grid .vote-card.small-wide .card-header,
-.poll-item > .vote-cards-grid .vote-card.small .card-header,
-.poll-item > .vote-cards-grid .vote-card.small-wide .card-header,
+.vote-cards-section>.vote-cards-grid .vote-card.small .card-header,
+.vote-cards-section>.vote-cards-grid .vote-card.small-wide .card-header,
+.poll-item>.vote-cards-grid .vote-card.small .card-header,
+.poll-item>.vote-cards-grid .vote-card.small-wide .card-header,
 .vote-cards-grid.accordion .vote-card.small .card-header,
 .vote-cards-grid.accordion .vote-card.small-wide .card-header {
   flex: 0 0 auto;
 }
 
-.vote-cards-section > .vote-cards-grid .vote-card.small .card-content,
-.vote-cards-section > .vote-cards-grid .vote-card.small-wide .card-content,
-.poll-item > .vote-cards-grid .vote-card.small .card-content,
-.poll-item > .vote-cards-grid .vote-card.small-wide .card-content,
+.vote-cards-section>.vote-cards-grid .vote-card.small .card-content,
+.vote-cards-section>.vote-cards-grid .vote-card.small-wide .card-content,
+.poll-item>.vote-cards-grid .vote-card.small .card-content,
+.poll-item>.vote-cards-grid .vote-card.small-wide .card-content,
 .vote-cards-grid.accordion .vote-card.small .card-content,
 .vote-cards-grid.accordion .vote-card.small-wide .card-content {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  padding: 10px 12px 36px 12px; /* compacto para caber en 200px */
+  padding: 10px 12px 36px 12px;
+  /* compacto para caber en 200px */
 }
 
 /* Cuando está en peek, usar el mismo color que el nav sin transparencia */
 .bottom-sheet.peek-state {
-  background: #181a20 !important; /* Mismo color que nav-bottom */
+  background: #181a20 !important;
+  /* Mismo color que nav-bottom */
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   border-top: none;
@@ -910,7 +1009,8 @@ header {
 :fullscreen .bottom-sheet,
 :-webkit-full-screen .bottom-sheet,
 :-moz-full-screen .bottom-sheet {
-  padding-bottom: 0 !important; /* Sin padding en fullscreen */
+  padding-bottom: 0 !important;
+  /* Sin padding en fullscreen */
 }
 
 /* En pantalla completa, el nav-minimal debe estar visible */
@@ -929,7 +1029,8 @@ header {
   overflow-y: auto !important;
   /* Asegurar que tiene altura */
   flex: 1;
-  min-height: 0; /* Importante para flex en Safari */
+  min-height: 0;
+  /* Importante para flex en Safari */
 }
 
 /* El drag area siempre debe estar por encima del scroll */
@@ -938,8 +1039,10 @@ header {
   z-index: 100;
   pointer-events: auto !important;
 }
+
 .sheet-header {
-  padding: 16px 14px 18px; /* área de arrastre más grande */
+  padding: 16px 14px 18px;
+  /* área de arrastre más grande */
   cursor: grab;
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -947,6 +1050,7 @@ header {
   user-select: none;
   position: relative;
 }
+
 .sheet-close {
   position: absolute;
   top: 8px;
@@ -959,31 +1063,35 @@ header {
   justify-content: center;
   color: #e5e7eb;
   border: 1px solid rgba(255, 255, 255, 0.28);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(255, 255, 255, 0.1) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.1) 100%);
   backdrop-filter: blur(10px) saturate(120%);
   -webkit-backdrop-filter: blur(10px) saturate(120%);
   cursor: pointer;
-  z-index: 5; /* por encima del área de drag del header */
+  z-index: 5;
+  /* por encima del área de drag del header */
   pointer-events: auto;
 }
+
 .sheet-close:hover {
   border-color: rgba(255, 255, 255, 0.42);
 }
+
 .sheet-close svg {
   pointer-events: none;
 }
+
 .sheet-grabber {
   width: 56px;
   height: 4px;
-  border-radius: 999px; /* más grande, más fácil de acertar */
+  border-radius: 999px;
+  /* más grande, más fácil de acertar */
   background: rgba(255, 255, 255, 0.45);
   margin: 0;
   flex-shrink: 0;
 }
+
 .sheet-title {
   font:
     600 16px/1.2 system-ui,
@@ -1006,15 +1114,18 @@ header {
   /* IMPORTANTE: Asegurar que captura eventos de arrastre */
   pointer-events: auto !important;
   position: relative;
-  z-index: 10; /* Por encima del contenido */
+  z-index: 10;
+  /* Por encima del contenido */
   /* Evitar que el scroll interfiera */
-  touch-action: none; /* Permitir solo arrastre, no scroll */
+  touch-action: none;
+  /* Permitir solo arrastre, no scroll */
 }
 
 /* Drag area transparente en móvil para heredar del padre */
 @media (max-width: 767px) {
   .bottom-sheet.glass .sheet-drag-area {
-    background: transparent !important; /* Transparente para heredar del padre */
+    background: transparent !important;
+    /* Transparente para heredar del padre */
   }
 }
 
@@ -1067,7 +1178,8 @@ header {
   transition: all 0.2s ease;
   /* Asegurar que captura eventos */
   pointer-events: auto;
-  touch-action: none; /* Solo arrastre */
+  touch-action: none;
+  /* Solo arrastre */
 }
 
 .drag-chart:active {
@@ -1107,7 +1219,7 @@ header {
   color: #ffffff;
 }
 
-.vote-total-info > span {
+.vote-total-info>span {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1183,23 +1295,29 @@ header {
 /* Contenedor mosaico horizontal con Grid */
 .vote-cards-grid {
   display: grid;
-  grid-auto-flow: column;        /* Flujo horizontal */
-  grid-auto-columns: 160px;      /* Ancho base de columna */
-  grid-template-rows: repeat(2, 115px); /* Máximo 2 filas fijas */
+  grid-auto-flow: column;
+  /* Flujo horizontal */
+  grid-auto-columns: 160px;
+  /* Ancho base de columna */
+  grid-template-rows: repeat(2, 115px);
+  /* Máximo 2 filas fijas */
   gap: 8px;
   padding: 0 16px 16px 16px;
-  height: auto; /* Altura automática según contenido */
-  min-height: 240px; /* Altura mínima para 2 filas */
+  height: auto;
+  /* Altura automática según contenido */
+  min-height: 240px;
+  /* Altura mínima para 2 filas */
   overflow-x: auto;
   overflow-y: hidden;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  align-content: start; /* Alinear al inicio para evitar superposiciones */
-  
+  align-content: start;
+  /* Alinear al inicio para evitar superposiciones */
+
   /* Ocultar scrollbar */
   scrollbar-width: none;
   -ms-overflow-style: none;
-  
+
   /* IMPORTANTE: Permitir eventos de scroll */
   pointer-events: auto;
 }
@@ -1218,11 +1336,14 @@ header {
 
 /* Compactar cuando solo hay 1 o 2 opciones: ocupar todo el ancho sin scroll */
 .vote-cards-grid.compact-two {
-  grid-auto-flow: row; /* Flujo vertical para 2 opciones */
+  grid-auto-flow: row;
+  /* Flujo vertical para 2 opciones */
   grid-auto-columns: 1fr;
-  grid-auto-rows: minmax(200px, auto); /* Más altura para mostrar contenido completo */
+  grid-auto-rows: minmax(200px, auto);
+  /* Más altura para mostrar contenido completo */
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: none; /* Sin límite de filas */
+  grid-template-rows: none;
+  /* Sin límite de filas */
   overflow-x: hidden;
   gap: 12px;
   height: auto;
@@ -1250,13 +1371,13 @@ header {
   transform: translateZ(0);
   will-change: transform, box-shadow;
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   border: none;
   text-align: left;
   padding: 0;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   --fill-window: 120px;
   outline: none;
   -webkit-tap-highlight-color: transparent;
@@ -1285,18 +1406,18 @@ header {
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
-  background: rgba(255,255,255,0.08) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   transform: translateZ(0) !important;
 }
 
-.vote-card:hover { 
+.vote-card:hover {
   /* NO aplicar borde de color en hover */
   /* Solo elevar y aplicar sombra */
   -webkit-transform: translateY(-2px);
   -moz-transform: translateY(-2px);
   -ms-transform: translateY(-2px);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   /* Forzar aceleración GPU */
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
@@ -1304,7 +1425,7 @@ header {
 }
 
 .vote-card.collapsed {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* Estilo para la opción votada - borde plano del color de la opción */
@@ -1312,7 +1433,7 @@ header {
 /* Este estilo debe ser PERMANENTE después de votar */
 .vote-card.voted {
   border: 3px solid var(--card-color) !important;
-  background: rgba(255,255,255,0.12) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   position: relative;
   /* Asegurar que el borde siempre sea visible */
   box-shadow: 0 0 0 1px var(--card-color) !important;
@@ -1346,12 +1467,13 @@ header {
   position: relative;
   gap: 12px;
 }
+
 .creator-avatar {
-  width: 32px; 
-  height: 32px; 
-  border-radius: 50%; 
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(255,255,255,0.4);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
   order: -1;
   margin-right: 8px;
@@ -1366,6 +1488,7 @@ header {
 .vote-card.is-active .creator-avatar {
   margin: 0 0 4px 0;
 }
+
 .card-header .question-title {
   font-size: 14px;
   font-weight: 500;
@@ -1412,6 +1535,7 @@ header {
   align-items: stretch;
   gap: 16px;
 }
+
 .card-content-full .vote-chart-container {
   width: 100%;
   flex: 1;
@@ -1423,14 +1547,17 @@ header {
   margin: 0;
   padding: 0;
 }
+
 .card-content-full .vote-chart {
   flex: 1;
   margin: 0;
   padding: 0;
 }
+
 .card-content-full .time-range-bottom {
   margin-top: 12px;
 }
+
 .card-content-full .chart-tooltip {
   top: 12px;
   left: 12px;
@@ -1445,8 +1572,7 @@ header {
   height: min(100%, var(--fill-window, 120px));
   background: linear-gradient(0deg,
       var(--card-color, rgba(0, 0, 0, 0.4)) calc(var(--fill-window, 120px) * (clamp(var(--fill-pct-val, 0), 0, 100) / 100)),
-      transparent calc(var(--fill-window, 120px) * (clamp(var(--fill-pct-val, 0), 0, 100) / 100))
-    );
+      transparent calc(var(--fill-window, 120px) * (clamp(var(--fill-pct-val, 0), 0, 100) / 100)));
   pointer-events: none;
   z-index: 0;
   opacity: 0;
@@ -1499,14 +1625,14 @@ header {
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
-  background: rgba(255,255,255,0.08) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 .vote-cards-grid.compact-one .vote-card:active {
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
-  background: rgba(255,255,255,0.08) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   transform: none !important;
 }
 
@@ -1532,7 +1658,8 @@ header {
 
 .percentage-large::after {
   content: '%';
-  font-size: 0.6em; /* 60% del tamaño del número */
+  font-size: 0.6em;
+  /* 60% del tamaño del número */
   position: absolute;
   bottom: 0.2em;
   margin-left: 0.08em;
@@ -1552,7 +1679,7 @@ header {
 .vote-count {
   font-size: 14px;
   font-weight: 400;
-  color: rgba(255,255,255,0.9);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* Avatares flotantes en esquina inferior derecha */
@@ -1577,7 +1704,11 @@ header {
   -moz-transition: -moz-transform 0.2s ease;
   transition: transform 0.2s ease;
 }
-.friend-avatar-floating:first-child { margin-left: 0; }
+
+.friend-avatar-floating:first-child {
+  margin-left: 0;
+}
+
 .friend-avatar-floating:hover {
   -webkit-transform: scale(1.1) translateY(-2px);
   -moz-transform: scale(1.1) translateY(-2px);
@@ -1622,7 +1753,7 @@ header {
       margin-left: 0;
     }
 
-    .vote-card:not(.is-active) .friend-avatar-floating + .friend-avatar-floating {
+    .vote-card:not(.is-active) .friend-avatar-floating+.friend-avatar-floating {
       margin-top: -10px;
     }
 
@@ -1722,17 +1853,21 @@ header {
 .vote-card.large .card-header {
   padding: 12px 16px;
 }
+
 .vote-card.large .creator-avatar {
   width: 32px;
   height: 32px;
 }
+
 .vote-card.large .card-header .question-title {
   font-size: 18px;
   min-height: 70px;
 }
+
 .vote-card.large .card-content {
   padding: 0 16px 50px 16px;
 }
+
 /* Tarjetas grandes - porcentaje muy prominente */
 .vote-card.large .percentage-large {
   font-size: 80px;
@@ -1740,7 +1875,7 @@ header {
   letter-spacing: -0.03em;
 }
 
-.extreme{
+.extreme {
   font-size: 75px;
 }
 
@@ -1752,13 +1887,16 @@ header {
   margin-left: 0.1em;
   vertical-align: baseline;
 }
+
 .vote-card.large .vote-count {
   font-size: 18px;
 }
+
 .vote-card.large .vote-info {
   bottom: 12px;
   left: 16px;
 }
+
 .vote-card.large .percentage-display {
   margin: 0;
 }
@@ -1768,22 +1906,27 @@ header {
   width: 32px;
   height: 32px;
 }
+
 .vote-card.medium .card-header .question-title {
   font-size: 16px;
   min-height: 62px;
 }
+
 .vote-card.medium .percentage-large {
   font-size: 48px;
   font-weight: 900;
   letter-spacing: -0.02em;
 }
+
 .vote-card.medium .vote-count {
   font-size: 16px;
 }
+
 .vote-card.medium .vote-info {
   bottom: 12px;
   left: 16px;
 }
+
 .vote-card.medium .percentage-display {
   margin: 0;
 }
@@ -1804,10 +1947,12 @@ header {
   margin-left: 0.05em;
   vertical-align: baseline;
 }
+
 .vote-card.small .percentage-display {
   font-size: 12px;
   min-height: 43px;
 }
+
 .vote-card.small .vote-count {
   font-size: 9px;
 }
@@ -1817,7 +1962,10 @@ header {
   left: 16px;
 }
 
-.header-meta { display: inline-flex; gap: 6px; }
+.header-meta {
+  display: inline-flex;
+  gap: 6px;
+}
 
 /* ---- Cross-browser hardening for vote cards ---- */
 :root {
@@ -1835,59 +1983,96 @@ header {
 /* Grid density and consistent gaps across engines */
 .vote-cards-grid {
   grid-auto-flow: dense;
-  gap: 6px; /* use px for consistent rendering */
+  gap: 6px;
+  /* use px for consistent rendering */
 }
 
 /* Horizontal layout ONLY for the first/top grid inside vote-cards-section */
-.vote-cards-section > .vote-cards-grid {
+.vote-cards-section>.vote-cards-grid {
   display: grid;
-  grid-auto-flow: column dense; /* llena columnas de izquierda a derecha */
-  grid-template-rows: repeat(2, auto); /* dos filas: permite apilar dos pequeñas */
-  grid-auto-rows: 200px; /* altura fija por fila: TODAS las cards = 200px */
-  grid-auto-columns: 140px; /* ancho base de columna */
+  grid-auto-flow: column dense;
+  /* llena columnas de izquierda a derecha */
+  grid-template-rows: repeat(2, auto);
+  /* dos filas: permite apilar dos pequeñas */
+  grid-auto-rows: 200px;
+  /* altura fija por fila: TODAS las cards = 200px */
+  grid-auto-columns: 140px;
+  /* ancho base de columna */
   overflow-x: auto;
-  overflow-y: hidden; /* nunca scroll vertical */
+  overflow-y: hidden;
+  /* nunca scroll vertical */
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* Firefox: ocultar scrollbar */
-  -ms-overflow-style: none; /* IE/Edge legacy: ocultar scrollbar */
+  scrollbar-width: none;
+  /* Firefox: ocultar scrollbar */
+  -ms-overflow-style: none;
+  /* IE/Edge legacy: ocultar scrollbar */
   gap: 12px;
-  padding-bottom: 6px; /* espacio para scrollbar */
+  padding-bottom: 6px;
+  /* espacio para scrollbar */
   scroll-snap-type: x mandatory;
   align-content: start;
 }
 
 /* WebKit: ocultar scrollbar manteniendo scroll */
-.vote-cards-section > .vote-cards-grid::-webkit-scrollbar { display: none; height: 0; }
+.vote-cards-section>.vote-cards-grid::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
 
-.vote-cards-section > .vote-cards-grid .vote-card {
+.vote-cards-section>.vote-cards-grid .vote-card {
   scroll-snap-align: start;
   height: 100%;
   display: flex;
   flex-direction: column;
-  width: 100%; /* llenar columna asignada */
+  width: 100%;
+  /* llenar columna asignada */
 }
 
 /* Spans por tamaño (controlan ancho por columnas y alto por filas) */
-.vote-cards-section > .vote-cards-grid .vote-card.small { grid-column: span 1; grid-row: span 1; }
-.vote-cards-section > .vote-cards-grid .vote-card.small-wide { grid-column: span 2; grid-row: span 1; }
-.vote-cards-section > .vote-cards-grid .vote-card.medium { grid-column: span 2; grid-row: span 2; }
-.vote-cards-section > .vote-cards-grid .vote-card.large { grid-column: span 3; grid-row: span 2; }
+.vote-cards-section>.vote-cards-grid .vote-card.small {
+  grid-column: span 1;
+  grid-row: span 1;
+}
+
+.vote-cards-section>.vote-cards-grid .vote-card.small-wide {
+  grid-column: span 2;
+  grid-row: span 1;
+}
+
+.vote-cards-section>.vote-cards-grid .vote-card.medium {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.vote-cards-section>.vote-cards-grid .vote-card.large {
+  grid-column: span 3;
+  grid-row: span 2;
+}
 
 /* Evitar desbordes internos excepto en compact-one */
-.vote-cards-section > .vote-cards-grid .vote-card .card-content { overflow: hidden; }
-.vote-cards-section > .vote-cards-grid.compact-one .vote-card .card-content { overflow: visible; }
+.vote-cards-section>.vote-cards-grid .vote-card .card-content {
+  overflow: hidden;
+}
+
+.vote-cards-section>.vote-cards-grid.compact-one .vote-card .card-content {
+  overflow: visible;
+}
 
 /* Horizontal layout for additional polls as well */
-.poll-item > .vote-cards-grid {
+.poll-item>.vote-cards-grid {
   display: grid;
   grid-auto-flow: column dense;
   grid-template-rows: repeat(2, auto);
-  grid-auto-rows: 200px; /* altura fija por fila: TODAS las cards = 200px */
-  grid-auto-columns: 140px; /* ancho base de columna */
+  grid-auto-rows: 200px;
+  /* altura fija por fila: TODAS las cards = 200px */
+  grid-auto-columns: 140px;
+  /* ancho base de columna */
   overflow-x: auto;
-  overflow-y: hidden; /* nunca scroll vertical */
+  overflow-y: hidden;
+  /* nunca scroll vertical */
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: none;
+  /* Firefox */
   -ms-overflow-style: none;
   gap: 12px;
   padding-bottom: 6px;
@@ -1896,8 +2081,8 @@ header {
 }
 
 /* === DOS CARDS: lado a lado, mitad y mitad, alto máximo 200px === */
-.vote-cards-section > .vote-cards-grid.compact-two,
-.poll-item > .vote-cards-grid.compact-two {
+.vote-cards-section>.vote-cards-grid.compact-two,
+.poll-item>.vote-cards-grid.compact-two {
   grid-template-rows: repeat(2, auto);
   grid-auto-rows: 200px;
   grid-auto-columns: 200px;
@@ -1909,11 +2094,14 @@ header {
   padding-bottom: 6px;
 }
 
-.vote-cards-section > .vote-cards-grid.compact-two::-webkit-scrollbar,
-.poll-item > .vote-cards-grid.compact-two::-webkit-scrollbar { display: none; height: 0; }
+.vote-cards-section>.vote-cards-grid.compact-two::-webkit-scrollbar,
+.poll-item>.vote-cards-grid.compact-two::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
 
-.vote-cards-section > .vote-cards-grid.compact-two .vote-card,
-.poll-item > .vote-cards-grid.compact-two .vote-card {
+.vote-cards-section>.vote-cards-grid.compact-two .vote-card,
+.poll-item>.vote-cards-grid.compact-two .vote-card {
   grid-column: span 1 !important;
   grid-row: span 2 !important;
   height: 200px;
@@ -1925,27 +2113,40 @@ header {
   display: flex !important;
   flex-wrap: nowrap;
   align-items: stretch;
-  gap: 0; /* pegadas por defecto */
+  gap: 0;
+  /* pegadas por defecto */
   overflow-x: auto;
   overflow-y: hidden;
-  min-height: 120px;        /* altura mínima */
-  max-height: 224px;        /* altura máxima */
+  min-height: 120px;
+  /* altura mínima */
+  max-height: 224px;
+  /* altura máxima */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-.vote-cards-grid.accordion:not(.compact-two)::-webkit-scrollbar { display: none; height: 0; }
+
+.vote-cards-grid.accordion:not(.compact-two)::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
 
 /* Por defecto: todas anchas y del mismo alto */
 .vote-cards-grid.accordion:not(.compact-two) .vote-card {
-  flex: 0 0 300px; /* base mayor para que no se vean pequeñas */
+  flex: 0 0 300px;
+  /* base mayor para que no se vean pequeñas */
   min-width: 300px;
-  min-height: 120px;        /* altura mínima para cards */
-  max-height: 224px;        /* altura máxima para cards */
-  border-radius: 0;           /* sin esquinas redondeadas intermedias */
-  overflow: hidden;           /* recorta bordes al unificar altura */
+  min-height: 120px;
+  /* altura mínima para cards */
+  max-height: 224px;
+  /* altura máxima para cards */
+  border-radius: 0;
+  /* sin esquinas redondeadas intermedias */
+  overflow: hidden;
+  /* recorta bordes al unificar altura */
   display: flex;
   flex-direction: column;
-  justify-content: center;  /* centrar contenido verticalmente */
+  justify-content: center;
+  /* centrar contenido verticalmente */
 }
 
 /* Transición suave de anchura */
@@ -1954,26 +2155,32 @@ header {
 }
 
 /* Al pasar el ratón por el contenedor, contraer ligeramente manteniendo legibilidad */
-.vote-cards-grid.accordion:not(.compact-two):hover .vote-card { flex-basis: 280px; }
+.vote-cards-grid.accordion:not(.compact-two):hover .vote-card {
+  flex-basis: 280px;
+}
 
 /* Destacar la card activa (hover, focus-visible o active táctil) */
 .vote-cards-grid.accordion:not(.compact-two) .vote-card:hover,
 .vote-cards-grid.accordion:not(.compact-two) .vote-card:focus-visible,
-.vote-cards-grid.accordion:not(.compact-two) .vote-card:active { flex-basis: 600px; }
+.vote-cards-grid.accordion:not(.compact-two) .vote-card:active {
+  flex-basis: 600px;
+}
 
 /* Asegurar que el contenido se adapta durante la expansión */
-.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-content { 
+.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-content {
   overflow: hidden;
-  padding: 0 16px 20px 16px; /* Reducir padding inferior para mejor centrado */
+  padding: 0 16px 20px 16px;
+  /* Reducir padding inferior para mejor centrado */
   justify-content: center;
   align-items: center;
 }
 
 /* Header más compacto en acordeones para mejor uso del espacio */
-.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-header { 
+.vote-cards-grid.accordion:not(.compact-two) .vote-card .card-header {
   padding: 8px 12px;
   min-height: auto;
 }
+
 .vote-cards-grid.accordion:not(.compact-two) .vote-card .card-header .question-title {
   min-height: auto;
   text-align: center !important;
@@ -2007,6 +2214,7 @@ header {
   min-height: 160px;
   max-height: 160px;
 }
+
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card {
   flex: 1 1 0 !important;
   min-width: 0 !important;
@@ -2019,24 +2227,29 @@ header {
   flex-direction: column;
   justify-content: center;
 }
+
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card .card-content {
   padding: 0 16px 20px 16px;
   justify-content: center;
   align-items: center;
 }
+
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card .card-header {
   padding: 8px 12px;
   min-height: auto;
 }
+
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card .card-header .question-title {
   min-height: auto;
   text-align: center !important;
   flex: 1;
   width: 100%;
 }
+
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card:not(.is-active) .card-header .question-title {
   display: none;
 }
+
 @container (min-width: 110px) {
   .vote-cards-grid.accordion.fullwidth.compact-one .vote-card:not(.is-active) .card-header .question-title {
     display: -webkit-box !important;
@@ -2046,6 +2259,7 @@ header {
     text-overflow: ellipsis;
   }
 }
+
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card:hover,
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card:focus-visible,
 .vote-cards-grid.accordion.fullwidth.compact-one .vote-card.is-active {
@@ -2055,13 +2269,16 @@ header {
 
 /* Pocas opciones (2-5): sin scroll, ocupan todo el ancho */
 .vote-cards-grid.accordion.fullwidth:not(.dense):not(.compact-one) {
-  overflow-x: hidden;    /* sin scroll horizontal */
+  overflow-x: hidden;
+  /* sin scroll horizontal */
   width: 100%;
-  gap: 3px;              /* pequeño espacio entre cards */
+  gap: 3px;
+  /* pequeño espacio entre cards */
   height: 160px;
   min-height: 160px;
   max-height: 160px;
 }
+
 .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card {
   /* Estado inicial: todas las cards con tamaño igual para mejor visibilidad */
   flex: 1 1 0 !important;
@@ -2089,19 +2306,23 @@ header {
   justify-content: center;
   align-items: center;
 }
+
 .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card .card-header {
   padding: 8px 12px;
   min-height: auto;
 }
+
 .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card .card-header .question-title {
   min-height: auto;
   text-align: center !important;
   flex: 1;
   width: 100%;
 }
+
 .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card:not(.is-active) .card-header .question-title {
   display: none;
 }
+
 @container (min-width: 110px) {
   .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card:not(.is-active) .card-header .question-title {
     display: -webkit-box !important;
@@ -2111,9 +2332,11 @@ header {
     text-overflow: ellipsis;
   }
 }
-.vote-cards-grid.accordion.fullwidth:not(.dense):hover .vote-card { 
-  flex: 1 1 0 !important; 
+
+.vote-cards-grid.accordion.fullwidth:not(.dense):hover .vote-card {
+  flex: 1 1 0 !important;
 }
+
 .vote-cards-grid.accordion.fullwidth:not(.dense) .vote-card.is-active {
   /* La activa crece al doble */
   flex: 2 1 0 !important;
@@ -2127,6 +2350,7 @@ header {
   flex-basis: 0 !important;
   transition: flex-grow 180ms ease, flex-shrink 180ms ease;
 }
+
 .vote-cards-grid.accordion.fullwidth:not(.dense).open .vote-card.is-active {
   /* Activa: crece según número de items, mínimo 1 */
   flex: calc(max(1, (var(--items) - 1) * 2.5)) 1 0 !important;
@@ -2139,9 +2363,11 @@ header {
     opacity: 0;
     transform: translateX(120%);
   }
+
   60% {
     opacity: 1;
   }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -2153,9 +2379,11 @@ header {
     opacity: 1;
     transform: translateX(0);
   }
+
   40% {
     opacity: 0.5;
   }
+
   100% {
     opacity: 0;
     transform: translateX(-120%);
@@ -2168,9 +2396,11 @@ header {
     opacity: 0;
     transform: translateX(-120%);
   }
+
   60% {
     opacity: 1;
   }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -2182,9 +2412,11 @@ header {
     opacity: 1;
     transform: translateX(0);
   }
+
   40% {
     opacity: 0.5;
   }
+
   100% {
     opacity: 0;
     transform: translateX(120%);
@@ -2209,10 +2441,12 @@ header {
   min-height: 120px;
   max-height: 224px;
 }
+
 .vote-cards-grid.accordion.fullwidth.dense::-webkit-scrollbar {
   display: none;
   height: 0;
 }
+
 .vote-cards-grid.accordion.fullwidth.dense .vote-card {
   scroll-snap-align: start;
   grid-row: span 1;
@@ -2242,19 +2476,23 @@ header {
   justify-content: center;
   align-items: center;
 }
+
 .vote-cards-grid.accordion.fullwidth.dense .vote-card .card-header {
   padding: 8px 12px;
   min-height: auto;
 }
+
 .vote-cards-grid.accordion.fullwidth.dense .vote-card .card-header .question-title {
   min-height: auto;
   text-align: center !important;
   flex: 1;
   width: 100%;
 }
+
 .vote-cards-grid.accordion.fullwidth.dense .vote-card:not(.is-active) .card-header .question-title {
   display: none;
 }
+
 @container (min-width: 110px) {
   .vote-cards-grid.accordion.fullwidth.dense .vote-card:not(.is-active) .card-header .question-title {
     display: -webkit-box !important;
@@ -2264,6 +2502,7 @@ header {
     text-overflow: ellipsis;
   }
 }
+
 .vote-cards-grid.accordion.fullwidth.dense .vote-card.is-active {
   z-index: 10;
   border-radius: 16px !important;
@@ -2272,10 +2511,13 @@ header {
 /* Estado abierto: la activa ocupa 2x2 (2 columnas x 2 filas) */
 /* Las 4 cards (2x2) deben caber en el ancho de la ventana */
 .vote-cards-grid.accordion.fullwidth.dense.open {
-  grid-auto-columns: calc((100vw - 24px - 12px) / 2); /* 2 columnas que caben en pantalla */
-  overflow-x: auto; /* Scroll horizontal habilitado para navegar entre cards expandidas */
+  grid-auto-columns: calc((100vw - 24px - 12px) / 2);
+  /* 2 columnas que caben en pantalla */
+  overflow-x: auto;
+  /* Scroll horizontal habilitado para navegar entre cards expandidas */
   scroll-snap-type: x mandatory;
 }
+
 .vote-cards-grid.accordion.fullwidth.dense.open .vote-card {
   transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
   grid-row: span 1;
@@ -2284,6 +2526,7 @@ header {
   border-radius: 16px !important;
   scroll-snap-align: start;
 }
+
 .vote-cards-grid.accordion.fullwidth.dense.open .vote-card.is-active {
   z-index: 20;
   /* Ocupa 2 columnas x 2 filas = 4 cards que caben exactamente en pantalla */
@@ -2296,23 +2539,27 @@ header {
 }
 
 /* Forzar que cualquier card dentro de un grid ocupe 200px exactos de alto */
-.vote-cards-section > .vote-cards-grid .vote-card,
-.poll-item > .vote-cards-grid .vote-card {
-  height: 100%;            /* llena la celda de 200px */
+.vote-cards-section>.vote-cards-grid .vote-card,
+.poll-item>.vote-cards-grid .vote-card {
+  height: 100%;
+  /* llena la celda de 200px */
   display: flex;
   flex-direction: column;
 }
 
-.vote-cards-section > .vote-cards-grid .vote-card .card-content,
-.poll-item > .vote-cards-grid .vote-card .card-content {
+.vote-cards-section>.vote-cards-grid .vote-card .card-content,
+.poll-item>.vote-cards-grid .vote-card .card-content {
   flex: 1 1 auto;
-  min-height: 0;           /* evita que el contenido fuerce más altura */
-  overflow: hidden;        /* evita salientes */
+  min-height: 0;
+  /* evita que el contenido fuerce más altura */
+  overflow: hidden;
+  /* evita salientes */
 }
 
-.vote-cards-section > .vote-cards-grid.compact-one .vote-card .card-content,
-.poll-item > .vote-cards-grid.compact-one .vote-card .card-content {
-  overflow: visible;       /* permite tooltip fuera */
+.vote-cards-section>.vote-cards-grid.compact-one .vote-card .card-content,
+.poll-item>.vote-cards-grid.compact-one .vote-card .card-content {
+  overflow: visible;
+  /* permite tooltip fuera */
 }
 
 /* A partir de ahora las tarjetas no usan small/medium/large/small-wide; 
@@ -2348,40 +2595,54 @@ header {
   border-top-left-radius: 16px;
   border-bottom-left-radius: 16px;
 }
+
 .vote-cards-grid.accordion:not(.compact-two) .vote-card:last-child {
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
 }
 
 /* === Compact-two (2 cards): mismas reglas de altura y bordes === */
-.vote-cards-section > .vote-cards-grid.compact-two,
-.poll-item > .vote-cards-grid.compact-two {
-  gap: 0;                 /* pegadas */
+.vote-cards-section>.vote-cards-grid.compact-two,
+.poll-item>.vote-cards-grid.compact-two {
+  gap: 0;
+  /* pegadas */
   height: 200px;
   max-height: 200px;
 }
-.vote-cards-section > .vote-cards-grid.compact-two .vote-card,
-.poll-item > .vote-cards-grid.compact-two .vote-card {
+
+.vote-cards-section>.vote-cards-grid.compact-two .vote-card,
+.poll-item>.vote-cards-grid.compact-two .vote-card {
   height: 100%;
   border-radius: 0;
   overflow: hidden;
 }
-.vote-cards-section > .vote-cards-grid.compact-two .vote-card:first-child,
-.poll-item > .vote-cards-grid.compact-two .vote-card:first-child {
+
+.vote-cards-section>.vote-cards-grid.compact-two .vote-card:first-child,
+.poll-item>.vote-cards-grid.compact-two .vote-card:first-child {
   border-top-left-radius: 16px;
   border-bottom-left-radius: 16px;
 }
-.vote-cards-section > .vote-cards-grid.compact-two .vote-card:last-child,
-.poll-item > .vote-cards-grid.compact-two .vote-card:last-child {
+
+.vote-cards-section>.vote-cards-grid.compact-two .vote-card:last-child,
+.poll-item>.vote-cards-grid.compact-two .vote-card:last-child {
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
 }
 
-.poll-item > .vote-cards-grid::-webkit-scrollbar { display: none; height: 0; }
+.poll-item>.vote-cards-grid::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
 
-.poll-item > .vote-cards-grid .vote-card { scroll-snap-align: start; width: 100%; height: 100%; display: flex; flex-direction: column; }
+.poll-item>.vote-cards-grid .vote-card {
+  scroll-snap-align: start;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 
-.poll-item > .vote-cards-grid .vote-card {
+.poll-item>.vote-cards-grid .vote-card {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -2394,11 +2655,14 @@ header {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   backface-visibility: hidden;
-  transform: translateZ(0); /* stabilize GPU compositing */
+  transform: translateZ(0);
+  /* stabilize GPU compositing */
   container-type: inline-size;
   container-name: vote-card;
-  position: relative; /* for custom highlight */
-  transition: none; /* sin animaciones */
+  position: relative;
+  /* for custom highlight */
+  transition: none;
+  /* sin animaciones */
 }
 
 /* Percentage baseline alignment and overflow safety */
@@ -2416,7 +2680,8 @@ header {
   display: flex;
   align-items: baseline;
   justify-content: flex-start;
-  margin: 6px 0 0 0; /* separación uniforme bajo el header */
+  margin: 6px 0 0 0;
+  /* separación uniforme bajo el header */
 }
 
 .vote-card .percentage-large {
@@ -2426,7 +2691,8 @@ header {
 
 .percentage-large {
   line-height: 1;
-  white-space: nowrap; /* avoid wraps across browsers */
+  white-space: nowrap;
+  /* avoid wraps across browsers */
 }
 
 /* Avatar image sizing to avoid layout shifts */
@@ -2520,6 +2786,7 @@ header {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -2609,12 +2876,13 @@ header {
 
 /* FIX CHROME MÓVIL: Ajustes para dispositivos táctiles */
 @media (hover: none) and (pointer: coarse) {
+
   /* Mantener backdrop-filter solo para el bottom-sheet */
   *:not(.bottom-sheet) {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  
+
   /* Fondos sólidos de reemplazo para elementos que tenían blur */
   .top-search-btn,
   .nav-chip,
@@ -2622,14 +2890,12 @@ header {
   :global(.vote-cluster) {
     background: rgba(0, 0, 0, 0.9) !important;
   }
-  
+
   /* Mantener efecto glass en el bottom-sheet para móviles */
   .bottom-sheet.glass {
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.45) 0%,
-      rgba(0, 0, 0, 0.7) 100%
-    ) !important;
+    background: linear-gradient(180deg,
+        rgba(0, 0, 0, 0.45) 0%,
+        rgba(0, 0, 0, 0.7) 100%) !important;
     -webkit-backdrop-filter: blur(10px) !important;
     backdrop-filter: blur(10px) !important;
   }
@@ -2676,20 +2942,24 @@ header {
     transform: translate(-50%, -50%) scale(0);
     opacity: 0;
   }
+
   20% {
     transform: translate(-50%, -50%) scale(1.4);
     opacity: 1;
   }
+
   25% {
     transform: translate(-50%, -50%) scale(1);
     opacity: 1;
   }
+
   95% {
     left: var(--icon-x, 50%);
     top: var(--icon-y, 50%);
     transform: translate(-50%, -50%) scale(0.4);
     opacity: 0.8;
   }
+
   100% {
     left: var(--icon-x, 50%);
     top: var(--icon-y, 50%);
@@ -2702,9 +2972,11 @@ header {
   0% {
     transform: scale(1);
   }
+
   50% {
     transform: scale(1.15);
   }
+
   100% {
     transform: scale(1);
   }
@@ -2715,6 +2987,7 @@ header {
     transform: translate(-50%, -50%) scale(1);
     opacity: 0.5;
   }
+
   100% {
     transform: translate(-50%, -50%) scale(3);
     opacity: 0;
@@ -2740,7 +3013,7 @@ header {
   color: var(--vote-color, #3b82f6);
   pointer-events: none;
   z-index: 99999;
-  text-shadow: 
+  text-shadow:
     0 0 8px var(--vote-color, #3b82f6),
     0 2px 6px rgba(0, 0, 0, 0.3);
   filter: drop-shadow(0 0 6px var(--vote-color, #3b82f6));
@@ -2936,27 +3209,30 @@ header {
 }
 
 /* Spans dinámicos por tamaño - treemap proporcional sin superposiciones */
-.vote-card.small  { 
-  grid-row: span 1; 
-  grid-column: span 1; 
+.vote-card.small {
+  grid-row: span 1;
+  grid-column: span 1;
   min-height: 115px;
   max-height: 115px;
 }
-.vote-card.small-wide { 
-  grid-row: span 1; 
-  grid-column: span 2; 
+
+.vote-card.small-wide {
+  grid-row: span 1;
+  grid-column: span 2;
   min-height: 115px;
   max-height: 115px;
 }
-.vote-card.medium { 
-  grid-row: span 2; 
-  grid-column: span 1; 
+
+.vote-card.medium {
+  grid-row: span 2;
+  grid-column: span 1;
   min-height: 238px;
   max-height: 238px;
 }
-.vote-card.large  { 
-  grid-row: span 2; 
-  grid-column: span 2; 
+
+.vote-card.large {
+  grid-row: span 2;
+  grid-column: span 2;
   min-height: 238px;
   max-height: 238px;
 }
@@ -2966,7 +3242,8 @@ header {
 .vote-cards-grid.compact-one .vote-card {
   grid-row: span 1 !important;
   grid-column: span 1 !important;
-  min-height: 200px !important; /* Más altura para mostrar todo el contenido */
+  min-height: 200px !important;
+  /* Más altura para mostrar todo el contenido */
   height: auto;
 }
 
@@ -3051,7 +3328,8 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 0; /* permitir reducirse según el span */
+  min-height: 0;
+  /* permitir reducirse según el span */
 }
 
 .vote-card-overlay {
@@ -3060,7 +3338,7 @@ header {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.4) 100%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.4) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3074,11 +3352,11 @@ header {
   font-size: 12px;
   font-weight: 700;
   color: #fff;
-  background: rgba(0,0,0,0.55);
-  border: 1px solid rgba(255,255,255,0.28);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   padding: 4px 8px;
   border-radius: 999px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* Tamaños de porcentaje según el tamaño de tarjeta */
@@ -3110,16 +3388,25 @@ header {
   padding: 0 4px;
 }
 
-.meta-left { display: flex; align-items: center; }
-.meta-right { display: flex; align-items: center; gap: 12px; }
+.meta-left {
+  display: flex;
+  align-items: center;
+}
+
+.meta-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
 .stat-text {
   font-size: 12px;
   font-weight: 600;
-  color: rgba(255,255,255,0.8);
+  color: rgba(255, 255, 255, 0.8);
 }
+
 .stat-text.subtle {
-  color: rgba(255,255,255,0.6);
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 500;
 }
 
@@ -3138,8 +3425,12 @@ header {
   margin-left: -8px;
   background: rgba(255, 255, 255, 0.12);
 }
-.avatar-sm:first-child { margin-left: 0; }
-.avatar-sm.placeholder { 
+
+.avatar-sm:first-child {
+  margin-left: 0;
+}
+
+.avatar-sm.placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3147,6 +3438,7 @@ header {
   font-weight: 700;
   color: #fff;
 }
+
 .avatar-sm.more {
   background: rgba(0, 0, 0, 0.5);
   border-color: rgba(255, 255, 255, 0.5);
@@ -3156,6 +3448,7 @@ header {
   display: inline-flex;
   gap: 6px;
 }
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -3168,6 +3461,7 @@ header {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
+
 .chip.subtle {
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.8);
@@ -3182,7 +3476,7 @@ header {
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   letter-spacing: -0.02em;
 }
 
@@ -3258,7 +3552,8 @@ header {
   width: 100%;
   padding: 4px 16px !important;
   min-height: 44px !important;
-  max-height: 200px; /* Maximum height when visible */
+  max-height: 200px;
+  /* Maximum height when visible */
   /* IMPORTANTE: Permitir arrastre desde toda el área */
   cursor: grab;
   -webkit-user-select: none;
@@ -3281,7 +3576,8 @@ header {
   margin-bottom: 0 !important;
   opacity: 0;
   pointer-events: none;
-  overflow: hidden; /* Hide overflow when collapsed */
+  overflow: hidden;
+  /* Hide overflow when collapsed */
 }
 
 .nav-wrapper:active {
@@ -3291,10 +3587,14 @@ header {
 /* Limitar ancho del nav en desktop para alinearlo con las modales */
 @media (min-width: 768px) {
   .nav-wrapper {
-    width: 100%; /* Mantener width 100% pero limitado por max-width */
-    max-width: 700px !important; /* Forzar el max-width */
-    margin-left: 0; /* Alinear a la izquierda */
-    margin-right: auto; /* Dejar espacio a la derecha */
+    width: 100%;
+    /* Mantener width 100% pero limitado por max-width */
+    max-width: 700px !important;
+    /* Forzar el max-width */
+    margin-left: 0;
+    /* Alinear a la izquierda */
+    margin-right: auto;
+    /* Dejar espacio a la derecha */
   }
 }
 
@@ -3305,19 +3605,25 @@ header {
   gap: 2px;
   justify-content: flex-start;
   padding: 2px 2px !important;
-  padding-right: 8px !important; /* Extra space to avoid clipping */
+  padding-right: 8px !important;
+  /* Extra space to avoid clipping */
   position: relative;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  scroll-behavior: smooth; /* Smooth scrolling */
-  flex: 1; /* Allow to shrink when buttons expand */
-  min-width: 0; /* Allow flex item to shrink below content size */
+  scroll-behavior: smooth;
+  /* Smooth scrolling */
+  flex: 1;
+  /* Allow to shrink when buttons expand */
+  min-width: 0;
+  /* Allow flex item to shrink below content size */
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
-  z-index: 1; /* Bajo z-index para no interferir con otros elementos */
-  min-height: 40px !important; /* Asegurar altura mínima para el input absoluto */
+  z-index: 1;
+  /* Bajo z-index para no interferir con otros elementos */
+  min-height: 40px !important;
+  /* Asegurar altura mínima para el input absoluto */
   /* Mask gradient to indicate more content */
   -webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
   mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
@@ -3383,7 +3689,8 @@ header {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto; /* Push to the right */
+  margin-left: auto;
+  /* Push to the right */
   z-index: 100;
   pointer-events: auto;
   /* Allow overflow for expanded buttons */
@@ -3487,6 +3794,7 @@ header {
     opacity: 0;
     transform: translateX(20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -3494,7 +3802,7 @@ header {
 }
 
 .nav-search-icon {
-  color: rgba(255, 255, 255,0.8) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
   flex-shrink: 0;
 }
 
@@ -3503,7 +3811,8 @@ header {
   border: none;
   background: rgba(0, 0, 0);
   color: #ffffff;
-  font-size: 16px; /* Mínimo 16px para evitar zoom en iOS */
+  font-size: 16px;
+  /* Mínimo 16px para evitar zoom en iOS */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   outline: none;
   min-width: 100%;
@@ -3612,32 +3921,41 @@ header {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  cursor: auto; /* Anular el cursor grab del padre */
-  user-select: text; /* Permitir selección de texto en el contenido */
-  padding-top: 0; /* Reducir espacio superior */
-  margin-top: -38px; /* Subir contenido */
+  cursor: auto;
+  /* Anular el cursor grab del padre */
+  user-select: text;
+  /* Permitir selección de texto en el contenido */
+  padding-top: 0;
+  /* Reducir espacio superior */
+  margin-top: -38px;
+  /* Subir contenido */
 }
+
 /* Feed en modo expandido */
 .feed-list {
   display: grid;
   gap: 10px;
 }
+
 .feed-post {
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(0, 0, 0, 0.25);
   border-radius: 10px;
   padding: 10px;
 }
+
 .feed-title {
   font:
     600 14px/1.2 system-ui,
     sans-serif;
   margin-bottom: 6px;
 }
+
 .feed-actions {
   display: flex;
   gap: 8px;
 }
+
 .feed-btn {
   padding: 6px 10px;
   border-radius: 8px;
@@ -3646,9 +3964,11 @@ header {
   color: #fff;
   cursor: pointer;
 }
+
 .feed-btn:hover {
   border-color: rgba(255, 255, 255, 0.42);
 }
+
 /* Country chart */
 .country-chart {
   width: 100%;
@@ -3660,15 +3980,18 @@ header {
   border: 1px solid rgba(255, 255, 255, 0.15);
   margin: 6px 0 8px;
 }
+
 .country-chart .seg {
   height: 100%;
 }
+
 .country-chart-pcts {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 10px;
   margin: 6px 0 8px;
 }
+
 .country-chart-pcts .pct-item {
   display: inline-flex;
   align-items: center;
@@ -3677,12 +4000,14 @@ header {
     12px/1.2 system-ui,
     sans-serif;
 }
+
 .country-chart-pcts .sw {
   width: 12px;
   height: 12px;
   border-radius: 999px;
   border: 1px solid #00000055;
 }
+
 .country-chart-pcts .pct {
   opacity: 0.9;
 }
@@ -3807,13 +4132,13 @@ header {
   -moz-appearance: none;
   appearance: none;
   /* Neumorfismo inset */
-  box-shadow: 
+  box-shadow:
     inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
     inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 }
 
 .dropdown-search input:focus {
-  box-shadow: 
+  box-shadow:
     inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
     inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
 }
@@ -3877,13 +4202,13 @@ header {
 
 .dropdown-option:hover {
   background: var(--neo-bg, #e0e5ec);
-  box-shadow: 
+  box-shadow:
     inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
     inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
 }
 
 .dropdown-option:active {
-  box-shadow: 
+  box-shadow:
     inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
     inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
 }
@@ -3939,7 +4264,7 @@ header {
   background: var(--neo-bg, #e0e5ec);
   border: none;
   border-radius: 16px;
-  box-shadow: 
+  box-shadow:
     8px 8px 24px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
     -8px -8px 24px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
   overflow: hidden !important;
@@ -3967,6 +4292,7 @@ header {
     opacity: 0;
     transform: translateX(-50%) scale(0.95) translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateX(-50%) scale(1) translateY(0);
@@ -3977,10 +4303,13 @@ header {
 .altitude-indicator {
   position: fixed;
   left: 10px;
-  left: calc(10px + env(safe-area-inset-left)); /* Safe area izquierda */
+  left: calc(10px + env(safe-area-inset-left));
+  /* Safe area izquierda */
   bottom: 70px;
-  bottom: calc(70px + env(safe-area-inset-bottom)); /* Safe area inferior */
-  z-index: 25000; /* Por encima del BottomSheet (20000) */
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  /* Safe area inferior */
+  z-index: 25000;
+  /* Por encima del BottomSheet (20000) */
   background: transparent;
   padding: 5px 8px;
   font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -3988,13 +4317,15 @@ header {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  pointer-events: auto; /* Asegurar que sea clickeable */
+  pointer-events: auto;
+  /* Asegurar que sea clickeable */
 }
 
 /* Contenedor de indicadores flotantes en sheet-content */
 /* Ahora vacío porque la navegación se movió al Header */
 .floating-indicators-content {
-  display: none; /* Ocultar - navegación ahora en Header */
+  display: none;
+  /* Ocultar - navegación ahora en Header */
 }
 
 /* Contenedor de indicadores flotantes (legacy) */
@@ -4016,7 +4347,8 @@ header {
   position: absolute;
   left: 0;
   right: 0;
-  top: -50px; /* Más arriba del nav */
+  top: -50px;
+  /* Más arriba del nav */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -4030,11 +4362,15 @@ header {
   padding: 5px 8px;
   font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   user-select: none;
-  pointer-events: auto; /* Pero sus hijos sí */
-  color: #9ca3af; /* Color gris */
+  pointer-events: auto;
+  /* Pero sus hijos sí */
+  color: #9ca3af;
+  /* Color gris */
   display: inline-flex;
-  align-items: center; /* centrar verticalmente con los chips */
-  height: 36px; /* igual que los nav-chip overrides */
+  align-items: center;
+  /* centrar verticalmente con los chips */
+  height: 36px;
+  /* igual que los nav-chip overrides */
 }
 
 /* Botón de pantalla completa flotante */
@@ -4096,14 +4432,17 @@ header {
   backdrop-filter: none;
   -webkit-transition: none;
   -moz-transition: none;
-  transition: none; /* sin efectos */
+  transition: none;
+  /* sin efectos */
 }
 
 .floating-indicators-content .nav-chip.settings-btn-floating:hover,
 .floating-indicators-content .nav-chip.locate-btn-floating:hover,
 .floating-indicators-content .nav-chip.fullscreen-btn-floating:hover {
-  background: rgba(255, 255, 255, 0.1); /* sin cambio */
-  color: rgba(255, 255, 255, 0.7); /* sin cambio */
+  background: rgba(255, 255, 255, 0.1);
+  /* sin cambio */
+  color: rgba(255, 255, 255, 0.7);
+  /* sin cambio */
 }
 
 .floating-indicators-content .nav-chip.settings-btn-floating svg,
@@ -4224,8 +4563,10 @@ header {
 
 .scale-bar {
   width: 60px;
-  height: 2px; /* Más delgada */
-  background: #9ca3af; /* Color gris */
+  height: 2px;
+  /* Más delgada */
+  background: #9ca3af;
+  /* Color gris */
   position: relative;
 }
 
@@ -4233,9 +4574,12 @@ header {
 .scale-bar::after {
   content: '';
   position: absolute;
-  width: 1.5px; /* Más delgados */
-  height: 6px; /* Más cortos */
-  background: #9ca3af; /* Color gris */
+  width: 1.5px;
+  /* Más delgados */
+  height: 6px;
+  /* Más cortos */
+  background: #9ca3af;
+  /* Color gris */
   bottom: 0;
 }
 
@@ -4252,7 +4596,8 @@ header {
   top: -18px;
   left: 50%;
   transform: translateX(-50%);
-  color: #9ca3af; /* Color gris */
+  color: #9ca3af;
+  /* Color gris */
   font-size: 11px;
   font-weight: 400;
   margin: 0;
@@ -4264,18 +4609,21 @@ header {
 .floating-hint-row {
   display: flex;
   align-items: center;
-  justify-content: center; /* centrar horizontal */
+  justify-content: center;
+  /* centrar horizontal */
   gap: 8px;
   width: 100%;
-  margin-top: 0; /* Reducido - navegación ahora en Header */
-  pointer-events: auto; /* permitir click */
+  margin-top: 0;
+  /* Reducido - navegación ahora en Header */
+  pointer-events: auto;
+  /* permitir click */
   /* Chip-like background for readability */
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 6px 10px;
   color: rgba(255, 255, 255, 0.85);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   cursor: pointer;
 }
@@ -4293,9 +4641,17 @@ header {
 }
 
 @keyframes arrowFloat {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
-  100% { transform: translateY(0); }
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-2px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 /* Sección de votación */
@@ -4486,9 +4842,10 @@ header {
   /* Scroll snap para que cada encuesta se pegue arriba */
   scroll-snap-type: y proximity;
   scroll-behavior: smooth;
-  
+
   flex: 1;
-  overflow-y: auto; /* Auto en lugar de scroll para mejorar compatibilidad */
+  overflow-y: auto;
+  /* Auto en lugar de scroll para mejorar compatibilidad */
   overflow-x: hidden;
   /* Scroll suave en móvil - CRÍTICO para iOS */
   -webkit-overflow-scrolling: touch;
@@ -4497,7 +4854,8 @@ header {
   position: relative;
   /* Altura calculada dinámicamente */
   /*max-height: calc(100vh - 120px) !important;*/
-  max-height: calc(var(--vh, 1vh) * 100 - 120px) !important;  /* Fix teclado móvil */
+  max-height: calc(var(--vh, 1vh) * 100 - 120px) !important;
+  /* Fix teclado móvil */
   /* Padding para el contenido */
   padding: 0 0 20px 0;
   pointer-events: auto;
@@ -4531,6 +4889,7 @@ header {
     display: none;
     width: 0;
   }
+
   .main-scroll-container {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -4625,6 +4984,7 @@ header {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -4712,7 +5072,7 @@ header {
   box-shadow: none !important;
   outline: none !important;
   border: none !important;
-  background: rgba(255,255,255,0.08) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 .vote-card:focus-visible {
@@ -4733,8 +5093,10 @@ header {
   max-width: 100%;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE/Edge */
 }
 
 .pagination-dots.many-pages {
@@ -4742,7 +5104,8 @@ header {
 }
 
 .pagination-dots::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;
+  /* Chrome, Safari, Opera */
 }
 
 .pagination-dot {
@@ -4842,14 +5205,17 @@ header {
     transform: translateX(0);
     opacity: 1;
   }
+
   50% {
     transform: translateX(-100%);
     opacity: 0;
   }
+
   51% {
     transform: translateX(100%);
     opacity: 0;
   }
+
   100% {
     transform: translateX(0);
     opacity: 1;
@@ -4861,14 +5227,17 @@ header {
     transform: translateX(0);
     opacity: 1;
   }
+
   50% {
     transform: translateX(100%);
     opacity: 0;
   }
+
   51% {
     transform: translateX(-100%);
     opacity: 0;
   }
+
   100% {
     transform: translateX(0);
     opacity: 1;
@@ -5158,6 +5527,7 @@ header {
     opacity: 0;
     transform: translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -5224,7 +5594,7 @@ header {
   align-items: center;
   position: relative;
   z-index: 1;
-  background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 100%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, transparent 100%);
   pointer-events: none;
 }
 

@@ -681,25 +681,22 @@
 <div
   class="h-[100dvh] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950 via-slate-950 to-black text-slate-100 flex flex-col overflow-hidden font-sans selection:bg-indigo-500/30 lg:pl-20"
 >
-  <!-- Header simple con logo y TopTabs - solo en vista feed -->
-  {#if currentView === "feed"}
-    <header
-      class="top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md"
-      style="position: sticky;"
+  <!-- Header simple con logo y TopTabs -->
+  <header
+    class="z-50 bg-black/80 backdrop-blur-md flex-shrink-0 border-b border-white/5"
+  >
+    <div
+      class="feed-container-width mx-auto flex items-center justify-between px-4 h-[4rem]"
     >
-      <div
-        class="feed-container-width mx-auto flex items-center justify-between px-4 h-[4rem]"
-      >
-        <img src="/logo.png" alt="VouTop" class="h-[2.5rem] w-auto" />
-        <TopTabs
-          bind:active={activeTab}
-          bind:timeFilter
-          on:change={handleTabChange}
-          on:timeFilterChange={handleTimeFilterChange}
-        />
-      </div>
-    </header>
-  {/if}
+      <img src="/logo.png" alt="VouTop" class="h-[2.5rem] w-auto" />
+      <TopTabs
+        bind:active={activeTab}
+        bind:timeFilter
+        on:change={handleTabChange}
+        on:timeFilterChange={handleTimeFilterChange}
+      />
+    </div>
+  </header>
 
   <!-- Main Content -->
   <main class="flex-1 overflow-hidden relative">
