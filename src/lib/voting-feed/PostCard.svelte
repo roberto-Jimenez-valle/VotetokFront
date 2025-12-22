@@ -633,6 +633,8 @@
                   onToggleExpand={() => {
                     setExpanded(null, null);
                     setAdding(null);
+                    // Switch to Reels mode when clicking on expanded option
+                    switchToReels(post.id);
                   }}
                   onEditConfirm={(txt) => {
                     onAddCollab(post.id, txt);
