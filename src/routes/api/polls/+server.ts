@@ -367,9 +367,19 @@ export const GET: RequestHandler = async ({ url }) => {
       pollOptions = poll.originalPoll.options;
     }
     
+    // Find correct option hashId for quiz type
+    let correctOptionHashId: string | null = null;
+    if (poll.correctOptionId) {
+      const correctOpt = pollOptions.find((o: any) => o.id === poll.correctOptionId);
+      if (correctOpt) {
+        correctOptionHashId = encodeOptionId(correctOpt.id);
+      }
+    }
+    
     return {
       ...poll,
       hashId: encodePollId(poll.id), // ID hasheado para URLs públicas
+      correctOptionHashId, // Hash ID of correct option for quiz type
       user: poll.user ? {
         ...poll.user,
         hashId: encodeUserId(poll.user.id),

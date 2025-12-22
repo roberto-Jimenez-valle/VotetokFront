@@ -1,0 +1,817 @@
+<script lang="ts">
+  import {
+    BarChart2,
+    Check,
+    X,
+    Heart,
+    MoreHorizontal,
+    MessageCircle,
+    Repeat2,
+    Bookmark,
+    Share2,
+    Plus,
+    Send,
+    RotateCcw,
+    Maximize,
+    Trophy,
+    ListOrdered,
+    Flame,
+    Users,
+    ArrowLeft,
+  } from "lucide-svelte";
+  import type {
+    Post,
+    PostType,
+    UserVotes,
+    RankingDrafts,
+    SwipeIndices,
+    ViewMode,
+  } from "./types";
+  import { POST_CONFIGS } from "./types";
+  import OptionCard from "./OptionCard.svelte";
+
+  interface Props {
+    post: Post;
+    userVotes: UserVotes;
+    rankingDrafts: RankingDrafts;
+    swipeIndices: SwipeIndices;
+    expandedPostId: string | null;
+    expandedOptionId: string | null;
+    addingPostId: string | null;
+    onVote: (postId: string, value: string | string[]) => void;
+    onToggleRank: (postId: string, optionId: string) => void;
+    onPopRank: (postId: string) => void;
+    onSwipe: (postId: string, direction: "left" | "right") => void;
+    onAddCollab: (postId: string, text: string) => void;
+    setExpanded: (postId: string | null, optionId: string | null) => void;
+    setAdding: (postId: string | null) => void;
+    switchToReels: (postId: string) => void;
+    viewMode?: ViewMode;
+  }
+
+  let {
+    post,
+    userVotes,
+    rankingDrafts,
+    swipeIndices,
+    expandedPostId,
+    expandedOptionId,
+    addingPostId,
+    onVote,
+    onToggleRank,
+    onPopRank,
+    onSwipe,
+    onAddCollab,
+    setExpanded,
+    setAdding,
+    switchToReels,
+    viewMode = "feed",
+  }: Props = $props();
+
+  let swipeAnim = $state<"left" | "right" | null>(null);
+  let expandedScrollRef: HTMLElement | null = $state(null);
+  let currentExpandedIndex = $state(0);
+
+  // Scroll to the clicked option when expanded, or to last option when adding
+  $effect(() => {
+    if (expandedPostId === post.id && expandedOptionId && expandedScrollRef) {
+      const optionIndex = sortedOptions.findIndex(
+        (o) => o.id === expandedOptionId,
+      );
+      if (optionIndex >= 0) {
+        currentExpandedIndex = optionIndex;
+        requestAnimationFrame(() => {
+          if (expandedScrollRef) {
+            expandedScrollRef.scrollTo({
+              left: optionIndex * expandedScrollRef.offsetWidth,
+              behavior: "instant",
+            });
+          }
+        });
+      }
+    }
+    // When adding, scroll to the last option (the new one)
+    if (isAdding && expandedScrollRef) {
+      const lastIndex = displayOptions.length - 1;
+      currentExpandedIndex = lastIndex;
+      requestAnimationFrame(() => {
+        if (expandedScrollRef) {
+          expandedScrollRef.scrollTo({
+            left: lastIndex * expandedScrollRef.offsetWidth,
+            behavior: "instant",
+          });
+        }
+      });
+    }
+  });
+
+  function handleExpandedScroll(e: Event) {
+    const target = e.target as HTMLElement;
+    if (target) {
+      const index = Math.round(target.scrollLeft / target.offsetWidth);
+      currentExpandedIndex = index;
+    }
+  }
+
+  function scrollToExpandedOption(index: number) {
+    if (expandedScrollRef) {
+      expandedScrollRef.scrollTo({
+        left: index * expandedScrollRef.offsetWidth,
+        behavior: "smooth",
+      });
+    }
+  }
+
+  const config = $derived(POST_CONFIGS[post.type] || POST_CONFIGS.standard);
+  const hasVoted = $derived(!!userVotes[post.id]);
+  const rankingDraft = $derived(rankingDrafts[post.id] || []);
+  const isRankingComplete = $derived(
+    post.type === "tierlist" &&
+      !hasVoted &&
+      rankingDraft.length === post.options.length,
+  );
+  const swipeIndex = $derived(swipeIndices[post.id] || 0);
+  const isAdding = $derived(addingPostId === post.id);
+  const isReels = $derived(viewMode === "reels");
+
+  const maxItemsGrid = $derived(isReels ? 6 : 4);
+  const containerHeight = $derived(isReels ? "flex-1 min-h-0" : "h-72");
+
+  function handleSwipeTrigger(dir: "left" | "right") {
+    if (swipeAnim) return;
+    swipeAnim = dir;
+    setTimeout(() => {
+      onSwipe(post.id, dir);
+      swipeAnim = null;
+    }, 300);
+  }
+
+  const finalRanking = $derived(
+    hasVoted ? (userVotes[post.id] as string[]) : rankingDraft,
+  );
+
+  const displayOptions = $derived.by(() => {
+    let options = [...post.options];
+
+    if (post.type === "tierlist") {
+      if (!hasVoted) {
+        if (isRankingComplete) {
+          options.sort((a, b) => {
+            const idxA = rankingDraft.indexOf(a.id);
+            const idxB = rankingDraft.indexOf(b.id);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return 0;
+          });
+        } else {
+          options = options.filter((o) => !rankingDraft.includes(o.id));
+        }
+      } else {
+        options.sort((a, b) => {
+          const idxA = finalRanking.indexOf(a.id);
+          const idxB = finalRanking.indexOf(b.id);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return 0;
+        });
+      }
+    }
+
+    if (isAdding && post.type !== "swipe") {
+      options.push({
+        id: "temp-new-option",
+        title: "",
+        votes: 0,
+        friends: [],
+        type: "text",
+        colorFrom: "from-slate-700",
+        colorTo: "to-slate-800",
+        bgBar: "bg-slate-500",
+      });
+    }
+    return options;
+  });
+
+  const sortedOptions = $derived.by(() => {
+    let sorted = [...post.options];
+    if (post.type === "tierlist" && finalRanking && finalRanking.length > 0) {
+      sorted.sort(
+        (a, b) => finalRanking.indexOf(a.id) - finalRanking.indexOf(b.id),
+      );
+    }
+    return sorted;
+  });
+
+  function getIconComponent(iconName: string) {
+    const icons: Record<string, any> = {
+      BarChart2,
+      Trophy,
+      ListOrdered,
+      Flame,
+      Users,
+    };
+    return icons[iconName] || BarChart2;
+  }
+
+  function getRankForOption(optionId: string): number | null {
+    if (post.type !== "tierlist") return null;
+    if (hasVoted) {
+      const r = (finalRanking as string[]).indexOf(optionId);
+      return r !== -1 ? r + 1 : null;
+    } else if (isRankingComplete) {
+      const r = rankingDraft.indexOf(optionId);
+      return r !== -1 ? r + 1 : null;
+    }
+    return null;
+  }
+
+  function isOptionSelected(optionId: string): boolean {
+    const vote = userVotes[post.id];
+    if (Array.isArray(vote)) {
+      return vote.includes(optionId);
+    }
+    return vote === optionId;
+  }
+
+  function handleOptionVote(optionId: string) {
+    if (post.type === "tierlist") {
+      onToggleRank(post.id, optionId);
+    } else {
+      onVote(post.id, optionId);
+    }
+  }
+</script>
+
+<article
+  class="relative {isReels
+    ? 'flex-1 h-full flex flex-col overflow-hidden'
+    : 'mb-6'} w-full"
+>
+  {#if !isReels}
+    <div
+      class="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none opacity-50"
+    ></div>
+  {/if}
+
+  <div
+    class="relative {isReels ? 'flex-1 flex flex-col min-h-0' : 'pb-4 pl-0.5'}"
+  >
+    <!-- Header -->
+    {#if !isReels}
+      {@const Icon = getIconComponent(config.icon)}
+      <div class="px-4 pt-3 pb-1">
+        <div class="flex justify-between items-start">
+          <div class="flex gap-3">
+            <div class="relative group cursor-pointer mt-1">
+              <div
+                class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347]"
+              >
+                <img
+                  src={post.avatar}
+                  alt={post.author}
+                  class="w-full h-full rounded-full bg-slate-800 object-cover border-2 border-slate-900"
+                />
+              </div>
+            </div>
+            <div class="flex flex-col">
+              <div class="flex items-center gap-2">
+                <h3
+                  class="font-bold text-white text-sm tracking-tight hover:underline cursor-pointer"
+                >
+                  {post.author}
+                </h3>
+                <span class="text-slate-500 text-[0.7rem]">• {post.time}</span>
+                <div
+                  class="inline-flex items-center gap-[0.25rem] px-[0.5rem] py-[0.15rem] rounded-full {config.badge}"
+                >
+                  <Icon size="0.65rem" strokeWidth={2.5} />
+                  <span
+                    class="text-[0.65rem] font-black uppercase tracking-widest"
+                    >{config.label}</span
+                  >
+                </div>
+              </div>
+              <p class="text-white text-sm font-medium leading-snug mt-1">
+                {post.question}
+              </p>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button
+              onclick={() => switchToReels(post.id)}
+              class="text-slate-500 hover:text-indigo-400 p-[0.3rem] rounded-full transition-colors"
+              title="Ver en modo Top"
+            >
+              <Maximize size="1.2rem" />
+            </button>
+            <button
+              class="text-slate-500 hover:text-white p-[0.3rem] hover:bg-white/5 rounded-full transition-colors"
+            >
+              <MoreHorizontal size="1.2rem" />
+            </button>
+          </div>
+        </div>
+      </div>
+    {:else}
+      {@const Icon = getIconComponent(config.icon)}
+      <div class="px-6 pt-4 flex flex-col gap-4">
+        <div class="flex items-center gap-4">
+          <button
+            onclick={() => switchToReels("")}
+            class="p-[0.6rem] bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white transition-colors"
+          >
+            <ArrowLeft size="1.4rem" />
+          </button>
+          <h3
+            class="text-xl font-black text-white drop-shadow-md leading-tight flex-1"
+          >
+            {post.question}
+          </h3>
+          <button
+            class="p-[0.6rem] bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white transition-colors"
+          >
+            <MoreHorizontal size="1.4rem" />
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <div
+            class="inline-flex items-center gap-[0.4rem] px-[0.7rem] py-[0.25rem] rounded-full {config.badge}"
+          >
+            <Icon size="0.8rem" strokeWidth={2.5} />
+            <span class="text-[0.7rem] font-black uppercase tracking-widest"
+              >{config.label}</span
+            >
+          </div>
+          <div class="flex items-center gap-2">
+            <img
+              src={post.avatar}
+              alt={post.author}
+              class="w-6 h-6 rounded-full bg-slate-800"
+            />
+            <span class="text-white/80 text-xs font-bold">{post.author}</span>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <div
+      class="w-full relative mt-1 {isReels
+        ? 'flex-1 flex flex-col min-h-0'
+        : ''}"
+    >
+      <!-- Swipe Mode -->
+      {#if post.type === "swipe" && !hasVoted}
+        <div
+          class="{containerHeight} relative w-full flex justify-center items-center overflow-hidden px-4 py-2"
+        >
+          {#if post.options[swipeIndex]}
+            <div
+              class="absolute inset-0 z-0 w-full h-full bg-slate-800 rounded-2xl shadow-xl overflow-hidden transform scale-95 opacity-50 translate-y-2"
+            >
+              {#if post.options[swipeIndex + 1]}
+                <img
+                  src={post.options[swipeIndex + 1].image}
+                  class="absolute inset-0 w-full h-full object-cover grayscale"
+                  alt=""
+                />
+              {/if}
+            </div>
+
+            <div
+              class="absolute inset-0 z-10 w-full h-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden {swipeAnim ===
+              'left'
+                ? 'transition-all duration-300 -translate-x-[150%] -rotate-12 opacity-0'
+                : swipeAnim === 'right'
+                  ? 'transition-all duration-300 translate-x-[150%] rotate-12 opacity-0'
+                  : 'transition-all duration-300'}"
+            >
+              <img
+                src={post.options[swipeIndex].image ||
+                  `https://picsum.photos/seed/${post.options[swipeIndex].id}/600/800`}
+                class="absolute inset-0 w-full h-full object-cover"
+                alt=""
+              />
+              <div
+                class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"
+              ></div>
+              <div class="absolute bottom-20 left-6 right-6 z-10">
+                <h3
+                  class="text-3xl font-black text-white drop-shadow-lg leading-none"
+                >
+                  {post.options[swipeIndex].title}
+                </h3>
+                <p
+                  class="text-xs font-bold text-white/60 mt-2 uppercase tracking-widest"
+                >
+                  {swipeIndex + 1} de {post.options.length}
+                </p>
+              </div>
+              <div
+                class="absolute bottom-5 w-full flex justify-center gap-10 px-8 z-30"
+              >
+                <button
+                  onclick={() => handleSwipeTrigger("left")}
+                  class="p-4 bg-slate-950/50 hover:bg-red-500/90 text-red-500 hover:text-white rounded-full backdrop-blur-md border border-white/10 transition-all active:scale-95"
+                >
+                  <X size={28} />
+                </button>
+                <button
+                  onclick={() => handleSwipeTrigger("right")}
+                  class="p-4 bg-slate-950/50 hover:text-white rounded-full backdrop-blur-md border border-white/10 transition-all active:scale-95"
+                  style="color: #9ec264;"
+                >
+                  <Heart size={28} fill="currentColor" />
+                </button>
+              </div>
+            </div>
+          {:else}
+            <div class="text-white text-center">
+              <Check size={40} class="mx-auto mb-2 text-emerald-500" />
+              <p class="font-bold">¡Completado!</p>
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <!-- GRID PRINCIPAL -->
+        {@const count = displayOptions.length}
+        {@const maxVisible = isReels ? 6 : 4}
+        {@const useCarousel = count > maxVisible}
+        <div
+          class="w-full relative z-10 {isReels
+            ? `flex-1 flex flex-col ${post.type === 'swipe' ? 'pt-12' : 'pt-2'} px-4 pb-6 min-h-0`
+            : 'pl-5 pr-5 pt-1'}"
+        >
+          <div
+            class="relative w-full {isReels
+              ? 'flex-1 py-[5px]'
+              : `${containerHeight} py-[5px]`} {useCarousel
+              ? 'overflow-x-auto scrollbar-hide'
+              : ''}"
+          >
+            {#if useCarousel}
+              {#if post.type === "tierlist"}
+                <div class="flex gap-2 h-full" style="min-width: max-content;">
+                  {#each displayOptions as opt, idx (opt.id)}
+                    {@const rank = getRankForOption(opt.id)}
+                    <div
+                      style="width: {isReels
+                        ? '42vw'
+                        : '10rem'}; flex-shrink: 0;"
+                      class="relative overflow-hidden rounded-xl h-full"
+                    >
+                      <OptionCard
+                        option={opt}
+                        postTotalVotes={post.totalVotes}
+                        {hasVoted}
+                        isSelected={hasVoted && isOptionSelected(opt.id)}
+                        isCorrectOption={false}
+                        isExpanded={false}
+                        isEditing={opt.id === "temp-new-option"}
+                        isHidden={expandedPostId === post.id &&
+                          expandedOptionId === opt.id}
+                        onToggleExpand={() => setExpanded(post.id, opt.id)}
+                        onEditConfirm={(txt) => onAddCollab(post.id, txt)}
+                        onVote={handleOptionVote}
+                        {rank}
+                        nextRank={rankingDraft.length + 1}
+                        totalOptions={post.options.length}
+                        postType={post.type}
+                        {viewMode}
+                      />
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                {@const itemsPerPage = isReels ? 6 : 4}
+                {@const totalPages = Math.ceil(count / itemsPerPage)}
+                <div
+                  class="flex gap-3 h-full snap-x snap-mandatory overflow-x-auto scrollbar-hide pl-1"
+                  style="scroll-snap-type: x mandatory; scroll-padding-left: 4px;"
+                >
+                  {#each Array(totalPages) as _, pageIdx}
+                    {@const pageOptions = displayOptions.slice(
+                      pageIdx * itemsPerPage,
+                      (pageIdx + 1) * itemsPerPage,
+                    )}
+                    {@const pageGridRows = isReels
+                      ? pageOptions.length <= 2
+                        ? 1
+                        : pageOptions.length <= 4
+                          ? 2
+                          : 3
+                      : 2}
+                    {@const isLastPage = pageIdx === totalPages - 1}
+                    {@const rowHeight = "1fr"}
+                    <div
+                      class="flex-shrink-0 h-full snap-start grid gap-2"
+                      style="width: {isLastPage
+                        ? '100%'
+                        : '92%'}; grid-template-columns: 1fr 1fr; grid-template-rows: repeat({pageGridRows}, {rowHeight});"
+                    >
+                      {#each pageOptions as opt, idx (opt.id)}
+                        {@const rank = getRankForOption(opt.id)}
+                        {@const pageCount = pageOptions.length}
+                        {@const itemStyle = (() => {
+                          if (pageCount === 1)
+                            return "grid-column: 1 / -1; grid-row: 1 / -1;";
+                          if (pageCount === 2) return "grid-row: 1 / -1;";
+                          if (pageCount === 3 && idx === 0)
+                            return "grid-column: 1 / -1;";
+                          return "";
+                        })()}
+                        <div
+                          style={itemStyle}
+                          class="relative overflow-hidden rounded-xl h-full"
+                        >
+                          <OptionCard
+                            option={opt}
+                            postTotalVotes={post.totalVotes}
+                            {hasVoted}
+                            isSelected={hasVoted && isOptionSelected(opt.id)}
+                            isCorrectOption={post.type === "quiz" &&
+                              opt.id === post.correctOptionId}
+                            isExpanded={false}
+                            isEditing={opt.id === "temp-new-option"}
+                            isHidden={expandedPostId === post.id &&
+                              expandedOptionId === opt.id}
+                            onToggleExpand={() => setExpanded(post.id, opt.id)}
+                            onEditConfirm={(txt) => onAddCollab(post.id, txt)}
+                            onVote={handleOptionVote}
+                            {rank}
+                            nextRank={rankingDraft.length + 1}
+                            totalOptions={post.options.length}
+                            postType={post.type}
+                            {viewMode}
+                          />
+                        </div>
+                      {/each}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            {:else}
+              {@const gridRows = isReels
+                ? count <= 2
+                  ? 1
+                  : count <= 4
+                    ? 2
+                    : 3
+                : 2}
+              {@const rowHeight = "1fr"}
+              <div
+                class="grid gap-2 h-full"
+                style="grid-template-columns: 1fr 1fr; grid-template-rows: repeat({gridRows}, {rowHeight});"
+              >
+                {#each displayOptions as opt, idx (opt.id)}
+                  {@const rank = getRankForOption(opt.id)}
+                  {@const itemStyle = (() => {
+                    if (count === 1)
+                      return "grid-column: 1 / -1; grid-row: 1 / -1;";
+                    if (count === 2) return "grid-row: 1 / -1;";
+                    if (count === 3 && idx === 0) return "grid-column: 1 / -1;";
+                    if (count === 5 && idx === 4) return "grid-column: 1 / -1;";
+                    return "";
+                  })()}
+                  <div
+                    style={itemStyle}
+                    class="relative overflow-hidden rounded-xl transition-all duration-300 group h-full"
+                  >
+                    <OptionCard
+                      option={opt}
+                      postTotalVotes={post.totalVotes}
+                      {hasVoted}
+                      isSelected={hasVoted && isOptionSelected(opt.id)}
+                      isCorrectOption={post.type === "quiz" &&
+                        opt.id === post.correctOptionId}
+                      isExpanded={false}
+                      isEditing={opt.id === "temp-new-option"}
+                      isHidden={expandedPostId === post.id &&
+                        expandedOptionId === opt.id}
+                      onToggleExpand={() => setExpanded(post.id, opt.id)}
+                      onEditConfirm={(txt) => onAddCollab(post.id, txt)}
+                      onVote={handleOptionVote}
+                      {rank}
+                      nextRank={rankingDraft.length + 1}
+                      totalOptions={post.options.length}
+                      postType={post.type}
+                      {viewMode}
+                    />
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
+      {#if expandedPostId === post.id || isAdding}
+        {@const expandedOptions = isAdding ? displayOptions : sortedOptions}
+        <div
+          class="absolute inset-0 z-30 bg-slate-950/90 backdrop-blur-xl rounded-xl overflow-hidden animate-in fade-in duration-300 ring-1 ring-white/10 shadow-2xl"
+        >
+          <div
+            class="flex w-full h-full overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+            bind:this={expandedScrollRef}
+            onscroll={handleExpandedScroll}
+          >
+            {#each expandedOptions as opt, idx}
+              {@const rank = getRankForOption(opt.id)}
+              <div class="w-full h-full flex-shrink-0 snap-center relative">
+                <OptionCard
+                  option={opt}
+                  postTotalVotes={post.totalVotes}
+                  {hasVoted}
+                  isSelected={hasVoted && isOptionSelected(opt.id)}
+                  isCorrectOption={post.type === "quiz" &&
+                    opt.id === post.correctOptionId}
+                  isExpanded={true}
+                  isEditing={opt.id === "temp-new-option"}
+                  onToggleExpand={() => {
+                    setExpanded(null, null);
+                    setAdding(null);
+                  }}
+                  onEditConfirm={(txt) => {
+                    onAddCollab(post.id, txt);
+                    setAdding(null);
+                  }}
+                  onVote={(optId) => {
+                    handleOptionVote(optId);
+                    setExpanded(null, null);
+                    setAdding(null);
+                  }}
+                  postType={post.type}
+                  totalOptions={post.options.length}
+                  {rank}
+                  {viewMode}
+                />
+              </div>
+            {/each}
+          </div>
+
+          <!-- Pagination Dots for Expanded View -->
+          {#if expandedOptions.length > 1}
+            <div
+              class="absolute bottom-6 left-0 right-0 flex justify-center gap-1.5 z-40 pointer-events-none"
+            >
+              {#each expandedOptions as _, i}
+                <div
+                  class="w-1.5 h-1.5 rounded-full transition-all duration-300 {i ===
+                  currentExpandedIndex
+                    ? 'bg-white w-3'
+                    : 'bg-white/30'}"
+                ></div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Tierlist Ranking Tray (Docked) -->
+    {#if post.type === "tierlist" && !hasVoted && rankingDraft.length > 0}
+      <div
+        class="relative z-20 px-4 py-3 bg-slate-900/40 border-y border-white/5 backdrop-blur-md flex flex-col gap-3 animate-in slide-in-from-bottom-2 duration-300"
+      >
+        <!-- Selected Options Tray -->
+        <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {#each rankingDraft as optionId, idx}
+            {@const opt = post.options.find((o) => o.id === optionId)}
+            {#if opt}
+              <button
+                onclick={() => onToggleRank(post.id, optionId)}
+                class="relative flex-shrink-0 animate-in zoom-in-75 duration-200 group/tray"
+                title="Quitar de la lista"
+              >
+                <div
+                  class="w-12 h-12 rounded-lg overflow-hidden border border-indigo-500/30 shadow-lg bg-slate-900 group-hover/tray:border-red-500/50 transition-colors"
+                >
+                  {#if opt.image}
+                    <img
+                      src={opt.image}
+                      class="w-full h-full object-cover group-hover/tray:opacity-50 transition-opacity"
+                      alt=""
+                    />
+                  {:else}
+                    <div
+                      class="w-full h-full bg-gradient-to-br {opt.colorFrom} {opt.colorTo} flex items-center justify-center p-1 group-hover/tray:opacity-50 transition-opacity"
+                    >
+                      <span
+                        class="text-white text-[8px] font-black text-center leading-tight uppercase"
+                        >{opt.title.substring(0, 8)}</span
+                      >
+                    </div>
+                  {/if}
+                  <div
+                    class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/tray:opacity-100 transition-opacity"
+                  >
+                    <X size={16} class="text-white drop-shadow-md" />
+                  </div>
+                </div>
+                <div
+                  class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center text-[9px] font-black text-white border border-slate-950 shadow-md group-hover/tray:bg-red-600 transition-colors"
+                >
+                  {idx + 1}
+                </div>
+              </button>
+            {/if}
+          {/each}
+        </div>
+
+        <div class="flex items-center justify-center gap-2">
+          <button
+            onclick={() => onPopRank(post.id)}
+            class="bg-white/5 hover:bg-white/10 text-white font-bold px-[0.7rem] py-[0.4rem] rounded-lg border border-white/10 flex items-center gap-[0.4rem] text-[0.7rem] transition-all active:scale-95"
+          >
+            <RotateCcw size="0.9rem" /> Deshacer
+          </button>
+          {#if isRankingComplete}
+            <button
+              onclick={() => onVote(post.id, [...rankingDraft])}
+              class="flex-1 bg-white text-indigo-950 font-black px-[1rem] py-[0.4rem] rounded-lg shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-[0.5rem] text-[0.7rem]"
+            >
+              CONFIRMAR <Check size="0.9rem" strokeWidth={3} />
+            </button>
+          {:else}
+            <div
+              class="flex-1 bg-white/5 border border-white/5 rounded-lg px-[0.7rem] py-[0.4rem] flex items-center justify-center"
+            >
+              <span
+                class="text-[0.65rem] font-bold text-slate-500 uppercase tracking-widest"
+              >
+                Faltan {post.options.length - rankingDraft.length}
+              </span>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
+    <!-- Footer Icons -->
+    <div
+      class="mt-auto shrink-0 pt-4 {isReels
+        ? 'pb-14'
+        : 'pb-4'} flex items-center justify-between {isReels ? 'px-6' : 'px-4'}"
+    >
+      <div class="flex items-center gap-3">
+        <div
+          class="flex items-center gap-[0.4rem] text-slate-400 bg-slate-900/50 px-[0.7rem] py-[0.3rem] rounded-full border border-white/5 text-[0.75rem] font-bold"
+        >
+          <BarChart2 size="0.75rem" class={config.color} />
+          <span>{post.totalVotes.toLocaleString()}</span>
+        </div>
+      </div>
+      <div
+        class="flex items-center {isReels ? 'gap-[0.8rem]' : 'gap-[1.2rem]'}"
+      >
+        <div
+          class="flex items-center {isReels ? 'gap-[1rem]' : 'gap-[1.5rem]'}"
+        >
+          <button
+            class="flex items-center gap-[0.4rem] text-slate-400 hover:text-blue-400 transition-colors group"
+          >
+            <MessageCircle
+              size="1.1rem"
+              class="group-hover:scale-110 transition-transform"
+            />
+            <span class="text-[0.7rem] font-bold">{post.comments || 0}</span>
+          </button>
+          <button
+            class="flex items-center gap-[0.4rem] text-slate-400 hover:text-emerald-400 transition-colors group"
+          >
+            <Repeat2
+              size="1.1rem"
+              class="group-hover:scale-110 transition-transform"
+            />
+            <span class="text-[0.7rem] font-bold">{post.reposts || 0}</span>
+          </button>
+          <button
+            class="text-slate-400 hover:text-yellow-400 transition-colors hover:scale-110 transform"
+          >
+            <Bookmark size="1.1rem" />
+          </button>
+          <button
+            class="text-slate-400 hover:text-indigo-400 transition-colors hover:scale-110 transform"
+          >
+            <Share2 size="1.1rem" />
+          </button>
+        </div>
+        <div class="w-px h-[1rem] bg-white/10"></div>
+        <div>
+          <button
+            onclick={() => setAdding(post.id)}
+            class="flex items-center justify-center w-[2.2rem] h-[2.2rem] rounded-full text-black transition-all duration-300 shadow-lg group hover:scale-110"
+            style="background-color: #9ec264;"
+          >
+            <Plus
+              size="1.1rem"
+              strokeWidth={3}
+              class="group-hover:rotate-90 transition-transform duration-300"
+            />
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>

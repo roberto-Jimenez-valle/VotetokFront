@@ -38,16 +38,17 @@ model User {
 }
 
 model Poll {
-  id             Int               @id @default(autoincrement())
-  userId         Int               @map("user_id")
-  title          String
-  description    String?
-  category       String?
-  imageUrl       String?           @map("image_url")
-  type           String            @default("poll")
-  status         String            @default("active")
-  isRell         Boolean           @default(false) @map("is_rell")
-  originalPollId Int?              @map("original_poll_id")
+  id              Int               @id @default(autoincrement())
+  userId          Int               @map("user_id")
+  title           String
+  description     String?
+  category        String?
+  imageUrl        String?           @map("image_url")
+  type            String            @default("standard")
+  status          String            @default("active")
+  isRell          Boolean           @default(false) @map("is_rell")
+  originalPollId  Int?              @map("original_poll_id")
+  correctOptionId Int?              @map("correct_option_id")
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
   closedAt       DateTime?         @map("closed_at")

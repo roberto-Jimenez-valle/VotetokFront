@@ -48,9 +48,16 @@
   import CommentsModal from "./CommentsModal.svelte";
   import Portal from "./Portal.svelte";
   import StatsBottomModal from "./StatsBottomModal.svelte";
-  import { apiPost, apiDelete } from '$lib/api/client';
-  import { openFullscreenIframe as openFullscreenIframeStore, preloadIframe, clearPreloadIframe } from '$lib/stores/globalState';
-  import { markImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
+  import { apiPost, apiDelete } from "$lib/api/client";
+  import {
+    openFullscreenIframe as openFullscreenIframeStore,
+    preloadIframe,
+    clearPreloadIframe,
+  } from "$lib/stores/globalState";
+  import {
+    markImageFailed,
+    shouldRetryImage,
+  } from "$lib/stores/failed-images-store";
 
   // --- INTERFACES ---
   interface PollOption {
@@ -170,99 +177,145 @@
   let totalVotes = $derived(options.reduce((a, b) => a + (b.votes || 0), 0));
   let maxVotes = $derived(Math.max(...options.map((o) => o.votes || 0), 1)); // Evitar div por 0
   let activeIndex = $derived(options.findIndex((o) => o.id === activeOptionId));
-  
+
   // Estado para rastrear thumbnails fallidos por opción (objeto reactivo)
   let failedThumbnails = $state<Record<string, boolean>>({});
-  
+
   // Función para marcar thumbnail como fallido
   function markThumbnailFailed(optionId: string, imageUrl: string) {
     failedThumbnails = { ...failedThumbnails, [optionId]: true };
     markImageFailed(imageUrl);
-    console.log('[PollMaximizedView] Thumbnail fallido:', optionId, imageUrl?.substring(0, 50));
+    console.log(
+      "[PollMaximizedView] Thumbnail fallido:",
+      optionId,
+      imageUrl?.substring(0, 50),
+    );
   }
-  
+
   // Verificar si el thumbnail de una opción ha fallado
   function hasThumbnailFailed(opt: PollOption): boolean {
     if (failedThumbnails[opt.id]) return true;
     if (opt.imageUrl && !shouldRetryImage(opt.imageUrl)) return true;
     return false;
   }
-  
+
   // Funciones helper para determinar el tipo de layout (reactivas a failedThumbnails)
   function shouldShowAsTextLayout(opt: PollOption): boolean {
     const type = getMediaType(opt);
     const failed = failedThumbnails[opt.id] === true;
     if (failed) return true;
-    if (type === 'text') return true;
-    if (type === 'generic-link' && !hasRealThumbnail(opt)) return true;
+    if (type === "text") return true;
+    if (type === "generic-link" && !hasRealThumbnail(opt)) return true;
     return false;
   }
-  
+
   function shouldShowAsVideoLayout(opt: PollOption): boolean {
     if (failedThumbnails[opt.id] === true) return false;
     const type = getMediaType(opt);
     const hasThumb = hasRealThumbnail(opt);
-    const isGenericWithThumb = type === 'generic-link' && hasThumb;
-    return (type !== 'image' && type !== 'text' && type !== 'generic-link') || isGenericWithThumb;
+    const isGenericWithThumb = type === "generic-link" && hasThumb;
+    return (
+      (type !== "image" && type !== "text" && type !== "generic-link") ||
+      isGenericWithThumb
+    );
   }
-  
+
   function shouldShowAsImageLayout(opt: PollOption): boolean {
     if (failedThumbnails[opt.id] === true) return false;
     const type = getMediaType(opt);
-    const url = opt.imageUrl?.toLowerCase() || '';
-    const isGif = url.includes('giphy.com') || url.includes('tenor.com') || /\.gif([?#]|$)/i.test(url);
-    return type === 'image' && !isGif;
+    const url = opt.imageUrl?.toLowerCase() || "";
+    const isGif =
+      url.includes("giphy.com") ||
+      url.includes("tenor.com") ||
+      /\.gif([?#]|$)/i.test(url);
+    return type === "image" && !isGif;
   }
-  
+
   function shouldShowAsGifLayout(opt: PollOption): boolean {
     if (failedThumbnails[opt.id] === true) return false;
-    const url = opt.imageUrl?.toLowerCase() || '';
-    return url.includes('giphy.com') || url.includes('tenor.com') || /\.gif([?#]|$)/i.test(url);
+    const url = opt.imageUrl?.toLowerCase() || "";
+    return (
+      url.includes("giphy.com") ||
+      url.includes("tenor.com") ||
+      /\.gif([?#]|$)/i.test(url)
+    );
   }
-  
+
   // Estado para añadir nueva opción colaborativa
   let isAddingOption = $state(false);
-  let newOptionLabel = $state('');
-  let newOptionColor = $state('#8b5cf6');
+  let newOptionLabel = $state("");
+  let newOptionColor = $state("#8b5cf6");
   let newOptionInputRef: HTMLTextAreaElement | null = null;
   let showNewOptionColorPicker = $state(false);
-  
+
   // Estado del color picker circular
   let selectedHue = $state(270); // Púrpura por defecto
   let selectedSaturation = $state(85);
   let isDraggingColor = $state(false);
-  let selectedColor = $derived(`hsl(${selectedHue}, ${selectedSaturation}%, 55%)`);
-  
+  let selectedColor = $derived(
+    `hsl(${selectedHue}, ${selectedSaturation}%, 55%)`,
+  );
+
   // Convertir HSL a hex
   function hslToHex(h: number, s: number, l: number): string {
     s = s / 100;
     l = l / 100;
     const c = (1 - Math.abs(2 * l - 1)) * s;
-    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
-    const m = l - c/2;
-    let r = 0, g = 0, b = 0;
-    if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
-    else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
-    else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
-    else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
-    else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
-    else { r = c; g = 0; b = x; }
-    const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0,
+      g = 0,
+      b = 0;
+    if (h >= 0 && h < 60) {
+      r = c;
+      g = x;
+      b = 0;
+    } else if (h >= 60 && h < 120) {
+      r = x;
+      g = c;
+      b = 0;
+    } else if (h >= 120 && h < 180) {
+      r = 0;
+      g = c;
+      b = x;
+    } else if (h >= 180 && h < 240) {
+      r = 0;
+      g = x;
+      b = c;
+    } else if (h >= 240 && h < 300) {
+      r = x;
+      g = 0;
+      b = c;
+    } else {
+      r = c;
+      g = 0;
+      b = x;
+    }
+    const toHex = (n: number) =>
+      Math.round((n + m) * 255)
+        .toString(16)
+        .padStart(2, "0");
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
-  
+
   // Confirmar color seleccionado
   function confirmColorSelection() {
     newOptionColor = hslToHex(selectedHue, selectedSaturation, 55);
     showNewOptionColorPicker = false;
   }
-  
+
   // Colores disponibles para nueva opción
   const optionColors = [
-    '#ef4444', '#f97316', '#f59e0b', '#10b981', 
-    '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'
+    "#ef4444",
+    "#f97316",
+    "#f59e0b",
+    "#10b981",
+    "#3b82f6",
+    "#8b5cf6",
+    "#ec4899",
+    "#14b8a6",
   ];
-  
+
   // Función para iniciar añadir opción
   function startAddingOption() {
     if (!isAuthenticated) {
@@ -270,58 +323,68 @@
       return;
     }
     isAddingOption = true;
-    newOptionLabel = '';
-    newOptionColor = optionColors[Math.floor(Math.random() * optionColors.length)];
+    newOptionLabel = "";
+    newOptionColor =
+      optionColors[Math.floor(Math.random() * optionColors.length)];
     // Scroll al final para mostrar el nuevo slide
     setTimeout(() => {
       if (scrollContainer) {
-        scrollContainer.scrollTo({ left: scrollContainer.scrollWidth, behavior: 'smooth' });
+        scrollContainer.scrollTo({
+          left: scrollContainer.scrollWidth,
+          behavior: "smooth",
+        });
       }
       if (newOptionInputRef) {
         newOptionInputRef.focus();
       }
     }, 100);
   }
-  
+
   // Función para cancelar añadir opción
   function cancelAddingOption() {
     isAddingOption = false;
-    newOptionLabel = '';
+    newOptionLabel = "";
   }
-  
+
   // Función para publicar la nueva opción
   async function publishNewOption() {
     if (!newOptionLabel.trim()) return;
-    
+
     // Llamar al callback con los datos de la nueva opción
     onAddOption(newOptionLabel.trim(), newOptionColor);
-    
+
     // Resetear estado
     isAddingOption = false;
-    newOptionLabel = '';
+    newOptionLabel = "";
   }
-  
+
   // Color neutro para opciones antes de votar
-  const NEUTRAL_COLOR = '#3a3d42';
-  
+  const NEUTRAL_COLOR = "#3a3d42";
+
   // Calcular el color del voto directamente (sin $effect para evitar flash)
   const getVoteColor = () => {
     if (hasVoted) {
       const votedOption = options.find((o) => o.voted === true);
-      return votedOption?.color || '#ffffff';
+      return votedOption?.color || "#ffffff";
     }
-    return '#ffffff';
+    return "#ffffff";
   };
-  
+
   // Usar $derived para que se recalcule reactivamente
   let voteColor = $derived(getVoteColor());
-  
+
   // Verificar si la opción actualmente visible está votada
-  let currentOptionVoted = $derived(activeIndex >= 0 && options[activeIndex]?.voted === true);
-  let currentOptionColor = $derived(activeIndex >= 0 ? (options[activeIndex]?.color || voteColor) : voteColor);
-  
+  let currentOptionVoted = $derived(
+    activeIndex >= 0 && options[activeIndex]?.voted === true,
+  );
+  let currentOptionColor = $derived(
+    activeIndex >= 0 ? options[activeIndex]?.color || voteColor : voteColor,
+  );
+
   // Contar opciones votadas (para múltiple)
-  let votedOptionsCount = $derived(options.filter(o => o.voted === true).length);
+  let votedOptionsCount = $derived(
+    options.filter((o) => o.voted === true).length,
+  );
 
   let scrollContainer: HTMLElement | null = null;
   let showLikeAnim = $state(false);
@@ -331,56 +394,56 @@
   let showFriendsVotesModal = $state(false);
   let showCommentsModal = $state(false);
   let showStatsModal = $state(false);
-  
+
   // Estado para repost
   let hasReposted = $state(false);
   let repostCount = $state(stats?.repostCount || 0);
   let isReposting = $state(false);
-  
+
   // Estado para views
   let viewCount = $state(stats?.totalViews || 0);
-  
+
   // Estado para shares
   let shareCount = $state((stats as any)?.shareCount || 0);
   let isSharing = $state(false);
   let showShareToast = $state(false);
   let shareToastTimeout: any = null;
-  
+
   // Registrar visualización al montar
   $effect(() => {
     if (pollId) {
       registerView();
     }
   });
-  
+
   // Manejar botón atrás del navegador
   let historyPushed = false;
-  
+
   // Agregar entrada al historial cuando se monta (el componente solo existe cuando está visible)
   onMount(() => {
-    history.pushState({ modal: 'maximized' }, '');
+    history.pushState({ modal: "maximized" }, "");
     historyPushed = true;
-    
+
     const handlePopState = () => {
       if (historyPushed) {
         historyPushed = false;
         onClose();
       }
     };
-    
+
     const handleCloseModals = () => {
       onClose();
     };
-    
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('closeModals', handleCloseModals);
-    
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("closeModals", handleCloseModals);
+
     return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('closeModals', handleCloseModals);
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("closeModals", handleCloseModals);
     };
   });
-  
+
   async function registerView() {
     try {
       const result = await apiPost(`/api/polls/${pollId}/view`, {});
@@ -389,20 +452,20 @@
       }
     } catch (error) {
       // Silenciar errores de view (no crítico)
-      console.debug('[View] Error registrando:', error);
+      console.debug("[View] Error registrando:", error);
     }
   }
-  
+
   // Función para republicar
   async function handleRepost() {
     if (!isAuthenticated) {
       showAuthModal = true;
       return;
     }
-    
+
     if (isReposting) return;
     isReposting = true;
-    
+
     try {
       if (hasReposted) {
         const result = await apiDelete(`/api/polls/${pollId}/repost`);
@@ -414,7 +477,7 @@
         repostCount = result.repostCount || repostCount + 1;
       }
     } catch (error: any) {
-      console.error('[Repost] Error:', error);
+      console.error("[Repost] Error:", error);
     } finally {
       isReposting = false;
     }
@@ -422,15 +485,21 @@
 
   // Debug: verificar friendsByOption
   $effect(() => {
-    console.log('[PollMaximizedView] friendsByOption:', friendsByOption);
-    console.log('[PollMaximizedView] options:', options.map(o => ({ id: o.id, key: o.key, optionKey: o.optionKey })));
-    console.log('[PollMaximizedView] friendsByOption keys:', Object.keys(friendsByOption || {}));
+    console.log("[PollMaximizedView] friendsByOption:", friendsByOption);
+    console.log(
+      "[PollMaximizedView] options:",
+      options.map((o) => ({ id: o.id, key: o.key, optionKey: o.optionKey })),
+    );
+    console.log(
+      "[PollMaximizedView] friendsByOption keys:",
+      Object.keys(friendsByOption || {}),
+    );
   });
 
   // Helper para obtener amigos de una opción (busca por múltiples claves)
   function getFriendsForOption(opt: PollOption): Friend[] {
     if (!friendsByOption) return [];
-    
+
     // Intentar diferentes claves posibles basadas en los campos de la opción
     const idStr = opt.id != null ? String(opt.id) : null;
     const possibleKeys = [
@@ -438,23 +507,27 @@
       opt.key,
       opt.optionKey,
       idStr ? `opt_${idStr}` : null,
-      idStr?.replace('opt_', ''),
+      idStr?.replace("opt_", ""),
       opt.key ? String(opt.key) : null,
     ].filter(Boolean) as string[];
-    
+
     for (const key of possibleKeys) {
       if (friendsByOption[key] && friendsByOption[key].length > 0) {
-        console.log(`[getFriendsForOption] Found friends for option using key ${key}:`, friendsByOption[key]);
+        console.log(
+          `[getFriendsForOption] Found friends for option using key ${key}:`,
+          friendsByOption[key],
+        );
         return friendsByOption[key];
       }
     }
-    
+
     return [];
   }
-  
+
   // Verificar si hay amigos en total
   let hasFriendsVotes = $derived(
-    friendsByOption && Object.values(friendsByOption).some(arr => arr && arr.length > 0)
+    friendsByOption &&
+      Object.values(friendsByOption).some((arr) => arr && arr.length > 0),
   );
 
   let isScrollingProgrammatically = false;
@@ -541,7 +614,8 @@
     if (now - lastTapTime < DOUBLE_TAP_DELAY) {
       const opt = options[activeIndex];
       // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
-      const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+      const canVote =
+        !hasVoted || pollType === "multiple" || !currentOptionVoted;
       if (canVote && readOnly) {
         // Check authentication before voting
         if (!isAuthenticated) {
@@ -576,7 +650,8 @@
     if (now - lastTapTime < DOUBLE_TAP_DELAY) {
       const opt = options[activeIndex];
       // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
-      const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+      const canVote =
+        !hasVoted || pollType === "multiple" || !currentOptionVoted;
       if (canVote && readOnly) {
         // Check authentication before voting
         if (!isAuthenticated) {
@@ -602,7 +677,8 @@
       if (e.key === " ") e.preventDefault();
 
       // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
-      const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+      const canVote =
+        !hasVoted || pollType === "multiple" || !currentOptionVoted;
       if (canVote && readOnly) {
         // Check authentication before voting
         if (!isAuthenticated) {
@@ -642,18 +718,39 @@
   }
 
   // --- DETECCIÓN DE TIPO DE MEDIA (SI NO VIENE EXPLÍCITO) ---
-  type MediaType = "youtube" | "vimeo" | "image" | "text" | "spotify" | "soundcloud" | "tiktok" | "twitch" | "twitter" | "applemusic" | "deezer" | "dailymotion" | "bandcamp" | "generic-link";
-  
+  type MediaType =
+    | "youtube"
+    | "vimeo"
+    | "image"
+    | "text"
+    | "spotify"
+    | "soundcloud"
+    | "tiktok"
+    | "twitch"
+    | "twitter"
+    | "applemusic"
+    | "deezer"
+    | "dailymotion"
+    | "bandcamp"
+    | "generic-link";
+
   function getMediaType(opt: PollOption): MediaType {
     if (opt.type) return opt.type as MediaType;
     if (!opt.imageUrl) return "text";
     const url = opt.imageUrl.toLowerCase();
     // Video platforms
-    if (url.includes("youtube.com") || url.includes("youtu.be") || url.includes("music.youtube.com")) return "youtube";
+    if (
+      url.includes("youtube.com") ||
+      url.includes("youtu.be") ||
+      url.includes("music.youtube.com")
+    )
+      return "youtube";
     if (url.includes("vimeo.com")) return "vimeo";
-    if (url.includes("tiktok.com") || url.includes("vm.tiktok.com")) return "tiktok";
+    if (url.includes("tiktok.com") || url.includes("vm.tiktok.com"))
+      return "tiktok";
     if (url.includes("twitch.tv")) return "twitch";
-    if (url.includes("dailymotion.com") || url.includes("dai.ly")) return "dailymotion";
+    if (url.includes("dailymotion.com") || url.includes("dai.ly"))
+      return "dailymotion";
     // Social
     if (url.includes("twitter.com") || url.includes("x.com")) return "twitter";
     // Audio platforms
@@ -664,52 +761,54 @@
     if (url.includes("bandcamp.com")) return "bandcamp";
     // Imagen directa o GIF
     if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(url)) return "image";
-    if (url.includes('giphy.com') || url.includes('tenor.com')) return "image";
+    if (url.includes("giphy.com") || url.includes("tenor.com")) return "image";
     // Enlace genérico (no plataforma conocida ni imagen directa)
     return "generic-link";
   }
-  
+
   // Detectar si un thumbnail es real (no placeholder) Y no ha fallado
   function hasRealThumbnail(opt: PollOption): boolean {
     // Si la opción ya está marcada como fallida, no tiene thumbnail real
     if (failedThumbnails[opt.id]) return false;
-    
+
     const thumb = previewCache[opt.id]?.image || getPreviewThumbnail(opt);
     if (!thumb) return false;
-    if (thumb.includes('placehold.co')) return false;
-    if (thumb.includes('placeholder')) return false;
-    if (thumb.startsWith('data:image/svg+xml')) return false; // SVGs generados son placeholders
-    
+    if (thumb.includes("placehold.co")) return false;
+    if (thumb.includes("placeholder")) return false;
+    if (thumb.startsWith("data:image/svg+xml")) return false; // SVGs generados son placeholders
+
     // Verificar si la URL del thumbnail ya ha fallado en el store global
     if (!shouldRetryImage(thumb)) return false;
-    
+
     return true;
   }
-  
+
   // Detectar si debemos mostrar el enlace (cualquier URL válida excepto imágenes directas y GIFs)
   function shouldShowLink(url: string | undefined): boolean {
     if (!url) return false;
     const lowerUrl = url.toLowerCase();
     // Si es una imagen directa, no mostramos enlace
-    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(lowerUrl)) return false;
+    if (/\.(jpg|jpeg|png|webp|gif|svg|bmp)([?#]|$)/i.test(lowerUrl))
+      return false;
     // Si es un GIF de GIPHY/Tenor, no mostramos enlace (ya tiene badge GIPHY)
-    if (lowerUrl.includes('giphy.com') || lowerUrl.includes('tenor.com')) return false;
+    if (lowerUrl.includes("giphy.com") || lowerUrl.includes("tenor.com"))
+      return false;
     // Para todo lo demás (YouTube, Twitter, enlaces genéricos, etc.) mostramos enlace
     return true;
   }
-  
+
   // Obtener hostname de una URL
   function getHostname(url: string): string {
     try {
-      return new URL(url).hostname.replace('www.', '');
+      return new URL(url).hostname.replace("www.", "");
     } catch {
-      return '';
+      return "";
     }
   }
-  
+
   // Obtener el texto de la etiqueta sin la URL
   function getLabelWithoutUrl(text: string): string {
-    return text.replace(/(https?:\/\/[^\s]+)/gi, '').trim();
+    return text.replace(/(https?:\/\/[^\s]+)/gi, "").trim();
   }
 
   function getYoutubeId(url?: string): string {
@@ -717,7 +816,7 @@
     // Incluye soporte para YouTube Shorts
     const patterns = [
       /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?\/]*).*/,
-      /youtube\.com\/shorts\/([^#&?\/]+)/
+      /youtube\.com\/shorts\/([^#&?\/]+)/,
     ];
     for (const regExp of patterns) {
       const match = url.match(regExp);
@@ -750,37 +849,39 @@
   let isTitleExpanded = $state(false);
   let expandedOptions = $state<Record<string, boolean>>({});
   let isMoreMenuOpen = $state(false);
-  
+
   // Cache de previews obtenidos de la API
-  let previewCache = $state<Record<string, { image: string; title?: string; loading: boolean }>>({});
-  
+  let previewCache = $state<
+    Record<string, { image: string; title?: string; loading: boolean }>
+  >({});
+
   // Set para trackear qué opciones ya fueron procesadas (evita re-fetches)
   const processedOptions = new Set<string>();
-  
+
   // --- IFRAME FULLSCREEN (usa store global) ---
   function handleOpenFullscreenIframe(opt: PollOption) {
-    console.log('[PollMaximizedView] Opening fullscreen iframe', opt);
+    console.log("[PollMaximizedView] Opening fullscreen iframe", opt);
     if (!opt?.imageUrl) return;
     const thumbnail = previewCache[opt.id]?.image || getPreviewThumbnail(opt);
     openFullscreenIframeStore(opt.imageUrl, opt.id, thumbnail);
   }
-  
+
   // --- DETECCIÓN DE SWIPE VERTICAL EN PREVIEW ---
   let previewTouchStartY = 0;
   let previewTouchStartX = 0;
-  
+
   function handlePreviewTouchStart(e: TouchEvent) {
     previewTouchStartY = e.touches[0].clientY;
     previewTouchStartX = e.touches[0].clientX;
   }
-  
+
   function handlePreviewTouchEnd(e: TouchEvent) {
     const touchEndY = e.changedTouches[0].clientY;
     const touchEndX = e.changedTouches[0].clientX;
-    
+
     const diffY = previewTouchStartY - touchEndY;
     const diffX = previewTouchStartX - touchEndX;
-    
+
     // Si el movimiento vertical es mayor que el horizontal y supera un umbral
     if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 30) {
       e.stopPropagation();
@@ -797,191 +898,225 @@
       }
     }
   }
-  
+
   // Verificar si una opción tiene contenido embebible (YouTube, Spotify, etc.)
   function hasEmbeddableContent(opt: PollOption): boolean {
     if (!opt?.imageUrl) return false;
     const url = opt.imageUrl.toLowerCase();
     return (
-      url.includes('youtube.com') ||
-      url.includes('youtu.be') ||
-      url.includes('vimeo.com') ||
-      url.includes('spotify.com') ||
-      url.includes('soundcloud.com') ||
-      url.includes('tiktok.com') ||
-      url.includes('twitch.tv') ||
-      url.includes('dailymotion.com') ||
-      url.includes('dai.ly') ||
-      url.includes('music.apple.com') ||
-      url.includes('deezer.com') ||
-      url.includes('bandcamp.com')
+      url.includes("youtube.com") ||
+      url.includes("youtu.be") ||
+      url.includes("vimeo.com") ||
+      url.includes("spotify.com") ||
+      url.includes("soundcloud.com") ||
+      url.includes("tiktok.com") ||
+      url.includes("twitch.tv") ||
+      url.includes("dailymotion.com") ||
+      url.includes("dai.ly") ||
+      url.includes("music.apple.com") ||
+      url.includes("deezer.com") ||
+      url.includes("bandcamp.com")
     );
   }
-  
+
   // Obtener thumbnail de preview - primero intenta YouTube directo, luego usa cache/API
   function getPreviewThumbnail(opt: PollOption): string {
-    if (!opt?.imageUrl) return '';
+    if (!opt?.imageUrl) return "";
     const url = opt.imageUrl;
-    
+
     // YouTube thumbnail - directo sin API
     const ytId = getYoutubeId(url);
     if (ytId) {
       return `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
     }
-    
+
     // Vimeo thumbnail - extraer ID y usar thumbs.vimeo.com
     const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     if (vimeoMatch) {
       return `https://vumbnail.com/${vimeoMatch[1]}.jpg`;
     }
-    
+
     // Para otras plataformas, usar el cache si existe y tiene imagen real
-    if (previewCache[opt.id]?.image && !previewCache[opt.id].image.includes('placehold.co')) {
+    if (
+      previewCache[opt.id]?.image &&
+      !previewCache[opt.id].image.includes("placehold.co")
+    ) {
       return previewCache[opt.id].image;
     }
-    
+
     // Placeholder mientras carga
     return getPlaceholderForPlatform(url);
   }
-  
+
   // Placeholder según plataforma con logos/iconos reales
   function getPlaceholderForPlatform(url: string): string {
     const lowerUrl = url.toLowerCase();
     // Spotify - verde con texto
-    if (lowerUrl.includes('spotify.com')) return 'https://placehold.co/640x360/1DB954/white?text=%E2%99%AB+Spotify';
+    if (lowerUrl.includes("spotify.com"))
+      return "https://placehold.co/640x360/1DB954/white?text=%E2%99%AB+Spotify";
     // SoundCloud - naranja con onda
-    if (lowerUrl.includes('soundcloud.com')) return 'https://placehold.co/640x360/ff5500/white?text=%E2%99%AB+SoundCloud';
+    if (lowerUrl.includes("soundcloud.com"))
+      return "https://placehold.co/640x360/ff5500/white?text=%E2%99%AB+SoundCloud";
     // Vimeo - azul oscuro
-    if (lowerUrl.includes('vimeo.com')) return 'https://placehold.co/640x360/1ab7ea/white?text=%E2%96%B6+Vimeo';
+    if (lowerUrl.includes("vimeo.com"))
+      return "https://placehold.co/640x360/1ab7ea/white?text=%E2%96%B6+Vimeo";
     // TikTok - negro
-    if (lowerUrl.includes('tiktok.com')) return 'https://placehold.co/640x360/010101/white?text=%E2%96%B6+TikTok';
+    if (lowerUrl.includes("tiktok.com"))
+      return "https://placehold.co/640x360/010101/white?text=%E2%96%B6+TikTok";
     // Twitch - morado
-    if (lowerUrl.includes('twitch.tv')) return 'https://placehold.co/640x360/9146FF/white?text=%E2%96%B6+Twitch';
+    if (lowerUrl.includes("twitch.tv"))
+      return "https://placehold.co/640x360/9146FF/white?text=%E2%96%B6+Twitch";
     // Dailymotion - azul
-    if (lowerUrl.includes('dailymotion.com') || lowerUrl.includes('dai.ly')) return 'https://placehold.co/640x360/0066DC/white?text=%E2%96%B6+Dailymotion';
+    if (lowerUrl.includes("dailymotion.com") || lowerUrl.includes("dai.ly"))
+      return "https://placehold.co/640x360/0066DC/white?text=%E2%96%B6+Dailymotion";
     // Apple Music - rojo
-    if (lowerUrl.includes('music.apple.com')) return 'https://placehold.co/640x360/FC3C44/white?text=%E2%99%AB+Apple+Music';
+    if (lowerUrl.includes("music.apple.com"))
+      return "https://placehold.co/640x360/FC3C44/white?text=%E2%99%AB+Apple+Music";
     // Deezer - naranja dorado
-    if (lowerUrl.includes('deezer.com')) return 'https://placehold.co/640x360/FEAA2D/000000?text=%E2%99%AB+Deezer';
+    if (lowerUrl.includes("deezer.com"))
+      return "https://placehold.co/640x360/FEAA2D/000000?text=%E2%99%AB+Deezer";
     // Bandcamp - azul verdoso
-    if (lowerUrl.includes('bandcamp.com')) return 'https://placehold.co/640x360/1DA0C3/white?text=%E2%99%AB+Bandcamp';
+    if (lowerUrl.includes("bandcamp.com"))
+      return "https://placehold.co/640x360/1DA0C3/white?text=%E2%99%AB+Bandcamp";
     // Mixcloud
-    if (lowerUrl.includes('mixcloud.com')) return 'https://placehold.co/640x360/5000ff/white?text=%E2%99%AB+Mixcloud';
+    if (lowerUrl.includes("mixcloud.com"))
+      return "https://placehold.co/640x360/5000ff/white?text=%E2%99%AB+Mixcloud";
     // Default
-    return 'https://placehold.co/640x360/1a1a2e/white?text=%E2%96%B6+Reproducir';
+    return "https://placehold.co/640x360/1a1a2e/white?text=%E2%96%B6+Reproducir";
   }
-  
+
   // Obtener thumbnail directo sin API para ciertas plataformas
   function getDirectThumbnail(url: string): string | null {
     const lowerUrl = url.toLowerCase();
-    
+
     // YouTube
     const ytId = getYoutubeId(url);
     if (ytId) return `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
-    
+
     // Vimeo - usar servicio vumbnail
     const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     if (vimeoMatch) return `https://vumbnail.com/${vimeoMatch[1]}.jpg`;
-    
+
     // Dailymotion
-    const dmMatch = url.match(/dailymotion\.com\/video\/([a-z0-9]+)/i) || url.match(/dai\.ly\/([a-z0-9]+)/i);
-    if (dmMatch) return `https://www.dailymotion.com/thumbnail/video/${dmMatch[1]}`;
-    
+    const dmMatch =
+      url.match(/dailymotion\.com\/video\/([a-z0-9]+)/i) ||
+      url.match(/dai\.ly\/([a-z0-9]+)/i);
+    if (dmMatch)
+      return `https://www.dailymotion.com/thumbnail/video/${dmMatch[1]}`;
+
     return null;
   }
-  
+
   // Cargar preview desde la API de link-preview
   async function fetchPreviewForOption(opt: PollOption) {
     if (!opt?.imageUrl || !opt?.id) return;
-    
+
     // Si ya fue procesada, no hacer nada (evita bucles)
     if (processedOptions.has(opt.id)) return;
-    
+
     // Si ya está en cache con imagen real, marcar como procesada y no hacer nada
-    if (previewCache[opt.id]?.image && !previewCache[opt.id].loading && !previewCache[opt.id].image.includes('placehold.co')) {
+    if (
+      previewCache[opt.id]?.image &&
+      !previewCache[opt.id].loading &&
+      !previewCache[opt.id].image.includes("placehold.co")
+    ) {
       processedOptions.add(opt.id);
       return;
     }
-    
+
     // Si está cargando, no hacer nada
     if (previewCache[opt.id]?.loading) return;
-    
+
     // Marcar como procesada ANTES de hacer fetch
     processedOptions.add(opt.id);
-    
+
     // Primero intentar thumbnail directo (YouTube, Vimeo, Dailymotion)
     const directThumb = getDirectThumbnail(opt.imageUrl);
     if (directThumb) {
-      previewCache = { 
-        ...previewCache, 
-        [opt.id]: { image: directThumb, loading: false } 
+      previewCache = {
+        ...previewCache,
+        [opt.id]: { image: directThumb, loading: false },
       };
       return;
     }
-    
+
     // Marcar como cargando
-    previewCache = { ...previewCache, [opt.id]: { image: '', loading: true } };
-    
+    previewCache = { ...previewCache, [opt.id]: { image: "", loading: true } };
+
     try {
-      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(opt.imageUrl)}`);
+      const response = await fetch(
+        `/api/link-preview?url=${encodeURIComponent(opt.imageUrl)}`,
+      );
       if (response.ok) {
         const result = await response.json();
         const data = result.data || result;
-        
+
         if (data) {
           // Obtener la imagen del preview - priorizar imageProxied, luego image
           let image = data.imageProxied || data.image;
-          
+
           // Si no hay imagen real, marcar como fallido y mostrar como texto
-          if (!image || image.includes('undefined') || image === 'null' || image.includes('placehold.co')) {
-            console.log('[PollMaximizedView] 🚫 Sin imagen real para:', opt.id, opt.imageUrl?.substring(0, 40));
+          if (
+            !image ||
+            image.includes("undefined") ||
+            image === "null" ||
+            image.includes("placehold.co")
+          ) {
+            console.log(
+              "[PollMaximizedView] 🚫 Sin imagen real para:",
+              opt.id,
+              opt.imageUrl?.substring(0, 40),
+            );
             failedThumbnails = { ...failedThumbnails, [opt.id]: true };
-            previewCache = { 
-              ...previewCache, 
-              [opt.id]: { image: '', loading: false } 
+            previewCache = {
+              ...previewCache,
+              [opt.id]: { image: "", loading: false },
             };
           } else {
-            previewCache = { 
-              ...previewCache, 
-              [opt.id]: { 
-                image, 
+            previewCache = {
+              ...previewCache,
+              [opt.id]: {
+                image,
                 title: data.title,
-                loading: false 
-              } 
+                loading: false,
+              },
             };
           }
         } else {
           // Sin datos, marcar como fallido
-          console.log('[PollMaximizedView] 🚫 Sin datos de preview para:', opt.id);
+          console.log(
+            "[PollMaximizedView] 🚫 Sin datos de preview para:",
+            opt.id,
+          );
           failedThumbnails = { ...failedThumbnails, [opt.id]: true };
-          previewCache = { 
-            ...previewCache, 
-            [opt.id]: { image: '', loading: false } 
+          previewCache = {
+            ...previewCache,
+            [opt.id]: { image: "", loading: false },
           };
         }
       } else {
         // Error de respuesta, marcar como fallido
-        console.log('[PollMaximizedView] 🚫 Error de API para:', opt.id);
+        console.log("[PollMaximizedView] 🚫 Error de API para:", opt.id);
         failedThumbnails = { ...failedThumbnails, [opt.id]: true };
-        previewCache = { 
-          ...previewCache, 
-          [opt.id]: { image: '', loading: false } 
+        previewCache = {
+          ...previewCache,
+          [opt.id]: { image: "", loading: false },
         };
       }
     } catch (error) {
-      console.warn('[PollMaximizedView] Error fetching preview:', error);
+      console.warn("[PollMaximizedView] Error fetching preview:", error);
       // Error, marcar como fallido
       failedThumbnails = { ...failedThumbnails, [opt.id]: true };
-      previewCache = { 
-        ...previewCache, 
-        [opt.id]: { 
-          image: '', 
-          loading: false 
-        } 
+      previewCache = {
+        ...previewCache,
+        [opt.id]: {
+          image: "",
+          loading: false,
+        },
       };
     }
   }
-  
+
   // Detectar si una opción necesita cargar preview (cualquier URL que no sea imagen directa)
   function needsPreviewFetch(opt: PollOption): boolean {
     if (!opt?.imageUrl) return false;
@@ -991,7 +1126,7 @@
     // Todo lo demás necesita fetch (plataformas conocidas y enlaces genéricos)
     return true;
   }
-  
+
   // Cargar previews para TODAS las opciones que necesiten fetch al iniciar
   $effect(() => {
     // Cargar previews de todas las opciones que tengan URL (excepto imágenes directas)
@@ -1001,101 +1136,105 @@
       }
     }
   });
-  
+
   // Obtener icono de play según la plataforma
   function getPlatformIcon(opt: PollOption): string {
-    if (!opt?.imageUrl) return '▶';
+    if (!opt?.imageUrl) return "▶";
     const url = opt.imageUrl.toLowerCase();
-    
-    if (url.includes('youtube.com') || url.includes('youtu.be')) return '▶';
-    if (url.includes('spotify.com')) return '♫';
-    if (url.includes('soundcloud.com')) return '♫';
-    if (url.includes('music.apple.com')) return '♫';
-    if (url.includes('deezer.com')) return '♫';
-    if (url.includes('bandcamp.com')) return '♫';
-    return '▶';
+
+    if (url.includes("youtube.com") || url.includes("youtu.be")) return "▶";
+    if (url.includes("spotify.com")) return "♫";
+    if (url.includes("soundcloud.com")) return "♫";
+    if (url.includes("music.apple.com")) return "♫";
+    if (url.includes("deezer.com")) return "♫";
+    if (url.includes("bandcamp.com")) return "♫";
+    return "▶";
   }
-  
+
   // Estado del sonido para videos
   let isMuted = $state(true); // Los videos empiezan muteados por autoplay
-  
+
   // Detectar si la opción actual es un video (YouTube, Vimeo, o video directo)
   function isVideoContent(opt: PollOption): boolean {
     if (!opt?.imageUrl) return false;
     const url = opt.imageUrl.toLowerCase();
     return (
-      url.includes('youtube.com') ||
-      url.includes('youtu.be') ||
-      url.includes('vimeo.com') ||
+      url.includes("youtube.com") ||
+      url.includes("youtu.be") ||
+      url.includes("vimeo.com") ||
       url.match(/\.(mp4|webm|ogg|mov)(\?|$)/) !== null
     );
   }
-  
+
   // Activar sonido del video actual
   function unmuteCurrentVideo() {
     if (!scrollContainer) return;
-    
-    const iframes = scrollContainer.querySelectorAll('iframe');
-    const videos = scrollContainer.querySelectorAll('video');
-    
+
+    const iframes = scrollContainer.querySelectorAll("iframe");
+    const videos = scrollContainer.querySelectorAll("video");
+
     // Para iframes de YouTube/Vimeo
     iframes.forEach((iframe) => {
       try {
-        const src = iframe.src || '';
-        
+        const src = iframe.src || "";
+
         // YouTube - usar postMessage API
-        if (src.includes('youtube.com') || src.includes('youtu.be')) {
+        if (src.includes("youtube.com") || src.includes("youtu.be")) {
           // Modificar src para quitar mute
-          const newSrc = src.replace(/[&?]mute=1/, '').replace(/mute=1[&]?/, '');
+          const newSrc = src
+            .replace(/[&?]mute=1/, "")
+            .replace(/mute=1[&]?/, "");
           if (newSrc !== src) {
             iframe.src = newSrc;
           }
           // También enviar comando de unmute
           iframe.contentWindow?.postMessage(
-            JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-            '*'
+            JSON.stringify({ event: "command", func: "unMute", args: [] }),
+            "*",
           );
         }
-        
+
         // Vimeo - usar postMessage API
-        if (src.includes('vimeo.com')) {
-          const newSrc = src.replace(/[&?]muted=1/, '').replace(/muted=1[&]?/, '');
+        if (src.includes("vimeo.com")) {
+          const newSrc = src
+            .replace(/[&?]muted=1/, "")
+            .replace(/muted=1[&]?/, "");
           if (newSrc !== src) {
             iframe.src = newSrc;
           }
           iframe.contentWindow?.postMessage(
-            JSON.stringify({ method: 'setVolume', value: 1 }),
-            '*'
+            JSON.stringify({ method: "setVolume", value: 1 }),
+            "*",
           );
         }
       } catch (e) {
-        console.warn('[PollMaximizedView] Error al activar sonido:', e);
+        console.warn("[PollMaximizedView] Error al activar sonido:", e);
       }
     });
-    
+
     // Para videos HTML5 nativos
     videos.forEach((video) => {
       video.muted = false;
     });
-    
+
     isMuted = false;
-    console.log('[PollMaximizedView] 🔊 Sonido activado');
+    console.log("[PollMaximizedView] 🔊 Sonido activado");
   }
-  
+
   // Swipe para cerrar bottom sheet
   let sheetTouchStartY = 0;
   let sheetCurrentY = 0;
   let sheetTranslateY = $state(0);
   let sheetElement: HTMLDivElement | null = null;
   let canSwipeClose = false;
-  
+
   function handleSheetTouchStart(e: TouchEvent) {
     sheetTouchStartY = e.touches[0].clientY;
     sheetCurrentY = sheetTouchStartY;
     // Solo permitir swipe si el scroll está en la parte superior
     canSwipeClose = sheetElement ? sheetElement.scrollTop <= 0 : true;
   }
-  
+
   function handleSheetTouchMove(e: TouchEvent) {
     if (!canSwipeClose) return;
     sheetCurrentY = e.touches[0].clientY;
@@ -1105,7 +1244,7 @@
       e.preventDefault(); // Prevenir scroll mientras arrastramos
     }
   }
-  
+
   function handleSheetTouchEnd() {
     if (sheetTranslateY > 80) {
       isMoreMenuOpen = false;
@@ -1125,14 +1264,14 @@
   // Formatear tiempo relativo (Hace 2h, Hace 3d, etc.)
   function formatRelativeTime(date: string | Date | undefined): string {
     if (!date) return "Reciente";
-    
+
     try {
       const now = new Date();
       const past = new Date(date);
-      
+
       // Verificar si la fecha es válida
       if (isNaN(past.getTime())) return "Reciente";
-      
+
       const diffMs = now.getTime() - past.getTime();
       const diffSec = Math.floor(diffMs / 1000);
       const diffMin = Math.floor(diffSec / 60);
@@ -1155,9 +1294,12 @@
   // Obtener texto del tipo de voto
   function getPollTypeText(type: string): string {
     switch (type) {
-      case "multiple": return "Voto Múltiple";
-      case "collaborative": return "Colaborativo";
-      default: return "Voto Único";
+      case "multiple":
+        return "Voto Múltiple";
+      case "collaborative":
+        return "Colaborativo";
+      default:
+        return "Voto Único";
     }
   }
 
@@ -1170,24 +1312,24 @@
       showShareToastNotification();
       registerShare();
     } catch (err) {
-      console.error('Error copiando enlace:', err);
+      console.error("Error copiando enlace:", err);
       // Fallback
-      const textarea = document.createElement('textarea');
+      const textarea = document.createElement("textarea");
       textarea.value = `https://voutop.com/#poll=${hashId}`;
-      textarea.style.position = 'fixed';
-      textarea.style.top = '0';
-      textarea.style.left = '-9999px';
+      textarea.style.position = "fixed";
+      textarea.style.top = "0";
+      textarea.style.left = "-9999px";
       document.body.appendChild(textarea);
       textarea.select();
       try {
-        document.execCommand('copy');
+        document.execCommand("copy");
         showShareToastNotification();
         registerShare();
       } catch (e) {}
       document.body.removeChild(textarea);
     }
   }
-  
+
   // Mostrar toast de enlace copiado
   function showShareToastNotification() {
     showShareToast = true;
@@ -1196,12 +1338,12 @@
       showShareToast = false;
     }, 2000);
   }
-  
+
   // Registrar share en API
   async function registerShare() {
     if (isSharing) return;
     isSharing = true;
-    
+
     try {
       const result = await apiPost(`/api/polls/${pollId}/share`, {});
       if (result.shareCount !== undefined) {
@@ -1216,17 +1358,20 @@
       isSharing = false;
     }
   }
-  
+
   // Handler para compartir - copia texto formateado al portapapeles
   async function handleShareAction() {
     const shareUrl = `https://voutop.com/#poll=${hashId}`;
-    const shareTitle = pollTitle || 'Encuesta';
-    
+    const shareTitle = pollTitle || "Encuesta";
+
     // Emojis de números para las opciones
-    const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
-    
+    const numberEmojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"];
+
     // Crear texto con formato bonito
-    const optionLabels = options.slice(0, 6).map((opt, i) => `${numberEmojis[i]} ${opt.label}`).join('\n');
+    const optionLabels = options
+      .slice(0, 6)
+      .map((opt, i) => `${numberEmojis[i]} ${opt.label}`)
+      .join("\n");
     const shareText = `❓${shareTitle}\n\n🧩 Opciones:\n${optionLabels}\n\n🗳️ ¡Vota ahora!\n${shareUrl}`;
 
     // Copiar directamente al portapapeles (más confiable que Web Share API)
@@ -1236,14 +1381,14 @@
       registerShare();
     } catch {
       // Fallback con textarea
-      const textarea = document.createElement('textarea');
+      const textarea = document.createElement("textarea");
       textarea.value = shareText;
-      textarea.style.position = 'fixed';
-      textarea.style.top = '0';
-      textarea.style.left = '-9999px';
+      textarea.style.position = "fixed";
+      textarea.style.top = "0";
+      textarea.style.left = "-9999px";
       document.body.appendChild(textarea);
       textarea.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       document.body.removeChild(textarea);
       showShareToastNotification();
       registerShare();
@@ -1253,7 +1398,7 @@
   // Cerrar menú al hacer clic fuera
   function handleClickOutside(e: MouseEvent) {
     const target = e.target as HTMLElement;
-    if (!target.closest('.more-menu-container')) {
+    if (!target.closest(".more-menu-container")) {
       isMoreMenuOpen = false;
     }
   }
@@ -1264,14 +1409,14 @@
       interactingOptionId = null;
     }
   });
-  
+
   // Resetear estado de mute cuando cambie la opción activa (cada video empieza muteado)
   $effect(() => {
     if (activeIndex >= 0) {
       isMuted = true; // Cada nuevo slide empieza muteado
     }
   });
-  
+
   // Precargar iframe cuando el usuario esté viendo una opción con contenido embebible
   $effect(() => {
     if (activeIndex >= 0 && options[activeIndex]) {
@@ -1281,7 +1426,7 @@
         const timeout = setTimeout(() => {
           preloadIframe(opt.imageUrl!);
         }, 500); // 500ms de delay para no precargar si el usuario está pasando rápido
-        
+
         return () => {
           clearTimeout(timeout);
           clearPreloadIframe();
@@ -1291,10 +1436,12 @@
       }
     }
   });
-  
+
   // Derivado: ¿la opción actual es video?
   let currentOptionIsVideo = $derived(
-    activeIndex >= 0 && options[activeIndex] ? isVideoContent(options[activeIndex]) : false
+    activeIndex >= 0 && options[activeIndex]
+      ? isVideoContent(options[activeIndex])
+      : false,
   );
 
   // --- COMPONENTES VISUALES (INLINE) ---
@@ -1319,14 +1466,14 @@
           <!-- Fila superior: Back + Avatar + Username + Metadata + Menu -->
           <div class="header-top-row">
             <!-- Botón atrás -->
-            <button 
-              onclick={onClose} 
+            <button
+              onclick={onClose}
               class="header-back-btn pointer-events-auto"
               aria-label="Volver"
             >
               <ArrowLeft size={20} class="text-white" />
             </button>
-            
+
             <!-- Avatar clickeable -->
             <button
               class="header-avatar pointer-events-auto"
@@ -1349,15 +1496,19 @@
                 <User size={18} class="text-white" />
               {/if}
             </button>
-            
+
             <!-- Info del usuario y metadatos -->
             <div class="header-user-info">
               <div class="header-username-row">
-                <span class="header-username">@{creator?.username || 'usuario'}</span>
+                <span class="header-username"
+                  >@{creator?.username || "usuario"}</span
+                >
                 <!-- Botón seguir usuario -->
                 <button
                   class="header-follow-btn pointer-events-auto"
-                  onclick={(e) => { e.stopPropagation(); /* TODO: Follow logic */ }}
+                  onclick={(e) => {
+                    e.stopPropagation(); /* TODO: Follow logic */
+                  }}
                   type="button"
                   aria-label="Seguir a {creator?.username || 'usuario'}"
                 >
@@ -1373,26 +1524,33 @@
                 </span>
               </div>
             </div>
-            
+
             <!-- Botón menú (3 puntos) -->
-            <button 
-              onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = !isMoreMenuOpen; }}
+            <button
+              onclick={(e) => {
+                e.stopPropagation();
+                isMoreMenuOpen = !isMoreMenuOpen;
+              }}
               class="header-menu-btn pointer-events-auto"
               aria-label="Más opciones"
             >
               <MoreVertical size={18} class="text-white" />
             </button>
           </div>
-          
+
           <!-- Fila inferior: Pregunta -->
           <div class="header-question-row">
             {#if readOnly}
               <button
                 class="header-question-text pointer-events-auto"
-                style={!isTitleExpanded ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word;" : "word-break: break-word;"}
-                onclick={() => isTitleExpanded = !isTitleExpanded}
+                style={!isTitleExpanded
+                  ? "display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word;"
+                  : "word-break: break-word;"}
+                onclick={() => (isTitleExpanded = !isTitleExpanded)}
                 type="button"
-                aria-label={isTitleExpanded ? "Contraer título" : "Expandir título"}
+                aria-label={isTitleExpanded
+                  ? "Contraer título"
+                  : "Expandir título"}
               >
                 {pollTitle}
               </button>
@@ -1412,7 +1570,8 @@
 
       <!-- SCROLL CONTAINER (MAIN CONTENT) -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-      <div bind:this={scrollContainer}
+      <div
+        bind:this={scrollContainer}
         class="absolute inset-0 w-full h-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar focus:outline-none scroll-smooth"
         onscroll={handleScroll}
         ontouchstart={handleTouchStart}
@@ -1422,173 +1581,274 @@
         tabindex="0"
         role="listbox"
         aria-label="Opciones de encuesta"
-        aria-activedescendant={options[activeIndex]?.id ? `option-${options[activeIndex].id}` : undefined}
+        aria-activedescendant={options[activeIndex]?.id
+          ? `option-${options[activeIndex].id}`
+          : undefined}
       >
         {#each options as opt, i (opt.id)}
           {#key `${opt.id}-${failedThumbnails[opt.id] === true}`}
-          {@const type = getMediaType(opt)}
-          {@const labelText = getLabelWithoutUrl(opt.label)}
-          {@const mediaFailed = failedThumbnails[opt.id] === true}
-          {@const hasThumb = !mediaFailed && hasRealThumbnail(opt)}
-          {@const isGenericLinkWithThumb = type === 'generic-link' && hasThumb}
-          {@const isVideoType = !mediaFailed && ((type !== 'image' && type !== 'text' && type !== 'generic-link') || isGenericLinkWithThumb)}
-          {@const isMusicType = !mediaFailed && ['spotify', 'soundcloud', 'applemusic', 'deezer', 'bandcamp'].includes(type)}
-          {@const isGifType = !mediaFailed && opt.imageUrl && (opt.imageUrl.includes('giphy.com') || opt.imageUrl.includes('tenor.com') || /\.gif([?#]|$)/i.test(opt.imageUrl))}
-          {@const isImageType = !mediaFailed && type === 'image' && !isGifType}
-          {@const isGenericLinkWithoutThumb = type === 'generic-link' && !hasThumb}
-          {@const shouldShowAsText = type === 'text' || isGenericLinkWithoutThumb || mediaFailed}
-          <div
-            id="option-{opt.id}"
-            class="w-full h-full flex-shrink-0 snap-center relative"
-            style="scroll-snap-stop: always;"
-            role="option"
-            aria-selected={i === activeIndex}
-          >
-            <!-- SlideContent -->
-            <div class="w-full h-full relative overflow-hidden">
-              
-              <!-- CARD CONTAINER - Igual para todos los tipos -->
-              <div class="option-card-container">
-                <div class="option-card-rounded" style="--option-color: {hasVoted ? opt.color : '#555'};">
-                  
-                                    
-                  {#if shouldShowAsText}
-                    <!-- === LAYOUT SOLO TEXTO (o enlace genérico sin thumbnail) === -->
-                    <!-- Área principal con color de fondo y comillas -->
-                    <div class="card-content-area" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                      <!-- Comillas decorativas -->
-                      <span class="quote-decoration quote-open">"</span>
-                      <span class="quote-decoration quote-close">"</span>
-                      
-                      <!-- Texto centrado -->
-                      <div class="text-center-wrapper">
-                        <h1 class="{labelText.length > 60 ? 'text-3xl' : labelText.length > 40 ? 'text-4xl' : 'text-5xl'} font-bold text-white tracking-tighter leading-tight break-words text-center">
-                          {labelText || opt.label}
-                        </h1>
-                        
-                        <!-- Enlace debajo del texto si existe -->
-                        {#if isGenericLinkWithoutThumb && opt.imageUrl}
-                          <a 
-                            href={opt.imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="link-below-text-max"
-                            onclick={(e) => e.stopPropagation()}
+            {@const type = getMediaType(opt)}
+            {@const labelText = getLabelWithoutUrl(opt.label)}
+            {@const mediaFailed = failedThumbnails[opt.id] === true}
+            {@const hasThumb = !mediaFailed && hasRealThumbnail(opt)}
+            {@const isGenericLinkWithThumb =
+              type === "generic-link" && hasThumb}
+            {@const isVideoType =
+              !mediaFailed &&
+              ((type !== "image" &&
+                type !== "text" &&
+                type !== "generic-link") ||
+                isGenericLinkWithThumb)}
+            {@const isMusicType =
+              !mediaFailed &&
+              [
+                "spotify",
+                "soundcloud",
+                "applemusic",
+                "deezer",
+                "bandcamp",
+              ].includes(type)}
+            {@const isGifType =
+              !mediaFailed &&
+              opt.imageUrl &&
+              (opt.imageUrl.includes("giphy.com") ||
+                opt.imageUrl.includes("tenor.com") ||
+                /\.gif([?#]|$)/i.test(opt.imageUrl))}
+            {@const isImageType =
+              !mediaFailed && type === "image" && !isGifType}
+            {@const isGenericLinkWithoutThumb =
+              type === "generic-link" && !hasThumb}
+            {@const shouldShowAsText =
+              type === "text" || isGenericLinkWithoutThumb || mediaFailed}
+            <div
+              id="option-{opt.id}"
+              class="w-full h-full flex-shrink-0 snap-center relative"
+              style="scroll-snap-stop: always;"
+              role="option"
+              aria-selected={i === activeIndex}
+            >
+              <!-- SlideContent -->
+              <div class="w-full h-full relative overflow-hidden">
+                <!-- CARD CONTAINER - Igual para todos los tipos -->
+                <div class="option-card-container">
+                  <div
+                    class="option-card-rounded"
+                    style="--option-color: {hasVoted ? opt.color : '#555'};"
+                  >
+                    {#if shouldShowAsText}
+                      <!-- === LAYOUT SOLO TEXTO (o enlace genérico sin thumbnail) === -->
+                      <!-- Área principal con color de fondo y comillas -->
+                      <div
+                        class="card-content-area"
+                        style="background-color: {hasVoted
+                          ? opt.color
+                          : NEUTRAL_COLOR};"
+                      >
+                        <!-- Comillas decorativas -->
+                        <span class="quote-decoration quote-open">"</span>
+                        <span class="quote-decoration quote-close">"</span>
+
+                        <!-- Texto centrado -->
+                        <div class="text-center-wrapper">
+                          <h1
+                            class="{labelText.length > 60
+                              ? 'text-3xl'
+                              : labelText.length > 40
+                                ? 'text-4xl'
+                                : 'text-5xl'} font-bold text-white tracking-tighter leading-tight break-words text-center"
                           >
-                            <img 
-                              src="https://www.google.com/s2/favicons?domain={getHostname(opt.imageUrl || '')}&sz=16" 
-                              alt="" 
-                              class="link-below-favicon-max"
-                            />
-                            <span class="link-below-domain-max">{getHostname(opt.imageUrl || '')}</span>
-                            <span class="link-below-arrow-max">↗</span>
-                          </a>
-                        {/if}
+                            {labelText || opt.label}
+                          </h1>
+
+                          <!-- Enlace debajo del texto si existe -->
+                          {#if isGenericLinkWithoutThumb && opt.imageUrl}
+                            <a
+                              href={opt.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="link-below-text-max"
+                              onclick={(e) => e.stopPropagation()}
+                            >
+                              <img
+                                src="https://www.google.com/s2/favicons?domain={getHostname(
+                                  opt.imageUrl || '',
+                                )}&sz=16"
+                                alt=""
+                                class="link-below-favicon-max"
+                              />
+                              <span class="link-below-domain-max"
+                                >{getHostname(opt.imageUrl || "")}</span
+                              >
+                              <span class="link-below-arrow-max">↗</span>
+                            </a>
+                          {/if}
+                        </div>
+
+                        <!-- Línea divisoria en el borde inferior -->
+                        <div
+                          class="card-divider-line card-divider-bottom"
+                        ></div>
                       </div>
-                      
-                      <!-- Línea divisoria en el borde inferior -->
-                      <div class="card-divider-line card-divider-bottom"></div>
-                    </div>
-                    
-                    <!-- Barra inferior -->
-                    <div class="card-footer-bar" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
+
+                      <!-- Barra inferior -->
+                      <div
+                        class="card-footer-bar"
+                        style="background-color: {hasVoted
+                          ? opt.color
+                          : NEUTRAL_COLOR};"
+                      >
                         <div class="card-bottom-row">
                           {#if hasVoted && totalVotes > 0}
                             <div class="card-percentage">
-                              <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
-                              <span class="card-percentage-label">DE LOS VOTOS</span>
+                              <span class="card-percentage-value"
+                                >{Math.round(
+                                  ((opt.votes || 0) / totalVotes) * 100,
+                                )}%</span
+                              >
+                              <span class="card-percentage-label"
+                                >DE LOS VOTOS</span
+                              >
                             </div>
                           {:else}
                             <div></div>
                           {/if}
-                          
+
                           <!-- Avatares de amigos -->
                           <div class="card-avatars-group">
                             {#if getFriendsForOption(opt).length > 0}
-                              <button 
+                              <button
                                 class="friends-avatars-stack"
-                                onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
+                                onclick={(e) => {
+                                  e.stopPropagation();
+                                  if (hasVoted) showFriendsVotesModal = true;
+                                }}
                                 disabled={!hasVoted}
                                 type="button"
-                                aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
+                                aria-label={hasVoted
+                                  ? "Ver votos de amigos"
+                                  : "Vota para ver quién eligió esta opción"}
                               >
                                 {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
                                   {#if hasVoted}
-                                    <img 
-                                      class="friend-avatar-stacked" 
-                                      style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
-                                      src={friend.avatarUrl || '/default-avatar.png'}
-                                      alt={friend.name || 'Amigo'}
+                                    <img
+                                      class="friend-avatar-stacked"
+                                      style="z-index: {10 -
+                                        idx}; margin-left: {idx > 0
+                                        ? '-8px'
+                                        : '0'};"
+                                      src={friend.avatarUrl ||
+                                        "/default-avatar.png"}
+                                      alt={friend.name || "Amigo"}
                                     />
                                   {:else}
-                                    <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
+                                    <div
+                                      class="friend-avatar-mystery"
+                                      style="z-index: {10 -
+                                        idx}; margin-left: {idx > 0
+                                        ? '-8px'
+                                        : '0'};"
+                                    >
                                       <span>?</span>
                                     </div>
                                   {/if}
                                 {/each}
                                 {#if getFriendsForOption(opt).length > 3}
-                                  <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
+                                  <span class="friends-more-count"
+                                    >+{getFriendsForOption(opt).length -
+                                      3}</span
+                                  >
                                 {/if}
                               </button>
                             {/if}
                           </div>
                         </div>
-                    </div>
-                    
-                    <!-- === INDICADOR DE RESPUESTA CORRECTA === -->
-                    {#if hasVoted && opt.isCorrect}
-                      <div class="correct-indicator-overlay">
-                        <div class="correct-indicator-badge {opt.voted ? 'correct' : 'incorrect'}">
-                          {#if opt.voted}
-                            <Check size={14} />
-                            <span>¡Acertaste!</span>
-                          {:else}
-                            <CircleCheck size={14} />
-                            <span>Esta era la correcta</span>
-                          {/if}
-                        </div>
                       </div>
-                    {/if}
-                    
-                  {:else if isVideoType}
-                    <!-- === LAYOUT VIDEO CON PREVIEW FLOTANTE === -->
-                    <!-- Card con color de fondo de la opción -->
-                    <div class="card-video-wrapper {isMusicType ? 'is-music' : ''}" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                      <!-- Contenedor flotante del preview que sobresale -->
-                      <div 
-                        class="floating-preview-frame"
-                        ontouchstart={handlePreviewTouchStart}
-                        ontouchend={handlePreviewTouchEnd}
-                        role="region"
-                        aria-label="Preview de contenido"
+
+                      <!-- === INDICADOR DE RESPUESTA CORRECTA === -->
+                      {#if hasVoted && opt.isCorrect}
+                        <div class="correct-indicator-overlay">
+                          <div
+                            class="correct-indicator-badge {opt.voted
+                              ? 'correct'
+                              : 'incorrect'}"
+                          >
+                            {#if opt.voted}
+                              <Check size={14} />
+                              <span>¡Acertaste!</span>
+                            {:else}
+                              <CircleCheck size={14} />
+                              <span>Esta era la correcta</span>
+                            {/if}
+                          </div>
+                        </div>
+                      {/if}
+                    {:else if isVideoType}
+                      <!-- === LAYOUT VIDEO CON PREVIEW FLOTANTE === -->
+                      <!-- Card con color de fondo de la opción -->
+                      <div
+                        class="card-video-wrapper {isMusicType
+                          ? 'is-music'
+                          : ''}"
+                        style="background-color: {hasVoted
+                          ? opt.color
+                          : NEUTRAL_COLOR};"
                       >
-                        <div class="floating-preview-inner">
-                          <!-- Mostrar thumbnail siempre que esté disponible y no haya fallado -->
-                          {#if !mediaFailed && (previewCache[opt.id]?.image || getPreviewThumbnail(opt)) && (hasEmbeddableContent(opt) || isGenericLinkWithThumb)}
-                            {@const thumbUrl = previewCache[opt.id]?.image || getPreviewThumbnail(opt)}
-                            <!-- Imagen oculta para detectar errores de carga -->
-                            <img 
-                              src={thumbUrl} 
-                              alt="" 
-                              style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;" 
-                              onerror={() => {
-                                console.log('[PollMaximizedView] 🚫 Imagen error:', opt.id, thumbUrl?.substring(0, 50));
-                                failedThumbnails = { ...failedThumbnails, [opt.id]: true };
-                                if (thumbUrl) markImageFailed(thumbUrl);
-                              }}
-                              onload={(e) => {
-                                const img = e.target as HTMLImageElement;
-                                // Si la imagen es muy pequeña (1x1 pixel tracking) o no tiene dimensiones, marcar como fallida
-                                if (img.naturalWidth < 10 || img.naturalHeight < 10) {
-                                  console.log('[PollMaximizedView] 🚫 Imagen inválida (muy pequeña):', opt.id, img.naturalWidth, 'x', img.naturalHeight);
-                                  failedThumbnails = { ...failedThumbnails, [opt.id]: true };
+                        <!-- Contenedor flotante del preview que sobresale -->
+                        <div
+                          class="floating-preview-frame"
+                          ontouchstart={handlePreviewTouchStart}
+                          ontouchend={handlePreviewTouchEnd}
+                          role="region"
+                          aria-label="Preview de contenido"
+                        >
+                          <div class="floating-preview-inner">
+                            <!-- Mostrar thumbnail siempre que esté disponible y no haya fallado -->
+                            {#if !mediaFailed && (previewCache[opt.id]?.image || getPreviewThumbnail(opt)) && (hasEmbeddableContent(opt) || isGenericLinkWithThumb)}
+                              {@const thumbUrl =
+                                previewCache[opt.id]?.image ||
+                                getPreviewThumbnail(opt)}
+                              <!-- Imagen oculta para detectar errores de carga -->
+                              <img
+                                src={thumbUrl}
+                                alt=""
+                                style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;"
+                                onerror={() => {
+                                  console.log(
+                                    "[PollMaximizedView] 🚫 Imagen error:",
+                                    opt.id,
+                                    thumbUrl?.substring(0, 50),
+                                  );
+                                  failedThumbnails = {
+                                    ...failedThumbnails,
+                                    [opt.id]: true,
+                                  };
                                   if (thumbUrl) markImageFailed(thumbUrl);
-                                }
-                              }}
-                            />
-                            <!-- PREVIEW: Thumbnail con badge flotante -->
-                            <!-- Si tiene embed (plataformas conocidas) -> abre fullscreen iframe -->
-                            <!-- Si es enlace genérico sin embed -> abre enlace directamente -->
+                                }}
+                                onload={(e) => {
+                                  const img = e.target as HTMLImageElement;
+                                  // Si la imagen es muy pequeña (1x1 pixel tracking) o no tiene dimensiones, marcar como fallida
+                                  if (
+                                    img.naturalWidth < 10 ||
+                                    img.naturalHeight < 10
+                                  ) {
+                                    console.log(
+                                      "[PollMaximizedView] 🚫 Imagen inválida (muy pequeña):",
+                                      opt.id,
+                                      img.naturalWidth,
+                                      "x",
+                                      img.naturalHeight,
+                                    );
+                                    failedThumbnails = {
+                                      ...failedThumbnails,
+                                      [opt.id]: true,
+                                    };
+                                    if (thumbUrl) markImageFailed(thumbUrl);
+                                  }
+                                }}
+                              />
+                              <!-- PREVIEW: Thumbnail con badge flotante -->
+                              <!-- Si tiene embed (plataformas conocidas) -> abre fullscreen iframe -->
+                              <!-- Si es enlace genérico sin embed -> abre enlace directamente -->
                               {@const platformType = getMediaType(opt)}
                               {@const canEmbed = hasEmbeddableContent(opt)}
                               {@const platformColors: Record<string, string> = {
@@ -1597,284 +1857,446 @@
                                 deezer: '#FEAA2D', dailymotion: '#0066DC', bandcamp: '#1DA0C3', video: '#666666',
                                 image: '#666666', 'generic-link': '#666666'
                               }}
-                              <button 
+                              <button
                                 class="embed-preview-container thumbnail-fullscreen-btn"
-                                onclick={(e) => { 
-                                  e.stopPropagation(); 
+                                onclick={(e) => {
+                                  e.stopPropagation();
                                   if (canEmbed) {
                                     handleOpenFullscreenIframe(opt);
                                   } else if (opt.imageUrl) {
-                                    window.open(opt.imageUrl, '_blank', 'noopener,noreferrer');
+                                    window.open(
+                                      opt.imageUrl,
+                                      "_blank",
+                                      "noopener,noreferrer",
+                                    );
                                   }
                                 }}
                                 type="button"
-                                aria-label={canEmbed ? "Reproducir contenido a pantalla completa" : "Abrir enlace"}
+                                aria-label={canEmbed
+                                  ? "Reproducir contenido a pantalla completa"
+                                  : "Abrir enlace"}
                                 style="background-image: url('{thumbUrl}');"
                               >
                                 <!-- Badge de plataforma -->
-                                <div class="platform-badge-max" style="--platform-color: {platformColors[platformType] || '#666'}">
-                                {#if platformType === 'youtube'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                                {:else if platformType === 'vimeo'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.977 6.416c-.105 2.338-1.739 5.543-4.894 9.609-3.268 4.247-6.026 6.37-8.29 6.37-1.409 0-2.578-1.294-3.553-3.881L5.322 11.4C4.603 8.816 3.834 7.522 3.01 7.522c-.179 0-.806.378-1.881 1.132L0 7.197c1.185-1.044 2.351-2.084 3.501-3.128C5.08 2.701 6.266 1.984 7.055 1.91c1.867-.18 3.016 1.1 3.447 3.838.465 2.953.789 4.789.971 5.507.539 2.45 1.131 3.674 1.776 3.674.502 0 1.256-.796 2.265-2.385 1.004-1.589 1.54-2.797 1.612-3.628.144-1.371-.395-2.061-1.614-2.061-.574 0-1.167.121-1.777.391 1.186-3.868 3.434-5.757 6.762-5.637 2.473.06 3.628 1.664 3.493 4.797l-.013.01z"/></svg>
-                                {:else if platformType === 'spotify'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-                                {:else if platformType === 'soundcloud'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.56 8.87V17h8.76c1.85-.13 2.68-1.27 2.68-2.67 0-1.48-1.12-2.67-2.53-2.67-.33 0-.65.08-.96.2-.11-2.02-1.69-3.63-3.66-3.63-1.24 0-2.34.64-2.99 1.64H11.56zm-1 0H9.4v8.13h1.16V8.87zm-2.16.52H7.24v7.61H8.4V9.39zm-2.16.91H5.08v6.7h1.16v-6.7zm-2.16.78H2.92v5.92h1.16v-5.92zm-2.16 1.3H.76v4.62h1.16v-4.62z"/></svg>
-                                {:else if platformType === 'tiktok'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>
-                                {:else if platformType === 'twitch'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
-                                {:else if platformType === 'twitter'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                {:else if platformType === 'applemusic'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.994 6.124a9.23 9.23 0 0 0-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 0 0-1.877-.726 10.496 10.496 0 0 0-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026-.747.043-1.49.123-2.193.4-1.336.53-2.3 1.452-2.865 2.78-.192.448-.292.925-.363 1.408-.056.392-.088.785-.1 1.18 0 .032-.007.062-.01.093v12.223c.01.14.017.283.027.424.05.815.154 1.624.497 2.373.65 1.42 1.738 2.353 3.234 2.8.42.127.856.187 1.293.228.555.053 1.11.06 1.667.06h11.03a12.5 12.5 0 0 0 1.57-.1c.822-.106 1.596-.35 2.296-.81a5.046 5.046 0 0 0 1.88-2.207c.186-.42.293-.87.37-1.324.113-.675.138-1.358.137-2.04-.002-3.8 0-7.595-.003-11.393zm-6.423 3.99v5.712c0 .417-.058.827-.244 1.206-.29.59-.76.962-1.388 1.14-.35.1-.706.157-1.07.173-.95.042-1.785-.455-2.105-1.245-.227-.56-.2-1.13.063-1.676.328-.68.88-1.106 1.596-1.29.39-.1.79-.148 1.19-.202.246-.033.494-.06.736-.108.27-.053.415-.2.46-.47a1.327 1.327 0 0 0 .015-.18V8.24a.677.677 0 0 0-.013-.12c-.05-.3-.2-.453-.505-.46-.304-.01-.61.013-.914.055-.505.07-1.01.15-1.514.227-.634.097-1.268.197-1.902.297-.346.054-.552.27-.59.615a2.24 2.24 0 0 0-.014.18v7.63c0 .426-.063.847-.25 1.236-.29.6-.77.97-1.406 1.148-.33.09-.665.134-1.01.152-.978.044-1.81-.424-2.14-1.236-.23-.566-.2-1.14.064-1.69.328-.684.89-1.106 1.6-1.287.38-.096.77-.147 1.156-.197.256-.035.51-.065.764-.11.26-.045.416-.196.458-.456.013-.083.014-.166.014-.25V6.8c0-.29.127-.49.387-.584.055-.02.113-.032.17-.045.348-.066.696-.133 1.044-.198.692-.13 1.386-.257 2.078-.385l2.052-.385 1.19-.22c.072-.014.144-.023.213-.052z"/></svg>
-                                {:else if platformType === 'deezer'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.81 4.16v3.03H24V4.16h-5.19zM6.27 8.38v3.027h5.189V8.38h-5.19zm12.54 0v3.027H24V8.38h-5.19zM6.27 12.594v3.027h5.189v-3.027h-5.19zm6.271 0v3.027h5.19v-3.027h-5.19zm6.27 0v3.027H24v-3.027h-5.19zM0 16.81v3.029h5.19v-3.03H0zm6.27 0v3.029h5.19v-3.03h-5.19zm6.271 0v3.029h5.19v-3.03h-5.19zm6.27 0v3.029H24v-3.03h-5.19z"/></svg>
-                                {:else if platformType === 'dailymotion'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.006 13.24c-1.47 0-2.66-1.2-2.66-2.67s1.2-2.67 2.66-2.67 2.67 1.19 2.67 2.67c0 1.47-1.2 2.67-2.67 2.67zM18 2H6C3.79 2 2 3.79 2 6v12c0 2.21 1.79 4 4 4h12c2.21 0 4-1.79 4-4V6c0-2.21-1.79-4-4-4zm-5.99 14.91c-3.32 0-6.01-2.69-6.01-6.01 0-3.32 2.69-6.01 6.01-6.01 3.32 0 6.01 2.69 6.01 6.01 0 3.32-2.69 6.01-6.01 6.01z"/></svg>
-                                {:else if platformType === 'bandcamp'}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5H0z"/></svg>
-                                {:else if platformType === 'generic-link' || !canEmbed}
-                                  <!-- Icono de enlace externo para enlaces genéricos -->
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zm-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7h-7z"/></svg>
-                                {:else}
-                                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                                {/if}
+                                <div
+                                  class="platform-badge-max"
+                                  style="--platform-color: {platformColors[
+                                    platformType
+                                  ] || '#666'}"
+                                >
+                                  {#if platformType === "youtube"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "vimeo"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M23.977 6.416c-.105 2.338-1.739 5.543-4.894 9.609-3.268 4.247-6.026 6.37-8.29 6.37-1.409 0-2.578-1.294-3.553-3.881L5.322 11.4C4.603 8.816 3.834 7.522 3.01 7.522c-.179 0-.806.378-1.881 1.132L0 7.197c1.185-1.044 2.351-2.084 3.501-3.128C5.08 2.701 6.266 1.984 7.055 1.91c1.867-.18 3.016 1.1 3.447 3.838.465 2.953.789 4.789.971 5.507.539 2.45 1.131 3.674 1.776 3.674.502 0 1.256-.796 2.265-2.385 1.004-1.589 1.54-2.797 1.612-3.628.144-1.371-.395-2.061-1.614-2.061-.574 0-1.167.121-1.777.391 1.186-3.868 3.434-5.757 6.762-5.637 2.473.06 3.628 1.664 3.493 4.797l-.013.01z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "spotify"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "soundcloud"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M11.56 8.87V17h8.76c1.85-.13 2.68-1.27 2.68-2.67 0-1.48-1.12-2.67-2.53-2.67-.33 0-.65.08-.96.2-.11-2.02-1.69-3.63-3.66-3.63-1.24 0-2.34.64-2.99 1.64H11.56zm-1 0H9.4v8.13h1.16V8.87zm-2.16.52H7.24v7.61H8.4V9.39zm-2.16.91H5.08v6.7h1.16v-6.7zm-2.16.78H2.92v5.92h1.16v-5.92zm-2.16 1.3H.76v4.62h1.16v-4.62z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "tiktok"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "twitch"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "twitter"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "applemusic"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M23.994 6.124a9.23 9.23 0 0 0-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 0 0-1.877-.726 10.496 10.496 0 0 0-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026-.747.043-1.49.123-2.193.4-1.336.53-2.3 1.452-2.865 2.78-.192.448-.292.925-.363 1.408-.056.392-.088.785-.1 1.18 0 .032-.007.062-.01.093v12.223c.01.14.017.283.027.424.05.815.154 1.624.497 2.373.65 1.42 1.738 2.353 3.234 2.8.42.127.856.187 1.293.228.555.053 1.11.06 1.667.06h11.03a12.5 12.5 0 0 0 1.57-.1c.822-.106 1.596-.35 2.296-.81a5.046 5.046 0 0 0 1.88-2.207c.186-.42.293-.87.37-1.324.113-.675.138-1.358.137-2.04-.002-3.8 0-7.595-.003-11.393zm-6.423 3.99v5.712c0 .417-.058.827-.244 1.206-.29.59-.76.962-1.388 1.14-.35.1-.706.157-1.07.173-.95.042-1.785-.455-2.105-1.245-.227-.56-.2-1.13.063-1.676.328-.68.88-1.106 1.596-1.29.39-.1.79-.148 1.19-.202.246-.033.494-.06.736-.108.27-.053.415-.2.46-.47a1.327 1.327 0 0 0 .015-.18V8.24a.677.677 0 0 0-.013-.12c-.05-.3-.2-.453-.505-.46-.304-.01-.61.013-.914.055-.505.07-1.01.15-1.514.227-.634.097-1.268.197-1.902.297-.346.054-.552.27-.59.615a2.24 2.24 0 0 0-.014.18v7.63c0 .426-.063.847-.25 1.236-.29.6-.77.97-1.406 1.148-.33.09-.665.134-1.01.152-.978.044-1.81-.424-2.14-1.236-.23-.566-.2-1.14.064-1.69.328-.684.89-1.106 1.6-1.287.38-.096.77-.147 1.156-.197.256-.035.51-.065.764-.11.26-.045.416-.196.458-.456.013-.083.014-.166.014-.25V6.8c0-.29.127-.49.387-.584.055-.02.113-.032.17-.045.348-.066.696-.133 1.044-.198.692-.13 1.386-.257 2.078-.385l2.052-.385 1.19-.22c.072-.014.144-.023.213-.052z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "deezer"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M18.81 4.16v3.03H24V4.16h-5.19zM6.27 8.38v3.027h5.189V8.38h-5.19zm12.54 0v3.027H24V8.38h-5.19zM6.27 12.594v3.027h5.189v-3.027h-5.19zm6.271 0v3.027h5.19v-3.027h-5.19zm6.27 0v3.027H24v-3.027h-5.19zM0 16.81v3.029h5.19v-3.03H0zm6.27 0v3.029h5.19v-3.03h-5.19zm6.271 0v3.029h5.19v-3.03h-5.19zm6.27 0v3.029H24v-3.03h-5.19z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "dailymotion"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M12.006 13.24c-1.47 0-2.66-1.2-2.66-2.67s1.2-2.67 2.66-2.67 2.67 1.19 2.67 2.67c0 1.47-1.2 2.67-2.67 2.67zM18 2H6C3.79 2 2 3.79 2 6v12c0 2.21 1.79 4 4 4h12c2.21 0 4-1.79 4-4V6c0-2.21-1.79-4-4-4zm-5.99 14.91c-3.32 0-6.01-2.69-6.01-6.01 0-3.32 2.69-6.01 6.01-6.01 3.32 0 6.01 2.69 6.01 6.01 0 3.32-2.69 6.01-6.01 6.01z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "bandcamp"}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M0 18.75l7.437-13.5H24l-7.438 13.5H0z"
+                                      /></svg
+                                    >
+                                  {:else if platformType === "generic-link" || !canEmbed}
+                                    <!-- Icono de enlace externo para enlaces genéricos -->
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path
+                                        d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zm-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7h-7z"
+                                      /></svg
+                                    >
+                                  {:else}
+                                    <svg viewBox="0 0 24 24" fill="currentColor"
+                                      ><path d="M8 5v14l11-7z" /></svg
+                                    >
+                                  {/if}
+                                </div>
+                              </button>
+                            {:else}
+                              <!-- Placeholder mientras carga el thumbnail -->
+                              <div
+                                class="w-full h-full flex items-center justify-center rounded-2xl"
+                                style="background-color: {hasVoted
+                                  ? opt.color
+                                  : NEUTRAL_COLOR};"
+                              >
+                                <span class="text-white/50 text-sm"
+                                  >Cargando...</span
+                                >
                               </div>
-                            </button>
-                          {:else}
-                            <!-- Placeholder mientras carga el thumbnail -->
-                            <div class="w-full h-full flex items-center justify-center rounded-2xl" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                              <span class="text-white/50 text-sm">Cargando...</span>
-                            </div>
-                          {/if}
+                            {/if}
+                          </div>
                         </div>
-                      </div>
-                      
-                      <!-- Contenido debajo del video -->
-                      <div class="card-video-bottom">
-                        <!-- Label (sin URL) -->
-                        <h2 class="{labelText.length > 40 ? 'text-xl' : labelText.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white tracking-tighter leading-tight card-bottom-label">
-                          {labelText}
-                        </h2>
-                        
-                        <!-- Enlace debajo del texto para URLs con embed -->
-                        {#if shouldShowLink(opt.imageUrl)}
-                          <a 
-                            href={opt.imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="link-below-text-max"
-                            onclick={(e) => e.stopPropagation()}
+
+                        <!-- Contenido debajo del video -->
+                        <div class="card-video-bottom">
+                          <!-- Label (sin URL) -->
+                          <h2
+                            class="{labelText.length > 40
+                              ? 'text-xl'
+                              : labelText.length > 25
+                                ? 'text-2xl'
+                                : 'text-3xl'} font-bold text-white tracking-tighter leading-tight card-bottom-label"
                           >
-                            <img 
-                              src="https://www.google.com/s2/favicons?domain={getHostname(opt.imageUrl || '')}&sz=16" 
-                              alt="" 
-                              class="link-below-favicon-max"
-                            />
-                            <span class="link-below-domain-max">{getHostname(opt.imageUrl || '')}</span>
-                            <span class="link-below-arrow-max">↗</span>
-                          </a>
-                        {/if}
-                        
-                        <!-- Línea divisoria -->
-                        <div class="card-divider-line"></div>
-                        
-                        <!-- Footer con porcentaje y avatares -->
+                            {labelText}
+                          </h2>
+
+                          <!-- Enlace debajo del texto para URLs con embed -->
+                          {#if shouldShowLink(opt.imageUrl)}
+                            <a
+                              href={opt.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="link-below-text-max"
+                              onclick={(e) => e.stopPropagation()}
+                            >
+                              <img
+                                src="https://www.google.com/s2/favicons?domain={getHostname(
+                                  opt.imageUrl || '',
+                                )}&sz=16"
+                                alt=""
+                                class="link-below-favicon-max"
+                              />
+                              <span class="link-below-domain-max"
+                                >{getHostname(opt.imageUrl || "")}</span
+                              >
+                              <span class="link-below-arrow-max">↗</span>
+                            </a>
+                          {/if}
+
+                          <!-- Línea divisoria -->
+                          <div class="card-divider-line"></div>
+
+                          <!-- Footer con porcentaje y avatares -->
                           <div class="card-bottom-row">
                             {#if hasVoted && totalVotes > 0}
                               <div class="card-percentage">
-                                <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
-                                <span class="card-percentage-label">DE LOS VOTOS</span>
+                                <span class="card-percentage-value"
+                                  >{Math.round(
+                                    ((opt.votes || 0) / totalVotes) * 100,
+                                  )}%</span
+                                >
+                                <span class="card-percentage-label"
+                                  >DE LOS VOTOS</span
+                                >
                               </div>
                             {:else}
                               <div></div>
                             {/if}
-                            
+
                             <!-- Avatares de amigos -->
                             <div class="card-avatars-group">
                               {#if getFriendsForOption(opt).length > 0}
-                                <button 
+                                <button
                                   class="friends-avatars-stack"
-                                  onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
+                                  onclick={(e) => {
+                                    e.stopPropagation();
+                                    if (hasVoted) showFriendsVotesModal = true;
+                                  }}
                                   disabled={!hasVoted}
                                   type="button"
-                                  aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
+                                  aria-label={hasVoted
+                                    ? "Ver votos de amigos"
+                                    : "Vota para ver quién eligió esta opción"}
                                 >
                                   {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
                                     {#if hasVoted}
-                                      <img 
-                                        class="friend-avatar-stacked" 
-                                        style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
-                                        src={friend.avatarUrl || '/default-avatar.png'}
-                                        alt={friend.name || 'Amigo'}
+                                      <img
+                                        class="friend-avatar-stacked"
+                                        style="z-index: {10 -
+                                          idx}; margin-left: {idx > 0
+                                          ? '-8px'
+                                          : '0'};"
+                                        src={friend.avatarUrl ||
+                                          "/default-avatar.png"}
+                                        alt={friend.name || "Amigo"}
                                       />
                                     {:else}
-                                      <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
+                                      <div
+                                        class="friend-avatar-mystery"
+                                        style="z-index: {10 -
+                                          idx}; margin-left: {idx > 0
+                                          ? '-8px'
+                                          : '0'};"
+                                      >
                                         <span>?</span>
                                       </div>
                                     {/if}
                                   {/each}
                                   {#if getFriendsForOption(opt).length > 3}
-                                    <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
+                                    <span class="friends-more-count"
+                                      >+{getFriendsForOption(opt).length -
+                                        3}</span
+                                    >
                                   {/if}
                                 </button>
                               {/if}
                             </div>
                           </div>
-                      </div>
-                    </div>
-                    
-                    <!-- === INDICADOR CORRECTA VIDEO === -->
-                    {#if hasVoted && opt.isCorrect}
-                      <div class="correct-indicator-overlay">
-                        <div class="correct-indicator-badge {opt.voted ? 'correct' : 'incorrect'}">
-                          {#if opt.voted}
-                            <Check size={14} />
-                            <span>¡Acertaste!</span>
-                          {:else}
-                            <CircleCheck size={14} />
-                            <span>Esta era la correcta</span>
-                          {/if}
                         </div>
                       </div>
-                    {/if}
-                    
-                  {:else}
-                    <!-- === LAYOUT GIF/IMAGEN === -->
-                    <!-- Wrapper con borde del color de la opción -->
-                    <div class="card-media-border" style="--border-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                      <!-- Imagen a pantalla completa con contenido overlay -->
-                      <div class="card-media-fullscreen">
-                        <!-- Imagen de fondo -->
-                        <div class="card-image-fullscreen">
-                        {#if i === activeIndex}
-                          {#key `media-${opt.id}-${activeIndex}`}
-                            <MediaEmbed
-                              url={opt.imageUrl || ""}
-                              mode="full"
-                              width="100%"
-                              height="100%"
-                              autoplay={isVideoContent(opt)}
-                              on:imageerror={() => { if (opt.imageUrl) markThumbnailFailed(opt.id, opt.imageUrl); }}
-                            />
-                          {/key}
-                        {:else}
-                          <!-- Placeholder mientras carga -->
-                          <div class="w-full h-full flex items-center justify-center rounded-2xl" style="background-color: {hasVoted ? opt.color : NEUTRAL_COLOR};">
-                            <span class="text-white/50 text-sm">Cargando...</span>
-                          </div>
-                        {/if}
-                        
-                      </div>
-                      
-                      <!-- Badge GIPHY -->
-                      {#if isGifType}
-                        <img src="/logoGIPHY.png" alt="GIPHY" class="giphy-badge-corner" />
-                      {/if}
-                      
-                      <!-- Degradado inferior -->
-                      <div class="card-bottom-gradient"></div>
-                      
-                      <!-- Contenido inferior: label + línea + porcentaje + avatar -->
-                      <div class="card-bottom-content">
-                        <!-- Label (sin URL) -->
-                        <h2 class="{labelText.length > 40 ? 'text-xl' : labelText.length > 25 ? 'text-2xl' : 'text-3xl'} font-bold text-white tracking-tighter leading-tight card-bottom-label">
-                          {labelText}
-                        </h2>
-                        
-                        <!-- Enlace debajo del texto para URLs con embed -->
-                        {#if shouldShowLink(opt.imageUrl)}
-                          <a 
-                            href={opt.imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="link-below-text-max"
-                            onclick={(e) => e.stopPropagation()}
+
+                      <!-- === INDICADOR CORRECTA VIDEO === -->
+                      {#if hasVoted && opt.isCorrect}
+                        <div class="correct-indicator-overlay">
+                          <div
+                            class="correct-indicator-badge {opt.voted
+                              ? 'correct'
+                              : 'incorrect'}"
                           >
-                            <img 
-                              src="https://www.google.com/s2/favicons?domain={getHostname(opt.imageUrl || '')}&sz=16" 
-                              alt="" 
-                              class="link-below-favicon-max"
-                            />
-                            <span class="link-below-domain-max">{getHostname(opt.imageUrl || '')}</span>
-                            <span class="link-below-arrow-max">↗</span>
-                          </a>
-                        {/if}
-                        
-                        <!-- Línea divisoria -->
-                        <div class="card-divider-line"></div>
-                        
-                        <!-- Fila: Porcentaje a la izquierda, avatar a la derecha -->
-                        <div class="card-bottom-row">
-                          {#if hasVoted && totalVotes > 0}
-                            <div class="card-percentage">
-                              <span class="card-percentage-value">{Math.round(((opt.votes || 0) / totalVotes) * 100)}%</span>
-                              <span class="card-percentage-label">DE LOS VOTOS</span>
-                            </div>
-                          {:else}
-                            <div></div>
-                          {/if}
-                          
-                          <!-- Avatares de amigos -->
-                          <div class="card-avatars-group">
-                            {#if getFriendsForOption(opt).length > 0}
-                              <button 
-                                class="friends-avatars-stack"
-                                onclick={(e) => { e.stopPropagation(); if (hasVoted) showFriendsVotesModal = true; }}
-                                disabled={!hasVoted}
-                                type="button"
-                                aria-label={hasVoted ? 'Ver votos de amigos' : 'Vota para ver quién eligió esta opción'}
-                              >
-                                {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
-                                  {#if hasVoted}
-                                    <img 
-                                      class="friend-avatar-stacked" 
-                                      style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};"
-                                      src={friend.avatarUrl || '/default-avatar.png'}
-                                      alt={friend.name || 'Amigo'}
-                                    />
-                                  {:else}
-                                    <div class="friend-avatar-mystery" style="z-index: {10 - idx}; margin-left: {idx > 0 ? '-8px' : '0'};">
-                                      <span>?</span>
-                                    </div>
-                                  {/if}
-                                {/each}
-                                {#if getFriendsForOption(opt).length > 3}
-                                  <span class="friends-more-count">+{getFriendsForOption(opt).length - 3}</span>
-                                {/if}
-                              </button>
+                            {#if opt.voted}
+                              <Check size={14} />
+                              <span>¡Acertaste!</span>
+                            {:else}
+                              <CircleCheck size={14} />
+                              <span>Esta era la correcta</span>
                             {/if}
                           </div>
                         </div>
+                      {/if}
+                    {:else}
+                      <!-- === LAYOUT GIF/IMAGEN === -->
+                      <!-- Wrapper con borde del color de la opción -->
+                      <div
+                        class="card-media-border"
+                        style="--border-color: {hasVoted
+                          ? opt.color
+                          : NEUTRAL_COLOR};"
+                      >
+                        <!-- Imagen a pantalla completa con contenido overlay -->
+                        <div class="card-media-fullscreen">
+                          <!-- Imagen de fondo -->
+                          <div class="card-image-fullscreen">
+                            {#if i === activeIndex}
+                              {#key `media-${opt.id}-${activeIndex}`}
+                                <MediaEmbed
+                                  url={opt.imageUrl || ""}
+                                  mode="full"
+                                  width="100%"
+                                  height="100%"
+                                  autoplay={isVideoContent(opt)}
+                                  on:imageerror={() => {
+                                    if (opt.imageUrl)
+                                      markThumbnailFailed(opt.id, opt.imageUrl);
+                                  }}
+                                />
+                              {/key}
+                            {:else}
+                              <!-- Placeholder mientras carga -->
+                              <div
+                                class="w-full h-full flex items-center justify-center rounded-2xl"
+                                style="background-color: {hasVoted
+                                  ? opt.color
+                                  : NEUTRAL_COLOR};"
+                              >
+                                <span class="text-white/50 text-sm"
+                                  >Cargando...</span
+                                >
+                              </div>
+                            {/if}
+                          </div>
+
+                          <!-- Badge GIPHY -->
+                          {#if isGifType}
+                            <img
+                              src="/logoGIPHY.png"
+                              alt="GIPHY"
+                              class="giphy-badge-corner"
+                            />
+                          {/if}
+
+                          <!-- Degradado inferior -->
+                          <div class="card-bottom-gradient"></div>
+
+                          <!-- Contenido inferior: label + línea + porcentaje + avatar -->
+                          <div class="card-bottom-content">
+                            <!-- Label (sin URL) -->
+                            <h2
+                              class="{labelText.length > 40
+                                ? 'text-xl'
+                                : labelText.length > 25
+                                  ? 'text-2xl'
+                                  : 'text-3xl'} font-bold text-white tracking-tighter leading-tight card-bottom-label"
+                            >
+                              {labelText}
+                            </h2>
+
+                            <!-- Enlace debajo del texto para URLs con embed -->
+                            {#if shouldShowLink(opt.imageUrl)}
+                              <a
+                                href={opt.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="link-below-text-max"
+                                onclick={(e) => e.stopPropagation()}
+                              >
+                                <img
+                                  src="https://www.google.com/s2/favicons?domain={getHostname(
+                                    opt.imageUrl || '',
+                                  )}&sz=16"
+                                  alt=""
+                                  class="link-below-favicon-max"
+                                />
+                                <span class="link-below-domain-max"
+                                  >{getHostname(opt.imageUrl || "")}</span
+                                >
+                                <span class="link-below-arrow-max">↗</span>
+                              </a>
+                            {/if}
+
+                            <!-- Línea divisoria -->
+                            <div class="card-divider-line"></div>
+
+                            <!-- Fila: Porcentaje a la izquierda, avatar a la derecha -->
+                            <div class="card-bottom-row">
+                              {#if hasVoted && totalVotes > 0}
+                                <div class="card-percentage">
+                                  <span class="card-percentage-value"
+                                    >{Math.round(
+                                      ((opt.votes || 0) / totalVotes) * 100,
+                                    )}%</span
+                                  >
+                                  <span class="card-percentage-label"
+                                    >DE LOS VOTOS</span
+                                  >
+                                </div>
+                              {:else}
+                                <div></div>
+                              {/if}
+
+                              <!-- Avatares de amigos -->
+                              <div class="card-avatars-group">
+                                {#if getFriendsForOption(opt).length > 0}
+                                  <button
+                                    class="friends-avatars-stack"
+                                    onclick={(e) => {
+                                      e.stopPropagation();
+                                      if (hasVoted)
+                                        showFriendsVotesModal = true;
+                                    }}
+                                    disabled={!hasVoted}
+                                    type="button"
+                                    aria-label={hasVoted
+                                      ? "Ver votos de amigos"
+                                      : "Vota para ver quién eligió esta opción"}
+                                  >
+                                    {#each getFriendsForOption(opt).slice(0, 3) as friend, idx}
+                                      {#if hasVoted}
+                                        <img
+                                          class="friend-avatar-stacked"
+                                          style="z-index: {10 -
+                                            idx}; margin-left: {idx > 0
+                                            ? '-8px'
+                                            : '0'};"
+                                          src={friend.avatarUrl ||
+                                            "/default-avatar.png"}
+                                          alt={friend.name || "Amigo"}
+                                        />
+                                      {:else}
+                                        <div
+                                          class="friend-avatar-mystery"
+                                          style="z-index: {10 -
+                                            idx}; margin-left: {idx > 0
+                                            ? '-8px'
+                                            : '0'};"
+                                        >
+                                          <span>?</span>
+                                        </div>
+                                      {/if}
+                                    {/each}
+                                    {#if getFriendsForOption(opt).length > 3}
+                                      <span class="friends-more-count"
+                                        >+{getFriendsForOption(opt).length -
+                                          3}</span
+                                      >
+                                    {/if}
+                                  </button>
+                                {/if}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    </div>
-                  {/if}
-                  
+                    {/if}
+                  </div>
                 </div>
               </div>
             </div>
-
-          </div>
           {/key}
         {/each}
 
         <!-- Slide para añadir nueva opción (colaborativas) -->
-        {#if isAddingOption && pollType === 'collaborative'}
+        {#if isAddingOption && pollType === "collaborative"}
           <div
             class="w-full h-full flex-shrink-0 snap-center relative"
             style="scroll-snap-stop: always;"
           >
             <div class="w-full h-full relative overflow-hidden">
               <div class="option-card-container">
-                <div class="option-card-rounded" style="--option-color: {newOptionColor};">
-                  <div class="card-content-area new-option-card" style="background-color: {newOptionColor};">
+                <div
+                  class="option-card-rounded"
+                  style="--option-color: {newOptionColor};"
+                >
+                  <div
+                    class="card-content-area new-option-card"
+                    style="background-color: {newOptionColor};"
+                  >
                     <!-- Comillas decorativas -->
                     <span class="quote-decoration quote-open">"</span>
                     <span class="quote-decoration quote-close">"</span>
-                    
+
                     <!-- Textarea para el texto -->
                     <div class="new-option-input-wrapper">
                       <textarea
@@ -1886,13 +2308,13 @@
                         rows="2"
                       ></textarea>
                     </div>
-                    
+
                     <!-- Barra de edición (igual que mini) -->
                     <div class="new-option-edit-bar">
                       <!-- Botón de color - abre modal -->
-                      <button 
-                        type="button" 
-                        class="edit-btn-max color-btn-max" 
+                      <button
+                        type="button"
+                        class="edit-btn-max color-btn-max"
                         style="background-color: {newOptionColor};"
                         onclick={(e) => {
                           e.stopPropagation();
@@ -1901,11 +2323,21 @@
                         title="Cambiar color"
                         aria-label="Cambiar color"
                       >
-                        <svg class="w-5 h-5" fill="none" stroke="white" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        <svg
+                          class="w-5 h-5"
+                          fill="none"
+                          stroke="white"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
+                          />
                         </svg>
                       </button>
-                      
+
                       <!-- Botón cancelar -->
                       <button
                         type="button"
@@ -1916,7 +2348,7 @@
                       >
                         <X size={20} strokeWidth={2.5} />
                       </button>
-                      
+
                       <!-- Botón publicar -->
                       <button
                         type="button"
@@ -1929,7 +2361,7 @@
                         <Check size={20} strokeWidth={2.5} />
                       </button>
                     </div>
-                    
+
                     <div class="card-divider-line card-divider-bottom"></div>
                   </div>
                 </div>
@@ -1941,7 +2373,6 @@
     </div>
   {/key}
 
-
   <!-- VOTE CHECK ANIMATION -->
   {#if showLikeAnim}
     {@const activeOption = options[activeIndex]}
@@ -1951,54 +2382,65 @@
     >
       <!-- Backdrop blur pulse -->
       <div class="absolute inset-0 vote-backdrop"></div>
-      
+
       <!-- Outer ring animation -->
-      <div class="vote-ring-outer" style="--check-color: {activeOption?.color || '#22c55e'}"></div>
-      
+      <div
+        class="vote-ring-outer"
+        style="--check-color: {activeOption?.color || '#22c55e'}"
+      ></div>
+
       <!-- Middle ring -->
-      <div class="vote-ring-middle" style="--check-color: {activeOption?.color || '#22c55e'}"></div>
-      
+      <div
+        class="vote-ring-middle"
+        style="--check-color: {activeOption?.color || '#22c55e'}"
+      ></div>
+
       <!-- Main check container -->
-      <div class="vote-check-container" style="--check-color: {activeOption?.color || '#22c55e'}">
+      <div
+        class="vote-check-container"
+        style="--check-color: {activeOption?.color || '#22c55e'}"
+      >
         <!-- Gradient background circle -->
         <div class="vote-circle-bg"></div>
-        
+
         <!-- SVG Check with draw animation -->
         <svg class="vote-check-svg" viewBox="0 0 52 52" fill="none">
           <!-- Circle stroke animation -->
-          <circle 
-            class="vote-circle-stroke" 
-            cx="26" cy="26" r="24" 
-            stroke="currentColor" 
+          <circle
+            class="vote-circle-stroke"
+            cx="26"
+            cy="26"
+            r="24"
+            stroke="currentColor"
             stroke-width="2"
             fill="none"
           />
           <!-- Check mark path -->
-          <path 
-            class="vote-check-path" 
-            d="M14 27L22 35L38 17" 
-            stroke="white" 
-            stroke-width="4" 
-            stroke-linecap="round" 
+          <path
+            class="vote-check-path"
+            d="M14 27L22 35L38 17"
+            stroke="white"
+            stroke-width="4"
+            stroke-linecap="round"
             stroke-linejoin="round"
             fill="none"
           />
         </svg>
-        
+
         <!-- Inner glow -->
         <div class="vote-inner-glow"></div>
       </div>
-      
+
       <!-- Particles -->
       <div class="vote-particles">
         {#each Array(12) as _, i}
-          <div 
-            class="vote-particle" 
+          <div
+            class="vote-particle"
             style="--i: {i}; --color: {activeOption?.color || '#22c55e'}"
           ></div>
         {/each}
       </div>
-      
+
       <!-- Success text -->
       <div class="vote-success-text">
         <span>¡Votado!</span>
@@ -2006,22 +2448,22 @@
     </div>
   {/if}
 
-  
   <!-- BOTTOM ACTION BAR - New Design -->
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div 
+  <div
     class="absolute bottom-0 left-0 right-0 z-50 pointer-events-auto more-menu-container"
-    onclick={handleClickOutside} >
+    onclick={handleClickOutside}
+  >
     <!-- Modal Bottom Sheet -->
     {#if isMoreMenuOpen}
       <!-- Overlay -->
       <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-      <div 
+      <div
         class="fixed inset-0 bg-black/60 z-[100]"
-        onclick={() => isMoreMenuOpen = false}
+        onclick={() => (isMoreMenuOpen = false)}
       ></div>
       <!-- Bottom Sheet -->
-      <div 
+      <div
         bind:this={sheetElement}
         class="fixed bottom-0 left-0 right-0 z-[101] bg-[#1a1a1a] rounded-t-3xl p-4 pb-6 shadow-2xl max-h-[60vh] overflow-y-auto transition-transform"
         style="transform: translateY({sheetTranslateY}px)"
@@ -2033,16 +2475,17 @@
       >
         <!-- Handle -->
         <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
-        
+
         <div class="flex flex-col gap-1 text-white max-w-md mx-auto">
           <!-- Votar -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { 
-              e.stopPropagation(); 
+            onclick={(e) => {
+              e.stopPropagation();
               isMoreMenuOpen = false;
               // Permitir votar si: no has votado, o es múltiple, o la opción actual no está votada
-              const canVote = !hasVoted || pollType === 'multiple' || !currentOptionVoted;
+              const canVote =
+                !hasVoted || pollType === "multiple" || !currentOptionVoted;
               if (canVote && readOnly) {
                 if (!isAuthenticated) {
                   onOpenAuthModal();
@@ -2057,33 +2500,44 @@
               }
             }}
           >
-            <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background-color: {hasVoted ? `${voteColor}33` : 'rgba(255, 255, 255, 0.1)'}">
-              {#if pollType === 'multiple'}
+            <div
+              class="w-10 h-10 rounded-full flex items-center justify-center"
+              style="background-color: {hasVoted
+                ? `${voteColor}33`
+                : 'rgba(255, 255, 255, 0.1)'}"
+            >
+              {#if pollType === "multiple"}
                 {#if hasVoted}
                   <SquareCheck size={20} style="color: {voteColor}" />
                 {:else}
                   <Square size={20} class="text-white" />
                 {/if}
+              {:else if hasVoted}
+                <CircleCheck size={20} style="color: {voteColor}" />
               {:else}
-                {#if hasVoted}
-                  <CircleCheck size={20} style="color: {voteColor}" />
-                {:else}
-                  <Circle size={20} class="text-white" />
-                {/if}
+                <Circle size={20} class="text-white" />
               {/if}
             </div>
             <div class="flex-1">
-              <span class="font-medium">{hasVoted ? 'Votado' : 'Votar'}</span>
-              <p class="text-xs text-gray-400">{formatCount(stats?.totalVotes)} votos</p>
+              <span class="font-medium">{hasVoted ? "Votado" : "Votar"}</span>
+              <p class="text-xs text-gray-400">
+                {formatCount(stats?.totalVotes)} votos
+              </p>
             </div>
           </button>
 
           <!-- Comentarios -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; showCommentsModal = true; }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+              showCommentsModal = true;
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+            <div
+              class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
+            >
               <MessageCircle size={20} class="text-white" />
             </div>
             <div class="flex-1">
@@ -2093,11 +2547,17 @@
           </button>
 
           <!-- Ver en globo -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; onOpenInGlobe(); }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+              onOpenInGlobe();
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
+            <div
+              class="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center"
+            >
               <Globe size={20} class="text-cyan-400" />
             </div>
             <div>
@@ -2107,11 +2567,17 @@
           </button>
 
           <!-- Estadísticas -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; showStatsModal = true; }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+              showStatsModal = true;
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+            <div
+              class="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center"
+            >
               <Activity size={20} class="text-purple-400" />
             </div>
             <div>
@@ -2123,40 +2589,69 @@
           <div class="h-px bg-white/10 my-2"></div>
 
           <!-- Compartir -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleShareAction(); }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+              handleShareAction();
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+            <div
+              class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center"
+            >
               <Share2 size={20} class="text-blue-400" />
             </div>
             <div class="flex-1">
               <span class="font-medium">Compartir</span>
-              <p class="text-xs text-gray-400">{formatCount(shareCount)} compartidos</p>
+              <p class="text-xs text-gray-400">
+                {formatCount(shareCount)} compartidos
+              </p>
             </div>
           </button>
 
           <!-- Repostear -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; handleRepost(); }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+              handleRepost();
+            }}
             disabled={isReposting}
           >
-            <div class="w-10 h-10 rounded-full {hasReposted ? 'bg-green-500/40' : 'bg-green-500/20'} flex items-center justify-center">
-              <Repeat2 size={20} class={hasReposted ? 'text-green-300' : 'text-green-400'} />
+            <div
+              class="w-10 h-10 rounded-full {hasReposted
+                ? 'bg-green-500/40'
+                : 'bg-green-500/20'} flex items-center justify-center"
+            >
+              <Repeat2
+                size={20}
+                class={hasReposted ? "text-green-300" : "text-green-400"}
+              />
             </div>
             <div class="flex-1">
-              <span class="font-medium {hasReposted ? 'text-green-400' : ''}">{hasReposted ? 'Republicado' : 'Repostear'}</span>
-              <p class="text-xs text-gray-400">{formatCount(repostCount)} reposts</p>
+              <span class="font-medium {hasReposted ? 'text-green-400' : ''}"
+                >{hasReposted ? "Republicado" : "Repostear"}</span
+              >
+              <p class="text-xs text-gray-400">
+                {formatCount(repostCount)} reposts
+              </p>
             </div>
           </button>
 
           <!-- Guardar -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; onBookmark(); }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+              onBookmark();
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+            <div
+              class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center"
+            >
               <Bookmark size={20} class="text-yellow-400" />
             </div>
             <div class="flex-1">
@@ -2166,11 +2661,16 @@
           </button>
 
           <!-- Copiar enlace -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); copyLink(); }}
+            onclick={(e) => {
+              e.stopPropagation();
+              copyLink();
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+            <div
+              class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
+            >
               <Link size={20} class="text-white" />
             </div>
             <div>
@@ -2182,11 +2682,16 @@
           <div class="h-px bg-white/10 my-2"></div>
 
           <!-- No me interesa -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-gray-500/20 flex items-center justify-center">
+            <div
+              class="w-10 h-10 rounded-full bg-gray-500/20 flex items-center justify-center"
+            >
               <EyeOff size={20} class="text-gray-400" />
             </div>
             <div>
@@ -2196,12 +2701,17 @@
           </button>
 
           <!-- Reportar -->
-          <button 
+          <button
             class="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition text-left"
-            onclick={(e) => { e.stopPropagation(); isMoreMenuOpen = false; }}
+            onclick={(e) => {
+              e.stopPropagation();
+              isMoreMenuOpen = false;
+            }}
           >
-            <div class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-              <Flag size={20} class="text-red-400" />
+            <div
+              class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center"
+            >
+              <Flag size={20} class="" />
             </div>
             <div>
               <span class="font-medium">Reportar</span>
@@ -2219,7 +2729,7 @@
         <!-- Votar -->
         <div class="vote-btn-wrapper">
           {#if hasVoted}
-            <button 
+            <button
               class="vote-remove-badge"
               style="background-color: {voteColor}"
               onclick={(e) => {
@@ -2233,7 +2743,7 @@
               <X size={12} strokeWidth={3} />
             </button>
           {/if}
-          <button 
+          <button
             class="action-bar-btn"
             onclick={() => {
               if (readOnly) {
@@ -2252,27 +2762,42 @@
             aria-label="Votar"
           >
             {#if currentOptionVoted}
-              <div class="vote-icon-voted-container" class:is-multiple={pollType === 'multiple'} style="background-color: {currentOptionColor}">
+              <div
+                class="vote-icon-voted-container"
+                class:is-multiple={pollType === "multiple"}
+                style="background-color: {currentOptionColor}"
+              >
                 <Check size={32} strokeWidth={3.5} class="vote-check-icon" />
               </div>
             {:else}
-              <div class="vote-icon-empty-container" class:is-multiple={pollType === 'multiple'}>
-                {#if pollType === 'multiple'}
+              <div
+                class="vote-icon-empty-container"
+                class:is-multiple={pollType === "multiple"}
+              >
+                {#if pollType === "multiple"}
                   <Square size={20} strokeWidth={2.5} class="vote-icon-inner" />
                 {:else}
                   <Circle size={20} strokeWidth={2.5} class="vote-icon-inner" />
                 {/if}
               </div>
             {/if}
-            <span class="action-bar-count" class:voted={currentOptionVoted} style={currentOptionVoted ? `color: ${currentOptionColor}` : ''}>{formatCount(stats?.totalVotes)}</span>
+            <span
+              class="action-bar-count"
+              class:voted={currentOptionVoted}
+              style={currentOptionVoted ? `color: ${currentOptionColor}` : ""}
+              >{formatCount(stats?.totalVotes)}</span
+            >
           </button>
         </div>
 
         <!-- Mensajes (a la derecha del voto) -->
-        <button 
+        <button
           class="action-bar-btn"
           aria-label="Comentarios"
-          onclick={(e) => { e.stopPropagation(); showCommentsModal = true; }}
+          onclick={(e) => {
+            e.stopPropagation();
+            showCommentsModal = true;
+          }}
         >
           <MessageCircle size={26} strokeWidth={1.5} />
           <span class="action-bar-count">{stats?.commentsCount || 0}</span>
@@ -2280,7 +2805,7 @@
 
         <!-- Mundo y Estadísticas - Solo si ha votado, fijos al lado del botón de votación -->
         {#if hasVoted}
-          <button 
+          <button
             class="action-bar-btn"
             onclick={onOpenInGlobe}
             aria-label="Ver en globo"
@@ -2288,26 +2813,24 @@
             <Globe size={26} strokeWidth={1.5} />
           </button>
 
-          <button 
+          <button
             class="action-bar-btn"
-            onclick={(e) => { 
-              e.stopPropagation(); 
-              showStatsModal = true; 
+            onclick={(e) => {
+              e.stopPropagation();
+              showStatsModal = true;
             }}
             aria-label="Ver estadísticas"
           >
             <Activity size={26} strokeWidth={1.5} />
           </button>
         {/if}
-
-        </div>
+      </div>
 
       <!-- Zona scroll: resto de acciones -->
       <div class="action-bar-scroll hide-scrollbar">
         <div class="action-bar-content">
-
           <!-- Share -->
-          <button 
+          <button
             class="action-bar-btn"
             onclick={handleShare}
             aria-label="Compartir"
@@ -2317,26 +2840,31 @@
           </button>
 
           <!-- Retweet -->
-          <button 
+          <button
             class="action-bar-btn {hasReposted ? 'reposted' : ''}"
             onclick={handleRepost}
-            aria-label={hasReposted ? 'Quitar repost' : 'Repostear'}
+            aria-label={hasReposted ? "Quitar repost" : "Repostear"}
             disabled={isReposting}
           >
-            <Repeat2 size={26} strokeWidth={1.5} class={hasReposted ? 'text-green-400' : ''} />
-            <span class="action-bar-count" class:reposted={hasReposted}>{formatCount(repostCount)}</span>
+            <Repeat2
+              size={26}
+              strokeWidth={1.5}
+              class={hasReposted ? "text-green-400" : ""}
+            />
+            <span class="action-bar-count" class:reposted={hasReposted}
+              >{formatCount(repostCount)}</span
+            >
           </button>
-
         </div>
       </div>
 
       <!-- Botón añadir opción (colaborativas) - fijo a la derecha -->
-      {#if pollType === 'collaborative' && !isAddingOption}
-        <button 
+      {#if pollType === "collaborative" && !isAddingOption}
+        <button
           class="add-option-btn"
           style="border-bottom-color: {newOptionColor}; --icon-color: {newOptionColor};"
-          onclick={(e) => { 
-            e.stopPropagation(); 
+          onclick={(e) => {
+            e.stopPropagation();
             startAddingOption();
           }}
           aria-label="Añadir opción"
@@ -2352,74 +2880,83 @@
   <AuthModal bind:isOpen={showAuthModal} />
 
   <!-- FRIENDS VOTES MODAL -->
-  <FriendsVotesModal 
+  <FriendsVotesModal
     bind:isOpen={showFriendsVotesModal}
-    pollTitle={pollTitle}
-    options={options.map(opt => ({ id: opt.id, key: opt.key || opt.optionKey || opt.id, label: opt.label, color: opt.color, votes: opt.votes }))}
+    {pollTitle}
+    options={options.map((opt) => ({
+      id: opt.id,
+      key: opt.key || opt.optionKey || opt.id,
+      label: opt.label,
+      color: opt.color,
+      votes: opt.votes,
+    }))}
     {friendsByOption}
-    onClose={() => showFriendsVotesModal = false}
+    onClose={() => (showFriendsVotesModal = false)}
   />
 
   <!-- COMMENTS MODAL (Portal para salir del contexto padre) -->
   <Portal>
-    <CommentsModal 
-      bind:isOpen={showCommentsModal}
-      {pollId}
-      {pollTitle}
-    />
+    <CommentsModal bind:isOpen={showCommentsModal} {pollId} {pollTitle} />
   </Portal>
-  
+
   <!-- STATS MODAL (Portal para salir del contexto padre) -->
   <Portal>
-    <StatsBottomModal 
+    <StatsBottomModal
       bind:isOpen={showStatsModal}
       {pollId}
       {pollTitle}
-      options={options.map(opt => ({ 
+      options={options.map((opt) => ({
         key: opt.key || opt.optionKey || String(opt.id),
-        label: opt.label || opt.optionLabel || '', 
+        label: opt.label || opt.optionLabel || "",
         color: opt.color,
-        votes: opt.voteCount || opt.votes || 0
+        votes: opt.voteCount || opt.votes || 0,
       }))}
-      onClose={() => showStatsModal = false}
+      onClose={() => (showStatsModal = false)}
     />
   </Portal>
-  
+
   <!-- Toast de enlace copiado -->
   {#if showShareToast}
-    <div class="share-toast-fixed">
-      ✓ Enlace copiado
-    </div>
+    <div class="share-toast-fixed">✓ Enlace copiado</div>
   {/if}
 
   <!-- COLOR PICKER MODAL circular para nueva opción -->
   {#if showNewOptionColorPicker}
-    <div 
-      class="color-picker-overlay" 
-      onclick={() => showNewOptionColorPicker = false}
-      onkeydown={(e) => { if (e.key === 'Escape') showNewOptionColorPicker = false; }}
+    <div
+      class="color-picker-overlay"
+      onclick={() => (showNewOptionColorPicker = false)}
+      onkeydown={(e) => {
+        if (e.key === "Escape") showNewOptionColorPicker = false;
+      }}
       role="button"
       tabindex="0"
       aria-label="Cerrar selector de color"
     >
-      <div 
-        class="color-picker-modal-circular" 
+      <div
+        class="color-picker-modal-circular"
         onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => { if (e.key === 'Escape') showNewOptionColorPicker = false; }}
+        onkeydown={(e) => {
+          if (e.key === "Escape") showNewOptionColorPicker = false;
+        }}
         role="dialog"
         aria-labelledby="color-picker-title"
         tabindex="-1"
       >
         <div class="color-picker-header-circular">
           <h3 id="color-picker-title">Selecciona un color</h3>
-          <button onclick={() => showNewOptionColorPicker = false} type="button" aria-label="Cerrar" class="color-picker-close-circular">
+          <button
+            onclick={() => (showNewOptionColorPicker = false)}
+            type="button"
+            aria-label="Cerrar"
+            class="color-picker-close-circular"
+          >
             <X size={20} />
           </button>
         </div>
-        
+
         <!-- Círculo de colores -->
         <div class="color-wheel-container">
-          <div 
+          <div
             class="color-wheel"
             role="slider"
             aria-label="Selector de color"
@@ -2437,8 +2974,12 @@
               const angle = Math.atan2(deltaY, deltaX);
               const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
               const maxDistance = rect.width / 2;
-              selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
-              selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+              selectedHue = Math.round(
+                ((angle * 180) / Math.PI + 360 + 90) % 360,
+              );
+              selectedSaturation = Math.round(
+                Math.min(100, (distance / maxDistance) * 100),
+              );
             }}
             onmousemove={(e) => {
               if (isDraggingColor) {
@@ -2450,12 +2991,16 @@
                 const angle = Math.atan2(deltaY, deltaX);
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 const maxDistance = rect.width / 2;
-                selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
-                selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+                selectedHue = Math.round(
+                  ((angle * 180) / Math.PI + 360 + 90) % 360,
+                );
+                selectedSaturation = Math.round(
+                  Math.min(100, (distance / maxDistance) * 100),
+                );
               }
             }}
-            onmouseup={() => isDraggingColor = false}
-            onmouseleave={() => isDraggingColor = false}
+            onmouseup={() => (isDraggingColor = false)}
+            onmouseleave={() => (isDraggingColor = false)}
             ontouchstart={(e) => {
               isDraggingColor = true;
               const touch = e.touches[0];
@@ -2467,8 +3012,12 @@
               const angle = Math.atan2(deltaY, deltaX);
               const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
               const maxDistance = rect.width / 2;
-              selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
-              selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+              selectedHue = Math.round(
+                ((angle * 180) / Math.PI + 360 + 90) % 360,
+              );
+              selectedSaturation = Math.round(
+                Math.min(100, (distance / maxDistance) * 100),
+              );
             }}
             ontouchmove={(e) => {
               if (isDraggingColor) {
@@ -2481,22 +3030,27 @@
                 const angle = Math.atan2(deltaY, deltaX);
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 const maxDistance = rect.width / 2;
-                selectedHue = Math.round(((angle * 180 / Math.PI) + 360 + 90) % 360);
-                selectedSaturation = Math.round(Math.min(100, (distance / maxDistance) * 100));
+                selectedHue = Math.round(
+                  ((angle * 180) / Math.PI + 360 + 90) % 360,
+                );
+                selectedSaturation = Math.round(
+                  Math.min(100, (distance / maxDistance) * 100),
+                );
               }
             }}
-            ontouchend={() => isDraggingColor = false}
+            ontouchend={() => (isDraggingColor = false)}
           >
             <!-- Gradiente radial para saturación -->
             <div class="color-wheel-saturation"></div>
-            
+
             <!-- Indicador de color seleccionado -->
-            <div 
+            <div
               class="color-wheel-indicator"
-              style="background: {selectedColor}; transform: translate(-50%, -50%) rotate({selectedHue}deg) translateY({-selectedSaturation * 1.2}px);"
+              style="background: {selectedColor}; transform: translate(-50%, -50%) rotate({selectedHue}deg) translateY({-selectedSaturation *
+                1.2}px);"
             ></div>
           </div>
-          
+
           <!-- Botón confirmar -->
           <button
             onclick={confirmColorSelection}
@@ -2582,7 +3136,7 @@
   .action-bar-btn:hover {
     background: rgba(255, 255, 255, 0.1);
   }
-  
+
   .action-bar-btn:hover :global(svg:not([style*="color"])) {
     color: rgba(255, 255, 255, 1);
   }
@@ -2600,7 +3154,10 @@
     font-size: 12px;
     font-weight: 500;
     color: rgba(255, 255, 255, 0.7) !important;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family:
+      system-ui,
+      -apple-system,
+      sans-serif;
   }
 
   .action-bar-count.voted,
@@ -2760,7 +3317,7 @@
   }
 
   .color-picker-close-circular {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     border: none;
     border-radius: 8px;
     padding: 8px;
@@ -2772,7 +3329,7 @@
   }
 
   .color-picker-close-circular:hover {
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.2);
   }
 
   .color-wheel-container {
@@ -2788,21 +3345,21 @@
     border-radius: 50%;
     position: relative;
     cursor: pointer;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     background: conic-gradient(
-      from 0deg, 
-      hsl(0, 100%, 50%), 
-      hsl(30, 100%, 50%), 
-      hsl(60, 100%, 50%), 
-      hsl(90, 100%, 50%), 
-      hsl(120, 100%, 50%), 
-      hsl(150, 100%, 50%), 
-      hsl(180, 100%, 50%), 
-      hsl(210, 100%, 50%), 
-      hsl(240, 100%, 50%), 
-      hsl(270, 100%, 50%), 
-      hsl(300, 100%, 50%), 
-      hsl(330, 100%, 50%), 
+      from 0deg,
+      hsl(0, 100%, 50%),
+      hsl(30, 100%, 50%),
+      hsl(60, 100%, 50%),
+      hsl(90, 100%, 50%),
+      hsl(120, 100%, 50%),
+      hsl(150, 100%, 50%),
+      hsl(180, 100%, 50%),
+      hsl(210, 100%, 50%),
+      hsl(240, 100%, 50%),
+      hsl(270, 100%, 50%),
+      hsl(300, 100%, 50%),
+      hsl(330, 100%, 50%),
       hsl(360, 100%, 50%)
     );
   }
@@ -2826,7 +3383,7 @@
     height: 36px;
     border-radius: 50%;
     border: 4px solid white;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
     pointer-events: none;
   }
 
@@ -2839,7 +3396,7 @@
     font-weight: 600;
     font-size: 16px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s;
   }
 
@@ -2886,7 +3443,9 @@
     justify-content: center !important;
     padding: 0 !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
     z-index: 10;
   }
 
@@ -2922,16 +3481,16 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
   }
-  
+
   .snap-center {
     scroll-snap-align: center;
     scroll-snap-stop: always;
   }
-  
+
   .scroll-smooth {
     scroll-behavior: smooth;
   }
-  
+
   /* Aumentar sensibilidad táctil */
   .overflow-x-scroll {
     touch-action: pan-x;
@@ -2949,13 +3508,15 @@
       -webkit-transform: translateZ(0);
       transform: translateZ(0);
     }
-    
+
     /* Optimizar renders */
-    img, video, iframe {
+    img,
+    video,
+    iframe {
       -webkit-transform: translateZ(0);
       transform: translateZ(0);
     }
-    
+
     /* Reducir blur en iOS para mejor rendimiento */
     [style*="blur"] {
       -webkit-backface-visibility: hidden;
@@ -2963,20 +3524,31 @@
     }
   }
 
-
   /* ========================================
      VOTE CHECK ANIMATION - Premium Style
      ======================================== */
-  
+
   .vote-backdrop {
-    background: radial-gradient(circle at center, rgba(0,0,0,0.4) 0%, transparent 70%);
+    background: radial-gradient(
+      circle at center,
+      rgba(0, 0, 0, 0.4) 0%,
+      transparent 70%
+    );
     animation: backdropPulse 0.8s ease-out forwards;
   }
 
   @keyframes backdropPulse {
-    0% { opacity: 0; transform: scale(0.8); }
-    50% { opacity: 1; }
-    100% { opacity: 0; transform: scale(1.5); }
+    0% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.5);
+    }
   }
 
   .vote-ring-outer {
@@ -2994,19 +3566,20 @@
     width: 140px;
     height: 140px;
     border-radius: 50%;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     opacity: 0;
-    animation: ringExpand 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s forwards;
+    animation: ringExpand 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s
+      forwards;
   }
 
   @keyframes ringExpand {
-    0% { 
-      transform: scale(0.5); 
-      opacity: 0.8; 
+    0% {
+      transform: scale(0.5);
+      opacity: 0.8;
     }
-    100% { 
-      transform: scale(2); 
-      opacity: 0; 
+    100% {
+      transform: scale(2);
+      opacity: 0;
     }
   }
 
@@ -3021,16 +3594,16 @@
   }
 
   @keyframes containerPop {
-    0% { 
-      transform: scale(0); 
-      opacity: 0; 
+    0% {
+      transform: scale(0);
+      opacity: 0;
     }
-    50% { 
-      transform: scale(1.2); 
+    50% {
+      transform: scale(1.2);
     }
-    100% { 
-      transform: scale(1); 
-      opacity: 1; 
+    100% {
+      transform: scale(1);
+      opacity: 1;
     }
   }
 
@@ -3038,18 +3611,27 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--check-color, #22c55e) 0%, color-mix(in srgb, var(--check-color, #22c55e) 70%, black) 100%);
-    box-shadow: 
+    background: linear-gradient(
+      135deg,
+      var(--check-color, #22c55e) 0%,
+      color-mix(in srgb, var(--check-color, #22c55e) 70%, black) 100%
+    );
+    box-shadow:
       0 10px 40px -10px var(--check-color, #22c55e),
-      0 0 0 4px rgba(255,255,255,0.1),
-      inset 0 -4px 12px rgba(0,0,0,0.2),
-      inset 0 4px 12px rgba(255,255,255,0.2);
+      0 0 0 4px rgba(255, 255, 255, 0.1),
+      inset 0 -4px 12px rgba(0, 0, 0, 0.2),
+      inset 0 4px 12px rgba(255, 255, 255, 0.2);
     animation: circlePulse 0.8s ease-out;
   }
 
   @keyframes circlePulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
   }
 
   .vote-check-svg {
@@ -3057,7 +3639,7 @@
     width: 52px;
     height: 52px;
     z-index: 10;
-    color: rgba(255,255,255,0.3);
+    color: rgba(255, 255, 255, 0.3);
   }
 
   .vote-circle-stroke {
@@ -3067,25 +3649,33 @@
   }
 
   @keyframes circleStroke {
-    100% { stroke-dashoffset: 0; }
+    100% {
+      stroke-dashoffset: 0;
+    }
   }
 
   .vote-check-path {
     stroke-dasharray: 48;
     stroke-dashoffset: 48;
     animation: checkDraw 0.4s cubic-bezier(0.65, 0, 0.45, 1) 0.3s forwards;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
   }
 
   @keyframes checkDraw {
-    100% { stroke-dashoffset: 0; }
+    100% {
+      stroke-dashoffset: 0;
+    }
   }
 
   .vote-inner-glow {
     position: absolute;
     inset: 10%;
     border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4) 0%, transparent 60%);
+    background: radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 255, 255, 0.4) 0%,
+      transparent 60%
+    );
     pointer-events: none;
   }
 
@@ -3107,7 +3697,8 @@
     background: var(--color, #22c55e);
     box-shadow: 0 0 10px var(--color, #22c55e);
     opacity: 0;
-    animation: particleExplode 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    animation: particleExplode 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)
+      forwards;
     animation-delay: calc(var(--i) * 0.02s + 0.2s);
   }
 
@@ -3137,8 +3728,8 @@
     color: white;
     text-transform: uppercase;
     letter-spacing: 3px;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-    background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.8) 100%);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.8) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -3160,8 +3751,13 @@
      ======================================== */
 
   /* Ocultar scrollbar pero mantener funcionalidad */
-  .hide-scrollbar::-webkit-scrollbar { display: none; }
-  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 
   /* Máscara de desvanecimiento para el scroll derecho */
   .scroll-mask-right {
@@ -3170,17 +3766,17 @@
   }
 
   /* Sombras para legibilidad sobre cualquier fondo */
-  :global(.icon-shadow) { 
-    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.9)); 
+  :global(.icon-shadow) {
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.9));
   }
-  
-  .text-shadow-sm { 
-    text-shadow: 0 1px 2px rgba(0,0,0,1); 
+
+  .text-shadow-sm {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 1);
   }
 
   /* Efecto de pulsación */
-  .btn-press:active { 
-    transform: scale(0.95); 
+  .btn-press:active {
+    transform: scale(0.95);
   }
 
   /* Menú Flotante (Glassmorphism) */
@@ -3188,20 +3784,30 @@
     background: rgba(20, 20, 20, 0.95);
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   /* Animación de Latido (Icono de voto) */
   @keyframes iconBeat {
-    0% { transform: scale(1); }
-    14% { transform: scale(1.3); }
-    28% { transform: scale(1); }
-    42% { transform: scale(1.3); }
-    70% { transform: scale(1); }
+    0% {
+      transform: scale(1);
+    }
+    14% {
+      transform: scale(1.3);
+    }
+    28% {
+      transform: scale(1);
+    }
+    42% {
+      transform: scale(1.3);
+    }
+    70% {
+      transform: scale(1);
+    }
   }
 
-  :global(.vote-icon-beat) { 
-    animation: iconBeat 1s ease-out; 
+  :global(.vote-icon-beat) {
+    animation: iconBeat 1s ease-out;
   }
 
   /* Force dark theme colors regardless of global theme */
@@ -3242,7 +3848,7 @@
   /* ========================================
      MARCO DECORATIVO PARA OPCIONES DE TEXTO
      ======================================== */
-  
+
   .option-card-frame {
     position: relative;
     max-width: 90%;
@@ -3255,11 +3861,11 @@
       rgba(255, 255, 255, 0.1) 50%,
       rgba(255, 255, 255, 0.3) 100%
     );
-    box-shadow: 
+    box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.3),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
-  
+
   .option-card-inner {
     position: relative;
     background: rgba(0, 0, 0, 0.25);
@@ -3272,14 +3878,14 @@
     align-items: center;
     gap: 16px;
   }
-  
+
   /* Botón de color dentro del card */
   .option-card-inner button[title="Cambiar color"] {
     position: absolute;
     top: 12px;
     right: 12px;
   }
-  
+
   /* Responsive para móviles */
   @media (max-width: 480px) {
     .option-card-frame {
@@ -3287,14 +3893,14 @@
       padding: 2px;
       border-radius: 20px;
     }
-    
+
     .option-card-inner {
       padding: 24px 20px;
       border-radius: 18px;
       gap: 12px;
     }
   }
-  
+
   /* Porcentaje en opciones de texto */
   .text-percentage-display {
     display: flex;
@@ -3307,7 +3913,7 @@
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
-  
+
   .text-percentage-value {
     font-size: 42px;
     font-weight: 900;
@@ -3315,7 +3921,7 @@
     line-height: 1;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
-  
+
   .text-percentage-label {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.7);
@@ -3323,7 +3929,7 @@
     letter-spacing: 0.15em;
     font-weight: 600;
   }
-  
+
   @media (max-width: 480px) {
     .text-percentage-value {
       font-size: 36px;
@@ -3337,7 +3943,7 @@
     align-items: flex-start;
     gap: 2px;
   }
-  
+
   .text-percentage-value-inline {
     font-size: 32px;
     font-weight: 900;
@@ -3345,7 +3951,7 @@
     line-height: 1;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
-  
+
   .text-percentage-label-inline {
     font-size: 10px;
     color: rgba(255, 255, 255, 0.7);
@@ -3353,7 +3959,7 @@
     letter-spacing: 0.1em;
     font-weight: 600;
   }
-  
+
   @media (max-width: 480px) {
     .text-percentage-value-inline {
       font-size: 28px;
@@ -3363,7 +3969,7 @@
   /* ========================================
      FLOATING MEDIA CARD (ESTILO TARJETA FLOTANTE)
      ======================================== */
-  
+
   .floating-media-card {
     position: relative;
     width: 100%;
@@ -3372,11 +3978,11 @@
     padding: 8px;
     background: white;
     border-radius: 20px;
-    box-shadow: 
+    box-shadow:
       0 20px 60px rgba(0, 0, 0, 0.3),
       0 8px 20px rgba(0, 0, 0, 0.2);
   }
-  
+
   .floating-media-inner {
     width: 100%;
     height: 100%;
@@ -3384,52 +3990,51 @@
     overflow: hidden;
     background: #000;
   }
-  
+
   .floating-media-inner :global(img),
   .floating-media-inner :global(video) {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  
+
   /* Panel inferior glassmorphism */
   .floating-glass-panel {
     display: flex;
     justify-content: center;
     padding: 0;
   }
-  
+
   .floating-glass-panel .option-card-frame {
     max-width: 100%;
     width: 100%;
     border-radius: 24px 24px 0 0;
     padding-bottom: 70px;
   }
-  
+
   .floating-glass-panel .option-card-inner {
     padding: 20px 24px;
     border-radius: 22px 22px 0 0;
     align-items: flex-start;
   }
-  
+
   /* Responsive */
   @media (max-width: 380px) {
     .floating-glass-panel .option-card-frame {
       border-radius: 20px 20px 0 0;
       padding-bottom: 60px;
     }
-    
+
     .floating-glass-panel .option-card-inner {
       padding: 16px 20px;
       border-radius: 18px 18px 0 0;
     }
   }
-  
-  
+
   /* ========================================
      AVATARES DE AMIGOS - Clickeables
      ======================================== */
-  
+
   .friends-avatars-btn {
     display: inline-flex;
     align-items: center;
@@ -3453,7 +4058,7 @@
   .friend-avatar-item {
     transition: filter 0.2s ease;
   }
-  
+
   .friends-avatars-btn:hover .friend-avatar-item img {
     box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
   }
@@ -3461,7 +4066,7 @@
   /* ========================================
      PORCENTAJE DE VOTACIÓN - Estilo atractivo
      ======================================== */
-  
+
   .option-percentage-voted-maximized {
     display: flex;
     flex-direction: column;
@@ -3474,7 +4079,7 @@
     font-size: 56px;
     font-weight: 900;
     line-height: 1;
-    text-shadow: 
+    text-shadow:
       0 4px 16px rgba(0, 0, 0, 0.6),
       0 2px 6px rgba(0, 0, 0, 0.4);
     filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.4));
@@ -3495,7 +4100,7 @@
     .percentage-value-maximized {
       font-size: 48px;
     }
-    
+
     .percentage-subtitle-maximized {
       font-size: 11px;
     }
@@ -3504,7 +4109,7 @@
   /* ========================================
      BOTÓN DE ACTIVAR SONIDO
      ======================================== */
-  
+
   .unmute-button {
     position: absolute;
     top: calc(50% + 50px);
@@ -3540,7 +4145,11 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.15) 0%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3557,7 +4166,8 @@
   }
 
   @keyframes pulseUnmute {
-    0%, 100% {
+    0%,
+    100% {
       box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.3);
     }
     50% {
@@ -3590,7 +4200,7 @@
   /* ========================================
      SCROLLBAR PERSONALIZADO
      ======================================== */
-  
+
   :global(.overflow-y-auto) {
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
@@ -3612,7 +4222,7 @@
   /* ========================================
      TOAST DE ENLACE COPIADO
      ======================================== */
-  
+
   .share-toast-fixed {
     position: fixed;
     top: 80px;
@@ -3624,8 +4234,9 @@
     border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4),
-                0 2px 8px rgba(16, 185, 129, 0.3);
+    box-shadow:
+      0 4px 12px rgba(16, 185, 129, 0.4),
+      0 2px 8px rgba(16, 185, 129, 0.3);
     z-index: 999999;
     pointer-events: none;
     display: flex;
@@ -3633,7 +4244,7 @@
     gap: 8px;
     animation: toast-in 0.3s ease-out;
   }
-  
+
   @keyframes toast-in {
     from {
       opacity: 0;
@@ -3765,7 +4376,7 @@
     border-radius: 32px;
     overflow: hidden;
   }
-  
+
   /* Scrollbar personalizada para contenedores multimedia */
   .card-video-area,
   .card-media-fullscreen,
@@ -3774,7 +4385,7 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   }
-  
+
   .card-video-area::-webkit-scrollbar,
   .card-media-fullscreen::-webkit-scrollbar,
   .card-image-fullscreen::-webkit-scrollbar,
@@ -3782,14 +4393,14 @@
     width: 4px;
     height: 4px;
   }
-  
+
   .card-video-area::-webkit-scrollbar-track,
   .card-media-fullscreen::-webkit-scrollbar-track,
   .card-image-fullscreen::-webkit-scrollbar-track,
   .card-content-area::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   .card-video-area::-webkit-scrollbar-thumb,
   .card-media-fullscreen::-webkit-scrollbar-thumb,
   .card-image-fullscreen::-webkit-scrollbar-thumb,
@@ -3797,20 +4408,20 @@
     background: rgba(255, 255, 255, 0.2);
     border-radius: 2px;
   }
-  
+
   .card-video-area::-webkit-scrollbar-thumb:hover,
   .card-media-fullscreen::-webkit-scrollbar-thumb:hover,
   .card-image-fullscreen::-webkit-scrollbar-thumb:hover,
   .card-content-area::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.4);
   }
-  
+
   /* También para iframes y embeds dentro */
   .card-video-area :global(iframe),
   .card-media-fullscreen :global(iframe) {
     scrollbar-width: none;
   }
-  
+
   .card-video-area :global(iframe)::-webkit-scrollbar,
   .card-media-fullscreen :global(iframe)::-webkit-scrollbar {
     display: none;
@@ -3826,7 +4437,7 @@
     height: 232px;
     min-height: 232px;
   }
-  
+
   .card-video-wrapper.is-music .card-video-bottom {
     flex: 1;
   }
@@ -3843,7 +4454,7 @@
     align-items: center !important;
     justify-content: center !important;
   }
-  
+
   /* Contenedor de iframe/video - fondo uniforme */
   .card-video-area :global(.embed-container > div),
   .card-video-area :global(.oembed-container > div),
@@ -3904,24 +4515,24 @@
     overflow: hidden !important;
     scrollbar-width: none !important;
   }
-  
+
   .card-video-area :global(.media-embed)::-webkit-scrollbar,
   .card-video-area :global(.embed-container)::-webkit-scrollbar,
   .card-video-area :global(.spotify-embed)::-webkit-scrollbar,
   .card-video-area :global([class*="spotify"])::-webkit-scrollbar {
     display: none !important;
   }
-  
+
   /* Forzar overflow hidden en todo el área de video */
   .card-video-area,
   .card-video-area * {
     overflow: hidden !important;
   }
-  
+
   .card-video-area :global(*) {
     scrollbar-width: none !important;
   }
-  
+
   .card-video-area :global(*)::-webkit-scrollbar {
     display: none !important;
   }
@@ -3929,7 +4540,7 @@
   /* ========================================
      PREVIEW ANTES DE CARGAR IFRAME
      ======================================== */
-  
+
   .embed-preview-container {
     position: absolute;
     inset: 0;
@@ -3945,21 +4556,23 @@
     padding: 0;
     margin: 0;
   }
-  
+
   .embed-preview-thumbnail {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.3s ease, filter 0.3s ease;
+    transition:
+      transform 0.3s ease,
+      filter 0.3s ease;
   }
-  
+
   .embed-preview-container:hover .embed-preview-thumbnail {
     transform: scale(1.05);
     filter: brightness(0.7);
   }
-  
+
   .embed-preview-overlay {
     position: absolute;
     inset: 0;
@@ -3971,11 +4584,11 @@
     background: rgba(0, 0, 0, 0.4);
     transition: background 0.3s ease;
   }
-  
+
   .embed-preview-container:hover .embed-preview-overlay {
     background: rgba(0, 0, 0, 0.5);
   }
-  
+
   .embed-preview-play-btn {
     width: 80px;
     height: 80px;
@@ -3984,21 +4597,27 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(255, 255, 255, 0.2);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow:
+      0 4px 20px rgba(0, 0, 0, 0.4),
+      0 0 0 4px rgba(255, 255, 255, 0.2);
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
   }
-  
+
   .embed-preview-container:hover .embed-preview-play-btn {
     transform: scale(1.1);
-    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(255, 255, 255, 0.3);
+    box-shadow:
+      0 6px 30px rgba(0, 0, 0, 0.5),
+      0 0 0 6px rgba(255, 255, 255, 0.3);
   }
-  
+
   .embed-preview-play-icon {
     font-size: 36px;
     color: #1a1a1a;
     margin-left: 4px; /* Ajuste visual para centrar el triángulo */
   }
-  
+
   .embed-preview-text {
     font-size: 14px;
     font-weight: 500;
@@ -4006,7 +4625,7 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     opacity: 0.9;
   }
-  
+
   .embed-preview-container:active .embed-preview-play-btn {
     transform: scale(0.95);
   }
@@ -4014,7 +4633,7 @@
   /* ========================================
      CONTENEDOR FLOTANTE DEL PREVIEW - ESTILO INSTAGRAM
      ======================================== */
-  
+
   .floating-preview-frame {
     position: relative;
     width: 90%;
@@ -4126,15 +4745,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 
+    box-shadow:
       0 4px 12px rgba(0, 0, 0, 0.4),
       0 0 0 2px rgba(255, 255, 255, 0.2);
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+    transition:
+      transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.3s ease;
   }
 
   .thumbnail-fullscreen-btn:hover .platform-badge-max {
     transform: scale(1.1);
-    box-shadow: 
+    box-shadow:
       0 6px 16px rgba(0, 0, 0, 0.5),
       0 0 0 3px rgba(255, 255, 255, 0.3);
   }
@@ -4205,7 +4826,7 @@
     height: 100% !important;
     object-fit: cover !important;
   }
-  
+
   /* Forzar que las imágenes llenen todo el contenedor sin recorte extra */
   .card-image-fullscreen :global(.image-with-link) {
     position: absolute !important;
@@ -4213,7 +4834,7 @@
     display: flex !important;
     flex-direction: column !important;
   }
-  
+
   .card-image-fullscreen :global(.image-container) {
     flex: 1 !important;
     position: relative !important;
@@ -4221,7 +4842,7 @@
     height: 100% !important;
     min-height: 0 !important;
   }
-  
+
   .card-image-fullscreen :global(.image-container img) {
     position: absolute !important;
     inset: 0 !important;
@@ -4273,26 +4894,26 @@
     transition: all 0.2s ease;
     width: fit-content;
   }
-  
+
   .link-below-text-max:hover {
     background: rgba(255, 255, 255, 0.22);
     color: white;
   }
-  
+
   .link-below-favicon-max {
     width: 14px;
     height: 14px;
     border-radius: 3px;
     flex-shrink: 0;
   }
-  
+
   .link-below-domain-max {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 180px;
   }
-  
+
   .link-below-arrow-max {
     font-size: 12px;
     opacity: 0.7;
@@ -4331,7 +4952,7 @@
   }
 
   .card-bottom-label {
-    text-shadow: 
+    text-shadow:
       0 2px 8px rgba(0, 0, 0, 0.7),
       0 4px 16px rgba(0, 0, 0, 0.5);
   }
@@ -4382,7 +5003,7 @@
     font-weight: 900;
     line-height: 1;
     color: white;
-    text-shadow: 
+    text-shadow:
       0 2px 8px rgba(0, 0, 0, 0.5),
       0 4px 16px rgba(0, 0, 0, 0.3);
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
@@ -4443,7 +5064,11 @@
     height: 32px;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.5);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.1) 100%
+    );
     backdrop-filter: blur(8px);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     display: flex;
@@ -4489,26 +5114,26 @@
     .option-card-container {
       padding: 130px 40px 80px;
     }
-    
+
     .option-card-rounded {
       max-width: 500px;
       margin: 0 auto;
     }
-    
+
     .quote-decoration {
       font-size: 140px;
     }
-    
+
     .card-bottom-label {
       font-size: 38px;
     }
-    
+
     .floating-preview-frame {
       max-width: 380px;
       min-height: 300px;
     }
   }
-  
+
   /* Desktop grande */
   @media (min-width: 1024px) {
     .floating-preview-frame {
@@ -4891,7 +5516,7 @@
   .header-question-text {
     font-size: 24px;
     font-weight: 400;
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: Georgia, "Times New Roman", serif;
     font-style: italic;
     color: #d1d5db;
     line-height: 1.3;
@@ -4909,7 +5534,7 @@
   .header-question-edit {
     font-size: 24px;
     font-weight: 400;
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: Georgia, "Times New Roman", serif;
     font-style: italic;
     color: #d1d5db;
     line-height: 1.3;
@@ -4957,7 +5582,7 @@
   /* ========================================
      BOTONES SÍ/NO INLINE (debajo de línea divisoria)
      ======================================== */
-  
+
   .yesno-vote-buttons-inline {
     display: flex;
     gap: 10px;
@@ -5017,7 +5642,7 @@
   /* ========================================
      INDICADOR DE RESPUESTA CORRECTA
      ======================================== */
-  
+
   .correct-indicator-overlay {
     position: absolute;
     top: 150px;
@@ -5066,5 +5691,4 @@
       transform: scale(1);
     }
   }
-
-  </style>
+</style>

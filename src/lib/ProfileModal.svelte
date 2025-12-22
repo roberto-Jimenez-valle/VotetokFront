@@ -1,137 +1,148 @@
 <script lang="ts">
-  import { fade, fly } from 'svelte/transition';
-  import { X, User, Settings, LogOut, Shield, HelpCircle, Bell, Moon, Sun, Globe } from 'lucide-svelte';
-  import { createEventDispatcher, onMount } from 'svelte';
-  import { currentUser } from '$lib/stores';
-  import { logout } from '$lib/stores/auth';
-  
+  import { fade, fly } from "svelte/transition";
+  import {
+    X,
+    User,
+    Settings,
+    LogOut,
+    Shield,
+    HelpCircle,
+    Bell,
+    Moon,
+    Sun,
+    Globe,
+  } from "lucide-svelte";
+  import { createEventDispatcher, onMount } from "svelte";
+  import { currentUser } from "$lib/stores";
+  import { logout } from "$lib/stores/auth";
+
   const dispatch = createEventDispatcher();
-  
+
   interface Props {
     isOpen?: boolean;
   }
-  
+
   let { isOpen = $bindable(false) }: Props = $props();
-  
+
   // Swipe handlers para cerrar modal (como type-options-sheet)
   let modalTouchStartY = 0;
-  
+
   function handleModalSwipeStart(e: TouchEvent) {
     modalTouchStartY = e.touches[0].clientY;
   }
-  
+
   function handleModalSwipeMove(e: TouchEvent) {
     const deltaY = e.touches[0].clientY - modalTouchStartY;
     if (deltaY > 100) {
       closeModal();
     }
   }
-  
+
   // Mock stats del usuario
   const userStats = {
     polls: 24,
     votes: 156,
     followers: 432,
-    following: 89
+    following: 89,
   };
-  
+
   function closeModal() {
     isOpen = false;
   }
-  
+
   // Manejar botón atrás del navegador
   let historyPushed = false;
-  
+
   $effect(() => {
     if (isOpen && !historyPushed) {
-      history.pushState({ modal: 'myProfile' }, '');
+      history.pushState({ modal: "myProfile" }, "");
       historyPushed = true;
     } else if (!isOpen) {
       historyPushed = false;
     }
   });
-  
+
   onMount(() => {
     const handlePopState = () => {
       if (isOpen) {
         closeModal();
       }
     };
-    
+
     const handleCloseModals = () => {
       if (isOpen) {
         closeModal();
       }
     };
-    
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('closeModals', handleCloseModals);
-    
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("closeModals", handleCloseModals);
+
     return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('closeModals', handleCloseModals);
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("closeModals", handleCloseModals);
     };
   });
-  
+
   function handleAvatarError(e: Event) {
     const target = e.target as HTMLImageElement;
-    const initial = $currentUser?.username?.[0]?.toUpperCase() || 'U';
+    const initial = $currentUser?.username?.[0]?.toUpperCase() || "U";
     target.src = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22 viewBox=%220 0 150 150%22%3E%3Ccircle cx=%2275%22 cy=%2275%22 r=%2275%22 fill=%22%23374151%22/%3E%3Ctext x=%2275%22 y=%2290%22 font-size=%2260%22 text-anchor=%22middle%22 fill=%22%23fff%22%3E${initial}%3C/text%3E%3C/svg%3E`;
   }
 
   function handleLogout() {
-    console.log('[ProfileModal] 🚪 Cerrando sesión...');
-    
+    console.log("[ProfileModal] 🚪 Cerrando sesión...");
+
     // Limpiar autenticación OAuth
     logout();
-    
+
     // Limpiar también usuario de prueba
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('voutop-test-user');
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("voutop-test-user");
     }
-    
+
     // Limpiar currentUser del store principal
     currentUser.set(null);
-    
-    console.log('[ProfileModal] ✅ Sesión cerrada');
-    dispatch('logout');
+
+    console.log("[ProfileModal] ✅ Sesión cerrada");
+    dispatch("logout");
     closeModal();
-    
+
     // Recargar página para limpiar todo el estado
     setTimeout(() => {
       window.location.reload();
     }, 100);
   }
-  
+
   function handleSettings() {
-    console.log('Abrir configuración');
-    dispatch('settings');
+    console.log("Abrir configuración");
+    dispatch("settings");
     closeModal();
   }
-  
+
   function handlePrivacy() {
-    console.log('Abrir privacidad');
-    dispatch('privacy');
+    console.log("Abrir privacidad");
+    dispatch("privacy");
   }
-  
+
   function handleHelp() {
-    console.log('Abrir ayuda');
-    dispatch('help');
+    console.log("Abrir ayuda");
+    dispatch("help");
   }
-  
+
   function handleNotifications() {
-    console.log('Configurar notificaciones');
-    dispatch('notifications');
+    console.log("Configurar notificaciones");
+    dispatch("notifications");
   }
-  
+
   function handleTheme() {
-    console.log('Cambiar tema');
-    dispatch('theme');
+    console.log("Cambiar tema");
+    dispatch("theme");
   }
-  
+
   function handleLanguage() {
-    console.log('Cambiar idioma');
-    dispatch('language');
+    console.log("Cambiar idioma");
+    dispatch("language");
   }
 </script>
 
@@ -143,13 +154,13 @@
     onclick={closeModal}
     role="button"
     tabindex="0"
-    onkeydown={(e) => e.key === 'Escape' && closeModal()}
+    onkeydown={(e) => e.key === "Escape" && closeModal()}
   ></div>
 
   <!-- Modal -->
   <div
     class="modal-container"
-    transition:fly={{ y: '100%', duration: 300 }}
+    transition:fly={{ y: "100%", duration: 300 }}
     role="dialog"
     aria-modal="true"
     aria-labelledby="profile-modal-title"
@@ -170,15 +181,15 @@
       <div class="profile-section">
         <div class="profile-avatar">
           {#if $currentUser?.avatarUrl}
-            <img 
-              src={$currentUser.avatarUrl} 
+            <img
+              src={$currentUser.avatarUrl}
               alt={$currentUser.displayName || $currentUser.username}
               onerror={handleAvatarError}
             />
           {:else}
-            <img 
-              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Ccircle cx='75' cy='75' r='75' fill='%23374151'/%3E%3Cpath d='M75 70a20 20 0 1 0 0-40 20 20 0 0 0 0 40zm0 10c-20 0-60 10-60 30v15h120v-15c0-20-40-30-60-30z' fill='%239ca3af'/%3E%3C/svg%3E" 
-              alt={$currentUser?.displayName || 'Usuario'}
+            <img
+              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Ccircle cx='75' cy='75' r='75' fill='%23374151'/%3E%3Cpath d='M75 70a20 20 0 1 0 0-40 20 20 0 0 0 0 40zm0 10c-20 0-60 10-60 30v15h120v-15c0-20-40-30-60-30z' fill='%239ca3af'/%3E%3C/svg%3E"
+              alt={$currentUser?.displayName || "Usuario"}
             />
           {/if}
           {#if $currentUser?.verified}
@@ -186,8 +197,8 @@
           {/if}
         </div>
         <div class="profile-info">
-          <h3>{$currentUser?.displayName || 'Usuario'}</h3>
-          <p class="username">@{$currentUser?.username || 'usuario'}</p>
+          <h3>{$currentUser?.displayName || "Usuario"}</h3>
+          <p class="username">@{$currentUser?.username || "usuario"}</p>
           {#if $currentUser?.countryIso3}
             <p class="location">{$currentUser.countryIso3}</p>
           {/if}
@@ -219,17 +230,17 @@
       <!-- Menú de opciones -->
       <div class="menu-section">
         <h4 class="menu-title">Cuenta</h4>
-        
+
         <button class="menu-item" onclick={handleSettings}>
           <Settings size={20} />
           <span>Configuración</span>
         </button>
-        
+
         <button class="menu-item" onclick={handleNotifications}>
           <Bell size={20} />
           <span>Notificaciones</span>
         </button>
-        
+
         <button class="menu-item" onclick={handlePrivacy}>
           <Shield size={20} />
           <span>Privacidad y seguridad</span>
@@ -240,7 +251,7 @@
 
       <div class="menu-section">
         <h4 class="menu-title">Apariencia</h4>
-        
+
         <button class="menu-item" onclick={handleTheme}>
           <Moon size={20} />
           <span>Modo oscuro</span>
@@ -248,7 +259,7 @@
             <div class="toggle-thumb"></div>
           </div>
         </button>
-        
+
         <button class="menu-item" onclick={handleLanguage}>
           <Globe size={20} />
           <span>Idioma</span>
@@ -260,7 +271,7 @@
 
       <div class="menu-section">
         <h4 class="menu-title">Soporte</h4>
-        
+
         <button class="menu-item" onclick={handleHelp}>
           <HelpCircle size={20} />
           <span>Ayuda y soporte</span>
@@ -289,11 +300,18 @@
     z-index: 30000;
     backdrop-filter: blur(8px);
   }
-  
+
   @media (min-width: 768px) {
     .modal-overlay {
+      left: 0;
       right: auto;
       width: 700px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .modal-overlay {
+      left: 5rem;
     }
   }
 
@@ -317,6 +335,12 @@
       max-width: 700px;
       border-radius: 0 1.25rem 0 0;
       box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .modal-container {
+      left: 5rem;
     }
   }
 
@@ -572,5 +596,4 @@
     background: rgba(239, 68, 68, 0.25);
     transform: scale(1.02);
   }
-
 </style>

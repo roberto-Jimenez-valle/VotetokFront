@@ -2245,8 +2245,10 @@
         key: opt.optionKey || opt.key || `option-${idx}`,
         label: opt.optionLabel || opt.label || `Opción ${idx + 1}`,
         color: opt.color || `hsl(${idx * 60}, 70%, 50%)`,
-        votes: opt._count?.votes || opt.votes || 0, // Auto-calculado
-        avatarUrl: opt.createdBy?.avatarUrl || pollData.user?.avatarUrl, // Desde relación User
+        votes: opt._count?.votes || opt.votes || 0,
+        imageUrl: opt.imageUrl || opt.image || opt.mediaUrl,
+        url: opt.url,
+        avatarUrl: opt.createdBy?.avatarUrl || pollData.user?.avatarUrl,
       })),
       totalVotes: pollData._count?.votes || pollData.totalVotes || 0, // Auto-calculado
       totalViews: 0, // Campo legacy - no se usa
@@ -2680,18 +2682,18 @@
 
         <!-- Carrusel 3D de opciones - transición suave al expandir -->
         {#if optionsWithPct.length > 0}
-          {@const carouselOptions = activePoll ? activePoll.options.map((opt: any, idx: number) => {
-            const optWithPct = optionsWithPct.find((o: any) => o.key === opt.key || o.key === opt.optionKey);
-            return {
-              key: opt.key || opt.optionKey || `opt-${idx}`,
-              label: opt.label || opt.optionLabel || opt.optionText,
-              color: opt.color,
-              imageUrl: opt.imageUrl,
-              pct: optWithPct?.pct || 0,
-              votes: optWithPct?.votes || opt.votes || 0,
-              displayText: optWithPct?.displayText || '0%',
-            };
-          }) : optionsWithPct}
+          {@const carouselOptions = optionsWithPct.map((opt: any, idx: number) => ({
+            key: opt.key || `opt-${idx}`,
+            label: opt.label,
+            color: opt.color,
+            imageUrl: opt.imageUrl,
+            url: opt.url,
+            pct: opt.pct || 0,
+            votes: opt.votes || 0,
+            displayText: opt.displayText || `${Math.round(opt.pct || 0)}%`,
+            pollData: opt.pollData,
+            avatarUrl: opt.avatarUrl,
+          }))}
           {@const carouselHasVoted = activePoll ? (Array.isArray(userVotes[activePoll.id]) ? userVotes[activePoll.id].length > 0 : !!userVotes[activePoll.id]) : false}
           {@const carouselTotalVotes = activePoll ? (activePoll.totalVotes || activePoll.options?.reduce((sum: number, o: any) => sum + (o.votes || 0), 0) || 0) : 0}
           <div class="poll-bar-options-expanded carousel-wrapper" class:carousel-hidden={state === "expanded"}>

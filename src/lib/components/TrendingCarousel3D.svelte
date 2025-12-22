@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onMount, afterUpdate, tick } from 'svelte';
   import { markImageFailed, hasImageFailed, shouldRetryImage } from '$lib/stores/failed-images-store';
   
   const dispatch = createEventDispatcher();
@@ -17,6 +17,14 @@
   let startX = 0;
   let startY = 0;
   let isAnimating = false;
+  let loadingKeys = new Set<string>(); // Track qué keys están cargando
+  
+  // Sincronizar cache externo cuando cambia
+  $: {
+    if (externalThumbnailsCache && Object.keys(externalThumbnailsCache).length > 0) {
+      thumbnails = { ...thumbnails, ...externalThumbnailsCache };
+    }
+  }
   
   $: totalCards = options?.length || 0;
   $: showColorsAndPercentages = isTrendingMode || hasVoted;
@@ -169,70 +177,140 @@
     return text.replace(/https?:\/\/[^\s]+/gi, '').trim() || text;
   }
   
-  // Cargar thumbnails cuando cambian las opciones (solo si NO es modo trending)
-  async function loadThumbnails() {
-    if (isTrendingMode) return;
+  // Cargar thumbnail para una opción específica
+  async function loadThumbnailForOption(option: any) {
+    if (!option?.key) {
+      console.log('[TrendingCarousel3D] ⚠️ Opción sin key:', option);
+      return;
+    }
+    if (thumbnails[option.key]) {
+      console.log('[TrendingCarousel3D] ✅ Ya en cache:', option.key);
+      return;
+    }
+    if (loadingKeys.has(option.key)) {
+      console.log('[TrendingCarousel3D] ⏳ Ya cargando:', option.key);
+      return;
+    }
     
-    console.log('[TrendingCarousel3D] Cargando thumbnails, isTrendingMode:', isTrendingMode);
-    console.log('[TrendingCarousel3D] Options:', options.map(o => ({ key: o.key, label: o.label, imageUrl: o.imageUrl, url: o.url })));
-    console.log('[TrendingCarousel3D] Cache externo:', Object.keys(externalThumbnailsCache));
+    const url = option.imageUrl || option.url || extractUrlFromText(option.label);
+    console.log('[TrendingCarousel3D] 🔗 URL para', option.key, ':', url);
+    if (!url) {
+      console.log('[TrendingCarousel3D] ❌ Sin URL para:', option.key, 'label:', option.label);
+      return;
+    }
     
-    for (const option of options) {
-      // Si ya está en cache (externo o local), no volver a cargar
-      if (thumbnails[option.key]) {
-        console.log('[TrendingCarousel3D] Opción', option.key, 'ya en cache:', thumbnails[option.key]);
-        continue;
+    if (isDirectImage(url)) {
+      thumbnails[option.key] = url;
+      thumbnails = { ...thumbnails };
+      dispatch('thumbnailLoaded', { key: option.key, url });
+      preloadImage(url);
+      return;
+    }
+    
+    if (!canHaveThumbnail(url)) return;
+    
+    // Marcar como cargando
+    loadingKeys.add(option.key);
+    
+    try {
+      const thumb = await fetchThumbnail(url);
+      if (thumb) {
+        thumbnails[option.key] = thumb;
+        thumbnails = { ...thumbnails };
+        forceUpdateCounter++; // Forzar re-render
+        dispatch('thumbnailLoaded', { key: option.key, url: thumb });
+        preloadImage(thumb);
       }
-      
-      // Buscar URL en: imageUrl, url, o extraer del texto (label)
-      let url = option.imageUrl || option.url || extractUrlFromText(option.label);
-      console.log('[TrendingCarousel3D] Opción', option.key, 'URL encontrada:', url);
-      
-      if (url && isDirectImage(url)) {
-        // Es imagen directa, usar directamente
-        thumbnails[option.key] = url;
-        thumbnails = thumbnails;
-        // Notificar al padre para actualizar cache externo
-        dispatch('thumbnailLoaded', { key: option.key, url });
-        console.log('[TrendingCarousel3D] Imagen directa:', url);
-      } else if (url && canHaveThumbnail(url)) {
-        // Es URL que puede tener thumbnail, obtenerlo de la API
-        const thumb = await fetchThumbnail(url);
-        if (thumb) {
-          thumbnails[option.key] = thumb;
-          thumbnails = thumbnails;
-          // Notificar al padre para actualizar cache externo
-          dispatch('thumbnailLoaded', { key: option.key, url: thumb });
-        }
+    } finally {
+      loadingKeys.delete(option.key);
+    }
+  }
+  
+  // Cargar thumbnails cuando cambian las opciones (solo si NO es modo trending)
+  function loadThumbnails() {
+    if (isTrendingMode) {
+      console.log('[TrendingCarousel3D] 🚫 Modo trending, no cargar thumbnails');
+      return;
+    }
+    if (!options || options.length === 0) {
+      console.log('[TrendingCarousel3D] 🚫 Sin opciones');
+      return;
+    }
+    
+    console.log('[TrendingCarousel3D] 🚀 Iniciando carga de thumbnails para', options.length, 'opciones');
+    console.log('[TrendingCarousel3D] 📊 Opciones:', options.map(o => ({ key: o.key, imageUrl: o.imageUrl, label: o.label?.substring(0, 30) })));
+    
+    // Cargar cada opción de forma independiente en paralelo
+    options.forEach(option => loadThumbnailForOption(option));
+  }
+  
+  // Precargar imagen para que esté lista cuando se muestre
+  function preloadImage(url: string) {
+    if (!url) return;
+    const img = new Image();
+    img.src = url;
+  }
+  
+  // Forzar carga cuando cambian las opciones
+  let lastOptionsKey = '';
+  $: {
+    const newKey = options?.map(o => o.key).join(',') || '';
+    if (newKey !== lastOptionsKey) {
+      lastOptionsKey = newKey;
+      if (!isTrendingMode && options?.length > 0) {
+        console.log('[TrendingCarousel3D] 🔄 Opciones cambiaron, cargando thumbnails...');
+        // Usar tick para asegurar que el estado esté actualizado
+        tick().then(() => loadThumbnails());
       }
     }
   }
   
-  // Recargar thumbnails cuando cambian options o isTrendingMode
-  $: if (options && options.length > 0 && !isTrendingMode) {
-    loadThumbnails();
+  // También disparar cuando isTrendingMode cambia a false
+  let prevTrendingMode = isTrendingMode;
+  $: {
+    if (prevTrendingMode !== isTrendingMode) {
+      prevTrendingMode = isTrendingMode;
+      if (!isTrendingMode && options?.length > 0) {
+        console.log('[TrendingCarousel3D] 🔄 Modo cambiado a encuesta, cargando thumbnails...');
+        tick().then(() => loadThumbnails());
+      }
+    }
   }
   
   onMount(() => {
-    loadThumbnails();
+    console.log('[TrendingCarousel3D] 🚀 onMount - isTrendingMode:', isTrendingMode, 'options:', options?.length);
+    if (!isTrendingMode && options?.length > 0) {
+      loadThumbnails();
+    }
   });
   
-  // Obtener thumbnail para una opción (solo en modo encuesta activa)
-  // NO devuelve URLs que han fallado 3+ veces para evitar loops
-  function getCardImage(option: any): string | null {
-    if (isTrendingMode) return null; // En trending no mostramos imágenes
-    
-    // Verificar thumbnail en cache - solo si no ha fallado permanentemente
-    const cachedThumb = thumbnails[option.key];
-    if (cachedThumb && shouldRetryImage(cachedThumb)) return cachedThumb;
-    
-    // Verificar imageUrl directa - solo si no ha fallado permanentemente
-    if (option.imageUrl && isDirectImage(option.imageUrl) && shouldRetryImage(option.imageUrl)) {
-      return option.imageUrl;
+  // Usar afterUpdate como respaldo para asegurar que se carguen
+  let hasLoadedOnce = false;
+  afterUpdate(() => {
+    if (!isTrendingMode && options?.length > 0 && !hasLoadedOnce) {
+      const needsLoad = options.some(opt => !thumbnails[opt.key] && (opt.imageUrl || opt.url || extractUrlFromText(opt.label)));
+      if (needsLoad) {
+        console.log('[TrendingCarousel3D] 🔄 afterUpdate - cargando thumbnails faltantes...');
+        loadThumbnails();
+        hasLoadedOnce = true;
+      }
     }
-    
-    return null;
-  }
+    // Reset hasLoadedOnce cuando cambian las opciones
+    if (lastOptionsKey !== options?.map(o => o.key).join(',')) {
+      hasLoadedOnce = false;
+    }
+  });
+  
+  // Combinar opciones con thumbnails/imageUrl en un array reactivo
+  // Depende de: options, isTrendingMode, thumbnails
+  $: optionsWithImages = (options || []).map(option => {
+    if (isTrendingMode) {
+      return { ...option, cardImage: null };
+    }
+    // Priorizar imageUrl directa, luego thumbnail cargado
+    const cardImage = option.imageUrl || thumbnails[option.key] || null;
+    return { ...option, cardImage };
+  });
 </script>
 
 <!-- Carrusel 3D de Cards de Trending -->
@@ -250,10 +328,9 @@
   tabindex="0"
 >
   <div class="carousel-3d">
-    {#each options as option, i (option.key || i)}
+    {#each optionsWithImages as option, i (option.key || i)}
       {@const pos = cardPositions[i]}
-      {@const cardImage = getCardImage(option)}
-      {@const hasImage = !!cardImage}
+      {@const hasImage = !!option.cardImage}
       <button
         class="carousel-card"
         class:active={pos === 0}
@@ -268,14 +345,16 @@
         {#if hasImage}
           <!-- Modo con imagen de fondo -->
           <img 
-            src={cardImage} 
+            src={option.cardImage} 
             alt="" 
             class="card-bg-image" 
-            loading="lazy"
+            loading={pos === 0 ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchpriority={pos === 0 ? 'high' : 'low'}
             onerror={(e: Event) => { 
               if (e.target) {
                 (e.target as HTMLImageElement).style.display = 'none';
-                markImageFailed(cardImage || '');
+                markImageFailed(option.cardImage || '');
               }
             }}
           />

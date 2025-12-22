@@ -25,7 +25,7 @@
   }
 
   let { isOpen = $bindable(false) }: Props = $props();
-  
+
   let isLoading = $state(false);
   let authPopup: Window | null = null;
 
@@ -33,35 +33,35 @@
   function handleMessage(event: MessageEvent) {
     // Verificar origen por seguridad
     if (event.origin !== window.location.origin) return;
-    
+
     const { type, token, user, error, message } = event.data;
-    
-    if (type === 'OAUTH_SUCCESS') {
-      console.log('[AuthModal] ✅ Login exitoso via popup:', user?.username);
-      
+
+    if (type === "OAUTH_SUCCESS") {
+      console.log("[AuthModal] ✅ Login exitoso via popup:", user?.username);
+
       // Guardar auth en localStorage y store
       setAuth(token, user);
-      
+
       isLoading = false;
       isOpen = false;
-      
+
       // Notificar al componente padre
-      dispatch('login', { provider: 'google', user, token });
+      dispatch("login", { provider: "google", user, token });
     }
-    
-    if (type === 'OAUTH_ERROR') {
-      console.error('[AuthModal] ❌ Error en popup:', error, message);
+
+    if (type === "OAUTH_ERROR") {
+      console.error("[AuthModal] ❌ Error en popup:", error, message);
       isLoading = false;
-      alert(message || 'Error en la autenticación');
+      alert(message || "Error en la autenticación");
     }
   }
 
   onMount(() => {
-    window.addEventListener('message', handleMessage);
+    window.addEventListener("message", handleMessage);
   });
 
   onDestroy(() => {
-    window.removeEventListener('message', handleMessage);
+    window.removeEventListener("message", handleMessage);
     if (authPopup && !authPopup.closed) {
       authPopup.close();
     }
@@ -78,36 +78,40 @@
 
   function handleGoogleLogin() {
     console.log("[AuthModal] 🔵 Abriendo popup de Google OAuth");
-    
+
     isLoading = true;
-    
+
     // Calcular posición centrada del popup
     const width = 500;
     const height = 600;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
-    
+
     // Abrir popup con el endpoint de auth (que redirigirá al callback)
-    const popupUrl = '/api/auth/google?popup=1';
+    const popupUrl = "/api/auth/google?popup=1";
     authPopup = window.open(
       popupUrl,
-      'GoogleAuth',
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=yes`
+      "GoogleAuth",
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=yes`,
     );
-    
+
     if (!authPopup) {
-      console.error('[AuthModal] ❌ No se pudo abrir el popup (¿bloqueador de popups?)');
+      console.error(
+        "[AuthModal] ❌ No se pudo abrir el popup (¿bloqueador de popups?)",
+      );
       isLoading = false;
-      alert('No se pudo abrir la ventana de autenticación. Desactiva el bloqueador de popups e intenta de nuevo.');
+      alert(
+        "No se pudo abrir la ventana de autenticación. Desactiva el bloqueador de popups e intenta de nuevo.",
+      );
       return;
     }
-    
+
     // Monitorear si el popup se cierra sin completar
     const checkClosed = setInterval(() => {
       if (authPopup?.closed) {
         clearInterval(checkClosed);
         if (isLoading) {
-          console.log('[AuthModal] Popup cerrado sin completar');
+          console.log("[AuthModal] Popup cerrado sin completar");
           isLoading = false;
         }
       }
@@ -212,6 +216,30 @@
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  }
+
+  @media (min-width: 768px) {
+    .auth-modal-sheet {
+      top: 0;
+      left: 0;
+      right: auto;
+      width: 100%;
+      max-width: 700px;
+      height: 100vh;
+      max-height: 100vh;
+      border-radius: 0 1.25rem 0 0;
+      background: #181a20;
+    }
+
+    :global(html.dark) .auth-modal-sheet {
+      background: #181a20;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .auth-modal-sheet {
+      left: 5rem;
+    }
   }
 
   .auth-modal-sheet::-webkit-scrollbar {

@@ -115,8 +115,10 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html, body {
-    @apply bg-background text-foreground;
+
+  html,
+  body {
+    @apply bg-background text-foreground h-full;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -124,33 +126,35 @@
   }
 }
 
-/* Escalar interfaz en escritorio para mejor legibilidad */
+/* Fluid Typography - Scales the entire UI based on viewport width */
+html {
+  font-size: 15px;
+  /* Base for mobile */
+}
+
 @media screen and (min-width: 768px) {
-  body {
-    zoom: 1.1;
-  }
-  
-  /* Contrarrestar zoom SOLO en el globo para evitar desajuste de clicks */
-  .globe-wrap {
-    zoom: calc(1 / 1.1);
+  html {
+    font-size: clamp(15px, 1.2vw + 7px, 20px);
   }
 }
 
 @media screen and (min-width: 1200px) {
-  body {
-    zoom: 1.26;
+  html {
+    font-size: clamp(18px, 1vw + 10px, 24px);
   }
-  
-  /* Contrarrestar zoom SOLO en el globo para evitar desajuste de clicks */
-  .globe-wrap {
-    zoom: calc(1 / 1.26);
+}
+
+@media screen and (min-width: 1920px) {
+  html {
+    font-size: clamp(22px, 0.6vw + 14px, 30px);
   }
 }
 
 /* CRÍTICO: Estilos para modo claro - deben estar FUERA de @layer para tener máxima prioridad */
 :root {
-  --color-white: white; /* Variable de Tailwind para modo oscuro */
-  
+  --color-white: white;
+  /* Variable de Tailwind para modo oscuro */
+
   /* Variables neomórficas - Modo Claro */
   --neo-hue: 220;
   --neo-bg: hsl(var(--neo-hue), 15%, 90%);
@@ -165,8 +169,9 @@
 }
 
 html:not(.dark) {
-  --color-white: #1a1a1a; /* Sobrescribir variable de Tailwind en modo claro */
-  
+  --color-white: #1a1a1a;
+  /* Sobrescribir variable de Tailwind en modo claro */
+
   /* Variables neomórficas actualizadas para modo claro */
   --neo-bg: hsl(var(--neo-hue), 15%, 90%);
   --neo-text: hsl(var(--neo-hue), 40%, 35%);
@@ -194,32 +199,33 @@ html:not(.dark) {
 
 /* Logo y tabs usan var(--neo-text) automáticamente */
 
-header h1{
+header h1 {
   margin-top: 0.05em;
 }
 
 /* Ocultar scrollbars en escritorio (>768px) manteniendo funcionalidad de scroll */
 @media (min-width: 768px) {
+
   /* Para navegadores basados en Webkit/Blink (Chrome, Safari, Edge, Opera) */
   *::-webkit-scrollbar {
     width: 0px;
     height: 0px;
     background: transparent;
   }
-  
+
   *::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   *::-webkit-scrollbar-thumb {
     background: transparent;
   }
-  
+
   /* Para Firefox */
   * {
     scrollbar-width: none;
   }
-  
+
   /* Para IE y Edge legacy */
   * {
     -ms-overflow-style: none;
@@ -235,7 +241,7 @@ header h1{
   background-color: var(--neo-bg);
   color: var(--neo-text);
   border: 1px solid var(--neo-border);
-  box-shadow: 
+  box-shadow:
     8px 8px 16px var(--neo-shadow-dark),
     -8px -8px 16px var(--neo-shadow-light),
     inset 1px 1px 4px var(--neo-bevel-highlight);
@@ -250,7 +256,7 @@ header h1{
   background-color: var(--neo-bg);
   color: var(--neo-text);
   border: 1px solid var(--neo-border);
-  box-shadow: 
+  box-shadow:
     8px 8px 16px var(--neo-shadow-dark),
     -8px -8px 16px var(--neo-shadow-light),
     inset 1px 1px 4px var(--neo-bevel-highlight);
@@ -266,7 +272,7 @@ header h1{
   background-color: var(--neo-bg);
   color: var(--neo-text);
   border: 1px solid var(--neo-border);
-  box-shadow: 
+  box-shadow:
     8px 8px 16px var(--neo-shadow-dark),
     -8px -8px 16px var(--neo-shadow-light),
     inset 1px 1px 4px var(--neo-bevel-highlight);
@@ -281,7 +287,7 @@ header h1{
 .neo-btn:active,
 .neo-btn-circle:active,
 .neo-btn-pill:active {
-  box-shadow: 
+  box-shadow:
     inset 3px 3px 6px var(--neo-shadow-dark),
     inset -3px -3px 6px var(--neo-shadow-light);
   transform: scale(0.98);
@@ -291,7 +297,7 @@ header h1{
 .neo-btn:hover,
 .neo-btn-circle:hover,
 .neo-btn-pill:hover {
-  box-shadow: 
+  box-shadow:
     10px 10px 20px var(--neo-shadow-dark),
     -10px -10px 20px var(--neo-shadow-light),
     inset 1px 1px 4px var(--neo-bevel-highlight);
@@ -305,7 +311,7 @@ header h1{
   opacity: 0.5;
   cursor: not-allowed;
   transform: none !important;
-  box-shadow: 
+  box-shadow:
     4px 4px 8px var(--neo-shadow-dark),
     -4px -4px 8px var(--neo-shadow-light);
 }
@@ -315,7 +321,7 @@ header h1{
   background-color: var(--neo-panel-bg);
   backdrop-filter: blur(20px);
   border: 1px solid var(--neo-border);
-  box-shadow: 
+  box-shadow:
     8px 8px 16px var(--neo-shadow-dark),
     -8px -8px 16px var(--neo-shadow-light);
   border-radius: 1rem;
@@ -326,7 +332,7 @@ header h1{
   background-color: var(--neo-input-bg);
   color: var(--neo-text);
   border: 1px solid var(--neo-border);
-  box-shadow: 
+  box-shadow:
     inset 2px 2px 5px var(--neo-shadow-dark),
     inset -2px -2px 5px var(--neo-shadow-light);
   border-radius: 0.5rem;
@@ -335,9 +341,8 @@ header h1{
 }
 
 .neo-input:focus {
-  box-shadow: 
+  box-shadow:
     inset 3px 3px 6px var(--neo-shadow-dark),
     inset -3px -3px 6px var(--neo-shadow-light),
     0 0 0 2px var(--neo-bevel-highlight);
 }
-
