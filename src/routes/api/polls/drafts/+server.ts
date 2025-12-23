@@ -41,7 +41,7 @@ export const POST: RequestHandler = async (event) => {
 
         const { id, ...draftData } = data;
 
-        let draft;
+        let draft: any;
 
         if (id && typeof id === 'number') {
             // Actualizar borrador existente
@@ -88,7 +88,7 @@ export const POST: RequestHandler = async (event) => {
             success: true,
             data: {
                 id: draft.id,
-                ...draft.draftData as object,
+                ...draft.draftData as any,
                 savedAt: draft.updatedAt.toISOString(),
             },
         });
