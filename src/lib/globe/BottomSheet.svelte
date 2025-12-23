@@ -184,13 +184,13 @@
 
   // Actualizar tiempos cada minuto
   let timeUpdateInterval: number | undefined;
-  
+
   // Control de historial para el estado expandido
   let sheetHistoryPushed = false;
-  
+
   // Detectar cuando el bottomsheet se expande para agregar entrada al historial
   $: if (state === "expanded" && !sheetHistoryPushed) {
-    history.pushState({ bottomSheet: 'expanded' }, '');
+    history.pushState({ bottomSheet: "expanded" }, "");
     sheetHistoryPushed = true;
   } else if (state !== "expanded") {
     sheetHistoryPushed = false;
@@ -218,7 +218,6 @@
     };
   });
 
-
   // Cargar sugerencias de usuarios desde la API
   let userSuggestions: Array<{
     id: number;
@@ -234,7 +233,7 @@
       const { data } = await apiGet("/api/users/suggestions?limit=8");
       userSuggestions = data;
     } catch (error) {
-            userSuggestions = [];
+      userSuggestions = [];
     }
   }
 
@@ -310,12 +309,19 @@
                 );
                 friendsByOption = friendsData.data || {};
                 if (Object.keys(friendsByOption).length > 0) {
-                  console.log('[BottomSheet] friendsByOption for poll', poll.id, ':', friendsByOption, 'option keys:', poll.options?.map((o: any) => o.optionKey || o.key || o.id));
+                  console.log(
+                    "[BottomSheet] friendsByOption for poll",
+                    poll.id,
+                    ":",
+                    friendsByOption,
+                    "option keys:",
+                    poll.options?.map((o: any) => o.optionKey || o.key || o.id),
+                  );
                 }
               }
             } catch (e) {
               // Silenciar error - no es crítico si falla
-                          }
+            }
 
             return {
               ...poll,
@@ -325,31 +331,33 @@
         );
 
         trendingPollsData = pollsWithFriends;
-        
+
         // Cargar los votos del usuario para estas encuestas
         await loadUserVotes(pollsWithFriends.map((p: any) => p.id));
       } else {
         trendingPollsData = [];
       }
     } catch (error) {
-            trendingPollsData = [];
+      trendingPollsData = [];
     }
   }
-  
+
   // Función para cargar los votos del usuario
   async function loadUserVotes(pollIds: number[]) {
     if (pollIds.length === 0) return;
-    
+
     try {
-      const { data } = await apiGet(`/api/polls/my-votes?pollIds=${pollIds.join(',')}`);
-      if (data && typeof data === 'object') {
+      const { data } = await apiGet(
+        `/api/polls/my-votes?pollIds=${pollIds.join(",")}`,
+      );
+      if (data && typeof data === "object") {
         // Combinar con los votos existentes
         userVotes = { ...userVotes, ...data };
         displayVotes = { ...displayVotes, ...data };
-        console.log('[BottomSheet] ✅ Votos del usuario cargados:', data);
+        console.log("[BottomSheet] ✅ Votos del usuario cargados:", data);
       }
     } catch (error) {
-      console.error('[BottomSheet] Error cargando votos del usuario:', error);
+      console.error("[BottomSheet] Error cargando votos del usuario:", error);
     }
   }
 
@@ -386,11 +394,11 @@
             }
           } catch (e) {
             // Silenciar error - no es crítico si falla
-                      }
+          }
 
           const transformed = {
             id: poll.id.toString(),
-            hashId: poll.hashId || '', // Incluir hashId para URLs públicas
+            hashId: poll.hashId || "", // Incluir hashId para URLs públicas
             question: poll.title,
             type: poll.type || "poll",
             region:
@@ -400,7 +408,10 @@
               "Global",
             options: poll.options.map((opt: any, optIdx: number) => ({
               id: opt.id,
-              key: opt.optionKey || opt.id?.toString() || `opt-${poll.id}-${optIdx}`,
+              key:
+                opt.optionKey ||
+                opt.id?.toString() ||
+                `opt-${poll.id}-${optIdx}`,
               optionKey: opt.optionKey, // Preservar optionKey original para lookup de amigos
               label: opt.optionLabel || opt.label || `Opción ${optIdx + 1}`,
               color:
@@ -452,16 +463,15 @@
 
       additionalPolls = uniquePolls;
       currentPollsPage = page;
-      
+
       // Cargar los votos del usuario para estas encuestas
       const newPollIds = transformedPolls.map((p: any) => Number(p.id));
       await loadUserVotes(newPollIds);
     } catch (error) {
-          } finally {
+    } finally {
       isLoadingPolls = false;
     }
   }
-
 
   // Navegar a vista de gráfico (página -1)
   function goToChartView(pollId: string) {
@@ -996,8 +1006,8 @@
 
   // Function to search countries and subdivisions
   async function handleSearch(query: string) {
-        if (!query || query.trim().length < 2) {
-            searchResults = [];
+    if (!query || query.trim().length < 2) {
+      searchResults = [];
       return;
     }
 
@@ -1006,9 +1016,9 @@
       clearTimeout(searchDebounceTimer);
     }
 
-        // Debounce search usando Promise
+    // Debounce search usando Promise
     searchDebounceTimer = setTimeout(async () => {
-            isSearching = true;
+      isSearching = true;
       const results = [] as Array<{
         id: string;
         name: string;
@@ -1022,14 +1032,14 @@
 
       try {
         const url = `/api/search?q=${encodeURIComponent(query)}&filter=places&limit=20`;
-                // Buscar en TODOS los niveles usando la API
+        // Buscar en TODOS los niveles usando la API
         const response = await fetch(url);
 
-                if (response.ok) {
+        if (response.ok) {
           const data = await response.json();
-                    // La API retorna { success, data: { places: [] } }
+          // La API retorna { success, data: { places: [] } }
           const places = data.data?.places || [];
-                    for (const place of places) {
+          for (const place of places) {
             // Determinar el tipo basado en el nivel
             const type = place.level === 1 ? "country" : "subdivision";
 
@@ -1055,9 +1065,9 @@
           return a.name.localeCompare(b.name);
         });
 
-                searchResults = results;
+        searchResults = results;
       } catch (error) {
-                searchResults = [];
+        searchResults = [];
       } finally {
         isSearching = false;
       }
@@ -1090,8 +1100,7 @@
     };
     const event = new CustomEvent("searchSelect", { detail: option });
     window.dispatchEvent(event);
-
-      }
+  }
 
   const dispatch = createEventDispatcher<{
     openPollInGlobe: {
@@ -1111,7 +1120,6 @@
     requestHide: void;
     polldropdownstatechange: { open: boolean };
   }>();
-
 
   // Función para abrir una encuesta adicional en el globo
   function openAdditionalPollInGlobe(poll: Poll) {
@@ -1140,7 +1148,7 @@
 
   // Estado de expansión de la barra de opciones
   let showPollOptionsExpanded = false;
-  
+
   // Auto-expandir opciones cuando se abre una encuesta
   let previousActivePollId: any = null;
   $: {
@@ -1149,7 +1157,7 @@
       // El usuario puede expandir manualmente si quiere ver más
       showPollOptionsExpanded = false;
       dispatch("polldropdownstatechange", { open: false });
-      
+
       // CRÍTICO: Limpiar cache de thumbnails al cambiar de encuesta
       // Las keys de opciones son genéricas (option_1, option_2, etc.) y se reutilizan entre encuestas
       carouselThumbnailsCache = {};
@@ -1161,7 +1169,7 @@
     }
     previousActivePollId = activePoll?.id || null;
   }
-  
+
   // Cache de thumbnails para el carrusel (persiste cuando se oculta/muestra)
   let carouselThumbnailsCache: Record<string, string> = {};
 
@@ -1227,18 +1235,21 @@
   }
 
   onMount(() => {
-    // Lazy load de componentes para evitar dependencia circular
     (async () => {
-      const [pollMaxModule, authModule, profileModule] = await Promise.all([
-        import("$lib/components/PollMaximizedView.svelte"),
-        import("$lib/AuthModal.svelte"),
-        import("$lib/UserProfileModal.svelte")
-      ]);
-      PollMaximizedView = pollMaxModule.default;
-      AuthModal = authModule.default;
-      UserProfileModal = profileModule.default;
+      try {
+        const [authModule, profileModule] = await Promise.all([
+          // import("$lib/components/PollMaximizedView.svelte"), // FIXME: File missing
+          import("$lib/AuthModal.svelte"),
+          import("$lib/UserProfileModal.svelte"),
+        ]);
+        // PollMaximizedView = pollMaxModule.default;
+        AuthModal = authModule.default;
+        UserProfileModal = profileModule.default;
+      } catch (e) {
+        console.error("Error loading dynamic components", e);
+      }
     })();
-    
+
     // Cargar datos iniciales desde la API
     loadMainPoll(); // Cargar trending topic como encuesta principal
     loadUserSuggestions();
@@ -1301,7 +1312,7 @@
     document.addEventListener("touchmove", handleGlobalMove, { passive: true });
     document.addEventListener("pointerup", handleGlobalEnd);
     document.addEventListener("touchend", handleGlobalEnd);
-    
+
     // Manejar botón atrás del navegador para cerrar modales y colapsar bottomsheet
     const handlePopState = () => {
       // Cerrar preview modal primero
@@ -1314,19 +1325,19 @@
         dispatch("requestHide");
       }
     };
-    
+
     const handleCloseModals = () => {
       if (showPreviewModal) {
         showPreviewModal = false;
       }
     };
-    
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('closeModals', handleCloseModals);
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("closeModals", handleCloseModals);
 
     return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('closeModals', handleCloseModals);
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("closeModals", handleCloseModals);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener(
         "webkitfullscreenchange",
@@ -1626,10 +1637,10 @@
       navigator.clipboard
         .writeText(url)
         .then(() => {
-                    // TODO: Mostrar toast de confirmación
+          // TODO: Mostrar toast de confirmación
         })
         .catch((err) => {
-                    fallbackCopyToClipboard(url);
+          fallbackCopyToClipboard(url);
         });
     } else {
       fallbackCopyToClipboard(url);
@@ -1646,16 +1657,15 @@
     textarea.select();
     try {
       document.execCommand("copy");
-          } catch (error) {
-          }
+    } catch (error) {}
     document.body.removeChild(textarea);
   }
 
   // Función para manejar el voto
   async function handleVote(optionKey: string, pollId?: string) {
-                                // Verificar autenticación ANTES de votar
+    // Verificar autenticación ANTES de votar
     if (!$currentUser) {
-            showAuthModal = true;
+      showAuthModal = true;
       return;
     }
 
@@ -1674,10 +1684,13 @@
       pollId || (activePoll?.id ? activePoll.id.toString() : "main");
 
     // Obtener el tipo de encuesta
-    let poll = pollId 
-      ? additionalPolls.find((p) => p.id == pollId || p.id === pollId.toString()) || previewModalPoll
+    let poll = pollId
+      ? additionalPolls.find(
+          (p) => p.id == pollId || p.id === pollId.toString(),
+        ) || previewModalPoll
       : activePoll;
-    const isMultiplePoll = poll?.pollType === 'multiple' || poll?.type === 'multiple';
+    const isMultiplePoll =
+      poll?.pollType === "multiple" || poll?.type === "multiple";
 
     // Para encuestas SIMPLES: si ya votó por la misma opción, desmarcar
     if (!isMultiplePoll && userVotes[votePollId] === optionKey) {
@@ -1713,26 +1726,26 @@
     await sendVoteToBackend(optionKey, pollId);
 
     // Voto completamente manejado por BottomSheet, no notifica al padre
-      }
+  }
 
   // Nueva función para enviar voto directamente desde BottomSheet
   async function sendVoteToBackend(optionKey: string, pollId?: string) {
-                // Determinar qué encuesta - buscar por ID (string o number)
+    // Determinar qué encuesta - buscar por ID (string o number)
     let poll;
     if (pollId) {
       // Buscar en additionalPolls (comparación flexible)
       poll = additionalPolls.find(
         (p) => p.id == pollId || p.id === pollId.toString(),
       );
-          } else {
+    } else {
       poll = activePoll;
-          }
-
-    if (!poll) {
-                  return;
     }
 
-        // Buscar la opción - puede estar como 'id', 'key', 'optionKey', etc.
+    if (!poll) {
+      return;
+    }
+
+    // Buscar la opción - puede estar como 'id', 'key', 'optionKey', etc.
     const option = poll.options?.find(
       (opt: any) =>
         opt.id === optionKey ||
@@ -1744,13 +1757,13 @@
     );
 
     if (!option) {
-                        return;
+      return;
     }
 
-            // Obtener optionId - puede estar en diferentes formatos
+    // Obtener optionId - puede estar en diferentes formatos
     const rawOptionId = option.id || option.optionId;
     if (!rawOptionId && rawOptionId !== 0) {
-                  return;
+      return;
     }
 
     // Convertir a número - CRÍTICO para el backend
@@ -1759,7 +1772,7 @@
     const numericPollId =
       typeof poll.id === "string" ? parseInt(poll.id) : poll.id;
 
-            try {
+    try {
       // Obtener ubicación real del usuario (con fallback)
       let latitude = 40.4168; // Madrid por defecto
       let longitude = -3.7038;
@@ -1783,11 +1796,11 @@
           latitude = position.coords.latitude;
           longitude = position.coords.longitude;
           locationMethod = "gps";
-                  }
+        }
       } catch (gpsError) {
-                        // PASO 2: Fallback a IP Geolocation (aproximado, sin permiso)
+        // PASO 2: Fallback a IP Geolocation (aproximado, sin permiso)
         try {
-                    const ipResponse = await fetch("https://ipapi.co/json/", {
+          const ipResponse = await fetch("https://ipapi.co/json/", {
             signal: AbortSignal.timeout(5000),
           });
 
@@ -1797,10 +1810,9 @@
               latitude = ipData.latitude;
               longitude = ipData.longitude;
               locationMethod = "ip";
-                          }
+            }
           }
-        } catch (ipError) {
-                            }
+        } catch (ipError) {}
       }
 
       // PASO 3: Geocodificar a subdivisión con point-in-polygon
@@ -1812,18 +1824,19 @@
           const geocodeData = await geocodeResponse.json();
           if (geocodeData.found && geocodeData.subdivisionId) {
             subdivisionId = geocodeData.subdivisionId;
-                      }
+          }
         }
-      } catch (geocodeError) {
-              }
+      } catch (geocodeError) {}
 
       // Si no hay subdivisionId, usar null (el voto aún debe enviarse)
       // El backend aceptará votos sin subdivisión
       if (!subdivisionId) {
-        console.log('[sendVoteToBackend] ⚠️ Sin subdivisionId, enviando voto sin subdivisión');
+        console.log(
+          "[sendVoteToBackend] ⚠️ Sin subdivisionId, enviando voto sin subdivisión",
+        );
       }
 
-            const result = await apiPost(`/api/polls/${numericPollId}/vote`, {
+      const result = await apiPost(`/api/polls/${numericPollId}/vote`, {
         optionId,
         userId: $currentUser?.id ?? $currentUser?.userId ?? null,
         latitude,
@@ -1832,18 +1845,23 @@
       });
 
       const pollIdStr = poll.id.toString();
-      const isMultiple = poll.type === 'multiple' || poll.pollType === 'multiple';
+      const isMultiple =
+        poll.type === "multiple" || poll.pollType === "multiple";
 
       // Actualizar estado local según tipo de encuesta y respuesta del backend
       if (isMultiple) {
         // Para múltiples: actualizar array basándose en la respuesta del backend
-        const currentVotes = Array.isArray(userVotes[pollIdStr]) 
+        const currentVotes = Array.isArray(userVotes[pollIdStr])
           ? [...userVotes[pollIdStr]]
-          : userVotes[pollIdStr] ? [userVotes[pollIdStr]] : [];
-        
-        if (result.action === 'removed') {
+          : userVotes[pollIdStr]
+            ? [userVotes[pollIdStr]]
+            : [];
+
+        if (result.action === "removed") {
           // Se eliminó el voto
-          const newVotes = currentVotes.filter((v: string) => String(v) !== String(optionKey));
+          const newVotes = currentVotes.filter(
+            (v: string) => String(v) !== String(optionKey),
+          );
           if (newVotes.length === 0) {
             const { [pollIdStr]: _, ...rest } = userVotes;
             userVotes = rest;
@@ -1853,7 +1871,10 @@
         } else {
           // Se agregó el voto
           if (!currentVotes.map(String).includes(String(optionKey))) {
-            userVotes = { ...userVotes, [pollIdStr]: [...currentVotes, optionKey] };
+            userVotes = {
+              ...userVotes,
+              [pollIdStr]: [...currentVotes, optionKey],
+            };
           }
         }
       } else {
@@ -1870,8 +1891,7 @@
       } else {
         additionalPolls = [...additionalPolls];
       }
-    } catch (error) {
-          }
+    } catch (error) {}
   }
 
   // Función para manejar votación múltiple - ahora vota directamente como PollMaximizedView
@@ -1893,7 +1913,7 @@
     const votes = multipleVotes[pollId];
     if (!votes || votes.length === 0) return;
 
-        // Enviar cada voto al backend
+    // Enviar cada voto al backend
     for (const optionKey of votes) {
       await sendVoteToBackend(optionKey, pollId);
     }
@@ -1910,21 +1930,20 @@
     if (poll) {
       // Encontrada en additionalPolls
       additionalPolls = [...additionalPolls];
-          } else if (activePoll && activePoll.id.toString() === pollId) {
+    } else if (activePoll && activePoll.id.toString() === pollId) {
       // Es la encuesta activa
       activePoll = { ...activePoll };
-          }
-
-      }
+    }
+  }
 
   // Función para añadir nueva opción directamente (como CreatePollModal)
   async function addNewCollaborativeOption(
     pollId: string,
     previewColor?: string,
   ) {
-        // Verificar si ya hay una opción pendiente de confirmar
+    // Verificar si ya hay una opción pendiente de confirmar
     if (pendingCollaborativeOption[pollId]) {
-            return;
+      return;
     }
 
     const poll =
@@ -1932,14 +1951,14 @@
       (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
 
     if (!poll) {
-            return;
+      return;
     }
 
     if (poll.type !== "collaborative") {
-            return;
+      return;
     }
 
-        // Generar un ID temporal único
+    // Generar un ID temporal único
     const tempId = `temp-${Date.now()}`;
 
     // Usar el color del preview si se pasa, si no generar uno aleatorio
@@ -2009,7 +2028,7 @@
     );
     const indexInPage = (totalOptions - 1) % OPTIONS_PER_PAGE;
 
-        if (poll.id === activePoll?.id) {
+    if (poll.id === activePoll?.id) {
       // Para encuesta activa
       activeAccordionMainIndex = null;
       transitionDirectionMain = "next";
@@ -2041,8 +2060,7 @@
         [pollId]: null,
       };
     }
-
-      }
+  }
 
   // Función para publicar una nueva opción colaborativa desde SinglePollSection
   async function handlePublishOption(
@@ -2051,20 +2069,20 @@
     label: string,
     color: string,
   ) {
-        const poll =
+    const poll =
       additionalPolls.find((p) => p.id.toString() === pollId) ||
       (activePoll && activePoll.id.toString() === pollId ? activePoll : null);
 
     if (!poll) {
-            return;
+      return;
     }
 
     const option = poll.options.find((o: any) => o.key === optionKey);
     if (!option) {
-            return;
+      return;
     }
 
-        try {
+    try {
       const numericPollId =
         typeof poll.id === "string" ? parseInt(poll.id) : poll.id;
 
@@ -2093,9 +2111,8 @@
       delete editingOptionColors[optionKey];
       pendingCollaborativeOption = { ...pendingCollaborativeOption };
       editingOptionColors = { ...editingOptionColors };
-
-          } catch (error) {
-            alert("Error de conexión. Inténtalo de nuevo.");
+    } catch (error) {
+      alert("Error de conexión. Inténtalo de nuevo.");
     }
   }
 
@@ -2142,9 +2159,8 @@
       delete editingOptionColors[tempId];
       pendingCollaborativeOption = { ...pendingCollaborativeOption };
       editingOptionColors = { ...editingOptionColors };
-
-          } catch (error) {
-            alert("Error de conexión. Inténtalo de nuevo.");
+    } catch (error) {
+      alert("Error de conexión. Inténtalo de nuevo.");
     }
   }
 
@@ -2173,8 +2189,7 @@
     delete editingOptionColors[tempId];
     pendingCollaborativeOption = { ...pendingCollaborativeOption };
     editingOptionColors = { ...editingOptionColors };
-
-      }
+  }
 
   // Función para añadir nueva opción (colaborativa)
   async function addNewOption(pollId: string) {
@@ -2192,7 +2207,7 @@
         label: newOptionLabel[pollId],
         userId: $currentUser?.id ?? $currentUser?.userId ?? null,
       });
-            // Actualizar la encuesta localmente
+      // Actualizar la encuesta localmente
       const newOption = {
         id: result.data.id,
         key: result.data.optionKey,
@@ -2214,14 +2229,13 @@
       newOptionLabel[pollId] = "";
       showAddOptionModal[pollId] = false;
       showAddOptionModal = { ...showAddOptionModal };
-    } catch (error) {
-          }
+    } catch (error) {}
   }
 
   // Función para abrir una encuesta trending específica
   function openTrendingPoll(pollData: any) {
     if (!pollData) {
-            return;
+      return;
     }
 
     // Generar ID Ãºnico si no existe
@@ -2294,7 +2308,7 @@
       showPollOptionsExpanded = false;
       // Notificar al padre
       dispatch("polldropdownstatechange", { open: false });
-          }
+    }
 
     const target = e.target as HTMLElement;
     if (target) {
@@ -2325,14 +2339,14 @@
         hasMorePolls &&
         !activePoll
       ) {
-                loadAdditionalPolls(currentPollsPage + 1);
+        loadAdditionalPolls(currentPollsPage + 1);
       }
     }
   }
 
   // Función para quitar voto (actualiza en BD)
   async function clearUserVote(pollId: string) {
-                try {
+    try {
       const numericPollId =
         typeof pollId === "string" ? parseInt(pollId) : pollId;
 
@@ -2343,9 +2357,9 @@
 
       // Guardar las opciones votadas antes de borrar (para encuestas múltiples)
       const votedOptions = userVotes[pollId];
-            // DELETE requiere autenticación - el userId viene del JWT
+      // DELETE requiere autenticación - el userId viene del JWT
       await apiCall(`/api/polls/${numericPollId}/vote`, {
-        method: "DELETE"
+        method: "DELETE",
       });
 
       // Actualizar estado local - eliminar voto de ambos registros
@@ -2354,22 +2368,22 @@
       userVotes = { ...restUserVotes };
       displayVotes = { ...restDisplayVotes };
 
-                        // Para encuestas múltiples, decrementar contadores de cada opción votada
+      // Para encuestas múltiples, decrementar contadores de cada opción votada
       if (poll && poll.type === "multiple" && votedOptions) {
         const optionKeys = votedOptions.split(",");
-                optionKeys.forEach((optionKey) => {
+        optionKeys.forEach((optionKey) => {
           const option = poll.options?.find(
             (opt: any) => opt.key === optionKey || opt.optionKey === optionKey,
           );
           if (option && option.votes !== undefined) {
             option.votes = Math.max(0, option.votes - 1);
-                      }
+          }
         });
 
         // Decrementar total de votos de la encuesta (por cada opción)
         if (poll.totalVotes !== undefined) {
           poll.totalVotes = Math.max(0, poll.totalVotes - optionKeys.length);
-                  }
+        }
       } else {
         // Para encuestas simples, decrementar solo 1 voto total
         if (poll && poll.totalVotes !== undefined) {
@@ -2380,23 +2394,21 @@
       // Forzar reactividad según dónde esté la encuesta
       if (activePoll && activePoll.id.toString() === pollId) {
         activePoll = { ...activePoll };
-              }
+      }
 
       const pollToUpdate = additionalPolls.find(
         (p) => p.id.toString() === pollId,
       );
       if (pollToUpdate) {
         additionalPolls = [...additionalPolls];
-              }
-
-                      } catch (error) {
-          }
+      }
+    } catch (error) {}
   }
 
   // Función para abrir modal de preview fullscreen
   function handleOpenPreviewModal(event: CustomEvent) {
     const { option, pollId } = event.detail;
-        // Encontrar la encuesta
+    // Encontrar la encuesta
     let poll = null;
 
     if (activePoll && activePoll.id.toString() === pollId.toString()) {
@@ -2406,7 +2418,7 @@
     }
 
     if (!poll) {
-            return;
+      return;
     }
 
     // Transformar opciones al formato que espera PollMaximizedView
@@ -2418,8 +2430,11 @@
 
     // Obtener los votos del usuario para esta encuesta
     const userVoteForPoll = userVotes[poll.id.toString()];
-    const isMultiple = poll.multipleChoice || poll.pollType === 'multiple' || poll.type === 'multiple';
-    
+    const isMultiple =
+      poll.multipleChoice ||
+      poll.pollType === "multiple" ||
+      poll.type === "multiple";
+
     // Detectar si alguna opción tiene imagen
     const hasAnyImages = (poll.options || []).some((opt: any) => opt.imageUrl);
 
@@ -2436,15 +2451,17 @@
       let hasVoted = false;
       if (isMultiple) {
         // Encuesta múltiple: array de keys - convertir todo a string
-        hasVoted = Array.isArray(userVoteForPoll) && userVoteForPoll.map(String).includes(optionKeyStr);
+        hasVoted =
+          Array.isArray(userVoteForPoll) &&
+          userVoteForPoll.map(String).includes(optionKeyStr);
       } else {
         // Encuesta simple: string key
         hasVoted = String(userVoteForPoll) === optionKeyStr;
       }
-      
+
       const transformedOption = {
-        id: opt.id,  // Mantener ID numérico para el backend
-        key: optionKey,  // Key para comparar con userVotes
+        id: opt.id, // Mantener ID numérico para el backend
+        key: optionKey, // Key para comparar con userVotes
         label: opt.label || opt.optionLabel || opt.optionText || "",
         color: opt.color || "#10b981",
         imageUrl: opt.imageUrl || opt.image || opt.mediaUrl,
@@ -2458,11 +2475,11 @@
         isCorrect: opt.isCorrect || false,
       };
 
-            return transformedOption;
+      return transformedOption;
     });
 
     if (transformedOptions.length === 0) {
-            return;
+      return;
     }
 
     // Si NO hay imágenes, mostrar todas las opciones en vertical
@@ -2489,12 +2506,11 @@
     previewModalPollIndex = pollIndex >= 0 ? pollIndex : 0;
     previewModalShowAllOptions = showAllOptions; // Nuevo estado
     showPreviewModal = true;
-
-      }
+  }
 
   // Función para cerrar modal de preview
   function closePreviewModal() {
-        showPreviewModal = false;
+    showPreviewModal = false;
     previewModalOption = null;
     previewModalPoll = null;
     previewModalOptionIndex = "";
@@ -2508,7 +2524,7 @@
       : additionalPolls;
     const currentIndex = previewModalPollIndex >= 0 ? previewModalPollIndex : 0;
 
-        // Buscar siguiente encuesta (con o sin imágenes)
+    // Buscar siguiente encuesta (con o sin imágenes)
     for (let i = currentIndex + 1; i < allPolls.length; i++) {
       const poll = allPolls[i];
       if ((poll.options || []).length > 0) {
@@ -2517,13 +2533,13 @@
         handleOpenPreviewModal({
           detail: { option: firstOption, pollId: poll.id.toString() },
         } as CustomEvent);
-                return;
+        return;
       }
     }
 
     // Si llegamos al final y hay más encuestas por cargar, cargarlas
     if (hasMorePolls && !isLoadingPolls && !activePoll) {
-            await loadAdditionalPolls(currentPollsPage + 1);
+      await loadAdditionalPolls(currentPollsPage + 1);
 
       // Intentar de nuevo después de cargar
       const newAllPolls = activePoll
@@ -2536,12 +2552,11 @@
           handleOpenPreviewModal({
             detail: { option: firstOption, pollId: poll.id.toString() },
           } as CustomEvent);
-                    return;
+          return;
         }
       }
     }
-
-      }
+  }
 
   // Navegar a la encuesta anterior con opciones de preview
   function navigateToPreviousPollWithPreview() {
@@ -2550,7 +2565,7 @@
       : additionalPolls;
     const currentIndex = previewModalPollIndex >= 0 ? previewModalPollIndex : 0;
 
-        // Buscar encuesta anterior (con o sin imágenes)
+    // Buscar encuesta anterior (con o sin imágenes)
     for (let i = currentIndex - 1; i >= 0; i--) {
       const poll = allPolls[i];
       if ((poll.options || []).length > 0) {
@@ -2559,15 +2574,14 @@
         handleOpenPreviewModal({
           detail: { option: firstOption, pollId: poll.id.toString() },
         } as CustomEvent);
-                return;
+        return;
       }
     }
-      }
+  }
 
   // Debug: log when world chart segments change
   $: if (worldChartSegments) {
   }
-
 </script>
 
 <div
@@ -2593,7 +2607,7 @@
     <div class="drag-handle-indicator">
       <div class="drag-handle-bar"></div>
     </div>
-    
+
     <!-- Barra de opciones de encuesta (cuando hay una activa) -->
     {#if voteOptions.length > 0}
       <!-- Para la BARRA: usar legendItems (solo opciones con votos en el nivel actual) -->
@@ -2611,7 +2625,7 @@
           votes: item.count,
           pct: totalCount > 0 ? (item.count / totalCount) * 100 : 0,
         }));
-                return segments;
+        return segments;
       })()}
 
       <!-- Para las OPCIONES EXPANDIDAS: mostrar TODAS las opciones de la encuesta -->
@@ -2641,7 +2655,10 @@
       {@const pollTitle =
         activePoll?.question || activePoll?.title || "Trending de encuestas"}
 
-      <div class="poll-options-bar-container" class:container-hidden={state === "expanded"}>
+      <div
+        class="poll-options-bar-container"
+        class:container-hidden={state === "expanded"}
+      >
         <!-- Título de la encuesta o trending -->
         <div class="poll-bar-title">
           <!-- Avatar del creador (si existe) -->
@@ -2682,21 +2699,37 @@
 
         <!-- Carrusel 3D de opciones - transición suave al expandir -->
         {#if optionsWithPct.length > 0}
-          {@const carouselOptions = optionsWithPct.map((opt: any, idx: number) => ({
-            key: opt.key || `opt-${idx}`,
-            label: opt.label,
-            color: opt.color,
-            imageUrl: opt.imageUrl,
-            url: opt.url,
-            pct: opt.pct || 0,
-            votes: opt.votes || 0,
-            displayText: opt.displayText || `${Math.round(opt.pct || 0)}%`,
-            pollData: opt.pollData,
-            avatarUrl: opt.avatarUrl,
-          }))}
-          {@const carouselHasVoted = activePoll ? (Array.isArray(userVotes[activePoll.id]) ? userVotes[activePoll.id].length > 0 : !!userVotes[activePoll.id]) : false}
-          {@const carouselTotalVotes = activePoll ? (activePoll.totalVotes || activePoll.options?.reduce((sum: number, o: any) => sum + (o.votes || 0), 0) || 0) : 0}
-          <div class="poll-bar-options-expanded carousel-wrapper" class:carousel-hidden={state === "expanded"}>
+          {@const carouselOptions = optionsWithPct.map(
+            (opt: any, idx: number) => ({
+              key: opt.key || `opt-${idx}`,
+              label: opt.label,
+              color: opt.color,
+              imageUrl: opt.imageUrl,
+              url: opt.url,
+              pct: opt.pct || 0,
+              votes: opt.votes || 0,
+              displayText: opt.displayText || `${Math.round(opt.pct || 0)}%`,
+              pollData: opt.pollData,
+              avatarUrl: opt.avatarUrl,
+            }),
+          )}
+          {@const carouselHasVoted = activePoll
+            ? Array.isArray(userVotes[activePoll.id])
+              ? userVotes[activePoll.id].length > 0
+              : !!userVotes[activePoll.id]
+            : false}
+          {@const carouselTotalVotes = activePoll
+            ? activePoll.totalVotes ||
+              activePoll.options?.reduce(
+                (sum: number, o: any) => sum + (o.votes || 0),
+                0,
+              ) ||
+              0
+            : 0}
+          <div
+            class="poll-bar-options-expanded carousel-wrapper"
+            class:carousel-hidden={state === "expanded"}
+          >
             <TrendingCarousel3D
               options={carouselOptions.sort((a: any, b: any) => b.pct - a.pct)}
               activeIndex={0}
@@ -2712,10 +2745,10 @@
                 } else if (activePoll) {
                   // Modo encuesta activa: abrir vista maximizada de la opción
                   handleOpenPreviewModal({
-                    detail: { 
+                    detail: {
                       option: { key: option.key, label: option.label },
-                      pollId: activePoll.id.toString() 
-                    }
+                      pollId: activePoll.id.toString(),
+                    },
                   } as CustomEvent);
                 }
               }}
@@ -2781,7 +2814,7 @@
           }}
           on:yesNoVote={(e: any) => {
             const { optionKey, answer, optionColor } = e.detail;
-            voteEffectColor = answer === 'yes' ? '#22c55e' : '#ef4444';
+            voteEffectColor = answer === "yes" ? "#22c55e" : "#ef4444";
             // El voto Sí/No funciona como voto a la opción
             handleVote(optionKey);
           }}
@@ -2843,26 +2876,39 @@
           on:openPreviewModal={handleOpenPreviewModal}
           on:openMaximized={(e: any) => {
             const { pollId, optionIndex } = e.detail;
-            console.log('[BottomSheet] 🎯 openMaximized (activePoll) recibido:', { pollId, optionIndex, activePollId: activePoll?.id });
-            const poll = activePoll?.id.toString() === pollId ? activePoll : null;
+            console.log(
+              "[BottomSheet] 🎯 openMaximized (activePoll) recibido:",
+              { pollId, optionIndex, activePollId: activePoll?.id },
+            );
+            const poll =
+              activePoll?.id.toString() === pollId ? activePoll : null;
             if (poll && poll.options && poll.options[optionIndex]) {
               // Abrir el modal maximized con la opción específica
-              const safeIndex = Math.min(Math.max(optionIndex, 0), poll.options.length - 1);
+              const safeIndex = Math.min(
+                Math.max(optionIndex, 0),
+                poll.options.length - 1,
+              );
               const option = poll.options[safeIndex];
-              console.log('[BottomSheet] ✅ Abriendo modal (activePoll) con opción:', option.key, option.label);
-              const customEvent = new CustomEvent('openPreviewModal', {
-                detail: { 
+              console.log(
+                "[BottomSheet] ✅ Abriendo modal (activePoll) con opción:",
+                option.key,
+                option.label,
+              );
+              const customEvent = new CustomEvent("openPreviewModal", {
+                detail: {
                   option: { key: option.key, label: option.label },
-                  pollId: pollId 
-                }
+                  pollId: pollId,
+                },
               });
               handleOpenPreviewModal(customEvent as any);
             } else {
-              console.log('[BottomSheet] ❌ No se encontró activePoll o la opción');
+              console.log(
+                "[BottomSheet] ❌ No se encontró activePoll o la opción",
+              );
             }
           }}
           on:openprofile={(event) => dispatch("openprofile", event.detail)}
-          on:openAuthModal={() => showAuthModal = true}
+          on:openAuthModal={() => (showAuthModal = true)}
         />
 
         <!-- Separador después de encuesta activa -->
@@ -2953,7 +2999,7 @@
           }}
           on:yesNoVote={(e) => {
             const { optionKey, pollId, answer, optionColor } = e.detail;
-            voteEffectColor = answer === 'yes' ? '#22c55e' : '#ef4444';
+            voteEffectColor = answer === "yes" ? "#22c55e" : "#ef4444";
             handleVote(optionKey, pollId);
           }}
           on:setActive={(e) =>
@@ -3016,27 +3062,48 @@
           on:openPreviewModal={handleOpenPreviewModal}
           on:openMaximized={(e: any) => {
             const { pollId, optionIndex } = e.detail;
-            console.log('[BottomSheet] 🎯 openMaximized recibido:', { pollId, optionIndex, type: typeof pollId });
-            const foundPoll = additionalPolls.find((p) => p.id.toString() === pollId);
-            console.log('[BottomSheet] 🔍 foundPoll:', foundPoll?.id, 'additionalPolls count:', additionalPolls.length);
-            if (foundPoll && foundPoll.options && foundPoll.options[optionIndex]) {
+            console.log("[BottomSheet] 🎯 openMaximized recibido:", {
+              pollId,
+              optionIndex,
+              type: typeof pollId,
+            });
+            const foundPoll = additionalPolls.find(
+              (p) => p.id.toString() === pollId,
+            );
+            console.log(
+              "[BottomSheet] 🔍 foundPoll:",
+              foundPoll?.id,
+              "additionalPolls count:",
+              additionalPolls.length,
+            );
+            if (
+              foundPoll &&
+              foundPoll.options &&
+              foundPoll.options[optionIndex]
+            ) {
               // Abrir el modal maximized con la opción específica
               const option = foundPoll.options[optionIndex];
-              console.log('[BottomSheet] ✅ Abriendo modal con opción:', option.key, option.label);
-              const customEvent = new CustomEvent('openPreviewModal', {
-                detail: { 
+              console.log(
+                "[BottomSheet] ✅ Abriendo modal con opción:",
+                option.key,
+                option.label,
+              );
+              const customEvent = new CustomEvent("openPreviewModal", {
+                detail: {
                   option: { key: option.key, label: option.label },
-                  pollId: pollId 
-                }
+                  pollId: pollId,
+                },
               });
               handleOpenPreviewModal(customEvent as any);
             } else {
-              console.log('[BottomSheet] ❌ No se encontró la encuesta o la opción');
+              console.log(
+                "[BottomSheet] ❌ No se encontró la encuesta o la opción",
+              );
             }
           }}
           bind:isProfileModalOpen
           bind:selectedProfileUserId
-          on:openAuthModal={() => showAuthModal = true}
+          on:openAuthModal={() => (showAuthModal = true)}
         />
       {/each}
 
@@ -3218,9 +3285,9 @@
                     text: shareText,
                     url: shareUrl,
                   });
-                                  } catch (error) {
+                } catch (error) {
                   if ((error as Error).name !== "AbortError") {
-                                        copyShareUrlToClipboard(shareUrl);
+                    copyShareUrlToClipboard(shareUrl);
                   }
                 }
               } else {
@@ -3367,14 +3434,22 @@
       previewModalPoll.title ||
       "Encuesta"}
     pollType={previewModalPoll.pollType || previewModalPoll.type || "simple"}
-    pollCreatedAt={previewModalPoll.createdAt || previewModalPoll.created_at || previewModalPoll.publishedAt || previewModalPoll.published_at || previewModalPoll.timestamp}
+    pollCreatedAt={previewModalPoll.createdAt ||
+      previewModalPoll.created_at ||
+      previewModalPoll.publishedAt ||
+      previewModalPoll.published_at ||
+      previewModalPoll.timestamp}
     creator={{
       id: previewModalPoll.creator?.id || previewModalPoll.user?.id,
       username:
         previewModalPoll.creator?.username ||
         previewModalPoll.user?.username ||
         "Usuario",
-      avatar: previewModalPoll.creator?.avatar || previewModalPoll.creator?.avatarUrl || previewModalPoll.user?.avatar || previewModalPoll.user?.avatarUrl,
+      avatar:
+        previewModalPoll.creator?.avatar ||
+        previewModalPoll.creator?.avatarUrl ||
+        previewModalPoll.user?.avatar ||
+        previewModalPoll.user?.avatarUrl,
     }}
     stats={{
       totalVotes:
@@ -3382,60 +3457,85 @@
       totalViews:
         previewModalPoll.stats?.totalViews || previewModalPoll.totalViews || 0,
       commentsCount:
-        previewModalPoll.stats?.commentsCount || previewModalPoll.commentsCount || 0,
+        previewModalPoll.stats?.commentsCount ||
+        previewModalPoll.commentsCount ||
+        0,
       repostCount:
-        previewModalPoll.stats?.repostCount || previewModalPoll.repostCount || 0,
+        previewModalPoll.stats?.repostCount ||
+        previewModalPoll.repostCount ||
+        0,
     }}
     friendsByOption={previewModalPoll.friendsByOption || {}}
     readOnly={true}
     showAllOptions={previewModalShowAllOptions}
-    hasVoted={Array.isArray(userVotes[previewModalPoll.id]) ? userVotes[previewModalPoll.id].length > 0 : !!userVotes[previewModalPoll.id]}
+    hasVoted={Array.isArray(userVotes[previewModalPoll.id])
+      ? userVotes[previewModalPoll.id].length > 0
+      : !!userVotes[previewModalPoll.id]}
     isAuthenticated={!!$currentUser}
     onClose={closePreviewModal}
     onAddOption={async (label: string, color: string) => {
       if (!previewModalPoll || !label.trim()) return;
-      
+
       // Crear la opción directamente con la API
       try {
-        const response = await apiCall(`/api/polls/${previewModalPoll.id}/options`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ optionText: label.trim(), color })
-        });
-        
+        const response = await apiCall(
+          `/api/polls/${previewModalPoll.id}/options`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ optionText: label.trim(), color }),
+          },
+        );
+
         if (response.ok) {
           // Recargar la encuesta para ver la nueva opción
-          const updatedResponse = await apiCall(`/api/polls/${previewModalPoll.id}`);
+          const updatedResponse = await apiCall(
+            `/api/polls/${previewModalPoll.id}`,
+          );
           if (updatedResponse.ok) {
             const updatedData = await updatedResponse.json();
             const updatedPoll = updatedData.data || updatedData;
-            
+
             // Actualizar previewModalOption con las nuevas opciones
-            const totalVotes = (updatedPoll.options || []).reduce((sum: number, opt: any) => sum + (opt.votes || 0), 0);
-            previewModalOption = (updatedPoll.options || []).map((opt: any, idx: number) => ({
-              id: opt.id?.toString() || opt.optionKey || `opt_${idx}`,
-              key: opt.optionKey || opt.key || `opt_${idx}`,
-              label: opt.optionText || opt.label || `Opción ${idx + 1}`,
-              color: opt.color || ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'][idx % 4],
-              imageUrl: opt.imageUrl || opt.image_url || null,
-              votes: opt.votes || 0,
-              pct: totalVotes > 0 ? Math.round((opt.votes || 0) / totalVotes * 100) : 0,
-              voted: userVotes[updatedPoll.id]?.includes?.(opt.optionKey || opt.key) || userVotes[updatedPoll.id] === (opt.optionKey || opt.key),
-            }));
-            
+            const totalVotes = (updatedPoll.options || []).reduce(
+              (sum: number, opt: any) => sum + (opt.votes || 0),
+              0,
+            );
+            previewModalOption = (updatedPoll.options || []).map(
+              (opt: any, idx: number) => ({
+                id: opt.id?.toString() || opt.optionKey || `opt_${idx}`,
+                key: opt.optionKey || opt.key || `opt_${idx}`,
+                label: opt.optionText || opt.label || `Opción ${idx + 1}`,
+                color:
+                  opt.color ||
+                  ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"][idx % 4],
+                imageUrl: opt.imageUrl || opt.image_url || null,
+                votes: opt.votes || 0,
+                pct:
+                  totalVotes > 0
+                    ? Math.round(((opt.votes || 0) / totalVotes) * 100)
+                    : 0,
+                voted:
+                  userVotes[updatedPoll.id]?.includes?.(
+                    opt.optionKey || opt.key,
+                  ) || userVotes[updatedPoll.id] === (opt.optionKey || opt.key),
+              }),
+            );
+
             // Ir al último slide (la nueva opción)
-            previewModalOptionIndex = previewModalOption[previewModalOption.length - 1]?.id;
+            previewModalOptionIndex =
+              previewModalOption[previewModalOption.length - 1]?.id;
           }
         }
       } catch (error) {
-        console.error('[AddOption] Error:', error);
+        console.error("[AddOption] Error:", error);
       }
     }}
     onOptionChange={(optionId: string) => {
       previewModalOptionIndex = optionId;
-          }}
+    }}
     onSwipeVertical={(direction: string) => {
-            if (direction === "down") {
+      if (direction === "down") {
         // Siguiente encuesta
         navigateToNextPollWithPreview();
       } else {
@@ -3444,13 +3544,14 @@
       }
     }}
     onVote={async (optionId: string | number) => {
-            if (!previewModalPoll) return;
+      if (!previewModalPoll) return;
 
       // Usar el handler de voto existente - buscar por id (numérico o string)
-      const option = previewModalOption.find((opt: any) => 
-        opt.id === optionId || 
-        opt.id?.toString() === optionId?.toString() ||
-        opt.key === optionId
+      const option = previewModalOption.find(
+        (opt: any) =>
+          opt.id === optionId ||
+          opt.id?.toString() === optionId?.toString() ||
+          opt.key === optionId,
       );
       if (option) {
         await handleVote(option.id, previewModalPoll.id.toString());
@@ -3466,24 +3567,34 @@
 
               // Sincronizar userVotes con los datos del servidor
               const pollId = updatedPoll.id.toString();
-              console.log('[Sync] updatedPoll.userVotes:', updatedPoll.userVotes);
-              console.log('[Sync] updatedPoll.userVote:', updatedPoll.userVote);
-              
-              if (updatedPoll.userVotes && Array.isArray(updatedPoll.userVotes) && updatedPoll.userVotes.length > 0) {
+              console.log(
+                "[Sync] updatedPoll.userVotes:",
+                updatedPoll.userVotes,
+              );
+              console.log("[Sync] updatedPoll.userVote:", updatedPoll.userVote);
+
+              if (
+                updatedPoll.userVotes &&
+                Array.isArray(updatedPoll.userVotes) &&
+                updatedPoll.userVotes.length > 0
+              ) {
                 // Encuesta múltiple: guardar array de votos
                 userVotes = { ...userVotes, [pollId]: updatedPoll.userVotes };
-                console.log('[Sync] Guardando múltiple:', updatedPoll.userVotes);
+                console.log(
+                  "[Sync] Guardando múltiple:",
+                  updatedPoll.userVotes,
+                );
               } else if (updatedPoll.userVote) {
                 // Encuesta simple: guardar string
                 userVotes = { ...userVotes, [pollId]: updatedPoll.userVote };
-                console.log('[Sync] Guardando simple:', updatedPoll.userVote);
+                console.log("[Sync] Guardando simple:", updatedPoll.userVote);
               } else {
                 // Sin votos
                 const { [pollId]: _, ...rest } = userVotes;
                 userVotes = rest;
-                console.log('[Sync] Sin votos, eliminando');
+                console.log("[Sync] Sin votos, eliminando");
               }
-              console.log('[Sync] userVotes final:', userVotes);
+              console.log("[Sync] userVotes final:", userVotes);
 
               // Actualizar la encuesta en el estado
               if (activePoll && activePoll.id === updatedPoll.id) {
@@ -3502,71 +3613,84 @@
                 detail: { option, pollId: previewModalPoll.id.toString() },
               } as CustomEvent);
             }
-          } catch (error) {
-                      }
+          } catch (error) {}
         }, 300);
       }
     }}
     onRemoveAllVotes={async () => {
       if (!previewModalPoll) return;
-      
+
       // Usar el endpoint DELETE para eliminar todos los votos de esta encuesta
       try {
-        const response = await apiCall(`/api/polls/${previewModalPoll.id}/vote`, {
-          method: 'DELETE'
-        });
-        
+        const response = await apiCall(
+          `/api/polls/${previewModalPoll.id}/vote`,
+          {
+            method: "DELETE",
+          },
+        );
+
         if (response.ok) {
           // Limpiar el estado local de votos
           const pollId = previewModalPoll.id.toString();
           const { [pollId]: _, ...rest } = userVotes;
           userVotes = rest;
-          
+
           // Recargar la encuesta para reflejar los cambios
           setTimeout(async () => {
-            const pollResponse = await apiCall(`/api/polls/${previewModalPoll.id}`);
+            const pollResponse = await apiCall(
+              `/api/polls/${previewModalPoll.id}`,
+            );
             if (pollResponse.ok) {
               const updatedPollData = await pollResponse.json();
               const updatedPoll = updatedPollData.data || updatedPollData;
-              
+
               // Actualizar la encuesta en el estado
               if (activePoll && activePoll.id === updatedPoll.id) {
                 activePoll = updatedPoll;
               } else {
-                const index = additionalPolls.findIndex((p) => p.id === updatedPoll.id);
+                const index = additionalPolls.findIndex(
+                  (p) => p.id === updatedPoll.id,
+                );
                 if (index !== -1) {
                   additionalPolls[index] = updatedPoll;
                 }
               }
-              
+
               // Reabrir el modal con datos actualizados - mantener la opción actual
-              const currentOption = previewModalOption?.find((opt: any) => opt.id?.toString() === previewModalOptionIndex?.toString()) || previewModalOption?.[0];
+              const currentOption =
+                previewModalOption?.find(
+                  (opt: any) =>
+                    opt.id?.toString() === previewModalOptionIndex?.toString(),
+                ) || previewModalOption?.[0];
               if (currentOption) {
                 handleOpenPreviewModal({
-                  detail: { option: currentOption, pollId: previewModalPoll.id.toString() },
+                  detail: {
+                    option: currentOption,
+                    pollId: previewModalPoll.id.toString(),
+                  },
                 } as CustomEvent);
               }
             }
           }, 100);
         }
       } catch (error) {
-        console.error('[onRemoveAllVotes] Error:', error);
+        console.error("[onRemoveAllVotes] Error:", error);
       }
     }}
     onOpenInGlobe={() => {
-            if (previewModalPoll) {
+      if (previewModalPoll) {
         openAdditionalPollInGlobe(previewModalPoll);
         closePreviewModal();
       }
     }}
     onGoToChart={() => {
-            if (previewModalPoll) {
+      if (previewModalPoll) {
         goToChartView(previewModalPoll.id.toString());
         closePreviewModal();
       }
     }}
     onShare={async () => {
-            if (!previewModalPoll) return;
+      if (!previewModalPoll) return;
 
       const shareUrl = `${window.location.origin}/poll/${previewModalPoll.hashId || previewModalPoll.id}`;
       const shareTitle = previewModalPoll.question || previewModalPoll.title;
@@ -3581,9 +3705,9 @@
             text: shareText,
             url: shareUrl,
           });
-                  } catch (error) {
+        } catch (error) {
           if ((error as Error).name !== "AbortError") {
-                        // Fallback: copiar al portapapeles
+            // Fallback: copiar al portapapeles
             copyShareUrlToClipboard(shareUrl);
           }
         }
@@ -3593,13 +3717,13 @@
       }
     }}
     onBookmark={() => {
-            // TODO: Implementar guardar
+      // TODO: Implementar guardar
     }}
     onRepost={() => {
-            // TODO: Implementar republicar
+      // TODO: Implementar republicar
     }}
     onOpenProfile={(userId: number) => {
-            closePreviewModal(); // Cerrar maximized primero
+      closePreviewModal(); // Cerrar maximized primero
       setTimeout(() => {
         selectedProfileUserId = userId;
         isProfileModalOpen = true;
@@ -3610,7 +3734,10 @@
 
 <!-- User Profile Modal -->
 {#if UserProfileModal && isProfileModalOpen && selectedProfileUserId}
-  <UserProfileModal bind:isOpen={isProfileModalOpen} userId={selectedProfileUserId} />
+  <UserProfileModal
+    bind:isOpen={isProfileModalOpen}
+    userId={selectedProfileUserId}
+  />
 {/if}
 
 <!-- Modal del selector de color para opciones colaborativas -->
