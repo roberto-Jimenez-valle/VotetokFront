@@ -22,18 +22,18 @@ export const POST: RequestHandler = async (event) => {
   try {
     // DESARROLLO: Permitir crear encuestas sin autenticación en localhost e IPs locales
     const isDevelopment = process.env.NODE_ENV === 'development' ||
-                         event.url.hostname === 'localhost' ||
-                         event.url.hostname === '127.0.0.1' ||
-                         event.url.hostname.startsWith('192.168.') ||
-                         event.url.hostname.startsWith('172.') ||
-                         event.url.hostname.startsWith('10.');
-    
+      event.url.hostname === 'localhost' ||
+      event.url.hostname === '127.0.0.1' ||
+      event.url.hostname.startsWith('192.168.') ||
+      event.url.hostname.startsWith('172.') ||
+      event.url.hostname.startsWith('10.');
+
     let user: any = null;
-    
+
     if (!isDevelopment) {
       // REQUERIR AUTENTICACIÓN - Solo usuarios logueados pueden crear encuestas
       user = await requireAuth(event);
-      
+
       // RATE LIMITING - Máximo 20 encuestas por día
       await rateLimitByUser(user.userId, user.role, 'poll_create');
     } else {
@@ -46,7 +46,7 @@ export const POST: RequestHandler = async (event) => {
         let devUser = await prisma.user.findFirst({
           where: { email: 'dev@local.test' }
         });
-        
+
         if (!devUser) {
           console.log('[DEV] Creando usuario de prueba...');
           devUser = await prisma.user.create({
@@ -61,28 +61,28 @@ export const POST: RequestHandler = async (event) => {
             }
           });
         }
-        
+
         user = { userId: devUser.id, role: 'user' };
         console.log('[DEV] Creando encuesta sin autenticación - usando userId:', user.userId);
       }
     }
-    
+
     const rawData = await event.request.json();
-    
+
     // ========================================
     // SANITIZACIÓN (prevenir XSS)
     // ========================================
     const data = sanitizePollData(rawData);
-    
-    const { 
-      title, 
-      description, 
-      category, 
-      type, 
-      imageUrl, 
-      duration, 
-      hashtags, 
-      location, 
+
+    const {
+      title,
+      description,
+      category,
+      type,
+      imageUrl,
+      duration,
+      hashtags,
+      location,
       options,
       settings
     } = data;
@@ -90,89 +90,105 @@ export const POST: RequestHandler = async (event) => {
     // ========================================
     // VALIDACIONES COMPLETAS
     // ========================================
-    
+
     // Validar título
     const titleValidation = validateTitle(title);
     if (!titleValidation.valid) {
-      throw error(400, { 
-        message: titleValidation.error, 
-        code: 'INVALID_TITLE',
-        constraints: { min: TITLE_MIN_LENGTH, max: TITLE_MAX_LENGTH }
+      throw error(400, {
+        message: titleValidation.error || 'Título inválido',
+        code: 'INVALID_TITLE'
       });
     }
-    
+
     // Validar descripción
     if (description) {
       const descValidation = validateDescription(description);
       if (!descValidation.valid) {
-        throw error(400, { 
-          message: descValidation.error, 
+        throw error(400, {
+          message: descValidation.error || 'Descripción inválida',
           code: 'INVALID_DESCRIPTION'
         });
       }
     }
-    
+
     // Validar opciones
     if (!options || !Array.isArray(options)) {
-      throw error(400, { 
-        message: 'Las opciones son requeridas', 
+      throw error(400, {
+        message: 'Las opciones son requeridas',
         code: 'MISSING_OPTIONS'
       });
     }
-    
+
     const optionsValidation = validateOptions(options);
     if (!optionsValidation.valid) {
-      throw error(400, { 
-        message: optionsValidation.error, 
-        code: 'INVALID_OPTIONS',
-        constraints: { min: OPTIONS_MIN_COUNT, max: OPTIONS_MAX_COUNT }
+      throw error(400, {
+        message: optionsValidation.error || 'Opciones inválidas',
+        code: 'INVALID_OPTIONS'
       });
     }
-    
+
     // Validar colores de opciones
     for (const opt of options) {
       if (opt.color) {
         const colorValidation = validateHexColor(opt.color);
         if (!colorValidation.valid) {
-          throw error(400, { 
-            message: colorValidation.error, 
+          throw error(400, {
+            message: colorValidation.error || 'Color inválido',
             code: 'INVALID_COLOR'
           });
         }
       }
     }
-    
+
     // Validar URL de imagen
     if (imageUrl) {
       const urlValidation = validateUrl(imageUrl);
       if (!urlValidation.valid) {
-        throw error(400, { 
-          message: urlValidation.error, 
+        throw error(400, {
+          message: urlValidation.error || 'URL inválida',
           code: 'INVALID_IMAGE_URL'
         });
       }
     }
-    
+
     // Validar hashtags
     if (hashtags && Array.isArray(hashtags) && hashtags.length > 0) {
       const hashtagsValidation = validateHashtags(hashtags);
       if (!hashtagsValidation.valid) {
-        throw error(400, { 
-          message: hashtagsValidation.error, 
-          code: 'INVALID_HASHTAGS',
-          constraints: { max: HASHTAGS_MAX_COUNT }
+        throw error(400, {
+          message: hashtagsValidation.error || 'Hashtags inválidos',
+          code: 'INVALID_HASHTAGS'
         });
       }
     }
 
     // Calcular closedAt basado en duration
+    // Calcular closedAt basado en duration
     let closedAt: Date | null = null;
     if (duration && duration !== 'never') {
-      const daysMatch = duration.match(/^(\d+)d$/);
-      if (daysMatch) {
-        const days = parseInt(daysMatch[1]);
-        closedAt = new Date();
-        closedAt.setDate(closedAt.getDate() + days);
+      if (duration.startsWith('custom:')) {
+        // Formato custom:ISOString
+        const dateStr = duration.replace('custom:', '');
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          closedAt = date;
+        }
+      } else {
+        // Formatos cortos: 15m, 24h, 7d
+        const match = duration.match(/^(\d+)([mdh])$/);
+        if (match) {
+          const value = parseInt(match[1]);
+          const unit = match[2];
+          closedAt = new Date();
+
+          if (unit === 'm') {
+            closedAt.setMinutes(closedAt.getMinutes() + value);
+          } else if (unit === 'h') {
+            closedAt.setHours(closedAt.getHours() + value);
+          } else if (unit === 'd') {
+            closedAt.setDate(closedAt.getDate() + value);
+          }
+        }
       }
     }
 
@@ -221,10 +237,10 @@ export const POST: RequestHandler = async (event) => {
       if (hashtags && Array.isArray(hashtags) && hashtags.length > 0) {
         for (const tag of hashtags) {
           if (!tag || tag.trim().length === 0) continue;
-          
+
           // Los hashtags ya vienen sanitizados de sanitizePollData
           const cleanTag = tag.trim().toLowerCase();
-          
+
           // Crear o encontrar el hashtag
           const hashtag = await tx.hashtag.upsert({
             where: { tag: cleanTag },
@@ -252,14 +268,14 @@ export const POST: RequestHandler = async (event) => {
 
   } catch (err: any) {
     console.error('Error creating poll:', err);
-    
+
     // Si ya es un error de validación, re-lanzarlo
     if (err.status) {
       throw err;
     }
-    
+
     // Error genérico
-    throw error(500, { 
+    throw error(500, {
       message: err.message || 'Error al crear la encuesta',
       code: 'INTERNAL_ERROR'
     });
@@ -361,12 +377,12 @@ export const GET: RequestHandler = async ({ url }) => {
   const transformedPolls = polls.map(poll => {
     // Si es un rell sin opciones propias, usar las opciones del poll original
     let pollOptions = poll.options;
-    
+
     if (poll.isRell && poll.originalPoll && poll.options.length === 0 && poll.originalPoll.options) {
       console.log('[API polls] ✅ Rell sin opciones, usando las del original. Rell ID:', poll.id, 'Original:', poll.originalPollId);
       pollOptions = poll.originalPoll.options;
     }
-    
+
     // Find correct option hashId for quiz type
     let correctOptionHashId: string | null = null;
     if (poll.correctOptionId) {
@@ -375,7 +391,7 @@ export const GET: RequestHandler = async ({ url }) => {
         correctOptionHashId = encodeOptionId(correctOpt.id);
       }
     }
-    
+
     return {
       ...poll,
       hashId: encodePollId(poll.id), // ID hasheado para URLs públicas

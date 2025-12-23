@@ -32,6 +32,7 @@ export interface Post {
   likes: number;
   options: VoteOption[];
   correctOptionId?: string; // For quiz type
+  endsAt?: string; // For polls ending soon
 }
 
 export interface UserVotes {

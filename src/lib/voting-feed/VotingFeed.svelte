@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Crown, X, Check, Loader2 } from "lucide-svelte";
+  import { Crown, X, Check, Loader2, Clock } from "lucide-svelte";
   import type {
     Post,
     PostType,
@@ -12,6 +12,7 @@
   import { generateFriends } from "./helpers";
   import PostCard from "./PostCard.svelte";
   import TopTabs from "$lib/TopTabs.svelte";
+  import Countdown from "$lib/ui/Countdown.svelte";
   import NavBottom from "$lib/nav-bottom.svelte";
   import CreatePollModal from "$lib/CreatePollModal.svelte";
   import UserProfileModal from "$lib/UserProfileModal.svelte";
@@ -334,6 +335,15 @@
 
   // Transform API poll to VotingFeed Post format
   function transformApiPoll(apiPoll: any): Post {
+    if (apiPoll.closedAt) {
+      console.log(
+        `[VotingFeed] Poll ${apiPoll.id} has closedAt:`,
+        apiPoll.closedAt,
+      );
+    } else {
+      // console.log(`[VotingFeed] Poll ${apiPoll.id} has NO closedAt`);
+    }
+
     const totalVotes =
       apiPoll.options?.reduce(
         (sum: number, opt: any) =>
@@ -376,6 +386,7 @@
       reposts: apiPoll._count?.interactions || 0,
       likes: apiPoll._count?.interactions || 0,
       correctOptionId,
+      endsAt: apiPoll.closedAt, // Map closedAt to endsAt
       options: (apiPoll.options || []).map((opt: any, idx: number) => {
         const colors = OPTION_COLORS[idx % OPTION_COLORS.length];
         // Check for option image - could be imageUrl, image_url, or thumbnailUrl
@@ -405,6 +416,23 @@
         };
       }),
     };
+  }
+
+  function getTimeRemaining(endDateString: string): string {
+    if (!endDateString) return "";
+    const end = new Date(endDateString).getTime();
+    const now = new Date().getTime();
+    const diff = end - now;
+
+    if (diff <= 0) return "Cerrada";
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (days > 0) return `${days} días ${hours} h`;
+    if (hours > 0) return `${hours} h ${minutes} min`;
+    return `${minutes} min`;
   }
 
   function getTimeAgo(dateString: string): string {
@@ -1136,9 +1164,15 @@
                                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                               />
                             </svg>
-                            <span class="text-xs text-orange-400/80"
-                              >• Expira pronto</span
+                            <div
+                              class="flex items-center gap-1 text-xs text-orange-400 font-medium"
                             >
+                              <Clock size={12} />
+                              <Countdown
+                                date={post.endsAt}
+                                fallback="Expira pronto"
+                              />
+                            </div>
                           </div>
                         </div>
 
