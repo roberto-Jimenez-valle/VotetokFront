@@ -144,6 +144,13 @@
   let fetchedThumbnail = $state<string | null>(null);
   let thumbnailLoading = $state(false);
 
+  // Reset exiting state when the option gets ranked (reappears in the full list)
+  $effect(() => {
+    if (rank !== null) {
+      isExiting = false;
+    }
+  });
+
   // Check if URL is a direct image or known image service
   function isDirectImage(url: string): boolean {
     if (!url) return false;

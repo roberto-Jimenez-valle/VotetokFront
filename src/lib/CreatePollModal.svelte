@@ -775,6 +775,12 @@
               ? getCalculatedEndDate()
               : undefined,
         },
+        duration:
+          selectedDuration === "indefinite"
+            ? "never"
+            : selectedDuration === "custom"
+              ? `custom:${getCalculatedEndDate()}`
+              : selectedDuration,
       };
 
       const response = await apiPost("/api/polls", pollData);
