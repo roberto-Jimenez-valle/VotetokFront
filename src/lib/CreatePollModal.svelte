@@ -182,9 +182,12 @@
   let showInfoPanel = $state(false);
 
   // --- ESTADOS DE BORRADORES ---
+  const MAX_DRAFTS = 5; // Límite estilo Instagram
   let drafts = $state<any[]>([]);
   let showDeleteDraftModal = $state(false);
   let draftToDelete = $state<number | null>(null);
+  let currentDraftId = $state<string | null>(null); // ID del borrador actual siendo editado
+  let lastSavedHash = $state<string>(""); // Para detectar cambios reales
 
   // --- ESTADOS DE COLABORACIÓN ---
   let collabMode = $state("me");
@@ -754,13 +757,46 @@
   }
 
   function discardChanges() {
+    // Eliminar el borrador actual si existe
+    if (currentDraftId) {
+      drafts = drafts.filter((d) => d.id !== currentDraftId);
+      localStorage.setItem("poll_drafts", JSON.stringify(drafts));
+    }
+    currentDraftId = null;
     showDiscardModal = false;
     close();
   }
 
-  function saveDraft() {
-    // Guardar en localStorage (en producción se guardaría en BD)
+  // Generar hash del estado actual para detectar cambios
+  function getCurrentStateHash(): string {
+    return JSON.stringify({
+      question,
+      type,
+      options: options.map((o) => ({
+        title: o.title,
+        image: o.image,
+        colorFrom: o.colorFrom,
+        colorTo: o.colorTo,
+      })),
+      collabMode,
+    });
+  }
+
+  // Auto-guardar el borrador actual (estilo Instagram)
+  function autoSaveDraft() {
+    // Solo guardar si hay contenido significativo
+    const hasContent =
+      question.trim().length > 0 ||
+      options.some((o) => o.title.trim().length > 0 || o.image);
+    if (!hasContent) return;
+
+    // Verificar si hay cambios reales
+    const currentHash = getCurrentStateHash();
+    if (currentHash === lastSavedHash) return;
+    lastSavedHash = currentHash;
+
     const draft = {
+      id: currentDraftId || `draft-${Date.now()}`,
       question,
       type,
       options,
@@ -773,17 +809,38 @@
       savedAt: new Date().toISOString(),
     };
 
-    // Añadir al array de borradores existente
-    const existingDrafts = JSON.parse(
+    // Si no hay ID actual, es un borrador nuevo
+    if (!currentDraftId) {
+      currentDraftId = draft.id;
+    }
+
+    // Actualizar o añadir el borrador
+    let existingDrafts = JSON.parse(
       localStorage.getItem("poll_drafts") || "[]",
     );
-    existingDrafts.unshift(draft); // Añadir al principio
+    const existingIndex = existingDrafts.findIndex(
+      (d: any) => d.id === draft.id,
+    );
+
+    if (existingIndex >= 0) {
+      existingDrafts[existingIndex] = draft;
+    } else {
+      existingDrafts.unshift(draft);
+      // Limitar a MAX_DRAFTS (estilo Instagram)
+      if (existingDrafts.length > MAX_DRAFTS) {
+        existingDrafts = existingDrafts.slice(0, MAX_DRAFTS);
+      }
+    }
+
     localStorage.setItem("poll_drafts", JSON.stringify(existingDrafts));
+    drafts = existingDrafts;
+  }
 
-    // TODO: Guardar en base de datos cuando esté disponible
-    // await apiPost("/api/polls/drafts", draft);
-
+  // Guardar borrador manualmente (al cerrar)
+  function saveDraft() {
+    autoSaveDraft();
     showDiscardModal = false;
+    currentDraftId = null;
     close();
   }
 
@@ -803,6 +860,7 @@
   function loadDraft(index: number) {
     const draft = drafts[index];
     if (draft) {
+      currentDraftId = draft.id; // Marcar este borrador como el actual
       question = draft.question || "";
       type = draft.type || "standard";
       options = draft.options || [];
@@ -812,8 +870,7 @@
       isIndefinite = draft.isIndefinite ?? true;
       startDate = draft.startDate || "";
       endDate = draft.endDate || "";
-
-      // NO eliminar el borrador - se mantiene hasta que se publique o se elimine manualmente
+      lastSavedHash = getCurrentStateHash(); // Establecer el hash inicial
     }
   }
 
@@ -843,7 +900,34 @@
   $effect(() => {
     if (isOpen) {
       checkForDraft();
+      currentDraftId = null;
+      lastSavedHash = "";
     }
+  });
+
+  // Auto-guardado cada 3 segundos (solo cuando está abierto)
+  let autoSaveInterval: ReturnType<typeof setInterval> | null = null;
+
+  $effect(() => {
+    if (isOpen) {
+      // Iniciar intervalo de auto-guardado
+      autoSaveInterval = setInterval(() => {
+        autoSaveDraft();
+      }, 3000);
+    } else {
+      // Limpiar intervalo
+      if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+        autoSaveInterval = null;
+      }
+    }
+
+    return () => {
+      if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+        autoSaveInterval = null;
+      }
+    };
   });
 
   function resetForm() {
