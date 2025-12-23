@@ -30,6 +30,7 @@
     Lock,
     Search,
     ChevronLeft,
+    ArrowLeft,
     Info,
     Search as SearchIcon,
     Palette,
@@ -37,6 +38,7 @@
     Save,
     AlertCircle,
     HelpCircle,
+    Send,
   } from "lucide-svelte";
   import { createEventDispatcher, onMount, tick } from "svelte";
   import GiphyPicker from "$lib/components/GiphyPicker.svelte";
@@ -178,6 +180,11 @@
   let isAutoFetchingGif = $state<Record<string, boolean>>({});
   let showDiscardModal = $state(false);
   let showInfoPanel = $state(false);
+
+  // --- ESTADOS DE BORRADORES ---
+  let drafts = $state<any[]>([]);
+  let showDeleteDraftModal = $state(false);
+  let draftToDelete = $state<number | null>(null);
 
   // --- ESTADOS DE COLABORACIÓN ---
   let collabMode = $state("me");
@@ -752,7 +759,7 @@
   }
 
   function saveDraft() {
-    // Guardar en localStorage para recuperar luego
+    // Guardar en localStorage (en producción se guardaría en BD)
     const draft = {
       question,
       type,
@@ -765,10 +772,79 @@
       endDate,
       savedAt: new Date().toISOString(),
     };
-    localStorage.setItem("poll_draft", JSON.stringify(draft));
+
+    // Añadir al array de borradores existente
+    const existingDrafts = JSON.parse(
+      localStorage.getItem("poll_drafts") || "[]",
+    );
+    existingDrafts.unshift(draft); // Añadir al principio
+    localStorage.setItem("poll_drafts", JSON.stringify(existingDrafts));
+
+    // TODO: Guardar en base de datos cuando esté disponible
+    // await apiPost("/api/polls/drafts", draft);
+
     showDiscardModal = false;
     close();
   }
+
+  function checkForDraft() {
+    const savedDrafts = localStorage.getItem("poll_drafts");
+    if (savedDrafts) {
+      try {
+        drafts = JSON.parse(savedDrafts);
+      } catch {
+        drafts = [];
+      }
+    } else {
+      drafts = [];
+    }
+  }
+
+  function loadDraft(index: number) {
+    const draft = drafts[index];
+    if (draft) {
+      question = draft.question || "";
+      type = draft.type || "standard";
+      options = draft.options || [];
+      collabMode = draft.collabMode || "me";
+      selectedUserIds = draft.selectedUserIds || [];
+      startsNow = draft.startsNow ?? true;
+      isIndefinite = draft.isIndefinite ?? true;
+      startDate = draft.startDate || "";
+      endDate = draft.endDate || "";
+
+      // NO eliminar el borrador - se mantiene hasta que se publique o se elimine manualmente
+    }
+  }
+
+  function deleteDraft(index: number) {
+    draftToDelete = index;
+    showDeleteDraftModal = true;
+  }
+
+  function confirmDeleteDraft() {
+    if (draftToDelete !== null) {
+      drafts = drafts.filter((_, i) => i !== draftToDelete);
+      localStorage.setItem("poll_drafts", JSON.stringify(drafts));
+    }
+    draftToDelete = null;
+    showDeleteDraftModal = false;
+  }
+
+  function loadDraftFromModal() {
+    if (draftToDelete !== null) {
+      loadDraft(draftToDelete);
+    }
+    showDeleteDraftModal = false;
+    draftToDelete = null;
+  }
+
+  // Comprobar si hay borrador al abrir
+  $effect(() => {
+    if (isOpen) {
+      checkForDraft();
+    }
+  });
 
   function resetForm() {
     question = "";
@@ -813,109 +889,176 @@
   >
     <!-- HEADER -->
     <header
-      class="px-6 py-4 flex justify-between items-center z-50 bg-black/50 backdrop-blur-xl border-b border-white/5 flex-shrink-0"
+      class="mx-3 my-2 flex justify-between items-center z-50 flex-shrink-0"
     >
-      <button
-        onclick={tryClose}
-        class="p-2 bg-white/5 rounded-full text-white/70 hover:text-white transition-all active:scale-90"
-      >
-        <X size={22} />
-      </button>
-      <div class="flex items-center gap-2">
-        <!-- Botón de Info/Checklist -->
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <button
+          onclick={tryClose}
+          class="p-2 bg-white/5 rounded-full text-white/70 hover:text-white transition-all active:scale-90 flex-shrink-0"
+        >
+          <ArrowLeft size={22} />
+        </button>
+
+        {#if drafts.length > 0}
+          <!-- Contenedor scroll horizontal para borradores -->
+          <div
+            class="flex-1 min-w-0 overflow-x-auto overflow-y-visible scrollbar-hide py-4 -my-2"
+          >
+            <div class="flex items-center gap-3 px-1">
+              {#each drafts as draft, index}
+                <div class="relative flex-shrink-0">
+                  <button
+                    onclick={() => loadDraft(index)}
+                    class="relative group flex flex-col items-center"
+                    title="Restaurar borrador"
+                  >
+                    <div
+                      class="w-16 h-16 rounded-md overflow-hidden shadow-lg relative"
+                      style={draft.options?.[0]?.image
+                        ? ""
+                        : `background: linear-gradient(135deg, ${draft.options?.[0]?.colorFrom || "hsl(239, 90%, 30%)"}, ${draft.options?.[0]?.colorTo || "hsl(239, 95%, 15%)"})`}
+                    >
+                      {#if draft.options?.[0]?.image}
+                        <img
+                          src={draft.options[0].image}
+                          alt=""
+                          class="w-full h-full object-cover"
+                        />
+                      {/if}
+                      <!-- Overlay con título -->
+                      <div
+                        class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end justify-center pb-0.5"
+                      >
+                        <span
+                          class="text-[7px] font-bold text-white/90 max-w-10 truncate text-center drop-shadow-lg"
+                        >
+                          {draft.question?.slice(0, 8) || "..."}
+                        </span>
+                      </div>
+                      <!-- Overlay de hover -->
+                      <div
+                        class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center"
+                      >
+                        <div
+                          class="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Check size={16} class="text-white drop-shadow-lg" />
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <!-- Botón X flotante -->
+                  <button
+                    onclick={() => deleteDraft(index)}
+                    class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black text-white/80 hover:text-red-400 hover:bg-red-500/30 transition-all flex items-center justify-center shadow-lg z-10 ring-2 ring-white/80"
+                    title="Eliminar borrador"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+      <div class="flex items-center gap-1.5 flex-shrink-0 relative">
+        <!-- Botón de lanzar con badge de advertencia -->
         <div class="relative">
           <button
-            onclick={() => (showInfoPanel = !showInfoPanel)}
-            class={`p-2.5 rounded-full transition-all active:scale-90 ${isFormValid ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}
-            title="Ver requisitos"
+            onclick={() => {
+              if (isFormValid) {
+                handleSubmit();
+              } else {
+                showInfoPanel = !showInfoPanel;
+              }
+            }}
+            disabled={isSubmitting}
+            class={`p-3.5 rounded-full transition-all active:scale-90 ${isFormValid && !isSubmitting ? "bg-white text-black shadow-xl" : "bg-slate-800 text-slate-500"}`}
+            title={isFormValid ? "Lanzar encuesta" : "Completa los requisitos"}
           >
-            {#if isFormValid}
-              <Check size={18} />
+            {#if isSubmitting}
+              <Loader2 size={22} class="animate-spin" />
             {:else}
-              <AlertCircle size={18} />
+              <Send size={22} />
             {/if}
           </button>
 
-          {#if showInfoPanel}
-            <div
-              class="absolute top-full right-0 mt-2 w-72 bg-slate-900 border border-white/10 rounded-2xl p-4 shadow-2xl z-[200] animate-in fade-in slide-in-from-top-2 duration-200"
+          <!-- Badge de advertencia (esquina superior izquierda) -->
+          {#if !isFormValid}
+            <button
+              onclick={() => (showInfoPanel = !showInfoPanel)}
+              class="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center shadow-lg ring-2 ring-black transition-all hover:scale-110 active:scale-95"
+              title="Ver requisitos"
             >
-              <div class="flex items-center justify-between mb-3">
-                <span
-                  class="text-xs font-bold uppercase tracking-widest text-white/60"
-                  >Checklist</span
-                >
-                <button
-                  onclick={() => (showInfoPanel = false)}
-                  class="text-white/40 hover:text-white"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div class="space-y-2">
-                <div class="flex items-center gap-2">
-                  {#if question.trim().length >= 2}
-                    <Check size={14} class="text-emerald-400" />
-                  {:else}
-                    <X size={14} class="text-red-400" />
-                  {/if}
-                  <span
-                    class="text-sm {question.trim().length >= 2
-                      ? 'text-white/60'
-                      : 'text-white'}">Pregunta (mín. 2 caracteres)</span
-                  >
-                </div>
-                <div class="flex items-center gap-2">
-                  {#if options.length >= 2}
-                    <Check size={14} class="text-emerald-400" />
-                  {:else}
-                    <X size={14} class="text-red-400" />
-                  {/if}
-                  <span
-                    class="text-sm {options.length >= 2
-                      ? 'text-white/60'
-                      : 'text-white'}">Mínimo 2 opciones</span
-                  >
-                </div>
-                <div class="flex items-center gap-2">
-                  {#if allOptionsValid}
-                    <Check size={14} class="text-emerald-400" />
-                  {:else}
-                    <X size={14} class="text-red-400" />
-                  {/if}
-                  <span
-                    class="text-sm {allOptionsValid
-                      ? 'text-white/60'
-                      : 'text-white'}"
-                    >Hay opciones con menos de 2 caracteres</span
-                  >
-                </div>
-              </div>
-              {#if isFormValid}
-                <div class="mt-3 pt-3 border-t border-white/10">
-                  <p class="text-emerald-400 text-xs font-medium">
-                    ✔ ¡Listo para lanzar!
-                  </p>
-                </div>
-              {/if}
-            </div>
+              <AlertCircle size={12} />
+            </button>
           {/if}
         </div>
 
-        <button
-          onclick={handleSubmit}
-          disabled={isSubmitting}
-          class={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${isFormValid && !isSubmitting ? "bg-white text-black shadow-xl" : "bg-slate-900 text-slate-600"}`}
-        >
-          {#if isSubmitting}
-            <div class="flex items-center gap-2">
-              <Loader2 size={16} class="animate-spin" />
-              <span>Procesando</span>
+        <!-- Popup de requisitos -->
+        {#if showInfoPanel && !isFormValid}
+          <!-- Backdrop para cerrar al pulsar fuera -->
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="fixed inset-0 z-[90]"
+            onclick={() => (showInfoPanel = false)}
+          ></div>
+
+          <div
+            class="absolute top-full right-0 mt-2 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl z-[100]"
+            transition:fly={{ y: -10, duration: 200 }}
+          >
+            <!-- Botón cerrar -->
+            <button
+              onclick={() => (showInfoPanel = false)}
+              class="absolute top-2 right-2 p-1 text-white/40 hover:text-white transition-colors"
+            >
+              <X size={14} />
+            </button>
+
+            <p class="text-xs font-bold text-amber-400 mb-3">Requisitos</p>
+            <div class="space-y-2">
+              <div class="flex items-center gap-2">
+                {#if question.trim().length >= 2}
+                  <Check size={12} class="text-emerald-400" />
+                {:else}
+                  <X size={12} class="text-red-400" />
+                {/if}
+                <span
+                  class="text-xs {question.trim().length >= 2
+                    ? 'text-white/50'
+                    : 'text-white/80'}">Pregunta (mín. 2 caracteres)</span
+                >
+              </div>
+              <div class="flex items-center gap-2">
+                {#if options.length >= 2}
+                  <Check size={12} class="text-emerald-400" />
+                {:else}
+                  <X size={12} class="text-red-400" />
+                {/if}
+                <span
+                  class="text-xs {options.length >= 2
+                    ? 'text-white/50'
+                    : 'text-white/80'}">Mínimo 2 opciones</span
+                >
+              </div>
+              <div class="flex items-center gap-2">
+                {#if allOptionsValid}
+                  <Check size={12} class="text-emerald-400" />
+                {:else}
+                  <X size={12} class="text-red-400" />
+                {/if}
+                <span
+                  class="text-xs {allOptionsValid
+                    ? 'text-white/50'
+                    : 'text-white/80'}">Todas las opciones con texto</span
+                >
+              </div>
             </div>
-          {:else}
-            Lanzar
-          {/if}
-        </button>
+          </div>
+        {/if}
       </div>
     </header>
 
@@ -1799,6 +1942,45 @@
         </button>
         <button
           onclick={() => (showDiscardModal = false)}
+          class="py-4 px-6 text-sm font-medium text-white/60 hover:bg-white/5 transition-colors"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showDeleteDraftModal}
+  <div
+    class="fixed inset-0 z-[3000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm"
+    transition:fade
+  >
+    <div
+      class="w-full max-w-sm bg-slate-900 rounded-3xl border border-white/10 shadow-2xl overflow-hidden"
+      transition:scale={{ start: 0.95, duration: 200 }}
+    >
+      <div class="p-6 text-center border-b border-white/10">
+        <h3 class="text-lg font-black text-white mb-2">¿Eliminar borrador?</h3>
+        <p class="text-sm text-white/60">
+          Esta acción no se puede deshacer. ¿Qué quieres hacer?
+        </p>
+      </div>
+      <div class="flex flex-col">
+        <button
+          onclick={loadDraftFromModal}
+          class="py-4 px-6 text-sm font-bold text-[#9ec264] border-b border-white/10 hover:bg-white/5 transition-colors"
+        >
+          Seguir editando
+        </button>
+        <button
+          onclick={confirmDeleteDraft}
+          class="py-4 px-6 text-sm font-bold text-red-400 border-b border-white/10 hover:bg-white/5 transition-colors"
+        >
+          Eliminar borrador
+        </button>
+        <button
+          onclick={() => (showDeleteDraftModal = false)}
           class="py-4 px-6 text-sm font-medium text-white/60 hover:bg-white/5 transition-colors"
         >
           Cancelar
