@@ -8,6 +8,7 @@
     UserPlus,
     TrendingUp,
     Check,
+    FileText,
   } from "lucide-svelte";
   import { createEventDispatcher, onMount } from "svelte";
   import UserProfileModal from "$lib/UserProfileModal.svelte";
@@ -50,6 +51,36 @@
 
   // Mock data para notificaciones
   const notifications = [
+    {
+      id: 1000,
+      type: "system",
+      icon: TrendingUp,
+      user: {
+        name: "Dev Team",
+        avatar:
+          "https://ui-avatars.com/api/?name=Dev+Team&background=10b981&color=fff",
+      },
+      message: "ha actualizado el status",
+      poll: "Production Checklist",
+      time: "Ahora mismo",
+      read: false,
+      link: "/production-checklist",
+    },
+    {
+      id: 999,
+      type: "system",
+      icon: FileText,
+      user: {
+        name: "VoteTok System",
+        avatar:
+          "https://ui-avatars.com/api/?name=Vote+Tok&background=6366f1&color=fff",
+      },
+      message: "ha generado un nuevo reporte",
+      poll: "Secret Flow Report v1",
+      time: "Hace 1 hora",
+      read: false,
+      link: "/secret-flow-report-v1",
+    },
     {
       id: 1,
       type: "vote",
@@ -189,6 +220,11 @@
   }
 
   function handleNotificationClick(notificationId: number) {
+    const notification = notifications.find((n) => n.id === notificationId);
+    if (notification && (notification as any).link) {
+      window.location.href = (notification as any).link;
+      return;
+    }
     // Lógica para abrir la encuesta/perfil correspondiente
     console.log("Abrir notificación:", notificationId);
     dispatch("notificationClick", { notificationId });

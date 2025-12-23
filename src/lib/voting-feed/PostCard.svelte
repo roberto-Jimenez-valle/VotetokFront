@@ -129,11 +129,15 @@
   }
 
   const config = $derived(POST_CONFIGS[post.type] || POST_CONFIGS.standard);
+  const isClosed = $derived(
+    post.endsAt ? new Date(post.endsAt) < new Date() : false,
+  );
   const hasVoted = $derived(!!userVotes[post.id]);
+  const shouldShowResults = $derived(hasVoted || isClosed);
   const rankingDraft = $derived(rankingDrafts[post.id] || []);
   const isRankingComplete = $derived(
     post.type === "tierlist" &&
-      !hasVoted &&
+      !shouldShowResults &&
       rankingDraft.length === post.options.length,
   );
   const swipeIndex = $derived(swipeIndices[post.id] || 0);
@@ -243,6 +247,7 @@
   }
 
   function handleOptionVote(optionId: string) {
+    if (isClosed) return;
     if (post.type === "tierlist") {
       onToggleRank(post.id, optionId);
     } else {
@@ -493,7 +498,7 @@
         : ''}"
     >
       <!-- Swipe Mode -->
-      {#if post.type === "swipe" && !hasVoted}
+      {#if post.type === "swipe" && !shouldShowResults}
         <div
           class="{containerHeight} relative w-full flex justify-center items-center overflow-hidden px-4 py-2"
         >
@@ -595,7 +600,7 @@
                       <OptionCard
                         option={opt}
                         postTotalVotes={post.totalVotes}
-                        {hasVoted}
+                        hasVoted={shouldShowResults}
                         isSelected={hasVoted && isOptionSelected(opt.id)}
                         isCorrectOption={false}
                         isExpanded={false}
@@ -672,7 +677,7 @@
                           <OptionCard
                             option={opt}
                             postTotalVotes={post.totalVotes}
-                            {hasVoted}
+                            hasVoted={shouldShowResults}
                             isSelected={hasVoted && isOptionSelected(opt.id)}
                             isCorrectOption={post.type === "quiz" &&
                               opt.id === post.correctOptionId}
@@ -725,7 +730,7 @@
                     <OptionCard
                       option={opt}
                       postTotalVotes={post.totalVotes}
-                      {hasVoted}
+                      hasVoted={shouldShowResults}
                       isSelected={hasVoted && isOptionSelected(opt.id)}
                       isCorrectOption={post.type === "quiz" &&
                         opt.id === post.correctOptionId}
@@ -766,7 +771,7 @@
                 <OptionCard
                   option={opt}
                   postTotalVotes={post.totalVotes}
-                  {hasVoted}
+                  hasVoted={shouldShowResults}
                   isSelected={hasVoted && isOptionSelected(opt.id)}
                   isCorrectOption={post.type === "quiz" &&
                     opt.id === post.correctOptionId}

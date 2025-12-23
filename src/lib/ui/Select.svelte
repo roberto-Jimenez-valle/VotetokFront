@@ -62,32 +62,19 @@
 
     {#if isOpen}
         <div
-            class="absolute top-full right-0 mt-1 min-w-[140px] bg-[#141414] backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-1 z-50 overflow-hidden origin-top-right animate-scale-in"
+            class="absolute top-full right-0 mt-1 min-w-[140px] bg-slate-900 border border-white/10 rounded-xl shadow-2xl py-1 z-50 overflow-hidden origin-top-right animate-scale-in"
         >
             <div class="max-h-[240px] overflow-y-auto custom-scrollbar">
                 {#each options as opt}
                     <button
                         type="button"
-                        class="w-full text-left px-3 py-2 text-xs transition-colors flex items-center gap-2 group
+                        class="w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between gap-2 group
                 {opt.value === value
-                            ? 'bg-white/10 text-white font-medium'
-                            : 'text-slate-400 hover:bg-white/5 hover:text-white'}"
+                            ? 'bg-white/10 text-white font-bold'
+                            : 'text-slate-300 hover:bg-white/5 hover:text-white'}"
                         on:click={() => select(opt)}
                     >
-                        <span class="flex-1 truncate">{opt.label}</span>
-                        {#if opt.value === value}
-                            <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="3"
-                                class="text-indigo-400 flex-shrink-0"
-                                ><polyline points="20 6 9 17 4 12"
-                                ></polyline></svg
-                            >
-                        {/if}
+                        <span class="truncate">{opt.label}</span>
                     </button>
                 {/each}
             </div>
