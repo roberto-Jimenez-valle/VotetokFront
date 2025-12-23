@@ -34,6 +34,9 @@
     Search as SearchIcon,
     Palette,
     Eye,
+    Save,
+    AlertCircle,
+    HelpCircle,
   } from "lucide-svelte";
   import { createEventDispatcher, onMount, tick } from "svelte";
   import GiphyPicker from "$lib/components/GiphyPicker.svelte";
@@ -173,6 +176,8 @@
   let activeGiphyOptionId = $state<string | null>(null);
   let initialGiphySearch = $state("");
   let isAutoFetchingGif = $state<Record<string, boolean>>({});
+  let showDiscardModal = $state(false);
+  let showInfoPanel = $state(false);
 
   // --- ESTADOS DE COLABORACIÓN ---
   let collabMode = $state("me");
@@ -259,11 +264,17 @@
     const invalidOptions = options.filter((opt) => opt.title.trim().length < 2);
     if (invalidOptions.length > 0) {
       errors.push(
-        `${invalidOptions.length} opción(es) sin título válido (mín. 2 caracteres)`,
+        `${invalidOptions.length} opción(es) sin texto válido (mínimo 2 caracteres)`,
       );
     }
     return errors;
   }
+
+  // Detectar si hay cambios sin guardar
+  let hasUnsavedChanges = $derived(
+    question.trim().length > 0 ||
+      options.some((opt) => opt.title.trim().length > 0 || opt.image),
+  );
 
   // --- FUNCIONES ---
   function getDurationConfig() {
@@ -723,6 +734,40 @@
   function close() {
     isOpen = false;
     resetForm();
+    validationErrors = [];
+    showInfoPanel = false;
+  }
+
+  function tryClose() {
+    if (hasUnsavedChanges) {
+      showDiscardModal = true;
+    } else {
+      close();
+    }
+  }
+
+  function discardChanges() {
+    showDiscardModal = false;
+    close();
+  }
+
+  function saveDraft() {
+    // Guardar en localStorage para recuperar luego
+    const draft = {
+      question,
+      type,
+      options,
+      collabMode,
+      selectedUserIds,
+      startsNow,
+      isIndefinite,
+      startDate,
+      endDate,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem("poll_draft", JSON.stringify(draft));
+    showDiscardModal = false;
+    close();
   }
 
   function resetForm() {
@@ -771,12 +816,92 @@
       class="px-6 py-4 flex justify-between items-center z-50 bg-black/50 backdrop-blur-xl border-b border-white/5 flex-shrink-0"
     >
       <button
-        onclick={close}
+        onclick={tryClose}
         class="p-2 bg-white/5 rounded-full text-white/70 hover:text-white transition-all active:scale-90"
       >
         <X size={22} />
       </button>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <!-- Botón de Info/Checklist -->
+        <div class="relative">
+          <button
+            onclick={() => (showInfoPanel = !showInfoPanel)}
+            class={`p-2.5 rounded-full transition-all active:scale-90 ${isFormValid ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}
+            title="Ver requisitos"
+          >
+            {#if isFormValid}
+              <Check size={18} />
+            {:else}
+              <AlertCircle size={18} />
+            {/if}
+          </button>
+
+          {#if showInfoPanel}
+            <div
+              class="absolute top-full right-0 mt-2 w-72 bg-slate-900 border border-white/10 rounded-2xl p-4 shadow-2xl z-[200] animate-in fade-in slide-in-from-top-2 duration-200"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span
+                  class="text-xs font-bold uppercase tracking-widest text-white/60"
+                  >Checklist</span
+                >
+                <button
+                  onclick={() => (showInfoPanel = false)}
+                  class="text-white/40 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                  {#if question.trim().length >= 2}
+                    <Check size={14} class="text-emerald-400" />
+                  {:else}
+                    <X size={14} class="text-red-400" />
+                  {/if}
+                  <span
+                    class="text-sm {question.trim().length >= 2
+                      ? 'text-white/60'
+                      : 'text-white'}">Pregunta (mín. 2 caracteres)</span
+                  >
+                </div>
+                <div class="flex items-center gap-2">
+                  {#if options.length >= 2}
+                    <Check size={14} class="text-emerald-400" />
+                  {:else}
+                    <X size={14} class="text-red-400" />
+                  {/if}
+                  <span
+                    class="text-sm {options.length >= 2
+                      ? 'text-white/60'
+                      : 'text-white'}">Mínimo 2 opciones</span
+                  >
+                </div>
+                <div class="flex items-center gap-2">
+                  {#if allOptionsValid}
+                    <Check size={14} class="text-emerald-400" />
+                  {:else}
+                    <X size={14} class="text-red-400" />
+                  {/if}
+                  <span
+                    class="text-sm {allOptionsValid
+                      ? 'text-white/60'
+                      : 'text-white'}"
+                    >Hay opciones con menos de 2 caracteres</span
+                  >
+                </div>
+              </div>
+              {#if isFormValid}
+                <div class="mt-3 pt-3 border-t border-white/10">
+                  <p class="text-emerald-400 text-xs font-medium">
+                    ✔ ¡Listo para lanzar!
+                  </p>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
         <button
           onclick={handleSubmit}
           disabled={isSubmitting}
@@ -1638,6 +1763,46 @@
               )}
           />
         </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showDiscardModal}
+  <div
+    class="fixed inset-0 z-[3000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm"
+    transition:fade
+  >
+    <div
+      class="w-full max-w-sm bg-slate-900 rounded-3xl border border-white/10 shadow-2xl overflow-hidden"
+      transition:scale={{ start: 0.95, duration: 200 }}
+    >
+      <div class="p-6 text-center border-b border-white/10">
+        <h3 class="text-lg font-black text-white mb-2">¿Descartar encuesta?</h3>
+        <p class="text-sm text-white/60">
+          Tienes cambios sin guardar. ¿Qué quieres hacer?
+        </p>
+      </div>
+      <div class="flex flex-col">
+        <button
+          onclick={saveDraft}
+          class="py-4 px-6 text-sm font-bold text-[#9ec264] border-b border-white/10 hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
+        >
+          <Save size={18} />
+          Guardar borrador
+        </button>
+        <button
+          onclick={discardChanges}
+          class="py-4 px-6 text-sm font-bold text-red-400 border-b border-white/10 hover:bg-white/5 transition-colors"
+        >
+          Descartar
+        </button>
+        <button
+          onclick={() => (showDiscardModal = false)}
+          class="py-4 px-6 text-sm font-medium text-white/60 hover:bg-white/5 transition-colors"
+        >
+          Cancelar
+        </button>
       </div>
     </div>
   </div>
