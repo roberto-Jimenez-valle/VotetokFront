@@ -204,32 +204,41 @@ header h1 {
 }
 
 /* Ocultar scrollbars en escritorio (>768px) manteniendo funcionalidad de scroll */
-@media (min-width: 768px) {
+/* Ocultar scrollbars globalmente manteniendo funcionalidad de scroll */
 
-  /* Para navegadores basados en Webkit/Blink (Chrome, Safari, Edge, Opera) */
-  *::-webkit-scrollbar {
-    width: 0px;
-    height: 0px;
-    background: transparent;
-  }
+/* Para navegadores basados en Webkit/Blink (Chrome, Safari, Edge, Opera) */
+*::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  background: transparent;
+}
 
-  *::-webkit-scrollbar-track {
-    background: transparent;
-  }
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  *::-webkit-scrollbar-thumb {
-    background: transparent;
-  }
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+}
 
-  /* Para Firefox */
-  * {
-    scrollbar-width: none;
-  }
+/* Para Firefox */
+* {
+  scrollbar-width: none;
+}
 
-  /* Para IE y Edge legacy */
-  * {
-    -ms-overflow-style: none;
-  }
+/* Para IE y Edge legacy */
+* {
+  -ms-overflow-style: none;
+}
+
+/* Clase utilitaria específica */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* ========================================

@@ -45,7 +45,7 @@
   import { searchGiphy, getBestGifUrl } from "$lib/services/giphy";
   import { searchTenor, getBestTenorUrl } from "$lib/services/tenor";
   import { currentUser, isAuthenticated } from "$lib/stores/auth";
-  import { apiPost } from "$lib/api/client";
+  import { apiPost, apiGet, apiDelete } from "$lib/api/client";
   import AuthModal from "$lib/AuthModal.svelte";
 
   const dispatch = createEventDispatcher<{
@@ -197,9 +197,40 @@
 
   // --- ESTADOS DE DURACIÓN ---
   let startsNow = $state(true);
-  let isIndefinite = $state(true);
   let startDate = $state("");
-  let endDate = $state("");
+
+  // Opciones de duración predefinidas
+  type DurationOption = "24h" | "3d" | "7d" | "30d" | "indefinite" | "custom";
+  let selectedDuration = $state<DurationOption>("indefinite");
+  let customEndDate = $state("");
+
+  const DURATION_OPTIONS = [
+    { id: "24h" as DurationOption, label: "24 horas", hours: 24 },
+    { id: "3d" as DurationOption, label: "3 días", hours: 72 },
+    { id: "7d" as DurationOption, label: "7 días", hours: 168 },
+    { id: "30d" as DurationOption, label: "30 días", hours: 720 },
+    { id: "indefinite" as DurationOption, label: "Sin límite", hours: 0 },
+    { id: "custom" as DurationOption, label: "Personalizar", hours: -1 },
+  ];
+
+  // Helper para obtener fecha de cierre calculada
+  function getCalculatedEndDate(): string | null {
+    if (selectedDuration === "indefinite") return null;
+    if (selectedDuration === "custom") return customEndDate || null;
+
+    const option = DURATION_OPTIONS.find((d) => d.id === selectedDuration);
+    if (!option || option.hours <= 0) return null;
+
+    const startTime = startsNow
+      ? new Date()
+      : startDate
+        ? new Date(startDate)
+        : new Date();
+    const endTime = new Date(
+      startTime.getTime() + option.hours * 60 * 60 * 1000,
+    );
+    return endTime.toISOString();
+  }
 
   // --- GESTIÓN DE OPCIONES ---
   let options = $state([
@@ -293,13 +324,25 @@
       : startDate
         ? startDate.split("T")[0].split("-").reverse().slice(0, 2).join("/")
         : "---";
-    if (isIndefinite) {
+
+    if (selectedDuration === "indefinite") {
       return { text: startText, indefinite: true };
     }
-    const endText = endDate
-      ? endDate.split("T")[0].split("-").reverse().slice(0, 2).join("/")
-      : "---";
-    return { text: `${startText} - ${endText}`, indefinite: false };
+
+    // Si es custom, mostrar la fecha personalizada formateada
+    if (selectedDuration === "custom" && customEndDate) {
+      const formattedEnd = customEndDate
+        .split("T")[0]
+        .split("-")
+        .reverse()
+        .slice(0, 2)
+        .join("/");
+      return { text: `${startText} · ${formattedEnd}`, indefinite: false };
+    }
+
+    const option = DURATION_OPTIONS.find((d) => d.id === selectedDuration);
+    const durationText = option?.label || "---";
+    return { text: `${startText} · ${durationText}`, indefinite: false };
   }
 
   function getCollabLabel() {
@@ -725,9 +768,12 @@
           collabMode,
           selectedUserIds: collabMode === "selected" ? selectedUserIds : [],
           startsNow,
-          isIndefinite,
+          isIndefinite: selectedDuration === "indefinite",
           startDate: !startsNow ? startDate : undefined,
-          endDate: !isIndefinite ? endDate : undefined,
+          endDate:
+            selectedDuration !== "indefinite"
+              ? getCalculatedEndDate()
+              : undefined,
         },
       };
 
@@ -783,7 +829,7 @@
   }
 
   // Auto-guardar el borrador actual (estilo Instagram)
-  function autoSaveDraft() {
+  async function autoSaveDraft() {
     // Solo guardar si hay contenido significativo
     const hasContent =
       question.trim().length > 0 ||
@@ -795,26 +841,60 @@
     if (currentHash === lastSavedHash) return;
     lastSavedHash = currentHash;
 
-    const draft = {
-      id: currentDraftId || `draft-${Date.now()}`,
+    const draftData = {
       question,
       type,
       options,
       collabMode,
       selectedUserIds,
       startsNow,
-      isIndefinite,
+      selectedDuration,
       startDate,
-      endDate,
+      customEndDate,
+    };
+
+    // Si el usuario está autenticado, usar API
+    if ($isAuthenticated && $currentUser) {
+      try {
+        const response = await apiPost("/api/polls/drafts", {
+          id: typeof currentDraftId === "number" ? currentDraftId : undefined,
+          ...draftData,
+        });
+        if (response.success && response.data) {
+          currentDraftId = response.data.id;
+          // Actualizar la lista local
+          const existingIndex = drafts.findIndex(
+            (d: any) => d.id === currentDraftId,
+          );
+          if (existingIndex >= 0) {
+            drafts[existingIndex] = response.data;
+          } else {
+            drafts = [response.data, ...drafts].slice(0, MAX_DRAFTS);
+          }
+        }
+      } catch (err) {
+        console.error("[autoSaveDraft] Error saving to API:", err);
+        // Fallback a localStorage
+        saveToLocalStorage(draftData);
+      }
+    } else {
+      // Usuario no autenticado: usar localStorage
+      saveToLocalStorage(draftData);
+    }
+  }
+
+  // Guardar en localStorage (fallback)
+  function saveToLocalStorage(draftData: any) {
+    const draft = {
+      id: currentDraftId || `draft-${Date.now()}`,
+      ...draftData,
       savedAt: new Date().toISOString(),
     };
 
-    // Si no hay ID actual, es un borrador nuevo
     if (!currentDraftId) {
       currentDraftId = draft.id;
     }
 
-    // Actualizar o añadir el borrador
     let existingDrafts = JSON.parse(
       localStorage.getItem("poll_drafts") || "[]",
     );
@@ -826,7 +906,6 @@
       existingDrafts[existingIndex] = draft;
     } else {
       existingDrafts.unshift(draft);
-      // Limitar a MAX_DRAFTS (estilo Instagram)
       if (existingDrafts.length > MAX_DRAFTS) {
         existingDrafts = existingDrafts.slice(0, MAX_DRAFTS);
       }
@@ -844,7 +923,21 @@
     close();
   }
 
-  function checkForDraft() {
+  // Cargar borradores del servidor o localStorage
+  async function checkForDraft() {
+    if ($isAuthenticated && $currentUser) {
+      try {
+        const response = await apiGet("/api/polls/drafts");
+        if (response.success && response.data) {
+          drafts = response.data;
+          return;
+        }
+      } catch (err) {
+        console.error("[checkForDraft] Error loading from API:", err);
+      }
+    }
+
+    // Fallback a localStorage
     const savedDrafts = localStorage.getItem("poll_drafts");
     if (savedDrafts) {
       try {
@@ -867,10 +960,17 @@
       collabMode = draft.collabMode || "me";
       selectedUserIds = draft.selectedUserIds || [];
       startsNow = draft.startsNow ?? true;
-      isIndefinite = draft.isIndefinite ?? true;
+      // Compatibilidad con borradores antiguos
+      if (draft.selectedDuration) {
+        selectedDuration = draft.selectedDuration;
+      } else if (draft.isIndefinite !== undefined) {
+        selectedDuration = draft.isIndefinite ? "indefinite" : "custom";
+      } else {
+        selectedDuration = "indefinite";
+      }
       startDate = draft.startDate || "";
-      endDate = draft.endDate || "";
-      lastSavedHash = getCurrentStateHash(); // Establecer el hash inicial
+      customEndDate = draft.customEndDate || draft.endDate || "";
+      lastSavedHash = getCurrentStateHash();
     }
   }
 
@@ -879,10 +979,34 @@
     showDeleteDraftModal = true;
   }
 
-  function confirmDeleteDraft() {
+  async function confirmDeleteDraft() {
     if (draftToDelete !== null) {
+      const draftToRemove = drafts[draftToDelete];
+
+      // Si el usuario está autenticado y el ID es numérico, eliminar de la API
+      if (
+        $isAuthenticated &&
+        $currentUser &&
+        typeof draftToRemove?.id === "number"
+      ) {
+        try {
+          await apiDelete(`/api/polls/drafts?id=${draftToRemove.id}`);
+        } catch (err) {
+          console.error("[confirmDeleteDraft] Error deleting from API:", err);
+        }
+      }
+
+      // Actualizar lista local
       drafts = drafts.filter((_, i) => i !== draftToDelete);
-      localStorage.setItem("poll_drafts", JSON.stringify(drafts));
+
+      // Si hay borradores en localStorage, también limpiar
+      const localDrafts = JSON.parse(
+        localStorage.getItem("poll_drafts") || "[]",
+      );
+      const updatedLocalDrafts = localDrafts.filter(
+        (d: any) => d.id !== draftToRemove?.id,
+      );
+      localStorage.setItem("poll_drafts", JSON.stringify(updatedLocalDrafts));
     }
     draftToDelete = null;
     showDeleteDraftModal = false;
@@ -962,7 +1086,8 @@
     collabMode = "me";
     selectedUserIds = [];
     startsNow = true;
-    isIndefinite = true;
+    selectedDuration = "indefinite";
+    customEndDate = "";
   }
 </script>
 
@@ -980,7 +1105,7 @@
           onclick={tryClose}
           class="p-2 bg-white/5 rounded-full text-white/70 hover:text-white transition-all active:scale-90 flex-shrink-0"
         >
-          <ArrowLeft size={22} />
+          <ArrowLeft class="w-[1.375rem] h-[1.375rem]" />
         </button>
 
         {#if drafts.length > 0}
@@ -1026,7 +1151,9 @@
                         <div
                           class="opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <Check size={16} class="text-white drop-shadow-lg" />
+                          <Check
+                            class="w-[1rem] h-[1rem] text-white drop-shadow-lg"
+                          />
                         </div>
                       </div>
                     </div>
@@ -1038,7 +1165,7 @@
                     class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black text-white/80 hover:text-red-400 hover:bg-red-500/30 transition-all flex items-center justify-center shadow-lg z-10 ring-2 ring-white/80"
                     title="Eliminar borrador"
                   >
-                    <X size={14} />
+                    <X class="w-[0.875rem] h-[0.875rem]" />
                   </button>
                 </div>
               {/each}
@@ -1062,9 +1189,9 @@
             title={isFormValid ? "Lanzar encuesta" : "Completa los requisitos"}
           >
             {#if isSubmitting}
-              <Loader2 size={22} class="animate-spin" />
+              <Loader2 class="w-[1.375rem] h-[1.375rem] animate-spin" />
             {:else}
-              <Send size={22} />
+              <Send class="w-[1.375rem] h-[1.375rem]" />
             {/if}
           </button>
 
@@ -1075,7 +1202,7 @@
               class="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center shadow-lg ring-2 ring-black transition-all hover:scale-110 active:scale-95"
               title="Ver requisitos"
             >
-              <AlertCircle size={12} />
+              <AlertCircle class="w-[0.75rem] h-[0.75rem]" />
             </button>
           {/if}
         </div>
@@ -1099,43 +1226,45 @@
               onclick={() => (showInfoPanel = false)}
               class="absolute top-2 right-2 p-1 text-white/40 hover:text-white transition-colors"
             >
-              <X size={14} />
+              <X class="w-[0.875rem] h-[0.875rem]" />
             </button>
 
-            <p class="text-xs font-bold text-amber-400 mb-3">Requisitos</p>
+            <p class="text-[0.7rem] sm:text-xs font-bold text-amber-400 mb-3">
+              Requisitos
+            </p>
             <div class="space-y-2">
               <div class="flex items-center gap-2">
                 {#if question.trim().length >= 2}
-                  <Check size={12} class="text-emerald-400" />
+                  <Check class="w-[0.75rem] h-[0.75rem] text-emerald-400" />
                 {:else}
-                  <X size={12} class="text-red-400" />
+                  <X class="w-[0.75rem] h-[0.75rem] text-red-400" />
                 {/if}
                 <span
-                  class="text-xs {question.trim().length >= 2
+                  class="text-[0.65rem] sm:text-xs {question.trim().length >= 2
                     ? 'text-white/50'
                     : 'text-white/80'}">Pregunta (mín. 2 caracteres)</span
                 >
               </div>
               <div class="flex items-center gap-2">
                 {#if options.length >= 2}
-                  <Check size={12} class="text-emerald-400" />
+                  <Check class="w-[0.75rem] h-[0.75rem] text-emerald-400" />
                 {:else}
-                  <X size={12} class="text-red-400" />
+                  <X class="w-[0.75rem] h-[0.75rem] text-red-400" />
                 {/if}
                 <span
-                  class="text-xs {options.length >= 2
+                  class="text-[0.65rem] sm:text-xs {options.length >= 2
                     ? 'text-white/50'
                     : 'text-white/80'}">Mínimo 2 opciones</span
                 >
               </div>
               <div class="flex items-center gap-2">
                 {#if allOptionsValid}
-                  <Check size={12} class="text-emerald-400" />
+                  <Check class="w-[0.75rem] h-[0.75rem] text-emerald-400" />
                 {:else}
-                  <X size={12} class="text-red-400" />
+                  <X class="w-[0.75rem] h-[0.75rem] text-red-400" />
                 {/if}
                 <span
-                  class="text-xs {allOptionsValid
+                  class="text-[0.65rem] sm:text-xs {allOptionsValid
                     ? 'text-white/50'
                     : 'text-white/80'}">Todas las opciones con texto</span
                 >
@@ -1160,7 +1289,7 @@
             onclick={() => (validationErrors = [])}
             class="p-1 text-red-400 hover:text-red-300 transition-colors"
           >
-            <X size={16} />
+            <X class="w-[1rem] h-[1rem]" />
           </button>
         </div>
       </div>
@@ -1182,13 +1311,14 @@
           >
             <div class="flex justify-between items-center py-2 mb-4">
               <h3
-                class="text-xl font-black uppercase tracking-widest text-white/90 ml-2"
+                class="text-base sm:text-lg md:text-xl font-black uppercase tracking-widest text-white/90 ml-2"
               >
                 Gestionar opciones
               </h3>
               <button
                 onclick={() => (showSortPanel = false)}
-                class="p-3 bg-white/5 rounded-full"><X size={20} /></button
+                class="p-3 bg-white/5 rounded-full"
+                ><X class="w-[1.25rem] h-[1.25rem]" /></button
               >
             </div>
 
@@ -1209,7 +1339,9 @@
                     .to}); border-color: {getOptionCssColors(opt).from}"
                 >
                   <div class="absolute inset-0 bg-black/5 -z-10" />
-                  <GripVertical size={18} class="text-white/40 flex-shrink-0" />
+                  <GripVertical
+                    class="w-[1.125rem] h-[1.125rem] text-white/40 flex-shrink-0"
+                  />
                   <div
                     class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center flex-shrink-0 relative"
                   >
@@ -1220,11 +1352,13 @@
                         alt=""
                       />
                     {:else}
-                      <ImageIcon size={18} class="text-white/10" />
+                      <ImageIcon
+                        class="w-[1.125rem] h-[1.125rem] text-white/10"
+                      />
                     {/if}
                   </div>
                   <div
-                    class="flex-1 min-w-0 text-sm font-bold text-white/90 truncate"
+                    class="flex-1 min-w-0 text-xs sm:text-sm font-bold text-white/90 truncate"
                   >
                     {opt.title || "Sin título"}
                   </div>
@@ -1237,14 +1371,14 @@
                       class="p-2 text-white/60 hover:text-white transition-colors"
                       title="Ver en pantalla"
                     >
-                      <Eye size={18} />
+                      <Eye class="w-[1.125rem] h-[1.125rem]" />
                     </button>
                     <button
                       onclick={() => removeOption(opt.id)}
                       class="p-2 text-white/40 hover:text-white transition-colors"
                       title="Eliminar"
                     >
-                      <X size={20} />
+                      <X class="w-[1.25rem] h-[1.25rem]" />
                     </button>
                   </div>
                 </div>
@@ -1255,14 +1389,14 @@
               <button
                 onclick={addOption}
                 disabled={options.length >= 10}
-                class="flex-1 py-4 bg-[#9ec264]/20 text-[#9ec264] border border-[#9ec264]/30 rounded-2xl font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center gap-2"
+                class="flex-1 py-3 sm:py-4 bg-[#9ec264]/20 text-[#9ec264] border border-[#9ec264]/30 rounded-2xl text-sm sm:text-base font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center gap-2"
               >
-                <Plus size={18} strokeWidth={4} />
+                <Plus class="w-[1.125rem] h-[1.125rem]" strokeWidth={4} />
                 Añadir
               </button>
               <button
                 onclick={() => (showSortPanel = false)}
-                class="flex-[1.5] py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
+                class="flex-[1.5] py-3 sm:py-4 bg-white text-black rounded-2xl text-sm sm:text-base font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
               >
                 Listo
               </button>
@@ -1279,97 +1413,136 @@
           <div
             class="absolute inset-0 bg-black/80 backdrop-blur-md"
             onclick={() => (showDurationModal = false)}
-          />
+          ></div>
           <div
-            class="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl"
+            class="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl"
             in:scale={{ start: 0.95, duration: 300 }}
           >
-            <div class="flex justify-between items-center mb-8">
+            <div class="flex justify-between items-center mb-6">
               <h3
-                class="text-xl font-black uppercase tracking-widest text-white/90"
+                class="text-base sm:text-lg md:text-xl font-black uppercase tracking-widest text-white/90"
               >
                 Duración
               </h3>
               <button
                 onclick={() => (showDurationModal = false)}
-                class="p-2 bg-white/5 rounded-full"><X size={20} /></button
+                class="p-2 bg-white/5 rounded-full"
+                aria-label="Cerrar"
               >
+                <X class="w-[1.25rem] h-[1.25rem]" />
+              </button>
             </div>
-            <div class="space-y-8 flex-1">
-              <div class="space-y-4">
-                <div class="flex justify-between items-center">
-                  <div class="flex items-center gap-4">
-                    <div
-                      class={`w-16 h-16 flex items-center justify-center rounded-2xl transition-all ${startsNow ? "bg-[#9ec264]/10 text-[#9ec264]" : "bg-white/5 text-white/20"}`}
-                    >
-                      <Zap size={24} />
-                    </div>
-                    <div>
-                      <h4 class="text-base font-black uppercase tracking-wider">
-                        Inicio
-                      </h4>
-                      <p
-                        class="text-[10px] text-white/40 uppercase tracking-tighter"
-                      >
-                        {startsNow ? "Al instante" : "Programado"}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onclick={() => (startsNow = !startsNow)}
-                    class={`w-14 h-7 rounded-full p-1 transition-all ${startsNow ? "bg-[#9ec264]/80" : "bg-white/10"}`}
-                    ><div
-                      class={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${startsNow ? "translate-x-7" : "translate-x-0"}`}
-                    /></button
-                  >
-                </div>
-                {#if !startsNow}
-                  <input
-                    type="datetime-local"
-                    bind:value={startDate}
-                    class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white outline-none focus:border-[#9ec264] transition-all"
-                  />
-                {/if}
-              </div>
-              <div class="space-y-4">
-                <div class="flex justify-between items-center">
-                  <div
-                    class={`w-16 h-16 flex items-center justify-center rounded-2xl transition-all ${isIndefinite ? "bg-[#9ec264]/10 text-[#9ec264]" : "bg-white/5 text-white/20"}`}
-                  >
-                    <Infinity size={32} strokeWidth={2.5} />
-                  </div>
-                  <div>
-                    <h4 class="text-base font-black uppercase tracking-wider">
-                      Cierre
-                    </h4>
-                    <p
-                      class="text-[10px] text-white/40 uppercase tracking-tighter"
-                    >
-                      {isIndefinite ? "Indefinida" : "Límite"}
-                    </p>
-                  </div>
-                </div>
+
+            <!-- Inicio -->
+            <div class="mb-6">
+              <p
+                class="text-[10px] sm:text-xs text-white/40 uppercase tracking-wider mb-3 font-bold"
+              >
+                Inicio
+              </p>
+              <div class="flex gap-2">
                 <button
-                  onclick={() => (isIndefinite = !isIndefinite)}
-                  class={`w-14 h-7 rounded-full p-1 transition-all ${isIndefinite ? "bg-[#9ec264]/80" : "bg-white/10"}`}
-                  ><div
-                    class={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isIndefinite ? "translate-x-7" : "translate-x-0"}`}
-                  /></button
+                  onclick={() => (startsNow = true)}
+                  class={`flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all ${startsNow ? "bg-[#9ec264] text-black" : "bg-white/5 text-white/60 hover:bg-white/10"}`}
                 >
+                  <Zap class="w-[1rem] h-[1rem] inline mr-1.5" />
+                  Ahora
+                </button>
+                <button
+                  onclick={() => (startsNow = false)}
+                  class={`flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all ${!startsNow ? "bg-[#9ec264] text-black" : "bg-white/5 text-white/60 hover:bg-white/10"}`}
+                >
+                  <Calendar class="w-[1rem] h-[1rem] inline mr-1.5" />
+                  Programar
+                </button>
               </div>
-              {#if !isIndefinite}
+              {#if !startsNow}
                 <input
                   type="datetime-local"
-                  bind:value={endDate}
-                  class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white outline-none focus:border-[#9ec264] transition-all"
+                  bind:value={startDate}
+                  class="w-full mt-3 bg-white/5 border border-white/10 rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm text-white outline-none focus:border-[#9ec264] transition-all"
                 />
               {/if}
             </div>
+
+            <!-- Duración -->
+            <div class="mb-6">
+              <p
+                class="text-[10px] sm:text-xs text-white/40 uppercase tracking-wider mb-3 font-bold"
+              >
+                Cierre
+              </p>
+              <div class="grid grid-cols-3 gap-2">
+                {#each DURATION_OPTIONS as option}
+                  <button
+                    onclick={() => (selectedDuration = option.id)}
+                    class={`py-3 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all ${selectedDuration === option.id ? "bg-[#9ec264] text-black" : "bg-white/5 text-white/60 hover:bg-white/10"}`}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
+              </div>
+              {#if selectedDuration === "custom"}
+                <input
+                  type="datetime-local"
+                  bind:value={customEndDate}
+                  class="w-full mt-3 bg-white/5 border border-white/10 rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm text-white outline-none focus:border-[#9ec264] transition-all"
+                />
+              {/if}
+            </div>
+
+            <!-- Resumen -->
+            <div class="bg-white/5 rounded-xl p-4 mb-6">
+              <p
+                class="text-[10px] sm:text-xs text-white/40 uppercase tracking-wider mb-2 font-bold"
+              >
+                Resumen
+              </p>
+              <p class="text-xs sm:text-sm text-white/80">
+                {#if startsNow}
+                  Comienza <span class="text-[#9ec264] font-bold"
+                    >al publicar</span
+                  >
+                {:else}
+                  Comienza <span class="text-[#9ec264] font-bold"
+                    >{startDate
+                      ? new Date(startDate).toLocaleDateString("es-ES", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "por definir"}</span
+                  >
+                {/if}
+                {#if selectedDuration === "indefinite"}
+                  · <span class="text-amber-400 font-bold">Sin límite</span>
+                {:else if selectedDuration === "custom"}
+                  · Cierra <span class="text-amber-400 font-bold"
+                    >{customEndDate
+                      ? new Date(customEndDate).toLocaleDateString("es-ES", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "por definir"}</span
+                  >
+                {:else}
+                  · Dura <span class="text-amber-400 font-bold"
+                    >{DURATION_OPTIONS.find((d) => d.id === selectedDuration)
+                      ?.label}</span
+                  >
+                {/if}
+              </p>
+            </div>
+
             <button
               onclick={() => (showDurationModal = false)}
-              class="mt-10 w-full py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
-              >Guardar</button
+              class="w-full py-3 sm:py-4 bg-white text-black rounded-2xl text-sm sm:text-base font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
             >
+              Guardar
+            </button>
           </div>
         </div>
       {/if}
@@ -1392,7 +1565,7 @@
           >
             <div class="flex justify-between items-center mb-6">
               <h3
-                class="text-xl font-black uppercase tracking-widest text-white/90"
+                class="text-base sm:text-lg md:text-xl font-black uppercase tracking-widest text-white/90"
               >
                 {isSelectingUsers ? "Elegir Usuarios" : "Colaboración"}
               </h3>
@@ -1401,7 +1574,8 @@
                   showCollabModal = false;
                   isSelectingUsers = false;
                 }}
-                class="p-2 bg-white/5 rounded-full"><X size={20} /></button
+                class="p-2 bg-white/5 rounded-full"
+                ><X class="w-[1.25rem] h-[1.25rem]" /></button
               >
             </div>
             {#if !isSelectingUsers}
@@ -1421,26 +1595,25 @@
                       class={`p-4 rounded-xl ${collabMode === mode.id ? "bg-[#9ec264]/20" : "bg-black/20"}`}
                     >
                       <mode.icon
-                        size={26}
-                        class={collabMode === mode.id
-                          ? "text-[#9ec264]"
-                          : "text-white/40"}
+                        class={`w-[1.625rem] h-[1.625rem] ${collabMode === mode.id ? "text-[#9ec264]" : "text-white/40"}`}
                       />
                     </div>
                     <div class="text-left flex-1">
                       <p
-                        class={`font-black uppercase tracking-wider text-sm ${collabMode === mode.id ? "text-white" : "text-white/70"}`}
+                        class={`font-black uppercase tracking-wider text-xs sm:text-sm ${collabMode === mode.id ? "text-white" : "text-white/70"}`}
                       >
                         {mode.label}
                       </p>
                       <p
-                        class={`text-[10px] tracking-tight ${collabMode === mode.id ? "text-white/60" : "text-white/30"}`}
+                        class={`text-[9px] sm:text-[10px] tracking-tight ${collabMode === mode.id ? "text-white/60" : "text-white/30"}`}
                       >
                         {mode.desc}
                       </p>
                     </div>
                     {#if collabMode === mode.id && mode.id !== "selected"}
-                      <Check size={22} class="ml-auto text-[#9ec264]" />
+                      <Check
+                        class="w-[1.375rem] h-[1.375rem] ml-auto text-[#9ec264]"
+                      />
                     {/if}
                   </button>
                 {/each}
@@ -1449,13 +1622,12 @@
               <div class="flex flex-col flex-1 overflow-hidden">
                 <div class="relative mb-6">
                   <Search
-                    class="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
-                    size={18}
+                    class="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 w-[1.125rem] h-[1.125rem]"
                   />
                   <input
                     bind:value={userSearchQuery}
                     placeholder="Buscar usuario..."
-                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-6 text-sm outline-none focus:border-[#9ec264]/40 transition-all"
+                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-3 sm:py-4 pl-12 pr-6 text-xs sm:text-sm outline-none focus:border-[#9ec264]/40 transition-all"
                   />
                 </div>
                 <div
@@ -1472,13 +1644,18 @@
                         {user.name[0]}
                       </div>
                       <div class="text-left flex-1">
-                        <p class="font-bold text-sm text-white">{user.name}</p>
+                        <p class="font-bold text-xs sm:text-sm text-white">
+                          {user.name}
+                        </p>
                       </div>
                       <div
                         class={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedUserIds.includes(user.id) ? "bg-white border-white text-[#9ec264] scale-110" : "border-white/10"}`}
                       >
                         {#if selectedUserIds.includes(user.id)}
-                          <Check size={14} strokeWidth={4} />
+                          <Check
+                            class="w-[0.875rem] h-[0.875rem]"
+                            strokeWidth={4}
+                          />
                         {/if}
                       </div>
                     </button>
@@ -1519,17 +1696,17 @@
                 style="background-color: {activeTypeData.hex}20; border: 1px solid {activeTypeData.hex}40"
               >
                 <activeTypeData.icon
-                  size={36}
+                  class="w-[2.25rem] h-[2.25rem]"
                   style="color: {activeTypeData.hex}"
                 />
               </div>
               <h3
-                class="text-2xl font-black uppercase tracking-widest mb-4"
+                class="text-xl sm:text-2xl font-black uppercase tracking-widest mb-4"
                 style="color: {activeTypeData.hex}"
               >
                 {activeTypeData.helpTitle}
               </h3>
-              <p class="text-white/60 text-sm leading-relaxed mb-8">
+              <p class="text-white/60 text-xs sm:text-sm leading-relaxed mb-8">
                 {activeTypeData.helpDesc}
               </p>
               <button
@@ -1548,7 +1725,7 @@
           autofocus
           bind:value={question}
           placeholder="¿Qué quieres preguntar?"
-          class="w-full bg-transparent border-none focus:ring-0 p-0 text-3xl font-black text-white placeholder-white/40 resize-none leading-none tracking-tighter outline-none appearance-none"
+          class="w-full bg-transparent border-none focus:ring-0 p-0 text-2xl sm:text-3xl font-black text-white placeholder-white/40 resize-none leading-none tracking-tighter outline-none appearance-none"
           rows="2"
         />
         <div class="flex items-center justify-center gap-2 mt-4">
@@ -1556,14 +1733,17 @@
             onclick={() => (showDurationModal = true)}
             class="flex items-center gap-3 px-5 py-2.5 bg-white/5 rounded-full border border-white/5 text-white active:scale-95 transition-all"
           >
-            <Clock size={16} class="text-white/70" />
+            <Clock class="w-[0.9rem] h-[0.9rem] text-white/70" />
             <div
-              class="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5"
+              class="text-[0.6rem] font-black uppercase tracking-wider flex items-center gap-1.5"
             >
               {#if getDurationConfig().indefinite}
                 <span>{getDurationConfig().text}</span>
                 <span class="opacity-30">-</span>
-                <Infinity size={18} strokeWidth={3} class="text-white" />
+                <Infinity
+                  strokeWidth={3}
+                  class="w-[1rem] h-[1rem] text-white"
+                />
               {:else}
                 <span>{getDurationConfig().text}</span>
               {/if}
@@ -1572,12 +1752,12 @@
 
           <button
             onclick={() => (showCollabModal = true)}
-            class={`flex items-center justify-center transition-all border active:scale-90 ${collabMode !== "me" ? "bg-[#9ec264] text-black border-[#9ec264] shadow-xl" : "bg-white/5 text-white/40 border-white/5"} ${collabMode === "selected" && selectedUserIds.length > 0 ? "px-3.5 h-10 gap-2 rounded-full" : "w-10 h-10 rounded-full"}`}
+            class={`flex items-center justify-center transition-all border active:scale-90 ${collabMode !== "me" ? "bg-[#9ec264] text-black border-[#9ec264] shadow-xl" : "bg-white/5 text-white/40 border-white/5"} ${collabMode === "selected" && selectedUserIds.length > 0 ? "px-3.5 py-2.5 gap-2 rounded-full" : "w-10 py-2.5 rounded-full"}`}
             title={getCollabLabel()}
           >
-            <activeCollabData.icon size={18} />
+            <activeCollabData.icon class="w-[1rem] h-[1rem]" />
             {#if collabMode === "selected" && selectedUserIds.length > 0}
-              <span class="text-[11px] font-black"
+              <span class="text-[0.6rem] font-black"
                 >{selectedUserIds.length}</span
               >
             {/if}
@@ -1585,9 +1765,9 @@
 
           <button
             onclick={() => (showSortPanel = true)}
-            class="flex items-center gap-2.5 px-4 py-2.5 bg-white/5 rounded-full border border-white/5 text-white/40 active:scale-90 transition-all text-[11px] font-black uppercase tracking-wider"
+            class="flex items-center gap-2.5 px-4 py-2.5 bg-white/5 rounded-full border border-white/5 text-white/40 active:scale-90 transition-all text-[0.6rem] font-black uppercase tracking-wider"
           >
-            <List size={18} />
+            <List class="w-[1rem] h-[1rem]" />
             <span class="opacity-80">{options.length}</span>
           </button>
         </div>
@@ -1613,7 +1793,7 @@
                   class="p-2.5 rounded-full bg-black text-white shadow-2xl hover:bg-zinc-800 active:scale-90 transition-all border-2 border-white/20"
                   title="Eliminar opción"
                 >
-                  <X size={14} strokeWidth={4} />
+                  <X class="w-[0.875rem] h-[0.875rem]" strokeWidth={4} />
                 </button>
               </div>
 
@@ -1638,7 +1818,7 @@
                   />
                 </div>
                 <div
-                  class="absolute top-6 left-6 z-30 bg-black/40 backdrop-blur-xl px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 text-white/70"
+                  class="absolute top-4 left-4 sm:top-6 sm:left-6 z-30 bg-black/40 backdrop-blur-xl px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-[0.55rem] font-black uppercase tracking-widest border border-white/10 text-white/70"
                 >
                   #{idx + 1}
                 </div>
@@ -1650,32 +1830,41 @@
                     rows="3"
                   />
                 </div>
-                <div class="absolute bottom-6 right-3 z-30">
-                  <div class="flex flex-col gap-2">
+                <div
+                  class="absolute bottom-4 right-2 sm:bottom-6 sm:right-3 z-30"
+                >
+                  <div class="flex flex-col gap-1.5 sm:gap-2">
                     {#if type === "quiz"}
                       <button
                         onclick={() => {
                           correctOptionId = opt.id;
                           centerOptionById(opt.id);
                         }}
-                        class={`p-3 rounded-2xl backdrop-blur-lg border transition-all ${correctOptionId === opt.id ? "bg-[#f0b100]/20 border-[#f0b100]/40 text-[#f0b100] shadow-lg shadow-[#f0b100]/10" : "bg-black/10 border-white/5 text-white/70 hover:text-white"}`}
-                        ><Trophy size={18} /></button
+                        class={`p-2 sm:p-3 rounded-xl sm:rounded-2xl backdrop-blur-lg border transition-all ${correctOptionId === opt.id ? "bg-[#f0b100]/20 border-[#f0b100]/40 text-[#f0b100] shadow-lg shadow-[#f0b100]/10" : "bg-black/10 border-white/5 text-white/70 hover:text-white"}`}
+                        ><Trophy
+                          class="w-[1rem] h-[1rem] sm:w-[1.125rem] sm:h-[1.125rem]"
+                        /></button
                       >
                     {/if}
 
                     <div
-                      class={`flex flex-col items-center rounded-2xl border backdrop-blur-lg transition-all overflow-hidden ${opt.image ? "bg-[#9ec264]/10 border-[#9ec264]/30 text-[#9ec264]" : "bg-black/20 border-white/10 text-white shadow-xl"}`}
+                      class={`flex flex-col items-center rounded-xl sm:rounded-2xl border backdrop-blur-lg transition-all overflow-hidden ${opt.image ? "bg-[#9ec264]/10 border-[#9ec264]/30 text-[#9ec264]" : "bg-black/20 border-white/10 text-white shadow-xl"}`}
                     >
                       {#if !opt.image}
                         <button
                           onclick={() => autoFetchGif(opt.id, false)}
-                          class="p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center"
+                          class="p-2 sm:p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center"
                           disabled={isAutoFetchingGif[opt.id]}
                         >
                           {#if isAutoFetchingGif[opt.id]}
-                            <Loader2 size={18} class="animate-spin" />
+                            <Loader2
+                              size={16}
+                              class="sm:w-[18px] sm:h-[18px] animate-spin"
+                            />
                           {:else}
-                            <ImageIcon size={18} />
+                            <ImageIcon
+                              class="w-[1rem] h-[1rem] sm:w-[1.125rem] sm:h-[1.125rem]"
+                            />
                           {/if}
                         </button>
                       {/if}
@@ -1683,13 +1872,13 @@
                         <div class="relative w-full flex flex-col items-center">
                           <button
                             onclick={() => toggleColorSlider(opt.id)}
-                            class={`p-3 w-full transition-all flex items-center justify-center ${showColorSlider === opt.id ? "bg-white text-black" : "hover:bg-white/10 text-white/70"}`}
+                            class={`p-2 sm:p-3 w-full transition-all flex items-center justify-center ${showColorSlider === opt.id ? "bg-white text-black" : "hover:bg-white/10 text-white/70"}`}
                           >
                             <Palette
-                              size={18}
                               fill={showColorSlider === opt.id
                                 ? "currentColor"
                                 : "none"}
+                              class="w-[1rem] h-[1rem] sm:w-[1.125rem] sm:h-[1.125rem]"
                             />
                           </button>
                         </div>
@@ -1697,22 +1886,29 @@
                       {#if opt.image}
                         <button
                           onclick={() => autoFetchGif(opt.id, true)}
-                          class="p-3 hover:bg-black/20 border-b border-white/5 transition-colors flex items-center justify-center"
+                          class="p-2 sm:p-3 hover:bg-black/20 border-b border-white/5 transition-colors flex items-center justify-center"
                           title="Siguiente GIF"
                           disabled={isAutoFetchingGif[opt.id]}
                         >
                           {#if isAutoFetchingGif[opt.id]}
-                            <Loader2 size={18} class="animate-spin" />
+                            <Loader2
+                              size={16}
+                              class="sm:w-[18px] sm:h-[18px] animate-spin"
+                            />
                           {:else}
-                            <RefreshCw size={18} />
+                            <RefreshCw
+                              class="w-[1rem] h-[1rem] sm:w-[1.125rem] sm:h-[1.125rem]"
+                            />
                           {/if}
                         </button>
                         <button
                           onclick={() => openGiphyPicker(opt.id)}
-                          class="p-3 hover:bg-black/20 border-b border-white/5 transition-colors flex items-center justify-center"
+                          class="p-2 sm:p-3 hover:bg-black/20 border-b border-white/5 transition-colors flex items-center justify-center"
                           title="Buscar manualmente"
                         >
-                          <SearchIcon size={18} />
+                          <SearchIcon
+                            class="w-[1rem] h-[1rem] sm:w-[1.125rem] sm:h-[1.125rem]"
+                          />
                         </button>
                         <button
                           onclick={() => {
@@ -1723,10 +1919,12 @@
                             });
                             centerOptionById(opt.id);
                           }}
-                          class="p-3 hover:bg-red-500/20 text-red-500/60 hover:text-red-500 transition-colors flex items-center justify-center"
+                          class="p-2 sm:p-3 hover:bg-red-500/20 text-red-500/60 hover:text-red-500 transition-colors flex items-center justify-center"
                           title="Eliminar imagen"
                         >
-                          <Trash2 size={18} />
+                          <Trash2
+                            class="w-[1rem] h-[1rem] sm:w-[1.125rem] sm:h-[1.125rem]"
+                          />
                         </button>
                       {/if}
                     </div>
@@ -1743,7 +1941,7 @@
                 onclick={addOption}
                 class={`absolute top-1/2 -translate-y-1/2 z-[60] flex items-center justify-center text-white active:scale-90 transition-all duration-500 ease-in-out ${activeIndex === options.length ? "left-1/2 -translate-x-1/2 scale-150" : "md:left-1/2 md:-translate-x-1/2 -left-2 translate-x-0 scale-100"}`}
               >
-                <Plus size={48} strokeWidth={3} />
+                <Plus class="w-[3rem] h-[3rem]" strokeWidth={3} />
               </button>
             </div>
           {/if}
@@ -1765,7 +1963,9 @@
                 class={`transition-all duration-300 active:scale-90 flex items-center justify-center ${activeIndex === options.length ? "text-white" : "text-white/20"}`}
               >
                 <Plus
-                  size={activeIndex === options.length ? 12 : 10}
+                  class={activeIndex === options.length
+                    ? "w-[0.75rem] h-[0.75rem]"
+                    : "w-[0.625rem] h-[0.625rem]"}
                   strokeWidth={activeIndex === options.length ? 4 : 3}
                 />
               </button>
@@ -1779,11 +1979,11 @@
               >
                 <div class="flex items-center gap-2">
                   <activeTypeData.icon
-                    size={14}
+                    class="w-[0.875rem] h-[0.875rem]"
                     style="color: {activeTypeData.hex}"
                   />
                   <span
-                    class="text-[10px] font-black uppercase tracking-[0.15em] leading-none"
+                    class="text-[0.55rem] font-black uppercase tracking-[0.15em] leading-none"
                     style="color: {activeTypeData.hex}"
                     >{activeTypeData.label}</span
                   >
@@ -1792,7 +1992,7 @@
                 <div class="w-px h-3 bg-white/10 mx-0.5" />
 
                 <span
-                  class="text-[9px] font-black uppercase tracking-wider whitespace-nowrap opacity-60"
+                  class="text-[0.5rem] font-black uppercase tracking-wider whitespace-nowrap opacity-60"
                   style="color: {activeTypeData.hex}"
                   >{getTypeDescription()}</span
                 >
@@ -1802,7 +2002,7 @@
                 <button
                   onclick={() => (showHelpModal = true)}
                   class="p-1 -mr-1 rounded-full text-white/40 hover:text-white transition-colors"
-                  ><Info size={14} /></button
+                  ><Info class="w-[0.875rem] h-[0.875rem]" /></button
                 >
               </div>
             {/if}
@@ -1828,13 +2028,13 @@
                 class={`p-3 rounded-2xl w-full flex items-center justify-center transition-all ${type === t.id ? `bg-gradient-to-br ${t.color} shadow-lg ring-1 ring-white/10` : "bg-slate-900 hover:bg-slate-800"}`}
               >
                 {#if t.id === "swipe"}
-                  <ArrowLeftRight size={20} class="text-white" />
+                  <ArrowLeftRight class="w-[1.25rem] h-[1.25rem] text-white" />
                 {:else}
-                  <t.icon size={20} class="text-white" />
+                  <t.icon class="w-[1.25rem] h-[1.25rem] text-white" />
                 {/if}
               </div>
               <span
-                class={`text-[9px] font-black uppercase tracking-tighter ${type === t.id ? "text-white" : "text-slate-500"}`}
+                class={`text-[0.5rem] font-black uppercase tracking-tighter ${type === t.id ? "text-white" : "text-slate-500"}`}
                 >{t.label}</span
               >
             </button>
@@ -1919,7 +2119,7 @@
       <div class="flex justify-between items-center">
         <div class="flex flex-col">
           <h3
-            class="text-xl font-black uppercase tracking-[0.1em] text-white m-0"
+            class="text-lg sm:text-xl font-black uppercase tracking-[0.1em] text-white m-0"
           >
             Color de opción
           </h3>
@@ -1928,7 +2128,7 @@
           onclick={() => (showColorSlider = null)}
           class="p-2 -mr-2 text-white/40 hover:text-white transition-colors"
         >
-          <X size={24} />
+          <X class="w-[1.5rem] h-[1.5rem]" />
         </button>
       </div>
 
@@ -2005,28 +2205,30 @@
       transition:scale={{ start: 0.95, duration: 200 }}
     >
       <div class="p-6 text-center border-b border-white/10">
-        <h3 class="text-lg font-black text-white mb-2">¿Descartar encuesta?</h3>
-        <p class="text-sm text-white/60">
+        <h3 class="text-base sm:text-lg font-black text-white mb-2">
+          ¿Descartar encuesta?
+        </h3>
+        <p class="text-xs sm:text-sm text-white/60">
           Tienes cambios sin guardar. ¿Qué quieres hacer?
         </p>
       </div>
       <div class="flex flex-col">
         <button
           onclick={saveDraft}
-          class="py-4 px-6 text-sm font-bold text-[#9ec264] border-b border-white/10 hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
+          class="py-3 sm:py-4 px-6 text-xs sm:text-sm font-bold text-[#9ec264] border-b border-white/10 hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
         >
           <Save size={18} />
           Guardar borrador
         </button>
         <button
           onclick={discardChanges}
-          class="py-4 px-6 text-sm font-bold text-red-400 border-b border-white/10 hover:bg-white/5 transition-colors"
+          class="py-3 sm:py-4 px-6 text-xs sm:text-sm font-bold text-red-400 border-b border-white/10 hover:bg-white/5 transition-colors"
         >
           Descartar
         </button>
         <button
           onclick={() => (showDiscardModal = false)}
-          class="py-4 px-6 text-sm font-medium text-white/60 hover:bg-white/5 transition-colors"
+          class="py-3 sm:py-4 px-6 text-xs sm:text-sm font-medium text-white/60 hover:bg-white/5 transition-colors"
         >
           Cancelar
         </button>
@@ -2045,27 +2247,29 @@
       transition:scale={{ start: 0.95, duration: 200 }}
     >
       <div class="p-6 text-center border-b border-white/10">
-        <h3 class="text-lg font-black text-white mb-2">¿Eliminar borrador?</h3>
-        <p class="text-sm text-white/60">
+        <h3 class="text-base sm:text-lg font-black text-white mb-2">
+          ¿Eliminar borrador?
+        </h3>
+        <p class="text-xs sm:text-sm text-white/60">
           Esta acción no se puede deshacer. ¿Qué quieres hacer?
         </p>
       </div>
       <div class="flex flex-col">
         <button
           onclick={loadDraftFromModal}
-          class="py-4 px-6 text-sm font-bold text-[#9ec264] border-b border-white/10 hover:bg-white/5 transition-colors"
+          class="py-3 sm:py-4 px-6 text-xs sm:text-sm font-bold text-[#9ec264] border-b border-white/10 hover:bg-white/5 transition-colors"
         >
           Seguir editando
         </button>
         <button
           onclick={confirmDeleteDraft}
-          class="py-4 px-6 text-sm font-bold text-red-400 border-b border-white/10 hover:bg-white/5 transition-colors"
+          class="py-3 sm:py-4 px-6 text-xs sm:text-sm font-bold text-red-400 border-b border-white/10 hover:bg-white/5 transition-colors"
         >
           Eliminar borrador
         </button>
         <button
           onclick={() => (showDeleteDraftModal = false)}
-          class="py-4 px-6 text-sm font-medium text-white/60 hover:bg-white/5 transition-colors"
+          class="py-3 sm:py-4 px-6 text-xs sm:text-sm font-medium text-white/60 hover:bg-white/5 transition-colors"
         >
           Cancelar
         </button>

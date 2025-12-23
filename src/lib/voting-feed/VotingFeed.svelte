@@ -15,7 +15,32 @@
   import NavBottom from "$lib/nav-bottom.svelte";
   import CreatePollModal from "$lib/CreatePollModal.svelte";
   import UserProfileModal from "$lib/UserProfileModal.svelte";
+  import Select from "$lib/ui/Select.svelte";
   import { apiCall } from "$lib/api/client";
+  import { currentUser } from "$lib/stores/auth";
+
+  // Options for custom Selects
+  const timeOptions = [
+    { label: "24h", value: "24h" },
+    { label: "7 días", value: "7d" },
+    { label: "30 días", value: "30d" },
+    { label: "3 meses", value: "90d" },
+    { label: "1 año", value: "1y" },
+  ];
+
+  const limitOptions = [
+    { label: "Top 10", value: 10 },
+    { label: "Top 20", value: 20 },
+    { label: "Top 30", value: 30 },
+    { label: "Top 40", value: 40 },
+    { label: "Top 50", value: 50 },
+  ];
+
+  const endingSoonLimitOptions = [
+    { label: "Top 10", value: 10 },
+    { label: "Top 20", value: 20 },
+    { label: "Top 30", value: 30 },
+  ];
 
   let posts = $state<Post[]>([]);
   let userVotes = $state<UserVotes>({});
@@ -85,6 +110,16 @@
   let trendingLoading = $state(false);
   const ITEMS_PER_PAGE = 4; // 4 items per carousel page
 
+  // Ending soon state (Live tab)
+  let endingSoonPosts = $state<Post[]>([]);
+  let endingSoonLoading = $state(false);
+  let endingSoonPage = $state(0);
+  let endingSoonCarouselRef: HTMLElement | null = $state(null);
+  let endingSoonLimit = $state<10 | 20 | 30 | 40 | 50>(10);
+  let endingSoonPeriod = $state<"24h" | "7d" | "30d" | "90d" | "1y" | "5y">(
+    "30d",
+  );
+
   function handleTrendingScroll(e: Event) {
     const target = e.target as HTMLElement;
     const scrollLeft = target.scrollLeft;
@@ -112,6 +147,26 @@
     }
   }
 
+  // Load ending soon posts
+  async function fetchEndingSoonPosts() {
+    endingSoonLoading = true;
+    try {
+      const url = `/api/polls?limit=${endingSoonLimit}&page=1&status=active&sort=ending_soon&period=${endingSoonPeriod}`;
+      const response = await apiCall(url);
+      if (response.ok) {
+        const data = await response.json();
+        const apiPolls = data.data || data || [];
+        if (Array.isArray(apiPolls)) {
+          endingSoonPosts = apiPolls.map(transformApiPoll);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching ending soon:", err);
+    } finally {
+      endingSoonLoading = false;
+    }
+  }
+
   // Computed: number of pages in trending carousel
   $effect(() => {
     // Reset to page 0 when limit changes
@@ -128,6 +183,39 @@
   }
   let friendStories = $state<FriendStory[]>([]);
   let selectedFriendId = $state<string | null>(null);
+
+  let sortedFriendStories = $derived.by(() => {
+    let stories = [...friendStories];
+    const me = $currentUser;
+
+    if (activeTab === "Amigos") {
+      stories.sort((a, b) => Number(b.hasNewPoll) - Number(a.hasNewPoll));
+    }
+
+    if (me) {
+      const myId = String(me.userId ?? me.id);
+      const myIndex = stories.findIndex((s) => s.id === myId);
+
+      if (myIndex >= 0) {
+        const [myStory] = stories.splice(myIndex, 1);
+        // Opcional: Cambiar nombre a "Tú"
+        // myStory.name = "Tú";
+        stories.unshift(myStory);
+      } else {
+        stories.unshift({
+          id: myId,
+          name: "Tú",
+          avatar:
+            me.avatarUrl ||
+            `https://api.dicebear.com/7.x/avataaars/svg?seed=${myId}`,
+          hasNewPoll: false,
+          pollCount: 0,
+        });
+      }
+    }
+
+    return stories;
+  });
 
   // Load friends with recent activity
   async function loadFriendStories() {
@@ -489,6 +577,10 @@
       fetchPolls();
     }
 
+    if (activeTab === "Live" && tabChanged) {
+      fetchEndingSoonPosts();
+    }
+
     if (filterChanged || limitChanged) {
       prevFilter = currentFilter;
       prevLimit = currentLimit;
@@ -739,12 +831,12 @@
         onscroll={handleScroll}
       >
         <div class="feed-container-width mx-auto min-h-full bg-black/20 pb-10">
-          {#if activeTab === "Para ti"}
+          {#if activeTab === "Para ti" || activeTab === "Amigos"}
             <!-- Instagram Stories Style - Friends with recent polls -->
             <div class="px-4 py-4">
               <div class="overflow-x-auto scrollbar-hide">
                 <div class="flex gap-4" style="width: max-content;">
-                  {#each friendStories as friend (friend.id)}
+                  {#each sortedFriendStories as friend (friend.id)}
                     <button
                       class="flex flex-col items-center gap-1.5 min-w-[72px]"
                       onclick={() => {
@@ -772,7 +864,7 @@
                     </button>
                   {/each}
 
-                  {#if friendStories.length === 0}
+                  {#if sortedFriendStories.length === 0}
                     <!-- Placeholder avatars when loading -->
                     {#each Array(6) as _, i}
                       <div
@@ -792,22 +884,23 @@
               <div>
                 <h2 class="text-lg font-bold text-white">Trending Global</h2>
                 <p class="text-xs text-slate-400 mt-0.5">
-                  {trendingPosts.length} encuestas más votadas • {getTimePeriodLabel(
-                    timeFilter,
-                  )}
+                  {trendingPosts.length} encuestas más votadas
                 </p>
               </div>
-              <!-- Limit selector -->
-              <select
-                class="bg-slate-800 text-white text-xs rounded px-2 py-1 border border-white/10"
-                bind:value={trendingLimit}
-              >
-                <option value={10}>Top 10</option>
-                <option value={20}>Top 20</option>
-                <option value={30}>Top 30</option>
-                <option value={40}>Top 40</option>
-                <option value={50}>Top 50</option>
-              </select>
+              <div class="flex items-center gap-2">
+                <!-- Time selector -->
+                <Select
+                  options={timeOptions}
+                  bind:value={timeFilter}
+                  className="w-24"
+                />
+                <!-- Limit selector -->
+                <Select
+                  options={limitOptions}
+                  bind:value={trendingLimit}
+                  className="w-24"
+                />
+              </div>
             </div>
 
             <!-- Trending List - Horizontal Carousel (4 items per page) -->
@@ -941,6 +1034,152 @@
                     if (trendingCarouselRef) {
                       trendingCarouselRef.scrollTo({
                         left: i * trendingCarouselRef.offsetWidth,
+                        behavior: "smooth",
+                      });
+                    }
+                  }}
+                ></button>
+              {/each}
+            </div>
+          {:else if activeTab === "Live"}
+            <!-- Ending Soon List Header -->
+            <div class="px-4 py-4 flex items-center justify-between">
+              <div>
+                <h2 class="text-lg font-bold text-white">Finalizan pronto</h2>
+                <p class="text-xs text-slate-400 mt-0.5">
+                  Última oportunidad para votar
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <!-- Limit selector ONLY -->
+                <Select
+                  options={endingSoonLimitOptions}
+                  bind:value={endingSoonLimit}
+                  on:change={fetchEndingSoonPosts}
+                  className="w-24"
+                />
+              </div>
+            </div>
+
+            <!-- Ending Soon List - Horizontal Carousel (Same layout as Trending) -->
+            <div
+              class="overflow-x-auto scrollbar-hide snap-x snap-mandatory"
+              bind:this={endingSoonCarouselRef}
+              onscroll={(e) => {
+                const target = e.target as HTMLElement;
+                const scrollLeft = target.scrollLeft;
+                const pageWidth = target.offsetWidth;
+                endingSoonPage = Math.round(scrollLeft / pageWidth);
+              }}
+            >
+              <div class="flex" style="width: max-content;">
+                {#each Array(Math.ceil(endingSoonPosts.length / ITEMS_PER_PAGE)) as _, pageIndex}
+                  <div
+                    class="w-screen max-w-2xl snap-center flex-shrink-0 divide-y divide-white/5"
+                  >
+                    {#each endingSoonPosts.slice(pageIndex * ITEMS_PER_PAGE, pageIndex * ITEMS_PER_PAGE + ITEMS_PER_PAGE) as post, idx (post.id)}
+                      {@const globalIndex = pageIndex * ITEMS_PER_PAGE + idx}
+                      <button
+                        class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                        onclick={() => {
+                          currentView = "reels";
+                        }}
+                      >
+                        <!-- Avatar -->
+                        <img
+                          src={post.avatar}
+                          alt={post.author}
+                          class="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        />
+
+                        <!-- Number (Ranking style) -->
+                        <div
+                          class="flex flex-col items-center justify-center w-6 flex-shrink-0"
+                        >
+                          <span class="text-slate-400 font-bold text-sm"
+                            >{globalIndex + 1}</span
+                          >
+                          <!-- Clock icon for ending soon urgency -->
+                          <svg
+                            class="w-2 h-2 text-orange-500 mt-0.5"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                          </svg>
+                        </div>
+
+                        <!-- Content -->
+                        <div class="flex-1 min-w-0">
+                          <h3
+                            class="text-sm font-medium text-white line-clamp-2"
+                          >
+                            {post.question}
+                          </h3>
+                          <div class="flex items-center gap-1.5 mt-1">
+                            <span class="text-xs text-slate-400"
+                              >{post.author}</span
+                            >
+                            <!-- Verified badge -->
+                            <svg
+                              class="w-3.5 h-3.5 flex-shrink-0"
+                              style="color: #9ec264"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                            >
+                              <path
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            <span class="text-xs text-orange-400/80"
+                              >• Expira pronto</span
+                            >
+                          </div>
+                        </div>
+
+                        <!-- More button -->
+                        <div
+                          role="button"
+                          tabindex="0"
+                          class="p-1 text-slate-500 hover:text-white flex-shrink-0 cursor-pointer"
+                          onclick={(e) => e.stopPropagation()}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                          >
+                            <circle cx="12" cy="6" r="2"></circle>
+                            <circle cx="12" cy="12" r="2"></circle>
+                            <circle cx="12" cy="18" r="2"></circle>
+                          </svg>
+                        </div>
+                      </button>
+                    {/each}
+                  </div>
+                {/each}
+              </div>
+            </div>
+
+            <!-- Page indicators -->
+            <div class="flex justify-center gap-1.5 py-3">
+              {#each Array(Math.ceil(endingSoonPosts.length / ITEMS_PER_PAGE)) as _, i}
+                <button
+                  aria-label="Ir a página {i + 1}"
+                  class="w-1.5 h-1.5 rounded-full transition-colors {i ===
+                  endingSoonPage
+                    ? 'bg-white'
+                    : 'bg-white/30'}"
+                  onclick={() => {
+                    if (endingSoonCarouselRef) {
+                      endingSoonCarouselRef.scrollTo({
+                        left: i * endingSoonCarouselRef.offsetWidth,
                         behavior: "smooth",
                       });
                     }

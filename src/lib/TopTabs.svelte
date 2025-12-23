@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, tick } from "svelte";
-  import { onMount } from "svelte";
+  import { createEventDispatcher, tick, onMount, onDestroy } from "svelte";
 
   export let active: "Para ti" | "Tendencias" | "Amigos" | "Live" = "Para ti";
 
@@ -66,11 +65,10 @@
     active = tab;
     console.log("[TopTabs] 📤 Disparando evento change con:", tab);
     dispatch("change", tab);
-    // Solo cerrar si no es Tendencias (para permitir seleccionar tiempo)
-    if (tab !== "Tendencias") {
-      open = false;
-    } else {
-      // Al cambiar a Tendencias, cargar filtros
+    // Siempre cerrar el menú al seleccionar
+    open = false;
+    // Si es Tendencias, seguir disparando menuOpen por si acaso se usa en otro lado
+    if (tab === "Tendencias") {
       dispatch("menuOpen", true);
     }
   }
@@ -96,6 +94,12 @@
     if (time === "1y") return "1a";
     if (time === "5y") return "5a";
     return time;
+  }
+  function formatTabLabel(tab: string): string {
+    if (!tab) return "";
+    // Normalizar para asegurar coincidencia
+    if (tab.trim().toLowerCase() === "live") return "Finalizan pronto";
+    return tab;
   }
   function toggleSymbol() {
     symbolMode = symbolMode === "#" ? "@" : "#";
@@ -130,6 +134,12 @@
       );
     };
   });
+
+  onDestroy(() => {
+    if (menuElement && menuElement.parentNode === document.body) {
+      document.body.removeChild(menuElement);
+    }
+  });
 </script>
 
 <div class="tabs-dd" bind:this={rootEl}>
@@ -140,11 +150,7 @@
     aria-haspopup="menu"
     aria-expanded={open}
   >
-    <span
-      >{customActiveLabel ||
-        active}{#if active === "Tendencias" && !customActiveLabel}
-        ({formatTimeShort(timeFilter)}){/if}</span
-    >
+    <span>{customActiveLabel || formatTabLabel(active)}</span>
     <svg
       class="caret"
       width="14"
@@ -169,30 +175,9 @@
       <button
         role="menuitemradio"
         aria-checked={!customActiveLabel && active === opt}
-        on:click={() => select(opt)}>{opt}</button
+        on:click={() => select(opt)}>{formatTabLabel(opt)}</button
       >
     {/each}
-
-    {#if active === "Tendencias"}
-      <div class="time-section">
-        <div class="time-section-label">Período</div>
-        <div class="time-options">
-          {#if isLoadingTimeFilters}
-            <div class="time-loading">Cargando...</div>
-          {:else}
-            {#each timeFilterOptions.filter((t) => availableTimeFilters[t]) as time}
-              <button
-                class="time-option"
-                class:selected={timeFilter === time}
-                on:click|stopPropagation={() => selectTimeFilter(time)}
-              >
-                {formatTimeLabel(time)}
-              </button>
-            {/each}
-          {/if}
-        </div>
-      </div>
-    {/if}
   </div>
 {/if}
 
@@ -204,130 +189,120 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 0.2rem;
+    padding: 0.5rem 0.8rem;
     height: 2.5rem;
-    border-radius: 0;
-    border: none;
-    background: transparent;
-    color: var(--neo-text, #e5e7eb);
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background: rgba(
+      255,
+      255,
+      255,
+      0.05
+    ); /* Sutil fondo para el botón trigger */
+    color: white;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 700;
     transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
   }
   .tabs-trigger:hover {
-    opacity: 0.8;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.1);
   }
   .tabs-trigger.has-custom-label {
     background: linear-gradient(
       135deg,
-      rgba(99, 102, 241, 0.15),
-      rgba(139, 92, 246, 0.15)
+      rgba(99, 102, 241, 0.2),
+      rgba(139, 92, 246, 0.2)
     );
-    border-radius: 8px;
-    padding: 8px 12px;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    padding: 8px 16px;
   }
   .tabs-trigger.has-custom-label span {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
   .caret {
-    color: var(--neo-text-light, #9ca3af);
-    opacity: 0.8;
+    color: rgba(255, 255, 255, 0.6);
+    transition: transform 0.2s ease;
   }
+  .tabs-trigger[aria-expanded="true"] .caret {
+    transform: rotate(180deg);
+    color: white;
+  }
+
+  /* MENÚ DESPLEGABLE ESTILO APP */
   :global(.toptabs-menu) {
     position: fixed !important;
-    top: 3.5rem !important;
-    right: 0.7rem !important;
-    min-width: 15rem;
-    max-width: 15rem;
-    border: none;
-    background: var(--neo-bg, #e0e5ec);
-    border-radius: 16px;
+    top: 4rem !important;
+    right: 1rem !important; /* Un poco más de margen */
+    min-width: 14rem;
+    max-width: 14rem;
+    background: rgba(20, 20, 20, 0.95); /* Fondo casi negro */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1); /* Borde fino */
+    border-radius: 1.5rem; /* Bordes muy redondeados como el resto de la app */
     padding: 8px;
-    display: grid;
-    gap: 4px;
-    z-index: 2147483647 !important; /* Máximo z-index posible - por encima de TODO */
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 2147483647 !important;
     isolation: isolate;
     pointer-events: auto !important;
-
-    /* Neumorfismo elevado */
     box-shadow:
-      6px 6px 18px var(--neo-shadow-dark, rgba(163, 177, 198, 0.6)),
-      -6px -6px 18px var(--neo-shadow-light, rgba(255, 255, 255, 0.7));
+      0 20px 50px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(0, 0, 0, 0.2);
+    transform-origin: top right;
+    animation: menu-pop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
+
+  @keyframes menu-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
   :global(.toptabs-menu button) {
     text-align: left;
-    padding: 0.8rem 1.1rem;
-    border-radius: 0.7rem;
-    color: var(--neo-text, #6b7280);
+    padding: 0.9rem 1.2rem;
+    border-radius: 1rem;
+    color: rgba(255, 255, 255, 0.6);
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 1rem;
-    font-weight: 500;
-    transition: all 0.15s ease;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
     white-space: nowrap;
-  }
-  :global(.toptabs-menu button[aria-checked="true"]) {
-    font-weight: 700;
-    box-shadow:
-      inset 2px 2px 5px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
-      inset -2px -2px 5px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
-  }
-  :global(.toptabs-menu button:hover) {
-    background: var(--neo-bg, #e0e5ec);
-    box-shadow:
-      inset 3px 3px 6px var(--neo-shadow-dark, rgba(163, 177, 198, 0.4)),
-      inset -3px -3px 6px var(--neo-shadow-light, rgba(255, 255, 255, 0.6));
-  }
-  :global(.toptabs-menu button:active) {
-    box-shadow:
-      inset 4px 4px 8px var(--neo-shadow-dark, rgba(163, 177, 198, 0.5)),
-      inset -4px -4px 8px var(--neo-shadow-light, rgba(255, 255, 255, 0.5));
+    position: relative;
+    letter-spacing: 0.02em;
   }
 
-  /* Separador y sección de tiempo */
-  :global(.toptabs-menu .time-section) {
-    border-top: 1px solid var(--neo-shadow-dark, rgba(163, 177, 198, 0.3));
-    margin-top: 6px;
-    padding-top: 8px;
+  /* Hover state */
+  :global(.toptabs-menu button:hover) {
+    background: rgba(255, 255, 255, 0.08); /* Fondo blanco muy sutil al pasar */
+    color: white;
+    transform: translateX(4px); /* Pequeño desplazamiento */
   }
-  :global(.toptabs-menu .time-section-label) {
-    font-size: 11px;
-    color: var(--neo-text-light, #9ca3af);
-    padding: 4px 16px 8px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  :global(.toptabs-menu .time-options) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 0 12px 8px;
-  }
-  :global(.toptabs-menu .time-option) {
-    padding: 6px 10px !important;
-    font-size: 12px !important;
-    border-radius: 6px !important;
-    min-width: auto !important;
-    flex: 0 0 auto;
-  }
-  :global(.toptabs-menu .time-option.selected) {
+
+  /* Active/Selected state */
+  /* Active/Selected state */
+  :global(.toptabs-menu button[aria-checked="true"]) {
+    color: white;
+    font-weight: 700;
     background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.2),
-      rgba(139, 92, 246, 0.2)
-    ) !important;
-    font-weight: 700 !important;
-  }
-  :global(.toptabs-menu .time-loading) {
-    padding: 8px 16px;
-    font-size: 12px;
-    color: var(--neo-text-light, #9ca3af);
-    text-align: center;
+      90deg,
+      rgba(255, 255, 255, 0.15),
+      rgba(255, 255, 255, 0.05)
+    );
+    border-left: 3px solid #6366f1; /* Indigo acento */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 </style>

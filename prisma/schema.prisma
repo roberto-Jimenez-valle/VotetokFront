@@ -30,6 +30,7 @@ model User {
   hashtagFollows  UserHashtagFollow[]
   interests       UserInterest[]
   votes           Vote[]
+  pollDrafts      PollDraft[]
 
   @@index([username])
   @@index([countryIso3])
@@ -277,4 +278,17 @@ model Subdivision {
   @@index([latitude, longitude])
   @@index([level, latitude, longitude])
   @@map("subdivisions")
+}
+
+model PollDraft {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  draftData   Json     @map("draft_data") // Guarda todo el contenido del borrador como JSON
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("poll_drafts")
 }
