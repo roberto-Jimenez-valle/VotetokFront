@@ -1076,7 +1076,7 @@
   </main>
 
   <!-- Bottom/Sidebar Navigation -->
-  {#if currentView !== "reels" || isDesktop}
+  {#if (currentView !== "reels" || isDesktop) && !isCreatePollModalOpen}
     <NavBottom
       bind:hidden={hideNav}
       modalOpen={isCreatePollModalOpen}
