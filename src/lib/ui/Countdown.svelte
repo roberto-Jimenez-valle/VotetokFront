@@ -32,12 +32,12 @@
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
         if (days > 0) {
-            timeString = `${days} días ${hours} h`;
+            timeString = `${days}d ${hours}h`;
         } else if (hours > 0) {
-            timeString = `${hours} h ${minutes} min`;
+            timeString = `${hours}h ${minutes}m`;
         } else {
             // Show seconds if less than 1 hour for that "ticking" feel
-            timeString = `${minutes} min ${seconds} s`;
+            timeString = `${minutes}m ${seconds}s`;
         }
     }
 

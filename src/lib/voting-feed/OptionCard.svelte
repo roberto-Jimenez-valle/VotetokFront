@@ -103,35 +103,53 @@
     bg: string;
     text: string;
     bgHover: string;
+    bgSolid: string;
+    textSolid: string;
   } {
     const colorMap: Record<
       PostType,
-      { bg: string; text: string; bgHover: string }
+      {
+        bg: string;
+        text: string;
+        bgHover: string;
+        bgSolid: string;
+        textSolid: string;
+      }
     > = {
       standard: {
         bg: "rgba(158, 194, 100, 0.25)",
         text: "#9ec264",
         bgHover: "rgba(158, 194, 100, 0.4)",
+        bgSolid: "#9ec264",
+        textSolid: "#000000",
       },
       quiz: {
         bg: "rgba(234, 179, 8, 0.25)",
         text: "#eab308",
         bgHover: "rgba(234, 179, 8, 0.4)",
+        bgSolid: "#eab308",
+        textSolid: "#000000",
       },
       tierlist: {
         bg: "rgba(99, 102, 241, 0.25)",
         text: "#818cf8",
         bgHover: "rgba(99, 102, 241, 0.4)",
+        bgSolid: "#6366f1",
+        textSolid: "#ffffff",
       },
       swipe: {
         bg: "rgba(239, 68, 68, 0.25)",
         text: "#ef4444",
         bgHover: "rgba(239, 68, 68, 0.4)",
+        bgSolid: "#ef4444",
+        textSolid: "#ffffff",
       },
       collab: {
         bg: "rgba(16, 185, 129, 0.25)",
         text: "#10b981",
         bgHover: "rgba(16, 185, 129, 0.4)",
+        bgSolid: "#10b981",
+        textSolid: "#ffffff",
       },
     };
     return colorMap[type] || colorMap.standard;
@@ -325,9 +343,11 @@
           alt=""
           onerror={handleImageError}
         />
-        <div
-          class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-90 {statusClasses.bgOverlay}"
-        ></div>
+        {#if !isExpanded}
+          <div
+            class="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/10 to-transparent opacity-80 {statusClasses.bgOverlay}"
+          ></div>
+        {/if}
       {/if}
     </div>
 
@@ -367,8 +387,8 @@
           {:else}
             <span
               class="{isReels
-                ? 'text-[0.7rem] sm:text-[0.8rem] md:text-[0.9rem]'
-                : 'text-[0.75rem] sm:text-[0.85rem]'} font-bold leading-tight line-clamp-2 drop-shadow-md text-white/95 group-hover:text-white transition-colors"
+                ? 'text-[0.85rem] sm:text-[0.95rem] md:text-[1.05rem]'
+                : 'text-[0.9rem] sm:text-[1rem]'} font-bold leading-tight line-clamp-2 drop-shadow-md text-white/95 group-hover:text-white transition-colors"
             >
               {option.title}
             </span>
@@ -452,12 +472,8 @@
                 {@const voteStyle = getVoteButtonStyle(postType)}
                 <button
                   onclick={handleVoteAction}
-                  class="py-1.5 px-4 rounded-full text-[0.7rem] sm:text-[0.8rem] font-bold uppercase tracking-wider shadow-lg active:scale-95 transition-all border border-current/30"
-                  style="background-color: {voteStyle.bg}; color: {voteStyle.text};"
-                  onmouseenter={(e) =>
-                    (e.currentTarget.style.backgroundColor = voteStyle.bgHover)}
-                  onmouseleave={(e) =>
-                    (e.currentTarget.style.backgroundColor = voteStyle.bg)}
+                  class="py-1.5 px-4 rounded-full text-[0.7rem] sm:text-[0.8rem] font-bold uppercase tracking-wider shadow-lg active:scale-95 transition-all border border-transparent shadow-black/20"
+                  style="background-color: {voteStyle.bgSolid}; color: {voteStyle.textSolid};"
                 >
                   {postType === "quiz" ? "Elegir" : "Votar"}
                 </button>
@@ -622,13 +638,8 @@
                         handleVoteAction(e);
                         onToggleExpand();
                       }}
-                      class="py-2.5 px-8 rounded-full text-xs font-black tracking-widest uppercase shadow-xl active:scale-95 transition-all border border-current/30"
-                      style="background-color: {voteStyle.bg}; color: {voteStyle.text};"
-                      onmouseenter={(e) =>
-                        (e.currentTarget.style.backgroundColor =
-                          voteStyle.bgHover)}
-                      onmouseleave={(e) =>
-                        (e.currentTarget.style.backgroundColor = voteStyle.bg)}
+                      class="py-2.5 px-8 rounded-full text-xs font-black tracking-widest uppercase shadow-xl active:scale-95 transition-all border border-transparent shadow-lg shadow-black/20"
+                      style="background-color: {voteStyle.bgSolid}; color: {voteStyle.textSolid};"
                     >
                       {postType === "quiz" ? "Elegir" : "Votar"}
                     </button>

@@ -5,6 +5,7 @@
     X,
     Heart,
     MoreHorizontal,
+    MoreVertical,
     MessageCircle,
     Repeat2,
     Bookmark,
@@ -19,6 +20,9 @@
     Users,
     ArrowLeft,
     ArrowLeftRight,
+    Clock,
+    Infinity as InfinityIcon,
+    Globe,
   } from "lucide-svelte";
   import type {
     Post,
@@ -30,6 +34,7 @@
   } from "./types";
   import { POST_CONFIGS } from "./types";
   import OptionCard from "./OptionCard.svelte";
+  import Countdown from "$lib/ui/Countdown.svelte";
 
   interface Props {
     post: Post;
@@ -263,96 +268,220 @@
     <!-- Header -->
     {#if !isReels}
       {@const Icon = getIconComponent(config.icon)}
-      <div class="px-4 pt-3 pb-1">
-        <div class="flex justify-between items-start">
-          <div class="flex gap-3">
-            <div class="relative group cursor-pointer mt-1">
-              <div
-                class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347]"
-              >
-                <img
-                  src={post.avatar}
-                  alt={post.author}
-                  class="w-full h-full rounded-full bg-slate-800 object-cover border-2 border-slate-900"
-                />
-              </div>
-            </div>
-            <div class="flex flex-col">
-              <div class="flex items-center gap-2">
-                <h3
-                  class="font-bold text-white text-sm tracking-tight hover:underline cursor-pointer"
-                >
-                  {post.author}
-                </h3>
-                <span class="text-slate-500 text-[0.7rem]">• {post.time}</span>
-                <div
-                  class="inline-flex items-center gap-[0.25rem] px-[0.5rem] py-[0.15rem] rounded-full {config.badge}"
-                >
-                  <Icon size="0.65rem" strokeWidth={2.5} />
-                  <span
-                    class="text-[0.65rem] font-black uppercase tracking-widest"
-                    >{config.label}</span
-                  >
-                </div>
-              </div>
-              <p class="text-white text-sm font-medium leading-snug mt-1">
-                {post.question}
-              </p>
+      <div class="px-5 pt-4 pb-2">
+        <div class="flex gap-3">
+          <!-- Avatar -->
+          <div class="relative flex-shrink-0 group cursor-pointer self-start">
+            <div
+              class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347] shadow-lg group-hover:shadow-[#9ec264]/20 transition-all"
+            >
+              <img
+                src={post.avatar}
+                alt={post.author}
+                class="w-full h-full rounded-full bg-slate-800 object-cover border-2 border-slate-900"
+              />
             </div>
           </div>
-          <div class="flex gap-2">
-            <button
-              onclick={() => switchToReels(post.id)}
-              class="text-slate-500 hover:text-indigo-400 p-[0.3rem] rounded-full transition-colors"
-              title="Ver en modo Top"
+
+          <!-- Content Column -->
+          <div class="flex-1 min-w-0 flex flex-col pt-0.5">
+            <!-- Row 1: Name & Follow -->
+            <div class="flex items-center gap-2 mb-0.5">
+              <h3
+                class="font-bold text-white text-sm tracking-tight hover:text-[#9ec264] cursor-pointer truncate transition-colors"
+                style="max-width: 14ch;"
+                title={post.author}
+              >
+                {post.author}
+              </h3>
+              <button
+                class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1"
+              >
+                Seguir
+              </button>
+            </div>
+
+            <!-- Row 2: Metadata (Time • Expiration • Extra) -->
+            <div
+              class="flex items-center gap-2 mb-1.5 text-[10px] sm:text-[11px] text-slate-500 font-medium"
             >
-              <Maximize size="1.2rem" />
-            </button>
-            <button
-              class="text-slate-500 hover:text-white p-[0.3rem] hover:bg-white/5 rounded-full transition-colors"
+              <!-- Time posted -->
+              <span class="flex-shrink-0">{post.time}</span>
+              <span class="text-slate-700">•</span>
+
+              <!-- Expiration -->
+              {#if post.endsAt}
+                <div
+                  class="flex items-center gap-1 text-orange-400/90 flex-shrink-0"
+                >
+                  <Clock size={10} strokeWidth={2.5} />
+                  <Countdown date={post.endsAt} fallback="Expira pronto" />
+                </div>
+              {:else}
+                <div
+                  class="flex items-center gap-1 text-slate-500 flex-shrink-0"
+                  title="Sin límite"
+                >
+                  <InfinityIcon size={12} strokeWidth={2.5} />
+                </div>
+              {/if}
+
+              <span class="text-slate-700">•</span>
+
+              <!-- Extra Item (Category/Public Scope) -->
+              <div class="flex items-center gap-1 text-slate-500 flex-shrink-0">
+                <Globe size={10} strokeWidth={2.5} />
+                <span>Público</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Actions -->
+          <div class="flex flex-col items-end gap-2 ml-1 flex-shrink-0">
+            <!-- Actions (Top) -->
+            <div class="flex items-center gap-1">
+              <button
+                onclick={() => switchToReels(post.id)}
+                class="text-slate-500 hover:text-indigo-400 p-1.5 rounded-full hover:bg-white/5 transition-all active:scale-95"
+                title="Ver en modo Top"
+              >
+                <Maximize size={16} />
+              </button>
+              <button
+                class="text-slate-500 hover:text-white p-1.5 hover:bg-white/5 rounded-full transition-all active:scale-95"
+              >
+                <MoreVertical size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Question + Badge Row -->
+        <div class="flex items-start justify-between gap-3 mt-1.5 px-0.5">
+          <p
+            class="text-white/95 text-[1rem] font-bold leading-snug break-words flex-1"
+          >
+            {post.question}
+          </p>
+
+          <div
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md {config.badge} bg-opacity-10 border border-current/20 flex-shrink-0 self-start mt-0.5"
+          >
+            <Icon size={10} strokeWidth={3} />
+            <span class="text-[0.65rem] font-black uppercase tracking-widest"
+              >{config.label}</span
             >
-              <MoreHorizontal size="1.2rem" />
-            </button>
           </div>
         </div>
       </div>
     {:else}
       {@const Icon = getIconComponent(config.icon)}
-      <div class="px-6 pt-4 flex flex-col gap-4">
-        <div class="flex items-center gap-4">
+      <div
+        class="px-5 pt-2 pb-2 bg-gradient-to-b from-black/60 via-black/30 to-transparent"
+      >
+        <div class="flex gap-3">
+          <!-- Back Button (Reels Only) -->
           <button
             onclick={() => switchToReels("")}
-            class="p-[0.6rem] bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white transition-colors"
+            class="self-start p-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-colors mt-0.5"
           >
-            <ArrowLeft size="1.4rem" />
+            <ArrowLeft size={20} />
           </button>
-          <h3
-            class="text-xl font-black text-white drop-shadow-md leading-tight flex-1"
+
+          <!-- Avatar -->
+          <div class="relative flex-shrink-0 group cursor-pointer self-start">
+            <div
+              class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347] shadow-lg group-hover:shadow-[#9ec264]/20 transition-all"
+            >
+              <img
+                src={post.avatar}
+                alt={post.author}
+                class="w-full h-full rounded-full bg-slate-800 object-cover border-2 border-slate-900"
+              />
+            </div>
+          </div>
+
+          <!-- Content Column -->
+          <div class="flex-1 min-w-0 flex flex-col pt-0.5">
+            <!-- Row 1: Name & Follow -->
+            <div class="flex items-center gap-2 mb-0.5">
+              <h3
+                class="font-bold text-white text-sm tracking-tight hover:text-[#9ec264] cursor-pointer truncate transition-colors"
+                style="max-width: 14ch;"
+                title={post.author}
+              >
+                {post.author}
+              </h3>
+              <button
+                class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1"
+              >
+                Seguir
+              </button>
+            </div>
+
+            <!-- Row 2: Metadata (Time • Expiration • Extra) -->
+            <div
+              class="flex items-center gap-2 mb-1.5 text-[10px] sm:text-[11px] text-slate-300 font-medium"
+            >
+              <!-- Time posted -->
+              <span class="flex-shrink-0">{post.time}</span>
+              <span class="text-slate-400">•</span>
+
+              <!-- Expiration -->
+              {#if post.endsAt}
+                <div
+                  class="flex items-center gap-1 text-orange-400/90 flex-shrink-0"
+                >
+                  <Clock size={10} strokeWidth={2.5} />
+                  <Countdown date={post.endsAt} fallback="Expira pronto" />
+                </div>
+              {:else}
+                <div
+                  class="flex items-center gap-1 text-slate-300 flex-shrink-0"
+                  title="Sin límite"
+                >
+                  <InfinityIcon size={12} strokeWidth={2.5} />
+                </div>
+              {/if}
+
+              <span class="text-slate-400">•</span>
+
+              <!-- Extra Item (Category/Public Scope) -->
+              <div class="flex items-center gap-1 text-slate-300 flex-shrink-0">
+                <Globe size={10} strokeWidth={2.5} />
+                <span>Público</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Actions -->
+          <div class="flex flex-col items-end gap-2 ml-1 flex-shrink-0">
+            <!-- Actions (Top) -->
+            <div class="flex items-center gap-1">
+              <button
+                class="text-slate-200 hover:text-white p-1.5 hover:bg-white/10 rounded-full transition-all active:scale-95 bg-black/20 backdrop-blur-sm"
+              >
+                <MoreVertical size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Question + Badge Row -->
+        <div class="flex items-start justify-between gap-3 mt-1.5 px-0.5">
+          <p
+            class="text-white/95 text-lg font-bold leading-snug break-words flex-1 drop-shadow-md"
           >
             {post.question}
-          </h3>
-          <button
-            class="p-[0.6rem] bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white transition-colors"
-          >
-            <MoreHorizontal size="1.4rem" />
-          </button>
-        </div>
-        <div class="flex items-center gap-2">
+          </p>
+
           <div
-            class="inline-flex items-center gap-[0.4rem] px-[0.7rem] py-[0.25rem] rounded-full {config.badge}"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md {config.badge} bg-opacity-20 border border-white/20 backdrop-blur-sm flex-shrink-0 self-start mt-0.5"
           >
-            <Icon size="0.8rem" strokeWidth={2.5} />
-            <span class="text-[0.7rem] font-black uppercase tracking-widest"
+            <Icon size={10} strokeWidth={3} />
+            <span class="text-[0.65rem] font-black uppercase tracking-widest"
               >{config.label}</span
             >
-          </div>
-          <div class="flex items-center gap-2">
-            <img
-              src={post.avatar}
-              alt={post.author}
-              class="w-6 h-6 rounded-full bg-slate-800"
-            />
-            <span class="text-white/80 text-xs font-bold">{post.author}</span>
           </div>
         </div>
       </div>
@@ -486,7 +615,10 @@
                   {/each}
                 </div>
               {:else}
-                {@const itemsPerPage = isReels ? 6 : 4}
+                {@const hasLongText = displayOptions.some(
+                  (opt) => opt.title && opt.title.length > 40,
+                )}
+                {@const itemsPerPage = isReels ? (hasLongText ? 4 : 6) : 4}
                 {@const totalPages = Math.ceil(count / itemsPerPage)}
                 <div
                   class="flex gap-3 h-full snap-x snap-mandatory overflow-x-auto scrollbar-hide pl-1"
@@ -497,20 +629,26 @@
                       pageIdx * itemsPerPage,
                       (pageIdx + 1) * itemsPerPage,
                     )}
-                    {@const pageGridRows = isReels
-                      ? pageOptions.length <= 2
-                        ? 1
-                        : pageOptions.length <= 4
-                          ? 2
-                          : 3
-                      : 2}
+                    {@const forceList =
+                      isReels && (pageOptions.length === 2 || hasLongText)}
+                    {@const pageGridRows = forceList
+                      ? pageOptions.length
+                      : isReels
+                        ? pageOptions.length <= 2
+                          ? 1
+                          : pageOptions.length <= 4
+                            ? 2
+                            : 3
+                        : 2}
                     {@const isLastPage = pageIdx === totalPages - 1}
-                    {@const rowHeight = "1fr"}
+                    {@const rowHeight = forceList ? "16rem" : "1fr"}
                     <div
-                      class="flex-shrink-0 h-full snap-start grid gap-2"
+                      class="flex-shrink-0 h-full snap-start grid gap-4 place-content-center"
                       style="width: {isLastPage
                         ? '100%'
-                        : '92%'}; grid-template-columns: 1fr 1fr; grid-template-rows: repeat({pageGridRows}, {rowHeight});"
+                        : '92%'}; grid-template-columns: {forceList
+                        ? '1fr'
+                        : '1fr 1fr'}; grid-template-rows: repeat({pageGridRows}, {rowHeight});"
                     >
                       {#each pageOptions as opt, idx (opt.id)}
                         {@const rank = getRankForOption(opt.id)}
@@ -518,7 +656,11 @@
                         {@const itemStyle = (() => {
                           if (pageCount === 1)
                             return "grid-column: 1 / -1; grid-row: 1 / -1;";
-                          if (pageCount === 2) return "grid-row: 1 / -1;";
+                          if (pageCount === 2) {
+                            return forceList
+                              ? "grid-column: 1 / -1;"
+                              : "grid-row: 1 / -1;";
+                          }
                           if (pageCount === 3 && idx === 0)
                             return "grid-column: 1 / -1;";
                           return "";
