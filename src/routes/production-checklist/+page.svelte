@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import {
         CheckCircle,
         Circle,
@@ -12,6 +12,7 @@
         ChevronUp,
         ArrowLeft,
     } from "lucide-svelte";
+    import { fly } from "svelte/transition";
 
     // Estado de expansión de cada item
     let expandedItems = $state<Record<string, boolean>>({});
