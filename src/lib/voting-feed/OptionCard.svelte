@@ -281,10 +281,34 @@
   >
     <!-- Background -->
     <div
-      class="absolute inset-0 w-full h-full {!showImage
-        ? `bg-gradient-to-br ${option.colorFrom} ${option.colorTo}`
-        : ''}"
+      class="absolute inset-0 w-full h-full"
+      style={!showImage
+        ? option.colorFrom?.startsWith("hsl")
+          ? `background: linear-gradient(135deg, ${option.colorFrom}, ${option.colorTo || "transparent"})`
+          : `background: ${option.colorFrom?.includes("#") ? option.colorFrom : ""}` // Fallback for pure hex
+        : ""}
+      class:bg-gradient-to-br={!showImage &&
+        !option.colorFrom?.startsWith("hsl")}
+      class:from-indigo-600={!showImage &&
+        !option.colorFrom?.startsWith("hsl") &&
+        option.colorFrom?.includes("indigo")}
+      class:to-slate-900={!showImage &&
+        !option.colorFrom?.startsWith("hsl") &&
+        option.colorTo?.includes("slate")}
+      class:from-purple-600={!showImage &&
+        !option.colorFrom?.startsWith("hsl") &&
+        option.colorFrom?.includes("purple")}
     >
+      <!-- Optimized legacy fallback: we just use style for HSL and class for everything else -->
+      <div
+        class="absolute inset-0 w-full h-full {!showImage &&
+        !option.colorFrom?.startsWith('hsl')
+          ? `bg-gradient-to-br ${option.colorFrom} ${option.colorTo}`
+          : ''}"
+        style={!showImage && option.colorFrom?.startsWith("hsl")
+          ? `background: linear-gradient(135deg, ${option.colorFrom}, ${option.colorTo})`
+          : ""}
+      ></div>
       {#if showImage && !isEditing}
         <img
           src={actualImageUrl}

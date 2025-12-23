@@ -31,8 +31,14 @@
     Search,
     ChevronLeft,
     Info,
+    Search as SearchIcon,
+    Palette,
+    Eye,
   } from "lucide-svelte";
   import { createEventDispatcher, onMount, tick } from "svelte";
+  import GiphyPicker from "$lib/components/GiphyPicker.svelte";
+  import { searchGiphy, getBestGifUrl } from "$lib/services/giphy";
+  import { searchTenor, getBestTenorUrl } from "$lib/services/tenor";
   import { currentUser, isAuthenticated } from "$lib/stores/auth";
   import { apiPost } from "$lib/api/client";
   import AuthModal from "$lib/AuthModal.svelte";
@@ -162,6 +168,11 @@
   let showDurationModal = $state(false);
   let showSortPanel = $state(false);
   let showHelpModal = $state(false);
+  let showGiphyPicker = $state(false);
+  let showColorSlider = $state<string | null>(null);
+  let activeGiphyOptionId = $state<string | null>(null);
+  let initialGiphySearch = $state("");
+  let isAutoFetchingGif = $state<Record<string, boolean>>({});
 
   // --- ESTADOS DE COLABORACIÓN ---
   let collabMode = $state("me");
@@ -181,17 +192,25 @@
       id: "opt-1",
       title: "",
       image: "",
-      colorFrom: "from-indigo-600",
-      colorTo: "to-slate-900",
+      colorFrom: "hsl(239, 90%, 30%)",
+      colorTo: "hsl(239, 95%, 15%)",
       isCorrect: false,
+      gifOffset: 0,
+      lastSearchTitle: "",
+      gifSource: "tenor" as "giphy" | "tenor",
+      tenorNextPos: "",
     },
     {
       id: "opt-2",
       title: "",
       image: "",
-      colorFrom: "from-purple-600",
-      colorTo: "to-slate-900",
+      colorFrom: "hsl(270, 90%, 30%)",
+      colorTo: "hsl(270, 95%, 15%)",
       isCorrect: false,
+      gifOffset: 0,
+      lastSearchTitle: "",
+      gifSource: "tenor" as "giphy" | "tenor",
+      tenorNextPos: "",
     },
   ]);
   let draggedItemIndex = $state<number | null>(null);
@@ -213,6 +232,38 @@
         u.username.toLowerCase().includes(userSearchQuery.toLowerCase()),
     ),
   );
+
+  let activeCollabData = $derived(
+    COLLAB_MODES.find((m) => m.id === collabMode) || COLLAB_MODES[0],
+  );
+
+  // Validación del formulario
+  let validationErrors = $state<string[]>([]);
+
+  let allOptionsValid = $derived(
+    options.every((opt) => opt.title.trim().length >= 2),
+  );
+
+  let isFormValid = $derived(
+    question.trim().length >= 2 && allOptionsValid && options.length >= 2,
+  );
+
+  function getValidationErrors(): string[] {
+    const errors: string[] = [];
+    if (question.trim().length < 2) {
+      errors.push("La pregunta debe tener al menos 2 caracteres");
+    }
+    if (options.length < 2) {
+      errors.push("Debes tener al menos 2 opciones");
+    }
+    const invalidOptions = options.filter((opt) => opt.title.trim().length < 2);
+    if (invalidOptions.length > 0) {
+      errors.push(
+        `${invalidOptions.length} opción(es) sin título válido (mín. 2 caracteres)`,
+      );
+    }
+    return errors;
+  }
 
   // --- FUNCIONES ---
   function getDurationConfig() {
@@ -271,7 +322,15 @@
           inline: "center",
           block: "nearest",
         });
+        activeIndex = index;
       }
+    }
+  }
+
+  function centerOptionById(id: string) {
+    const idx = options.findIndex((o) => o.id === id);
+    if (idx !== -1) {
+      scrollToIndex(idx);
     }
   }
 
@@ -305,14 +364,11 @@
 
   function addOption() {
     if (options.length >= 10) return;
-    const colors = [
-      "from-indigo-600",
-      "from-purple-600",
-      "from-pink-600",
-      "from-emerald-600",
-      "from-orange-600",
-      "from-red-600",
-    ];
+
+    // Usamos el sistema HSL desde el principio con alta intensidad (index 0)
+    const family = COLOR_FAMILIES[options.length % COLOR_FAMILIES.length];
+    const range = SHADE_VALUES[0]; // Muy Intenso
+
     const newId = `opt-${Date.now()}`;
     options = [
       ...options,
@@ -320,9 +376,13 @@
         id: newId,
         title: "",
         image: "",
-        colorFrom: colors[options.length % colors.length],
-        colorTo: "to-slate-950",
+        colorFrom: `hsl(${family.h}, 90%, ${range.l1}%)`,
+        colorTo: `hsl(${family.h}, 95%, ${range.l2}%)`,
         isCorrect: false,
+        gifOffset: 0,
+        lastSearchTitle: "",
+        gifSource: "tenor",
+        tenorNextPos: "",
       },
     ];
 
@@ -338,14 +398,132 @@
     }, 100);
   }
 
+  const COLOR_FAMILIES = [
+    { name: "Azul", hue: "blue", h: 217, hex: "#3b82f6" },
+    { name: "Cian", hue: "cyan", h: 188, hex: "#06b6d4" },
+    { name: "Esmeralda", hue: "emerald", h: 160, hex: "#10b981" },
+    { name: "Lima", hue: "lime", h: 84, hex: "#84cc16" },
+    { name: "Ámbar", hue: "amber", h: 45, hex: "#f59e0b" },
+    { name: "Naranja", hue: "orange", h: 25, hex: "#f97316" },
+    { name: "Rojo", hue: "red", h: 0, hex: "#ef4444" },
+    { name: "Rosa", hue: "rose", h: 350, hex: "#f43f5e" },
+    { name: "Fucsia", hue: "fuchsia", h: 295, hex: "#d946ef" },
+    { name: "Púrpura", hue: "purple", h: 270, hex: "#a855f7" },
+    { name: "Índigo", hue: "indigo", h: 239, hex: "#6366f1" },
+  ];
+
+  const SHADE_VALUES = [
+    { l1: 30, l2: 15 }, // 1. Muy Intenso
+    { l1: 40, l2: 20 },
+    { l1: 50, l2: 30 },
+    { l1: 60, l2: 40 },
+    { l1: 70, l2: 50 }, // 5. Equilibrado
+    { l1: 75, l2: 60 },
+    { l1: 80, l2: 70 },
+    { l1: 85, l2: 75 },
+    { l1: 90, l2: 80 },
+    { l1: 95, l2: 85 }, // 10. Pastel
+  ];
+
+  function getOptionColorSetup(id: string) {
+    const opt = options.find((o) => o.id === id);
+    if (!opt) return { hueIdx: 0, shadeIdx: 4 };
+
+    const from = opt.colorFrom || "";
+
+    // Si ya es HSL: "hsl(217, 90%, 50%)"
+    if (from.startsWith("hsl")) {
+      const match = from.match(/hsl\((\d+)/);
+      const h = match ? parseInt(match[1]) : 217;
+      const hueIdx = COLOR_FAMILIES.findIndex(
+        (f) => Math.abs((f.h || 0) - h) < 10,
+      );
+
+      const lMatch = from.match(/(\d+)%\)/);
+      const l = lMatch ? parseInt(lMatch[1]) : 50;
+      const shadeIdx = SHADE_VALUES.findIndex((s) => s.l1 === l);
+
+      return {
+        hueIdx: hueIdx === -1 ? 0 : hueIdx,
+        shadeIdx: shadeIdx === -1 ? 4 : shadeIdx,
+      };
+    }
+
+    // Compatibilidad con Tailwind antiguo
+    const parts = from.split("-");
+    const hue = parts[1] || "blue";
+    const hueIdx = COLOR_FAMILIES.findIndex((f) => f.hue === hue);
+    return { hueIdx: hueIdx === -1 ? 0 : hueIdx, shadeIdx: 4 };
+  }
+
+  function handleDualSliderChange(
+    id: string,
+    hueIdx: number,
+    shadeIdx: number,
+  ) {
+    const family = COLOR_FAMILIES[hueIdx];
+    const range = SHADE_VALUES[shadeIdx];
+
+    updateOptionMultiple(id, {
+      colorFrom: `hsl(${family.h}, 90%, ${range.l1}%)`,
+      colorTo: `hsl(${family.h}, 95%, ${range.l2}%)`,
+    });
+  }
+
+  function getOptionCssColors(opt: any, alpha: number = 1) {
+    let from = opt.colorFrom || "";
+    let to = opt.colorTo || "";
+
+    // Si no empieza con hsl, es el formato antiguo de Tailwind (o inicial)
+    if (!from.startsWith("hsl")) {
+      const parts = from.split("-");
+      const hue = parts[1] || "blue";
+      const family =
+        COLOR_FAMILIES.find((f) => f.hue === hue) || COLOR_FAMILIES[0];
+      from = `hsl(${family.h}, 90%, 50%)`;
+      to = `hsl(${family.h}, 95%, 25%)`;
+    }
+
+    if (alpha < 1) {
+      // Convertimos hsl(h, s, l) a hsla(h, s, l, a) de forma segura
+      const fromHsla = from.replace("hsl", "hsla").replace(")", `, ${alpha})`);
+      const toHsla = to
+        .replace("hsl", "hsla")
+        .replace(")", `, ${alpha + 0.1})`);
+      return { from: fromHsla, to: toHsla };
+    }
+
+    return { from, to };
+  }
+
   function removeOption(id: string) {
-    if (options.length <= 2) return;
     options = options.filter((o) => o.id !== id);
-    if (activeIndex >= options.length) activeIndex = options.length - 1;
+
+    // Si no quedan opciones, creamos una nueva automáticamente
+    if (options.length === 0) {
+      addOption();
+    }
+
+    if (activeIndex >= options.length) {
+      activeIndex = Math.max(0, options.length - 1);
+    }
+  }
+
+  function toggleColorSlider(id: string) {
+    if (showColorSlider === id) {
+      showColorSlider = null;
+    } else {
+      showColorSlider = id;
+      centerOptionById(id);
+    }
   }
 
   function updateOption(id: string, field: string, value: any) {
     options = options.map((o) => (o.id === id ? { ...o, [field]: value } : o));
+  }
+
+  function updateOptionMultiple(id: string, updates: Record<string, any>) {
+    options = options.map((o) => (o.id === id ? { ...o, ...updates } : o));
   }
 
   function toggleUserSelection(userId: string) {
@@ -356,8 +534,150 @@
     }
   }
 
+  function openGiphyPicker(optionId: string) {
+    activeGiphyOptionId = optionId;
+    const opt = options.find((o) => o.id === optionId);
+    initialGiphySearch = opt?.title || "";
+    showGiphyPicker = true;
+    centerOptionById(optionId);
+  }
+
+  function handleGifSelect(url: string) {
+    if (activeGiphyOptionId) {
+      updateOption(activeGiphyOptionId, "image", url);
+    }
+    showGiphyPicker = false;
+    activeGiphyOptionId = null;
+    initialGiphySearch = "";
+  }
+
+  async function autoFetchGif(id: string, next: boolean = false) {
+    centerOptionById(id);
+    const opt = options.find((o) => o.id === id);
+    if (!opt || !opt.title.trim()) {
+      openGiphyPicker(id);
+      return;
+    }
+
+    const currentTitle = opt.title.trim().toLowerCase();
+    const titleChanged = currentTitle !== (opt as any).lastSearchTitle;
+
+    isAutoFetchingGif[id] = true;
+    try {
+      // Siempre empezar por Tenor si el título cambia o si no hay imagen
+      let source =
+        titleChanged || !opt.image
+          ? "tenor"
+          : (opt as any).gifSource || "tenor";
+      let gifUrl = "";
+      let nextPos = "";
+      let nextOffset = 0;
+
+      if (source === "tenor") {
+        // Usar el token 'next' guardado si estamos pidiendo el siguiente
+        const pos =
+          next && !titleChanged ? (opt as any).tenorNextPos || "" : "";
+
+        const results = await searchTenor(opt.title, {
+          limit: 1,
+          pos: pos,
+        });
+
+        if (results && results.length > 0) {
+          gifUrl = getBestTenorUrl(results[0]);
+          nextPos = (results as any).next || "";
+        }
+      }
+
+      // Si Tenor no devuelve nada o si ya pasamos por Tenor y queremos probar Giphy
+      // (O si decidimos alternar tras X intentos, pero por ahora Tenor es prioridad)
+      if (!gifUrl) {
+        source = "giphy";
+        const offset =
+          next && !titleChanged ? ((opt as any).gifOffset || 0) + 1 : 0;
+        const results = await searchGiphy(opt.title, {
+          limit: 1,
+          offset: offset,
+        });
+        if (results && results.length > 0) {
+          gifUrl = getBestGifUrl(results[0]);
+          nextOffset = offset;
+        }
+      }
+
+      if (gifUrl) {
+        updateOptionMultiple(id, {
+          image: gifUrl,
+          gifOffset: nextOffset,
+          gifSource: source,
+          tenorNextPos: nextPos,
+          lastSearchTitle: currentTitle,
+        });
+      }
+    } catch (err) {
+      console.error("[CreatePollModal] Error auto-fetching GIF:", err);
+    } finally {
+      isAutoFetchingGif[id] = false;
+    }
+  }
+
+  function colorToHex(color: string): string {
+    if (!color) return "#3b82f6";
+    if (color.startsWith("#")) return color;
+
+    // Si es HSL: hsl(217, 90%, 50%)
+    if (color.startsWith("hsl")) {
+      const match = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+      if (match) {
+        let h = parseInt(match[1]) / 360;
+        let s = parseInt(match[2]) / 100;
+        let l = parseInt(match[3]) / 100;
+
+        let r, g, b;
+        if (s === 0) {
+          r = g = b = l;
+        } else {
+          const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+          const p = 2 * l - q;
+          const hue2rgb = (t: number) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1 / 6) return p + (q - p) * 6 * t;
+            if (t < 1 / 2) return q;
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+            return p;
+          };
+          r = hue2rgb(h + 1 / 3);
+          g = hue2rgb(h);
+          b = hue2rgb(h - 1 / 3);
+        }
+        const toHex = (x: number) => {
+          const hex = Math.round(x * 255).toString(16);
+          return hex.length === 1 ? "0" + hex : hex;
+        };
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+      }
+    }
+
+    // Si es legacy Tailwind: "indigo-600" o "from-indigo-600"
+    const cleanColor = color.replace("from-", "").split("-")[0];
+    const family = COLOR_FAMILIES.find((f) => f.hue === cleanColor);
+    return family?.hex || "#3b82f6";
+  }
+
   async function handleSubmit() {
-    if (!question.trim() || isSubmitting) return;
+    // Siempre mostrar errores si hay alguno
+    const errors = getValidationErrors();
+    if (errors.length > 0) {
+      validationErrors = errors;
+      // Auto-ocultar después de 4 segundos
+      setTimeout(() => {
+        validationErrors = [];
+      }, 4000);
+      return;
+    }
+
+    if (isSubmitting) return;
 
     if (!$isAuthenticated || !$currentUser) {
       showAuthModal = true;
@@ -373,7 +693,9 @@
         options: options.map((opt, idx) => ({
           optionKey: opt.id,
           optionLabel: opt.title || `Opción ${idx + 1}`,
-          color: opt.colorFrom.replace("from-", ""), // Extract color name from tailwind class
+          colorFrom: opt.colorFrom,
+          colorTo: opt.colorTo,
+          color: colorToHex(opt.colorFrom), // Convertimos a Hex para la BD
           imageUrl: opt.image || undefined,
           isCorrect: type === "quiz" ? opt.id === correctOptionId : false,
           displayOrder: idx,
@@ -411,17 +733,25 @@
         id: "opt-1",
         title: "",
         image: "",
-        colorFrom: "from-indigo-600",
-        colorTo: "to-slate-900",
+        colorFrom: "hsl(239, 90%, 30%)",
+        colorTo: "hsl(239, 95%, 15%)",
         isCorrect: false,
+        gifOffset: 0,
+        lastSearchTitle: "",
+        gifSource: "tenor",
+        tenorNextPos: "",
       },
       {
         id: "opt-2",
         title: "",
         image: "",
-        colorFrom: "from-purple-600",
-        colorTo: "to-slate-900",
+        colorFrom: "hsl(270, 90%, 30%)",
+        colorTo: "hsl(270, 95%, 15%)",
         isCorrect: false,
+        gifOffset: 0,
+        lastSearchTitle: "",
+        gifSource: "tenor",
+        tenorNextPos: "",
       },
     ];
     collabMode = "me";
@@ -449,8 +779,8 @@
       <div class="flex items-center gap-3">
         <button
           onclick={handleSubmit}
-          disabled={!question.trim() || isSubmitting}
-          class={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${question.trim() && !isSubmitting ? "bg-white text-black shadow-xl" : "bg-slate-900 text-slate-600 opacity-50"}`}
+          disabled={isSubmitting}
+          class={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${isFormValid && !isSubmitting ? "bg-white text-black shadow-xl" : "bg-slate-900 text-slate-600"}`}
         >
           {#if isSubmitting}
             <div class="flex items-center gap-2">
@@ -464,10 +794,32 @@
       </div>
     </header>
 
+    {#if validationErrors.length > 0}
+      <div
+        class="px-6 py-3 bg-red-500/20 border-b border-red-500/30 flex-shrink-0 animate-in slide-in-from-top duration-300"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex-1">
+            {#each validationErrors as error}
+              <p class="text-red-400 text-sm font-medium">• {error}</p>
+            {/each}
+          </div>
+          <button
+            onclick={() => (validationErrors = [])}
+            class="p-1 text-red-400 hover:text-red-300 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+    {/if}
+
     <main class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
       <!-- MODAL GESTIÓN OPCIONES -->
       {#if showSortPanel}
-        <div class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+        <div
+          class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+        >
           <div
             class="absolute inset-0 bg-black/80 backdrop-blur-md"
             onclick={() => (showSortPanel = false)}
@@ -498,12 +850,13 @@
                   ondragstart={() => onDragStart(idx)}
                   ondragover={(e) => onDragOver(e, idx)}
                   ondragend={onDragEnd}
-                  class={`relative border border-white/10 rounded-2xl p-4 flex items-center gap-4 transition-all duration-200 overflow-hidden cursor-grab active:cursor-grabbing ${draggedItemIndex === idx ? "opacity-20 scale-95 border-[#9ec264]" : "opacity-100"}`}
+                  class={`relative border rounded-2xl p-4 flex items-center gap-4 transition-all duration-300 overflow-hidden cursor-grab active:cursor-grabbing ${draggedItemIndex === idx ? "opacity-20 scale-95 border-[#9ec264]" : "border-white/10 opacity-100"}`}
+                  style="background: linear-gradient(135deg, {getOptionCssColors(
+                    opt,
+                  ).from}, {getOptionCssColors(opt)
+                    .to}); border-color: {getOptionCssColors(opt).from}"
                 >
-                  <div
-                    class={`absolute inset-0 bg-gradient-to-br ${opt.colorFrom} ${opt.colorTo} opacity-40 -z-10`}
-                  />
-                  <div class="absolute inset-0 bg-black/20 -z-10" />
+                  <div class="absolute inset-0 bg-black/5 -z-10" />
                   <GripVertical size={18} class="text-white/40 flex-shrink-0" />
                   <div
                     class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center flex-shrink-0 relative"
@@ -523,11 +876,25 @@
                   >
                     {opt.title || "Sin título"}
                   </div>
-                  <button
-                    onclick={() => removeOption(opt.id)}
-                    class="p-2 text-red-500/50 hover:text-red-500 transition-colors relative z-10"
-                    ><Trash2 size={18} /></button
-                  >
+                  <div class="flex items-center gap-1 relative z-10">
+                    <button
+                      onclick={() => {
+                        centerOptionById(opt.id);
+                        showSortPanel = false;
+                      }}
+                      class="p-2 text-white/60 hover:text-white transition-colors"
+                      title="Ver en pantalla"
+                    >
+                      <Eye size={18} />
+                    </button>
+                    <button
+                      onclick={() => removeOption(opt.id)}
+                      class="p-2 text-white/40 hover:text-white transition-colors"
+                      title="Eliminar"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
                 </div>
               {/each}
             </div>
@@ -554,7 +921,9 @@
 
       <!-- MODAL DURACIÓN -->
       {#if showDurationModal}
-        <div class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+        <div
+          class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+        >
           <div
             class="absolute inset-0 bg-black/80 backdrop-blur-md"
             onclick={() => (showDurationModal = false)}
@@ -612,39 +981,37 @@
               </div>
               <div class="space-y-4">
                 <div class="flex justify-between items-center">
-                  <div class="flex items-center gap-4">
-                    <div
-                      class={`w-16 h-16 flex items-center justify-center rounded-2xl transition-all ${isIndefinite ? "bg-[#9ec264]/10 text-[#9ec264]" : "bg-white/5 text-white/20"}`}
-                    >
-                      <Infinity size={32} strokeWidth={2.5} />
-                    </div>
-                    <div>
-                      <h4 class="text-base font-black uppercase tracking-wider">
-                        Cierre
-                      </h4>
-                      <p
-                        class="text-[10px] text-white/40 uppercase tracking-tighter"
-                      >
-                        {isIndefinite ? "Indefinida" : "Límite"}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onclick={() => (isIndefinite = !isIndefinite)}
-                    class={`w-14 h-7 rounded-full p-1 transition-all ${isIndefinite ? "bg-[#9ec264]/80" : "bg-white/10"}`}
-                    ><div
-                      class={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isIndefinite ? "translate-x-7" : "translate-x-0"}`}
-                    /></button
+                  <div
+                    class={`w-16 h-16 flex items-center justify-center rounded-2xl transition-all ${isIndefinite ? "bg-[#9ec264]/10 text-[#9ec264]" : "bg-white/5 text-white/20"}`}
                   >
+                    <Infinity size={32} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h4 class="text-base font-black uppercase tracking-wider">
+                      Cierre
+                    </h4>
+                    <p
+                      class="text-[10px] text-white/40 uppercase tracking-tighter"
+                    >
+                      {isIndefinite ? "Indefinida" : "Límite"}
+                    </p>
+                  </div>
                 </div>
-                {#if !isIndefinite}
-                  <input
-                    type="datetime-local"
-                    bind:value={endDate}
-                    class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white outline-none focus:border-[#9ec264] transition-all"
-                  />
-                {/if}
+                <button
+                  onclick={() => (isIndefinite = !isIndefinite)}
+                  class={`w-14 h-7 rounded-full p-1 transition-all ${isIndefinite ? "bg-[#9ec264]/80" : "bg-white/10"}`}
+                  ><div
+                    class={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isIndefinite ? "translate-x-7" : "translate-x-0"}`}
+                  /></button
+                >
               </div>
+              {#if !isIndefinite}
+                <input
+                  type="datetime-local"
+                  bind:value={endDate}
+                  class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white outline-none focus:border-[#9ec264] transition-all"
+                />
+              {/if}
             </div>
             <button
               onclick={() => (showDurationModal = false)}
@@ -657,7 +1024,9 @@
 
       <!-- MODAL COLABORACIÓN -->
       {#if showCollabModal}
-        <div class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+        <div
+          class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+        >
           <div
             class="absolute inset-0 bg-black/80 backdrop-blur-md"
             onclick={() => {
@@ -781,7 +1150,7 @@
       <!-- MODAL DE AYUDA / INFO -->
       {#if showHelpModal && activeTypeData}
         <div
-          class="fixed inset-0 z-[200] flex items-center justify-center p-6"
+          class="fixed inset-0 z-[2000] flex items-center justify-center p-6"
           transition:fade
         >
           <div
@@ -833,7 +1202,7 @@
         <div class="flex items-center justify-center gap-2 mt-4">
           <button
             onclick={() => (showDurationModal = true)}
-            class="flex items-center gap-3 px-6 py-2.5 bg-white/5 rounded-full border border-white/5 text-white active:scale-95 transition-all"
+            class="flex items-center gap-3 px-5 py-2.5 bg-white/5 rounded-full border border-white/5 text-white active:scale-95 transition-all"
           >
             <Clock size={16} class="text-white/70" />
             <div
@@ -848,34 +1217,62 @@
               {/if}
             </div>
           </button>
+
+          <button
+            onclick={() => (showCollabModal = true)}
+            class={`flex items-center justify-center transition-all border active:scale-90 ${collabMode !== "me" ? "bg-[#9ec264] text-black border-[#9ec264] shadow-xl" : "bg-white/5 text-white/40 border-white/5"} ${collabMode === "selected" && selectedUserIds.length > 0 ? "px-3.5 h-10 gap-2 rounded-full" : "w-10 h-10 rounded-full"}`}
+            title={getCollabLabel()}
+          >
+            <activeCollabData.icon size={18} />
+            {#if collabMode === "selected" && selectedUserIds.length > 0}
+              <span class="text-[11px] font-black"
+                >{selectedUserIds.length}</span
+              >
+            {/if}
+          </button>
+
           <button
             onclick={() => (showSortPanel = true)}
-            class="flex items-center gap-3 px-6 py-2.5 bg-white/5 rounded-full border border-white/5 text-white/40 active:scale-90 transition-all text-[11px] font-black uppercase tracking-wider"
+            class="flex items-center gap-2.5 px-4 py-2.5 bg-white/5 rounded-full border border-white/5 text-white/40 active:scale-90 transition-all text-[11px] font-black uppercase tracking-wider"
           >
-            <List size={16} />
-            Opciones ({options.length})
+            <List size={18} />
+            <span class="opacity-80">{options.length}</span>
           </button>
         </div>
       </div>
 
       <!-- ÁREA CENTRAL: CARDS + PAGINACIÓN + INFO -->
       <div
-        class="flex-1 flex flex-col justify-center min-h-0 py-1 overflow-hidden relative"
+        class="flex-1 flex flex-col justify-center min-h-0 py-0 overflow-hidden relative"
       >
         <div
           bind:this={scrollContainer}
           onscroll={handleScroll}
-          class="flex h-full max-h-[580px] overflow-x-auto scrollbar-hide px-12 items-center gap-5 pb-0"
+          class="flex h-full max-h-[820px] overflow-x-auto scrollbar-hide px-12 pt-6 pb-0 items-center gap-5"
         >
           {#each options as opt, idx (opt.id)}
             <div
               class="option-card-unit real-option-card-main flex-shrink-0 w-[72vw] sm:w-[320px] h-full flex flex-col relative"
             >
+              <!-- Botón Eliminar Flotante (Fuera del overflow-hidden para verse por encima) -->
+              <div class="absolute -top-3 -left-3 z-[150]">
+                <button
+                  onclick={() => removeOption(opt.id)}
+                  class="p-2.5 rounded-full bg-black text-white shadow-2xl hover:bg-zinc-800 active:scale-90 transition-all border-2 border-white/20"
+                  title="Eliminar opción"
+                >
+                  <X size={14} strokeWidth={4} />
+                </button>
+              </div>
+
               <div
                 class={`flex-1 rounded-2xl border-2 shadow-2xl overflow-hidden relative transition-all duration-300 ${type === "quiz" && correctOptionId === opt.id ? "border-yellow-400 shadow-yellow-500/20" : "border-white/10"}`}
               >
                 <div
-                  class={`absolute inset-0 bg-gradient-to-br ${opt.colorFrom} ${opt.colorTo}`}
+                  class="absolute inset-0"
+                  style="background: linear-gradient(135deg, {getOptionCssColors(
+                    opt,
+                  ).from}, {getOptionCssColors(opt).to})"
                 >
                   {#if opt.image}
                     <img
@@ -893,39 +1290,94 @@
                 >
                   #{idx + 1}
                 </div>
-                <div
-                  class="absolute inset-0 z-10 flex flex-col items-center justify-center p-10 text-center"
-                >
+                <div class="absolute bottom-6 left-6 right-20 z-20">
                   <textarea
                     bind:value={opt.title}
-                    placeholder="Escribe..."
-                    class="w-full bg-transparent border-none focus:ring-0 p-0 text-2xl font-black text-white placeholder-white/30 resize-none leading-none outline-none appearance-none"
+                    placeholder={`Opción ${idx + 1}...`}
+                    class="w-full bg-transparent border-none focus:ring-0 p-0 text-xl font-black text-white placeholder-white/30 resize-none leading-tight outline-none appearance-none"
                     rows="3"
                   />
                 </div>
-                <div
-                  class="absolute bottom-8 left-0 right-0 z-20 flex flex-col items-center gap-3 px-6"
-                >
-                  <div class="flex gap-2">
+                <div class="absolute bottom-6 right-3 z-30">
+                  <div class="flex flex-col gap-2">
                     {#if type === "quiz"}
                       <button
-                        onclick={() => (correctOptionId = opt.id)}
-                        class={`p-4 rounded-2xl backdrop-blur-md border transition-all ${correctOptionId === opt.id ? "bg-[#f0b100] border-yellow-300 text-black shadow-[#f0b100]/20" : "bg-black/40 border-white/10 text-white/40"}`}
-                        ><Trophy size={20} /></button
+                        onclick={() => {
+                          correctOptionId = opt.id;
+                          centerOptionById(opt.id);
+                        }}
+                        class={`p-3 rounded-2xl backdrop-blur-lg border transition-all ${correctOptionId === opt.id ? "bg-[#f0b100]/20 border-[#f0b100]/40 text-[#f0b100] shadow-lg shadow-[#f0b100]/10" : "bg-black/10 border-white/5 text-white/70 hover:text-white"}`}
+                        ><Trophy size={18} /></button
                       >
                     {/if}
-                    <button
-                      onclick={() =>
-                        updateOption(
-                          opt.id,
-                          "image",
-                          opt.image
-                            ? ""
-                            : `https://picsum.photos/seed/${opt.id}/800/1200`,
-                        )}
-                      class="p-4 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-white/60 active:scale-90 transition-all"
-                      ><ImageIcon size={20} /></button
+
+                    <div
+                      class={`flex flex-col items-center rounded-2xl border backdrop-blur-lg transition-all overflow-hidden ${opt.image ? "bg-[#9ec264]/10 border-[#9ec264]/30 text-[#9ec264]" : "bg-black/20 border-white/10 text-white shadow-xl"}`}
                     >
+                      {#if !opt.image}
+                        <button
+                          onclick={() => autoFetchGif(opt.id, false)}
+                          class="p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center"
+                          disabled={isAutoFetchingGif[opt.id]}
+                        >
+                          {#if isAutoFetchingGif[opt.id]}
+                            <Loader2 size={18} class="animate-spin" />
+                          {:else}
+                            <ImageIcon size={18} />
+                          {/if}
+                        </button>
+                      {/if}
+                      {#if !opt.image}
+                        <div class="relative w-full flex flex-col items-center">
+                          <button
+                            onclick={() => toggleColorSlider(opt.id)}
+                            class={`p-3 w-full transition-all flex items-center justify-center ${showColorSlider === opt.id ? "bg-white text-black" : "hover:bg-white/10 text-white/70"}`}
+                          >
+                            <Palette
+                              size={18}
+                              fill={showColorSlider === opt.id
+                                ? "currentColor"
+                                : "none"}
+                            />
+                          </button>
+                        </div>
+                      {/if}
+                      {#if opt.image}
+                        <button
+                          onclick={() => autoFetchGif(opt.id, true)}
+                          class="p-3 hover:bg-black/20 border-b border-white/5 transition-colors flex items-center justify-center"
+                          title="Siguiente GIF"
+                          disabled={isAutoFetchingGif[opt.id]}
+                        >
+                          {#if isAutoFetchingGif[opt.id]}
+                            <Loader2 size={18} class="animate-spin" />
+                          {:else}
+                            <RefreshCw size={18} />
+                          {/if}
+                        </button>
+                        <button
+                          onclick={() => openGiphyPicker(opt.id)}
+                          class="p-3 hover:bg-black/20 border-b border-white/5 transition-colors flex items-center justify-center"
+                          title="Buscar manualmente"
+                        >
+                          <SearchIcon size={18} />
+                        </button>
+                        <button
+                          onclick={() => {
+                            updateOptionMultiple(opt.id, {
+                              image: "",
+                              gifOffset: 0,
+                              tenorNextPos: "",
+                            });
+                            centerOptionById(opt.id);
+                          }}
+                          class="p-3 hover:bg-red-500/20 text-red-500/60 hover:text-red-500 transition-colors flex items-center justify-center"
+                          title="Eliminar imagen"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      {/if}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -967,32 +1419,40 @@
               </button>
             {/if}
           </div>
-          <div class="h-14 flex flex-col items-center gap-2">
+          <div class="h-10 flex items-center justify-center">
             {#if activeTypeData}
               <div
-                class="flex items-center gap-3 px-3 py-2 rounded-full border backdrop-blur-xl shadow-lg transition-all"
+                class="flex items-center gap-3 px-4 py-2 rounded-full border backdrop-blur-xl shadow-lg transition-all"
                 style="background-color: {activeTypeData.hex}15; border-color: {activeTypeData.hex}30"
               >
-                <activeTypeData.icon
-                  size={14}
-                  style="color: {activeTypeData.hex}"
-                />
-                <span
-                  class="text-[10px] font-black uppercase tracking-[0.15em] leading-none"
-                  style="color: {activeTypeData.hex}"
-                  >{activeTypeData.label}</span
-                >
+                <div class="flex items-center gap-2">
+                  <activeTypeData.icon
+                    size={14}
+                    style="color: {activeTypeData.hex}"
+                  />
+                  <span
+                    class="text-[10px] font-black uppercase tracking-[0.15em] leading-none"
+                    style="color: {activeTypeData.hex}"
+                    >{activeTypeData.label}</span
+                  >
+                </div>
+
                 <div class="w-px h-3 bg-white/10 mx-0.5" />
+
+                <span
+                  class="text-[9px] font-black uppercase tracking-wider whitespace-nowrap opacity-60"
+                  style="color: {activeTypeData.hex}"
+                  >{getTypeDescription()}</span
+                >
+
+                <div class="w-px h-3 bg-white/10 mx-0.5" />
+
                 <button
                   onclick={() => (showHelpModal = true)}
                   class="p-1 -mr-1 rounded-full text-white/40 hover:text-white transition-colors"
                   ><Info size={14} /></button
                 >
               </div>
-              <span
-                class="text-[10px] font-black uppercase tracking-wider whitespace-nowrap opacity-60 mt-1"
-                style="color: {activeTypeData.hex}">{getTypeDescription()}</span
-              >
             {/if}
           </div>
         </div>
@@ -1001,16 +1461,9 @@
 
     <!-- DOCK INFERIOR -->
     <footer
-      class="relative z-50 bg-black border-t border-white/5 pb-6 pt-4 flex-shrink-0"
+      class="relative z-50 bg-black border-t border-white/5 pb-4 pt-4 flex-shrink-0"
     >
-      <div class="flex flex-col items-center gap-6">
-        <button
-          onclick={() => (showCollabModal = true)}
-          class={`flex items-center gap-2.5 px-6 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all border active:scale-95 ${collabMode !== "me" ? "bg-[#9ec264]/80 text-black border-[#9ec264] shadow-xl" : "bg-white/5 text-white/40 border-white/5"}`}
-        >
-          <Users size={14} />
-          {getCollabLabel()}
-        </button>
+      <div class="flex flex-col items-center">
         <div
           class="flex justify-center items-center gap-3 px-6 w-full max-w-md"
         >
@@ -1056,10 +1509,136 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+
+      .custom-color-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        background: white;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        transition: transform 0.1s;
+      }
+
+      .custom-color-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.1);
+      }
     </style>
   </div>
 {/if}
 
 {#if showAuthModal}
   <AuthModal bind:isOpen={showAuthModal} />
+{/if}
+
+{#if showGiphyPicker}
+  <div
+    class="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    transition:fade
+  >
+    <div
+      class="w-full max-w-lg h-[80vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col"
+      transition:scale={{ start: 0.95, duration: 200 }}
+    >
+      <GiphyPicker
+        onSelect={handleGifSelect}
+        onClose={() => (showGiphyPicker = false)}
+        optionColor={activeTypeData.hex}
+        initialSearch={initialGiphySearch}
+      />
+    </div>
+  </div>
+{/if}
+
+{#if showColorSlider}
+  <div
+    class="fixed inset-0 z-[2200] flex items-end justify-center p-3 sm:p-8 pb-2"
+    transition:fade
+    onclick={() => (showColorSlider = null)}
+  >
+    <div
+      class="relative w-full max-w-lg bg-[#111] backdrop-blur-3xl p-7 rounded-3xl border border-white/20 shadow-[0_0_100px_rgba(0,0,0,0.9)] flex flex-col gap-4 z-[2210]"
+      transition:fly={{ y: 50, duration: 300 }}
+      onclick={(e) => e.stopPropagation()}
+    >
+      <div class="flex justify-between items-center">
+        <div class="flex flex-col">
+          <h3
+            class="text-xl font-black uppercase tracking-[0.1em] text-white m-0"
+          >
+            Color de opción
+          </h3>
+        </div>
+        <button
+          onclick={() => (showColorSlider = null)}
+          class="p-2 -mr-2 text-white/40 hover:text-white transition-colors"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      <!-- Tono (Hue) -->
+      <div class="flex flex-col gap-4">
+        <span
+          class="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 px-1"
+          >Tono Principal</span
+        >
+        <div class="relative h-4 flex items-center">
+          <div
+            class="absolute inset-0 rounded-full"
+            style="background: linear-gradient(to right, #3b82f6, #06b6d4, #10b981, #84cc16, #f59e0b, #f97316, #ef4444, #f43f5e, #d946ef, #a855f7, #6366f1);"
+          ></div>
+          <input
+            type="range"
+            min="0"
+            max={COLOR_FAMILIES.length - 1}
+            step="1"
+            value={getOptionColorSetup(showColorSlider).hueIdx}
+            class="absolute inset-0 w-full h-full bg-transparent appearance-none cursor-pointer z-10 custom-color-slider"
+            oninput={(e) =>
+              handleDualSliderChange(
+                showColorSlider!,
+                parseInt(e.currentTarget.value),
+                getOptionColorSetup(showColorSlider!).shadeIdx,
+              )}
+          />
+        </div>
+      </div>
+
+      <!-- Brillo (Shade) -->
+      <div class="flex flex-col gap-4">
+        <span
+          class="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 px-1"
+          >Intensidad</span
+        >
+        <div class="relative h-4 flex items-center">
+          <div
+            class="absolute inset-0 rounded-full"
+            style="background: linear-gradient(to right, 
+              {COLOR_FAMILIES[getOptionColorSetup(showColorSlider).hueIdx]
+              .hex}, 
+              #fff
+            ); filter: brightness(0.6) saturate(1.8);"
+          ></div>
+          <input
+            type="range"
+            min="0"
+            max={SHADE_VALUES.length - 1}
+            step="1"
+            value={getOptionColorSetup(showColorSlider).shadeIdx}
+            class="absolute inset-0 w-full h-full bg-transparent appearance-none cursor-pointer z-10 custom-color-slider"
+            oninput={(e) =>
+              handleDualSliderChange(
+                showColorSlider!,
+                getOptionColorSetup(showColorSlider!).hueIdx,
+                parseInt(e.currentTarget.value),
+              )}
+          />
+        </div>
+      </div>
+    </div>
+  </div>
 {/if}

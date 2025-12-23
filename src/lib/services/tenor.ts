@@ -203,7 +203,10 @@ export async function searchTenor(
     }
     
     const json: TenorApiResponse = await res.json();
-    return (json.results || []).map(normalizeTenorResult);
+    const results = (json.results || []).map(normalizeTenorResult);
+    // Añadimos el token 'next' como propiedad extra para permitir paginación exacta
+    (results as any).next = json.next || "";
+    return results;
   } catch (error) {
     console.error('[Tenor] Error buscando GIFs:', error);
     return [];
