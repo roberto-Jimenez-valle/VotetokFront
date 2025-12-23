@@ -774,7 +774,7 @@
   class="h-[100dvh] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950 via-slate-950 to-black text-slate-100 flex flex-col overflow-hidden font-sans selection:bg-indigo-500/30 lg:pl-20"
 >
   <!-- Header simple con logo y TopTabs - solo en vista feed -->
-  {#if currentView === "feed"}
+  {#if currentView === "feed" && !isCreatePollModalOpen}
     <header class="z-50 bg-black/80 backdrop-blur-md flex-shrink-0">
       <div
         class="feed-container-width mx-auto flex items-center justify-between px-4 h-[4rem]"
