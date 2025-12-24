@@ -138,6 +138,10 @@
 	import { onMount } from "svelte";
 	import { apiCall } from "$lib/api/client";
 
+	function handleNotificationClick(event: CustomEvent) {
+		dispatch("notificationClick", event.detail);
+	}
+
 	onMount(() => {
 		// Fetch initial counts if user is logged in
 		if ($currentUser) {
@@ -250,7 +254,10 @@
 	bind:isOpen={searchModalOpen}
 	on:openPollInGlobe={handleOpenPollInGlobe}
 />
-<NotificationsModal bind:isOpen={notificationsModalOpen} />
+<NotificationsModal 
+	bind:isOpen={notificationsModalOpen} 
+	on:notificationClick={handleNotificationClick}
+/>
 <ProfileModal bind:isOpen={profileModalOpen} />
 <AuthModal bind:isOpen={authModalOpen} />
 

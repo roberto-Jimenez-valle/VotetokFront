@@ -99,6 +99,8 @@
             },
             message: n.message || "Nueva notificación",
             poll: meta.pollTitle || meta.title,
+            pollId: meta.pollId || meta.id,
+            commentId: meta.commentId,
             time: formatRelativeTime(n.createdAt),
             read: n.read,
             link: meta.link,
@@ -199,7 +201,15 @@
     }
 
     console.log("Abrir notificación:", notification.id);
-    dispatch("notificationClick", { notificationId: notification.id });
+    dispatch("notificationClick", { 
+      notificationId: notification.id,
+      pollId: notification.pollId,
+      userId: notification.user?.id,
+      type: notification.type,
+      commentId: notification.commentId,
+      pollTitle: notification.poll
+    });
+    isOpen = false;
   }
 
   function handleAvatarClick(userId: number, event: Event) {

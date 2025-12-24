@@ -857,6 +857,75 @@
     isCreatePollModalOpen = false;
   }
 
+  async function handleNotificationClick(event: CustomEvent) {
+    const { pollId, userId, type, commentId } = event.detail;
+    
+    console.log("[VotingFeed] Handling notification click:", { pollId, userId, type, commentId });
+
+    // Caso 1: Navegación a Encuesta / Comentario
+    if (pollId) {
+      // Intentar encontrar el post existente. 
+      // Nota: posts usa HashIDs, pero pollId de notificación puede ser numérico.
+      // Si no coinciden, fallará aquí y haremos fetch, lo cual es seguro.
+      let targetPost = posts.find((p) => p.id === String(pollId));
+      
+      if (!targetPost) {
+        // Fetch the poll
+        isLoading = true;
+        try {
+          const response = await apiCall(`/api/polls/${pollId}`);
+          if (response.ok) {
+            const data = await response.json();
+            const pollData = data.data || data;
+            
+            if (pollData) {
+              const transformedPoll = transformApiPoll(pollData);
+              
+              // Verificar si ya existe con el ID transformado (HashID)
+              const existingIndex = posts.findIndex(p => p.id === transformedPoll.id);
+              
+              if (existingIndex !== -1) {
+                // Actualizar existente
+                const newPosts = [...posts];
+                newPosts[existingIndex] = transformedPoll;
+                posts = newPosts;
+                targetPost = transformedPoll;
+              } else {
+                // Agregar al inicio
+                posts = [transformedPoll, ...posts];
+                targetPost = transformedPoll;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching poll from notification:", e);
+        } finally {
+          isLoading = false;
+        }
+      }
+
+      if (targetPost) {
+        switchToReels(targetPost.id);
+        
+        // Si hay commentId o es tipo comentario/mención, abrir modal
+        if (commentId || type === 'comment' || type === 'mention') {
+          setTimeout(() => {
+            commentsPollId = targetPost!.id;
+            commentsPollTitle = targetPost!.question;
+            isCommentsModalOpen = true;
+          }, 300); // Pequeño delay para que la transición a reels termine/empiece
+        }
+      }
+      return;
+    }
+
+    // Caso 2: Navegación a Perfil de Usuario (Follows)
+    if (userId && (type === 'new_follower' || type === 'follow_request' || !pollId)) {
+      selectedProfileUserId = Number(userId);
+      isProfileModalOpen = true;
+    }
+  }
+
   // Handle interactions
   function handleComment(post: Post) {
     commentsPollId = post.id;
@@ -1631,6 +1700,7 @@
       on:openCreatePoll={handleOpenCreatePoll}
       on:closeCreatePoll={handleCloseCreatePoll}
       on:openBottomSheet={goHome}
+      on:notificationClick={handleNotificationClick}
     />
   {/if}
 
