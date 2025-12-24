@@ -2,12 +2,13 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
 import { createNotification } from '$lib/server/notifications';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 // GET - Obtener comentarios de una encuesta
 export const GET: RequestHandler = async ({ params }) => {
-  const pollId = parseInt(params.pollId);
+  const pollId = parsePollIdInternal(params.pollId);
 
-  if (isNaN(pollId)) {
+  if (!pollId) {
     return json({ error: 'ID de encuesta inválido' }, { status: 400 });
   }
 
@@ -58,9 +59,11 @@ export const GET: RequestHandler = async ({ params }) => {
 
 // POST - Crear nuevo comentario
 export const POST: RequestHandler = async ({ params, request, locals }) => {
-  const pollId = parseInt(params.pollId);
+  console.log('[Comments POST] Params:', params);
+  const pollId = parsePollIdInternal(params.pollId);
+  console.log('[Comments POST] Parsed ID:', pollId);
 
-  if (isNaN(pollId)) {
+  if (!pollId) {
     return json({ error: 'ID de encuesta inválido' }, { status: 400 });
   }
 
@@ -74,7 +77,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     const body = await request.json();
     const { content, parentCommentId } = body;
 
-    if (!content || !content.trim()) {
+    if (!content || !String(content).trim()) {
       return json({ error: 'El comentario no puede estar vacío' }, { status: 400 });
     }
 
@@ -92,7 +95,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
       data: {
         pollId,
         userId,
-        content: content.trim(),
+        content: String(content).trim(),
         parentCommentId: parentCommentId || null
       },
       include: {
@@ -109,55 +112,66 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     });
 
     // Notificar al creador de la encuesta
-    // Fire and forget
-    createNotification({
-      userId: poll.userId,
-      actorId: Number(userId),
-      type: 'COMMENT',
-      message: 'comentó en',
-      data: {
-        pollId: poll.id,
-        pollTitle: poll.title,
-        commentId: comment.id
-      }
-    }).catch(err => console.error('[Comment Notification] Error:', err));
+    try {
+      createNotification({
+        userId: poll.userId,
+        actorId: Number(userId),
+        type: 'COMMENT',
+        message: 'comentó en',
+        data: {
+          pollId: poll.id,
+          pollTitle: poll.title,
+          commentId: comment.id
+        }
+      }).catch(err => console.error('[Comment Notification] Error:', err));
+    } catch (e) {
+      console.error('[Comment Notification Trigger] Error:', e);
+    }
 
     // PROCESAR MENCIONES
-    // Buscar patrones @username
-    const mentionRegex = /@(\w+)/g;
-    const matches = [...content.matchAll(mentionRegex)];
-    const mentionedUsernames = [...new Set(matches.map(m => m[1]))]; // Unique usernames
+    try {
+      // Buscar patrones @username
+      const mentionRegex = /@(\w+)/g;
+      const matches = [...String(content).matchAll(mentionRegex)];
+      const mentionedUsernames = [...new Set(matches.map(m => m[1]))]; // Unique usernames
 
-    if (mentionedUsernames.length > 0) {
-      // Buscar usuarios por username
-      prisma.user.findMany({
-        where: {
-          username: { in: mentionedUsernames },
-          id: { not: Number(userId) } // No notificarse a sí mismo
-        },
-        select: { id: true, username: true }
-      }).then(mentionedUsers => {
-        // Crear notificaciones para cada usuario mencionado
-        mentionedUsers.forEach(user => {
-          createNotification({
-            userId: user.id,
-            actorId: Number(userId),
-            type: 'MENTION',
-            message: 'te mencionó en un comentario',
-            data: {
-              pollId: poll.id,
-              pollTitle: poll.title,
-              commentId: comment.id,
-              contentSnippet: content.length > 50 ? content.substring(0, 47) + '...' : content
-            }
-          }).catch(err => console.error(`[Mention Notification] Error notifying ${user.username}:`, err));
-        });
-      }).catch(err => console.error('[Mention Processing] Error:', err));
+      if (mentionedUsernames.length > 0) {
+        // Buscar usuarios por username
+        prisma.user.findMany({
+          where: {
+            username: { in: mentionedUsernames },
+            id: { not: Number(userId) } // No notificarse a sí mismo
+          },
+          select: { id: true, username: true }
+        }).then(mentionedUsers => {
+          // Crear notificaciones para cada usuario mencionado
+          mentionedUsers.forEach(user => {
+            createNotification({
+              userId: user.id,
+              actorId: Number(userId),
+              type: 'MENTION',
+              message: 'te mencionó en un comentario',
+              data: {
+                pollId: poll.id,
+                pollTitle: poll.title,
+                commentId: comment.id,
+                contentSnippet: String(content).length > 50 ? String(content).substring(0, 47) + '...' : String(content)
+              }
+            }).catch(err => console.error(`[Mention Notification] Error notifying ${user.username}:`, err));
+          });
+        }).catch(err => console.error('[Mention Processing] Error:', err));
+      }
+    } catch (mentionError) {
+      console.error('[Mention Logic] Error:', mentionError);
+      // No fallar el request completo si falla la lógica de menciones
     }
 
     return json({ data: comment }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating comment:', error);
-    return json({ error: 'Error al crear comentario' }, { status: 500 });
+    return json({ 
+      error: 'Error al crear comentario', 
+      details: error.message || String(error) 
+    }, { status: 500 });
   }
 };

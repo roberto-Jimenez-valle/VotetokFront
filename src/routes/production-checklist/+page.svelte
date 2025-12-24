@@ -180,7 +180,12 @@
                 {
                     label: "Actividad/Notificaciones",
                     status: "done",
-                    detail: "Implementación completa. Backend registra eventos (Follow, Vote, Comment). Modal muestra notificaciones reales con filtros, avatares, tiempos relativos ('hace 5 min') y navegación al contenido.",
+                    detail: "Implementación completa. Backend registra eventos (Follow, Vote, Comment, Mention). Modal muestra notificaciones reales con filtros, avatares, tiempos relativos ('hace 5 min') y navegación al contenido.",
+                },
+                {
+                    label: "Sistema de Menciones (@usuario)",
+                    status: "done",
+                    detail: "Implementado autocompletado de @menciones en comentarios con filtrado de privacidad (solo públicos o amigos mutuos) y notificaciones automáticas al usuario mencionado.",
                 },
                 {
                     label: "Mensajes Directos (DM)",
@@ -197,10 +202,8 @@
                 },
                 {
                     label: "Comentarios Anidados",
-                    status: "partial",
-                    note: "Sistema básico existe",
-                    detail: "Se pueden escribir comentarios pero las respuestas a comentarios (hilos) tienen limitaciones visuales.",
-                    action: "Mejorar la UI de respuestas y añadir indicadores visuales de hilos.",
+                    status: "done",
+                    detail: "Implementado sistema de respuestas (Reply) con indentación visual, agrupación correcta en la UI y soporte para menciones.",
                 },
             ],
         },

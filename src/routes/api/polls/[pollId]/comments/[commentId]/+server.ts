@@ -1,15 +1,14 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 // DELETE - Eliminar un comentario
 export const DELETE: RequestHandler = async ({ params, request }) => {
-  const pollId = parseInt(params.pollId);
+  const pollId = parsePollIdInternal(params.pollId);
   const commentId = parseInt(params.commentId);
   
-  if (isNaN(pollId) || isNaN(commentId)) {
+  if (!pollId || isNaN(commentId)) {
     return json({ error: 'IDs inválidos' }, { status: 400 });
   }
   
