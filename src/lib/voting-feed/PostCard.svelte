@@ -254,6 +254,16 @@
     }
   }
 
+  function checkIsCorrect(optionId: string | number) {
+    if (post.type !== "quiz") return false;
+    const optIdStr = String(optionId);
+    const correctIdStr = String(post.correctOptionId);
+    const correctHash = (post as any).correctOptionHashId;
+    return (
+      optIdStr === correctIdStr || (correctHash && optIdStr === correctHash)
+    );
+  }
+
   const config = $derived(POST_CONFIGS[post.type] || POST_CONFIGS.standard);
   // Check if closed by initial date OR by countdown expiring in real-time
   const isClosed = $derived(
@@ -926,8 +936,7 @@
                             postTotalVotes={post.totalVotes}
                             hasVoted={shouldShowResults}
                             isSelected={hasVoted && isOptionSelected(opt.id)}
-                            isCorrectOption={post.type === "quiz" &&
-                              opt.id === post.correctOptionId}
+                            isCorrectOption={checkIsCorrect(opt.id)}
                             isExpanded={false}
                             isEditing={opt.id === "temp-new-option"}
                             isHidden={expandedPostId === post.id &&
@@ -979,8 +988,7 @@
                       postTotalVotes={post.totalVotes}
                       hasVoted={shouldShowResults}
                       isSelected={hasVoted && isOptionSelected(opt.id)}
-                      isCorrectOption={post.type === "quiz" &&
-                        opt.id === post.correctOptionId}
+                      isCorrectOption={checkIsCorrect(opt.id)}
                       isExpanded={false}
                       isEditing={opt.id === "temp-new-option"}
                       isHidden={expandedPostId === post.id &&
@@ -1020,8 +1028,7 @@
                   postTotalVotes={post.totalVotes}
                   hasVoted={shouldShowResults}
                   isSelected={hasVoted && isOptionSelected(opt.id)}
-                  isCorrectOption={post.type === "quiz" &&
-                    opt.id === post.correctOptionId}
+                  isCorrectOption={checkIsCorrect(opt.id)}
                   isExpanded={true}
                   isEditing={opt.id === "temp-new-option"}
                   onToggleExpand={() => {

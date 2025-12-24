@@ -265,7 +265,7 @@
           "border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] z-10";
         bgOverlay = "bg-red-500/10";
       } else {
-        statusColor = "opacity-40 grayscale-[0.8]";
+        statusColor = "opacity-25 grayscale scale-[0.98] transition-all";
       }
     }
 
