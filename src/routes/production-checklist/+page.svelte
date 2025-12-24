@@ -164,10 +164,9 @@
                 },
                 {
                     label: "Navegación en Avatar",
-                    status: "missing",
+                    status: "done",
                     critical: true,
-                    detail: "Cuando pulsas en la foto de perfil de alguien en el feed, no pasa nada. Debería abrirse su perfil.",
-                    action: "Hacer clicable el avatar y que abra el modal de perfil del usuario.",
+                    detail: "Implementado. Al pulsar en el avatar se abre el modal de perfil del usuario.",
                 },
                 {
                     label: "Buscador Global (Usuarios/Tags)",
