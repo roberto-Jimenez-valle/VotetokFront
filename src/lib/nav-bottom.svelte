@@ -134,6 +134,27 @@
 	function handleOpenPollInGlobe(event: CustomEvent<{ poll: any }>) {
 		dispatch("openPollInGlobe", event.detail);
 	}
+	import { totalUnread, notificationCounts } from "$lib/stores/notifications";
+	import { onMount } from "svelte";
+	import { apiCall } from "$lib/api/client";
+
+	onMount(() => {
+		// Fetch initial counts if user is logged in
+		if ($currentUser) {
+			apiCall("/api/notifications?limit=1")
+				.then(async (res) => {
+					if (res.ok) {
+						const data = await res.json();
+						if (data.counts) {
+							notificationCounts.set(data.counts);
+						}
+					}
+				})
+				.catch((e) =>
+					console.error("Error fetching notification counts", e),
+				);
+		}
+	});
 </script>
 
 <nav
@@ -176,11 +197,20 @@
 		{/if}
 		<button
 			onclick={openNotifications}
-			class="nav-btn"
+			class="nav-btn relative"
 			class:nav-btn-active={activeItem === "notifications"}
 			aria-label="Notificaciones"
 		>
-			<Bell class="w-[1.8rem] h-[1.8rem]" />
+			<div class="relative">
+				<Bell class="w-[1.8rem] h-[1.8rem]" />
+				{#if $totalUnread > 0}
+					<span
+						class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] flex items-center justify-center border border-black transform scale-90"
+					>
+						{$totalUnread > 99 ? "99+" : $totalUnread}
+					</span>
+				{/if}
+			</div>
 		</button>
 		<button
 			onclick={openProfile}

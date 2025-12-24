@@ -134,33 +134,9 @@
     },
   ];
 
-  const MOCK_FOLLOWING = [
-    {
-      id: "u1",
-      name: "Alex Marín",
-      username: "@alexm",
-      avatar: "bg-orange-500",
-    },
-    { id: "u2", name: "Sara Vega", username: "@sarav", avatar: "bg-pink-500" },
-    {
-      id: "u3",
-      name: "Marcos Ruiz",
-      username: "@mruiz",
-      avatar: "bg-emerald-500",
-    },
-    {
-      id: "u4",
-      name: "Elena Soler",
-      username: "@elenas",
-      avatar: "bg-indigo-500",
-    },
-    {
-      id: "u5",
-      name: "David Ortíz",
-      username: "@david_o",
-      avatar: "bg-blue-500",
-    },
-  ];
+  // Usuarios seguidos (se cargarán de la API)
+  let followingUsers = $state<any[]>([]);
+  let isLoadingFriends = $state(false);
 
   // --- ESTADOS ---
   let type = $state("standard");
@@ -296,13 +272,39 @@
     CREATOR_TYPES.find((t) => t.id === type) || CREATOR_TYPES[0],
   );
 
-  let filteredUsers = $derived(
-    MOCK_FOLLOWING.filter(
+  let filteredUsers = $derived.by(() => {
+    if (!userSearchQuery) return followingUsers;
+    const query = userSearchQuery.toLowerCase();
+    return followingUsers.filter(
       (u) =>
-        u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-        u.username.toLowerCase().includes(userSearchQuery.toLowerCase()),
-    ),
-  );
+        (u.name && u.name.toLowerCase().includes(query)) ||
+        (u.username && u.username.toLowerCase().includes(query)),
+    );
+  });
+
+  async function fetchFollowing() {
+    if (!$currentUser || followingUsers.length > 0) return;
+
+    isLoadingFriends = true;
+    try {
+      const userId = $currentUser.userId || ($currentUser as any).id;
+      const response = await apiGet(
+        `/api/users/following?userId=${userId}&limit=100`,
+      );
+      if (response.data) {
+        followingUsers = response.data.map((u) => ({
+          id: u.id.toString(), // Aseguramos que el ID sea string para comparaciones
+          name: u.name,
+          username: u.username,
+          avatar: u.avatar || null, // API puede devolver null
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching following users:", error);
+    } finally {
+      isLoadingFriends = false;
+    }
+  }
 
   let activeCollabData = $derived(
     COLLAB_MODES.find((m) => m.id === collabMode) || COLLAB_MODES[0],
@@ -1666,33 +1668,61 @@
                 <div
                   class="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar"
                 >
-                  {#each filteredUsers as user}
-                    <button
-                      onclick={() => toggleUserSelection(user.id)}
-                      class={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${selectedUserIds.includes(user.id) ? "bg-[#9ec264]/10 border-[#9ec264]/30" : "bg-white/5 border-transparent"}`}
+                  {#if isLoadingFriends}
+                    <div class="flex items-center justify-center py-10">
+                      <Loader2 class="w-8 h-8 animate-spin text-white/30" />
+                    </div>
+                  {:else if filteredUsers.length === 0}
+                    <div
+                      class="flex flex-col items-center justify-center py-10 opacity-50"
                     >
-                      <div
-                        class={`w-10 h-10 rounded-full ${user.avatar} flex items-center justify-center text-white font-black text-sm`}
+                      <Users class="w-10 h-10 mb-3" />
+                      <p class="text-sm">No sigues a nadie aún</p>
+                    </div>
+                  {:else}
+                    {#each filteredUsers as user}
+                      <button
+                        onclick={() => toggleUserSelection(user.id)}
+                        class={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${selectedUserIds.includes(user.id) ? "bg-[#9ec264]/10 border-[#9ec264]/30" : "bg-white/5 border-transparent"}`}
                       >
-                        {user.name[0]}
-                      </div>
-                      <div class="text-left flex-1">
-                        <p class="font-bold text-xs sm:text-sm text-white">
-                          {user.name}
-                        </p>
-                      </div>
-                      <div
-                        class={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedUserIds.includes(user.id) ? "bg-white border-white text-[#9ec264] scale-110" : "border-white/10"}`}
-                      >
-                        {#if selectedUserIds.includes(user.id)}
-                          <Check
-                            class="w-[0.875rem] h-[0.875rem]"
-                            strokeWidth={4}
-                          />
-                        {/if}
-                      </div>
-                    </button>
-                  {/each}
+                        <div
+                          class={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-sm overflow-hidden relative ${!user.avatar ? "bg-indigo-500" : ""}`}
+                        >
+                          {#if user.avatar}
+                            <img
+                              src={user.avatar}
+                              alt={user.username}
+                              class="w-full h-full object-cover"
+                            />
+                          {:else}
+                            {user.name ? user.name[0].toUpperCase() : "?"}
+                          {/if}
+                        </div>
+                        <div class="text-left flex-1 min-w-0">
+                          <p
+                            class="font-bold text-xs sm:text-sm text-white truncate"
+                          >
+                            {user.name || user.username}
+                          </p>
+                          {#if user.username}
+                            <p class="text-xs text-white/40 truncate">
+                              {user.username}
+                            </p>
+                          {/if}
+                        </div>
+                        <div
+                          class={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedUserIds.includes(user.id) ? "bg-white border-white text-[#9ec264] scale-110" : "border-white/10"}`}
+                        >
+                          {#if selectedUserIds.includes(user.id)}
+                            <Check
+                              class="w-[0.875rem] h-[0.875rem]"
+                              strokeWidth={4}
+                            />
+                          {/if}
+                        </div>
+                      </button>
+                    {/each}
+                  {/if}
                 </div>
                 <button
                   onclick={() => {
@@ -1857,7 +1887,10 @@
           </button>
 
           <button
-            onclick={() => (showCollabModal = true)}
+            onclick={() => {
+              showCollabModal = true;
+              fetchFollowing();
+            }}
             class={`flex items-center justify-center transition-all border active:scale-90 ${collabMode !== "me" ? "bg-[#9ec264] text-black border-[#9ec264] shadow-xl" : "bg-white/5 text-white/40 border-white/5"} ${collabMode === "selected" && selectedUserIds.length > 0 ? "px-3.5 py-2.5 gap-2 rounded-full" : "w-10 py-2.5 rounded-full"}`}
             title={getCollabLabel()}
           >

@@ -1,5 +1,6 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { Prisma } from '@prisma/client';
 import { requireAuth } from '$lib/server/middleware/auth';
 import { rateLimitByUser } from '$lib/server/middleware/rateLimit';
 import { sanitizePollData } from '$lib/server/utils/sanitize';
@@ -84,7 +85,8 @@ export const POST: RequestHandler = async (event) => {
       hashtags,
       location,
       options,
-      settings
+      settings,
+      visibility // Extraer visibility
     } = data;
 
     // ========================================
@@ -207,6 +209,8 @@ export const POST: RequestHandler = async (event) => {
           type: type || 'simple',
           imageUrl: imageUrl || null,
           status: 'active',
+          visibility: visibility || 'public',
+          collabMode: settings?.collabMode || 'me',
           closedAt: closedAt,
           options: {
             create: options.map((opt: any, index: number) => ({
@@ -232,6 +236,20 @@ export const POST: RequestHandler = async (event) => {
           }
         }
       });
+
+      // Guardar colaboradores si el modo es "selected"
+      if (settings?.collabMode === 'selected' && settings?.selectedUserIds?.length > 0) {
+        const collaboratorIds = settings.selectedUserIds.map((id: any) => Number(id)).filter((n: number) => !isNaN(n));
+        if (collaboratorIds.length > 0) {
+          await tx.pollCollaborator.createMany({
+            data: collaboratorIds.map((uid: number) => ({
+              pollId: newPoll.id,
+              userId: uid
+            })),
+            skipDuplicates: true
+          });
+        }
+      }
 
       // Procesar hashtags si existen (ya validados y sanitizados)
       if (hashtags && Array.isArray(hashtags) && hashtags.length > 0) {
@@ -282,145 +300,169 @@ export const POST: RequestHandler = async (event) => {
   }
 };
 
-export const GET: RequestHandler = async ({ url }) => {
-  const page = Math.max(1, Number(url.searchParams.get('page') ?? '1'));
-  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? '20')));
-  const category = url.searchParams.get('category');
-  const search = url.searchParams.get('search');
-  const userId = url.searchParams.get('userId');
+export const GET: RequestHandler = async ({ url, locals }) => {
+  try {
+    const page = Math.max(1, Number(url.searchParams.get('page') ?? '1'));
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? '20')));
+    const category = url.searchParams.get('category');
+    const search = url.searchParams.get('search');
+    const userId = url.searchParams.get('userId');
 
-  const where = {
-    status: 'active',
-    // Excluir rells del listado general, a menos que se filtre por userId
-    // (en ese caso se incluyen los rells de ese usuario)
-    ...(!userId && { isRell: false }),
-    ...(category && { category }),
-    ...(userId && { userId: Number(userId) }),
-    ...(search && {
-      OR: [
-        { title: { contains: search } },
-        { description: { contains: search } },
-      ],
-    }),
-  };
+    // Get current user's followed IDs for checking "isFollowing" status
+    const currentUserId = locals.user?.userId;
+    let followingIds = new Set<number>();
+    let pendingIds = new Set<number>();
 
-  const [polls, total] = await Promise.all([
-    prisma.poll.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            avatarUrl: true,
-            verified: true,
-          },
+    if (currentUserId) {
+      const follows = await prisma.userFollower.findMany({
+        where: { followerId: currentUserId },
+        select: { followingId: true, status: true }
+      });
+      follows.forEach(f => {
+        if (f.status === 'accepted') followingIds.add(f.followingId);
+        else if (f.status === 'pending') pendingIds.add(f.followingId);
+      });
+    }
+
+    const where = {
+      status: 'active',
+      ...(!userId && { isRell: false }),
+      ...(category && { category }),
+      ...(userId && { userId: Number(userId) }),
+      ...(search && {
+        OR: [
+          { title: { contains: search } },
+          { description: { contains: search } },
+        ],
+      }),
+    };
+
+    const pollInclude = {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          verified: true,
         },
-        originalPoll: {
-          select: {
-            id: true,
-            title: true,
-            options: {
-              orderBy: { displayOrder: 'asc' },
-              include: {
-                createdBy: {
-                  select: {
-                    id: true,
-                    avatarUrl: true,
-                    displayName: true
-                  }
-                },
-                _count: {
-                  select: {
-                    votes: true
-                  }
+      },
+      originalPoll: {
+        select: {
+          id: true,
+          title: true,
+          options: {
+            orderBy: { displayOrder: 'asc' },
+            include: {
+              createdBy: {
+                select: {
+                  id: true,
+                  avatarUrl: true,
+                  displayName: true
                 }
-              }
-            }
-          },
-        },
-        options: {
-          orderBy: { displayOrder: 'asc' },
-          include: {
-            createdBy: {
-              select: {
-                id: true,
-                avatarUrl: true,
-                displayName: true
-              }
-            },
-            _count: {
-              select: {
-                votes: true
+              },
+              _count: {
+                select: {
+                  votes: true
+                }
               }
             }
           }
         },
-        _count: {
-          select: {
-            votes: true,
-            comments: true,
-            interactions: true,
+      },
+      options: {
+        orderBy: { displayOrder: 'asc' },
+        include: {
+          createdBy: {
+            select: {
+              id: true,
+              avatarUrl: true,
+              displayName: true
+            }
           },
+          _count: {
+            select: {
+              votes: true
+            }
+          }
+        }
+      },
+      _count: {
+        select: {
+          votes: true,
+          comments: true,
+          interactions: true,
         },
       },
+      collaborators: {
+        select: { userId: true }
+      }
+    } satisfies Prisma.PollInclude;
+
+    const pollsQuery = prisma.poll.findMany({
+      where,
+      include: pollInclude,
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
-    }),
-    prisma.poll.count({ where }),
-  ]);
+    });
 
-  // Transformar datos: calcular voteCount para cada opción desde votos reales
-  // Agregar hashIds para URLs públicas
-  const transformedPolls = polls.map(poll => {
-    // Si es un rell sin opciones propias, usar las opciones del poll original
-    let pollOptions = poll.options;
+    const countQuery = prisma.poll.count({ where });
 
-    if (poll.isRell && poll.originalPoll && poll.options.length === 0 && poll.originalPoll.options) {
-      console.log('[API polls] ✅ Rell sin opciones, usando las del original. Rell ID:', poll.id, 'Original:', poll.originalPollId);
-      pollOptions = poll.originalPoll.options;
-    }
+    const [polls, total] = await Promise.all([pollsQuery, countQuery]);
 
-    // Find correct option hashId for quiz type
-    let correctOptionHashId: string | null = null;
-    if (poll.correctOptionId) {
-      const correctOpt = pollOptions.find((o: any) => o.id === poll.correctOptionId);
-      if (correctOpt) {
-        correctOptionHashId = encodeOptionId(correctOpt.id);
+    type PollWithData = Prisma.PollGetPayload<{ include: typeof pollInclude }>;
+
+    const transformedPolls = (polls as PollWithData[]).map(poll => {
+      let pollOptions = poll.options;
+
+      if (poll.isRell && poll.originalPoll && poll.options.length === 0 && poll.originalPoll.options) {
+        // console.log('[API polls] ✅ Rell sin opciones, usando las del original. Rell ID:', poll.id);
+        pollOptions = poll.originalPoll.options;
       }
-    }
 
-    return {
-      ...poll,
-      hashId: encodePollId(poll.id), // ID hasheado para URLs públicas
-      correctOptionHashId, // Hash ID of correct option for quiz type
-      user: poll.user ? {
-        ...poll.user,
-        hashId: encodeUserId(poll.user.id),
-      } : null,
-      options: pollOptions.map((option: any) => ({
-        ...option,
-        hashId: encodeOptionId(option.id),
-        voteCount: option._count?.votes || 0,
-        // Mantener avatarUrl del creador para compatibilidad con frontend
-        avatarUrl: option.createdBy?.avatarUrl || null,
-        createdBy: option.createdBy ? {
-          ...option.createdBy,
-          hashId: encodeUserId(option.createdBy.id),
+      let correctOptionHashId: string | null = null;
+      if (poll.correctOptionId) {
+        const correctOpt = pollOptions.find(o => o.id === poll.correctOptionId);
+        if (correctOpt) {
+          correctOptionHashId = encodeOptionId(correctOpt.id);
+        }
+      }
+
+      return {
+        ...poll,
+        hashId: encodePollId(poll.id),
+        correctOptionHashId,
+        isFollowing: followingIds.has(poll.userId),
+        isPending: pendingIds.has(poll.userId),
+        user: poll.user ? {
+          ...poll.user,
+          hashId: encodeUserId(poll.user.id),
         } : null,
-      }))
-    };
-  });
+        options: pollOptions.map((option: any) => ({
+          ...option,
+          hashId: encodeOptionId(option.id),
+          voteCount: option._count?.votes || 0,
+          avatarUrl: option.createdBy?.avatarUrl || null,
+          createdBy: option.createdBy ? {
+            ...option.createdBy,
+            hashId: encodeUserId(option.createdBy.id),
+          } : null,
+        }))
+      };
+    });
 
-  return json({
-    data: transformedPolls,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  });
+    return json({
+      data: transformedPolls,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('[API GET /polls] Error:', error);
+    return json({ error: 'Internal Server Error', details: (error as Error).message }, { status: 500 });
+  }
 };

@@ -24,6 +24,8 @@
     Infinity as InfinityIcon,
     Globe,
     Lock,
+    UserPlus,
+    UserCheck,
   } from "lucide-svelte";
   import type {
     Post,
@@ -74,6 +76,92 @@
     switchToReels,
     viewMode = "feed",
   }: Props = $props();
+
+  import { currentUser } from "$lib/stores/auth";
+
+  // Follow logic
+  let isFollowing = $state(post.isFollowing || false);
+  let isPending = $state(post.isPending || false);
+
+  $effect(() => {
+    isFollowing = post.isFollowing || false;
+    isPending = post.isPending || false;
+  });
+
+  const isSelf = $derived(
+    $currentUser &&
+      ((post.userId &&
+        post.userId === ($currentUser.userId || ($currentUser as any).id)) ||
+        post.author === $currentUser.username),
+  );
+
+  async function handleFollow() {
+    if (!$currentUser) return;
+    const oldFollow = isFollowing;
+    const oldPending = isPending;
+
+    // Optimistic update
+    if (isPending) {
+      isPending = false;
+    } else if (isFollowing) {
+      isFollowing = false;
+    } else {
+      // Si no sabemos si es privado, mostramos 'Siguiendo' temporalmente
+      // El servidor corregirá si es 'pending'
+      isFollowing = true;
+    }
+
+    try {
+      const targetId = post.userId;
+      if (!targetId) throw new Error("No user ID");
+
+      // Si antes teniamos algo (pending o follow) y ahora nada -> DELETE
+      // Si antes nada y ahora algo -> POST
+      const isDeleting =
+        (oldFollow || oldPending) && !isFollowing && !isPending;
+      const method = isDeleting ? "DELETE" : "POST";
+
+      const res = await fetch(`/api/users/${targetId}/follow`, { method });
+      if (!res.ok) throw new Error("API Error");
+
+      if (!isDeleting) {
+        const data = await res.json();
+        if (data.success && data.status) {
+          isFollowing = data.status === "accepted";
+          isPending = data.status === "pending";
+        }
+      }
+    } catch (e) {
+      isFollowing = oldFollow;
+      isPending = oldPending;
+      console.error("Error following:", e);
+    }
+  }
+
+  const canAddOption = $derived.by(() => {
+    // Si la encuesta está cerrada, nadie puede añadir
+    if (isClosed) return false;
+
+    // Si no hay usuario logueado, no puede añadir
+    if (!$currentUser) return false;
+
+    // Si soy el creador, siempre puedo añadir
+    if (isSelf) return true;
+
+    // Verificar permisos basados en collabMode
+    const mode = (post as any).collabMode || "me";
+
+    if (mode === "public") return true;
+    if (mode === "me") return false;
+
+    if (mode === "selected") {
+      const collaborators = (post as any).collaborators || [];
+      const userId = $currentUser.userId || ($currentUser as any).id;
+      return collaborators.some((c: any) => c.userId === userId);
+    }
+
+    return false;
+  });
 
   let swipeAnim = $state<"left" | "right" | null>(null);
   let expandedScrollRef: HTMLElement | null = $state(null);
@@ -336,11 +424,27 @@
               >
                 {post.author}
               </h3>
-              <button
-                class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1"
-              >
-                Seguir
-              </button>
+              {#if !isSelf}
+                <button
+                  onclick={handleFollow}
+                  class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1 flex items-center {isFollowing
+                    ? '!bg-emerald-500/20 !text-emerald-400'
+                    : ''} {isPending
+                    ? '!bg-yellow-500/20 !text-yellow-400'
+                    : ''}"
+                >
+                  {#if isFollowing}
+                    <UserCheck size={14} class="mr-1" />
+                    <span>Siguiendo</span>
+                  {:else if isPending}
+                    <Clock size={14} class="mr-1" />
+                    <span>Solicitado</span>
+                  {:else}
+                    <UserPlus size={14} class="mr-1" />
+                    <span>Seguir</span>
+                  {/if}
+                </button>
+              {/if}
             </div>
 
             <!-- Row 2: Metadata (Time • Expiration • Extra) -->
@@ -462,11 +566,27 @@
               >
                 {post.author}
               </h3>
-              <button
-                class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1"
-              >
-                Seguir
-              </button>
+              {#if !isSelf}
+                <button
+                  onclick={handleFollow}
+                  class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1 flex items-center {isFollowing
+                    ? '!bg-emerald-500/20 !text-emerald-400'
+                    : ''} {isPending
+                    ? '!bg-yellow-500/20 !text-yellow-400'
+                    : ''}"
+                >
+                  {#if isFollowing}
+                    <UserCheck size={14} class="mr-1" />
+                    <span>Siguiendo</span>
+                  {:else if isPending}
+                    <Clock size={14} class="mr-1" />
+                    <span>Solicitado</span>
+                  {:else}
+                    <UserPlus size={14} class="mr-1" />
+                    <span>Seguir</span>
+                  {/if}
+                </button>
+              {/if}
             </div>
 
             <!-- Row 2: Metadata (Time • Expiration • Extra) -->
@@ -997,7 +1117,9 @@
             <Share2 size="1.1rem" />
           </button>
         </div>
-        <div class="w-px h-[1rem] bg-white/10"></div>
+        {#if isClosed || canAddOption}
+          <div class="w-px h-[1rem] bg-white/10"></div>
+        {/if}
         <div class="relative">
           {#if isClosed}
             <!-- Poll is closed - show lock icon with popup on click -->
@@ -1052,18 +1174,20 @@
               </div>
             {/if}
           {:else}
-            <!-- Poll is open - show add button -->
-            <button
-              onclick={() => setAdding(post.id)}
-              class="flex items-center justify-center w-[2.2rem] h-[2.2rem] rounded-full text-black transition-all duration-300 shadow-lg group hover:scale-110"
-              style="background-color: #9ec264;"
-            >
-              <Plus
-                size="1.1rem"
-                strokeWidth={3}
-                class="group-hover:rotate-90 transition-transform duration-300"
-              />
-            </button>
+            <!-- Poll is open - show add button if user has permission -->
+            {#if canAddOption}
+              <button
+                onclick={() => setAdding(post.id)}
+                class="flex items-center justify-center w-[2.2rem] h-[2.2rem] rounded-full text-black transition-all duration-300 shadow-lg group hover:scale-110"
+                style="background-color: #9ec264;"
+              >
+                <Plus
+                  size="1.1rem"
+                  strokeWidth={3}
+                  class="group-hover:rotate-90 transition-transform duration-300"
+                />
+              </button>
+            {/if}
           {/if}
         </div>
       </div>

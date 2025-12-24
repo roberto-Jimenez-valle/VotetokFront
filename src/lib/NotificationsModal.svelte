@@ -16,6 +16,7 @@
     markImageFailed,
     shouldRetryImage,
   } from "$lib/stores/failed-images-store";
+  import { notificationCounts } from "$lib/stores/notifications";
 
   const dispatch = createEventDispatcher();
 
@@ -29,7 +30,7 @@
   let isProfileModalOpen = $state(false);
   let selectedUserId = $state<number | null>(null);
 
-  // Swipe handlers para cerrar modal - SOLO si scroll está en top
+  // Swipe handlers para cerrar modal
   let modalTouchStartY = 0;
   let scrollContainer: HTMLElement | null = $state(null);
 
@@ -38,7 +39,6 @@
   }
 
   function handleModalSwipeMove(e: TouchEvent) {
-    // Solo cerrar si el scroll está en la parte superior
     if (!scrollContainer || scrollContainer.scrollTop > 0) return;
 
     const deltaY = e.touches[0].clientY - modalTouchStartY;
@@ -47,134 +47,79 @@
     }
   }
 
-  let filterTab = $state<"all" | "mentions" | "votes" | "follows">("all");
+  let filterTab = $state<"all" | "mentions" | "votes" | "follows" | "messages">(
+    "all",
+  );
+  let notifications = $state<any[]>([]);
+  let loading = $state(false);
 
-  // Mock data para notificaciones
-  const notifications = [
-    {
-      id: 1000,
-      type: "system",
-      icon: TrendingUp,
-      user: {
-        name: "Dev Team",
-        avatar:
-          "https://ui-avatars.com/api/?name=Dev+Team&background=10b981&color=fff",
-      },
-      message: "ha actualizado el status",
-      poll: "Production Checklist",
-      time: "Ahora mismo",
-      read: false,
-      link: "/production-checklist",
-    },
-    {
-      id: 999,
-      type: "system",
-      icon: FileText,
-      user: {
-        name: "VoteTok System",
-        avatar:
-          "https://ui-avatars.com/api/?name=Vote+Tok&background=6366f1&color=fff",
-      },
-      message: "ha generado un nuevo reporte",
-      poll: "Secret Flow Report v1",
-      time: "Hace 1 hora",
-      read: false,
-      link: "/secret-flow-report-v1",
-    },
-    {
-      id: 1,
-      type: "vote",
-      icon: TrendingUp,
-      user: {
-        name: "María González",
-        avatar: "https://i.pravatar.cc/150?img=1",
-      },
-      message: "votó en tu encuesta",
-      poll: "¿Mejor película del año?",
-      time: "hace 5 min",
-      read: false,
-    },
-    {
-      id: 2,
-      type: "like",
-      icon: Heart,
-      user: {
-        name: "Carlos López",
-        avatar: "https://i.pravatar.cc/150?img=12",
-      },
-      message: "le gustó tu encuesta",
-      poll: "Cambio climático 2024",
-      time: "hace 15 min",
-      read: false,
-    },
-    {
-      id: 3,
-      type: "follow",
-      icon: UserPlus,
-      user: { name: "Ana Martínez", avatar: "https://i.pravatar.cc/150?img=5" },
-      message: "comenzó a seguirte",
-      time: "hace 1 hora",
-      read: false,
-    },
-    {
-      id: 4,
-      type: "comment",
-      icon: MessageCircle,
-      user: { name: "David Ruiz", avatar: "https://i.pravatar.cc/150?img=13" },
-      message: "comentó en",
-      poll: "Tecnología IA",
-      time: "hace 2 horas",
-      read: true,
-    },
-    {
-      id: 5,
-      type: "vote",
-      icon: TrendingUp,
-      user: {
-        name: "Laura Sánchez",
-        avatar: "https://i.pravatar.cc/150?img=9",
-      },
-      message: "votó en tu encuesta",
-      poll: "Deportes favoritos",
-      time: "hace 3 horas",
-      read: true,
-    },
-    {
-      id: 6,
-      type: "vote",
-      icon: TrendingUp,
-      user: {
-        name: "Pedro García",
-        avatar: "https://i.pravatar.cc/150?img=14",
-      },
-      message: "votó en tu encuesta",
-      poll: "Mejor serie del año",
-      time: "hace 4 horas",
-      read: true,
-    },
-    {
-      id: 7,
-      type: "like",
-      icon: Heart,
-      user: { name: "Isabel Ruiz", avatar: "https://i.pravatar.cc/150?img=10" },
-      message: "le gustó tu encuesta",
-      poll: "Música favorita",
-      time: "hace 5 horas",
-      read: true,
-    },
-    {
-      id: 8,
-      type: "follow",
-      icon: UserPlus,
-      user: {
-        name: "Miguel Torres",
-        avatar: "https://i.pravatar.cc/150?img=15",
-      },
-      message: "comenzó a seguirte",
-      time: "hace 6 horas",
-      read: true,
-    },
-  ];
+  function formatRelativeTime(dateString: string) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = (now.getTime() - date.getTime()) / 1000;
+
+    if (diff < 60) return "Ahora mismo";
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `hace ${Math.floor(diff / 3600)} horas`;
+    return `hace ${Math.floor(diff / 86400)} días`;
+  }
+
+  async function loadNotifications() {
+    if (!isOpen) return;
+    loading = true;
+    try {
+      const res = await fetch(`/api/notifications?filter=${filterTab}`);
+      const result = await res.json();
+      if (result.success) {
+        if (result.counts) {
+          notificationCounts.set(result.counts);
+        }
+        notifications = result.data.map((n: any) => {
+          let icon = TrendingUp; // Default
+          // Map icons based on type
+          if (n.type === "VOTE") icon = TrendingUp;
+          else if (n.type === "LIKE") icon = Heart;
+          else if (n.type === "COMMENT") icon = MessageCircle;
+          else if (n.type === "MENTION") icon = MessageCircle;
+          else if (n.type === "NEW_FOLLOWER" || n.type === "FOLLOW_REQUEST")
+            icon = UserPlus;
+          else if (n.type === "SYSTEM") icon = FileText;
+          else if (n.type === "MESSAGE") icon = MessageCircle;
+
+          const meta = n.data || {};
+
+          return {
+            id: n.id,
+            type: n.type.toLowerCase(),
+            icon,
+            user: {
+              name: n.actor?.displayName || n.actor?.username || "Sistema",
+              avatar: n.actor?.avatarUrl || null,
+              id: n.actor?.id,
+            },
+            message: n.message || "Nueva notificación",
+            poll: meta.pollTitle || meta.title,
+            time: formatRelativeTime(n.createdAt),
+            read: n.read,
+            link: meta.link,
+          };
+        });
+      }
+    } catch (e) {
+      console.error("Error loading notifications:", e);
+    } finally {
+      loading = false;
+    }
+  }
+
+  // Effect to load notifications when open or filter changes
+  $effect(() => {
+    if (isOpen) {
+      // Verify filterTab dependency is tracked
+      const _ = filterTab;
+      loadNotifications();
+    }
+  });
 
   function closeModal() {
     isOpen = false;
@@ -214,23 +159,51 @@
     };
   });
 
-  function markAllAsRead() {
-    // Lógica para marcar todas como leídas
-    console.log("Marcar todas como leídas");
+  async function markAllAsRead() {
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        body: JSON.stringify({ all: true }),
+      });
+      // Optimistic update
+      notifications = notifications.map((n) => ({ ...n, read: true }));
+      // Update global store
+      notificationCounts.set({
+        all: 0,
+        mentions: 0,
+        votes: 0,
+        follows: 0,
+        messages: 0,
+      });
+    } catch (e) {
+      console.error("Error marking read", e);
+    }
   }
 
-  function handleNotificationClick(notificationId: number) {
-    const notification = notifications.find((n) => n.id === notificationId);
-    if (notification && (notification as any).link) {
-      window.location.href = (notification as any).link;
+  function handleNotificationClick(notification: any) {
+    if (notification.link) {
+      window.location.href = notification.link;
       return;
     }
-    // Lógica para abrir la encuesta/perfil correspondiente
-    console.log("Abrir notificación:", notificationId);
-    dispatch("notificationClick", { notificationId });
+    // Si no es leída, marcar como leída individualmente
+    if (!notification.read) {
+      fetch("/api/notifications", {
+        method: "PATCH",
+        body: JSON.stringify({ id: notification.id }),
+      });
+      notifications = notifications.map((n) =>
+        n.id === notification.id ? { ...n, read: true } : n,
+      );
+      // Decrement visible count conservatively
+      notificationCounts.update((c) => ({ ...c, all: Math.max(0, c.all - 1) }));
+    }
+
+    console.log("Abrir notificación:", notification.id);
+    dispatch("notificationClick", { notificationId: notification.id });
   }
 
   function handleAvatarClick(userId: number, event: Event) {
+    if (!userId) return;
     event.stopPropagation();
     selectedUserId = userId;
     isProfileModalOpen = true;
@@ -265,7 +238,9 @@
       <div class="modal-header-content">
         <Bell size={24} />
         <h2 id="notifications-modal-title">Notificaciones</h2>
-        <span class="notification-badge">3</span>
+        {#if $notificationCounts.all > 0}
+          <span class="notification-badge">{$notificationCounts.all}</span>
+        {/if}
       </div>
       <div class="header-actions">
         <button
@@ -291,6 +266,9 @@
           onclick={() => (filterTab = "all")}
         >
           Todas
+          {#if $notificationCounts.all > 0}<span class="tab-badge"
+              >{$notificationCounts.all}</span
+            >{/if}
         </button>
         <button
           class="filter-tab"
@@ -298,6 +276,9 @@
           onclick={() => (filterTab = "mentions")}
         >
           Menciones
+          {#if $notificationCounts.mentions > 0}<span class="tab-badge"
+              >{$notificationCounts.mentions}</span
+            >{/if}
         </button>
         <button
           class="filter-tab"
@@ -305,6 +286,9 @@
           onclick={() => (filterTab = "votes")}
         >
           Votos
+          {#if $notificationCounts.votes > 0}<span class="tab-badge"
+              >{$notificationCounts.votes}</span
+            >{/if}
         </button>
         <button
           class="filter-tab"
@@ -312,6 +296,19 @@
           onclick={() => (filterTab = "follows")}
         >
           Seguidores
+          {#if $notificationCounts.follows > 0}<span class="tab-badge"
+              >{$notificationCounts.follows}</span
+            >{/if}
+        </button>
+        <button
+          class="filter-tab"
+          class:active={filterTab === "messages"}
+          onclick={() => (filterTab = "messages")}
+        >
+          Mensajes
+          {#if $notificationCounts.messages > 0}<span class="tab-badge"
+              >{$notificationCounts.messages}</span
+            >{/if}
         </button>
       </div>
 
@@ -356,11 +353,11 @@
 
             <div
               class="notification-content"
-              onclick={() => handleNotificationClick(notification.id)}
+              onclick={() => handleNotificationClick(notification)}
               role="button"
               tabindex="0"
               onkeydown={(e) =>
-                e.key === "Enter" && handleNotificationClick(notification.id)}
+                e.key === "Enter" && handleNotificationClick(notification)}
             >
               <div class="notification-text">
                 <strong>{notification.user.name}</strong>
@@ -590,6 +587,21 @@
   .filter-tab.active {
     background: rgba(59, 130, 246, 0.3);
     color: #60a5fa;
+  }
+
+  .tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    height: 16px;
+    min-width: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    margin-left: 6px;
   }
 
   .notifications-list {

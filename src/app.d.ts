@@ -6,7 +6,20 @@ declare global {
 			message: string;
 			code?: string;
 		}
-		// interface Locals {}
+		interface Locals {
+			user?: {
+				userId: number;
+				username: string;
+				email?: string;
+				role: 'user' | 'verified' | 'premium' | 'moderator' | 'admin';
+			};
+			session?: {
+				userId: number;
+				username: string;
+				email?: string;
+				role: 'user' | 'verified' | 'premium' | 'moderator' | 'admin';
+			};
+		}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

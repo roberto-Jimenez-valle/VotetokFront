@@ -447,6 +447,10 @@
         `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiPoll.userId}`,
       time: getTimeAgo(apiPoll.createdAt),
       question: apiPoll.title || "Sin título",
+      collabMode: apiPoll.collabMode, // Añadido
+      collaborators: apiPoll.collaborators, // Añadido
+      userId: apiPoll.user?.id || apiPoll.userId, // Añadido para verificar permisos
+      isFollowing: apiPoll.isFollowing, // Añadido
       totalVotes,
       comments: apiPoll._count?.comments || 0,
       reposts: apiPoll._count?.interactions || 0,

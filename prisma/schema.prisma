@@ -20,6 +20,9 @@ model User {
   subdivisionId   String?             @map("subdivision_id")
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
+  isPrivate       Boolean             @default(false) @map("is_private")
+  notifications   Notification[]      @relation("UserNotifications")
+  sentNotifications Notification[]    @relation("NotificationActor")
   comments        Comment[]
   featuredProfile FeaturedUser?
   interactions    PollInteraction[]
@@ -31,6 +34,9 @@ model User {
   interests       UserInterest[]
   votes           Vote[]
   pollDrafts      PollDraft[]
+  collaborations  PollCollaborator[]
+  conversationParticipations ConversationParticipant[]
+  sentMessages    Message[]
 
   @@index([username])
   @@index([countryIso3])
@@ -48,6 +54,7 @@ model Poll {
   type            String            @default("standard")
   status          String            @default("active")
   visibility      String            @default("public")  // public, followers, mutuals
+  collabMode      String            @default("me") @map("collab_mode") // me, public, mutuals, selected
   isRell          Boolean           @default(false) @map("is_rell")
   originalPollId  Int?              @map("original_poll_id")
   correctOptionId Int?              @map("correct_option_id")
@@ -58,6 +65,7 @@ model Poll {
   hashtags       PollHashtag[]
   interactions   PollInteraction[]
   options        PollOption[]
+  collaborators  PollCollaborator[]
   originalPoll   Poll?             @relation("PollRells", fields: [originalPollId], references: [id])
   rells          Poll[]            @relation("PollRells")
   user           User              @relation("PollCreator", fields: [userId], references: [id], onDelete: Cascade)
@@ -69,11 +77,26 @@ model Poll {
   @@index([status])
   @@index([type])
   @@index([visibility])
+  @@index([collabMode])
   @@index([isRell])
   @@index([originalPollId])
   @@index([createdAt])
   @@index([status, createdAt])
   @@map("polls")
+}
+
+model PollCollaborator {
+  id        Int      @id @default(autoincrement())
+  pollId    Int      @map("poll_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@index([pollId])
+  @@map("poll_collaborators")
 }
 
 model PollOption {
@@ -181,6 +204,7 @@ model UserFollower {
   id          Int      @id @default(autoincrement())
   followerId  Int      @map("follower_id")
   followingId Int      @map("following_id")
+  status      String   @default("accepted")
   createdAt   DateTime @default(now()) @map("created_at")
   follower    User     @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
   following   User     @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
@@ -293,4 +317,61 @@ model PollDraft {
   @@index([userId])
   @@index([createdAt])
   @@map("poll_drafts")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id") // Receptor
+  actorId   Int?     @map("actor_id") // Emisor
+  type      String   // FOLLOW_REQUEST, NEW_FOLLOWER, etc
+  message   String?
+  read      Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([read])
+  @@map("notifications")
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId Int @map("conversation_id")
+  userId         Int @map("user_id")
+  unreadCount    Int @default(0) @map("unread_count")
+  joinedAt       DateTime @default(now()) @map("joined_at")
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             Int      @id @default(autoincrement())
+  conversationId Int      @map("conversation_id")
+  senderId       Int      @map("sender_id")
+  content        String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("messages")
 }

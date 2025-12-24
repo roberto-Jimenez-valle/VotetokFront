@@ -33,6 +33,11 @@ export interface Post {
   options: VoteOption[];
   correctOptionId?: string; // For quiz type
   endsAt?: string; // For polls ending soon
+  userId?: number;
+  collabMode?: string;
+  collaborators?: { userId: number }[];
+  isFollowing?: boolean;
+  isPending?: boolean;
 }
 
 export interface UserVotes {

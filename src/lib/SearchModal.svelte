@@ -1,6 +1,14 @@
 <script lang="ts">
   import { fade, fly } from "svelte/transition";
-  import { X, Search, TrendingUp, Clock, User } from "lucide-svelte";
+  import {
+    X,
+    Search,
+    TrendingUp,
+    Clock,
+    User,
+    UserPlus,
+    UserCheck,
+  } from "lucide-svelte";
   import { createEventDispatcher, onMount } from "svelte";
   import { apiCall } from "$lib/api/client";
   import { formatNumber } from "$lib/utils/pollHelpers";
@@ -370,16 +378,31 @@
           searchResults.users = [...searchResults.users];
         }
       } else {
-        // Seguir
-        const response = await apiCall(`/api/users/${user.id}/follow`, {
-          method: "POST",
-        });
+        if (user.isPending) {
+          const response = await apiCall(`/api/users/${user.id}/follow`, {
+            method: "DELETE",
+          });
+          if (response.ok) {
+            user.isPending = false;
+            searchResults.users = [...searchResults.users];
+          }
+        } else {
+          const response = await apiCall(`/api/users/${user.id}/follow`, {
+            method: "POST",
+          });
 
-        if (response.ok) {
-          // Actualizar estado local
-          user.isFollowing = true;
-          user.followersCount += 1;
-          searchResults.users = [...searchResults.users];
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status === "pending") {
+              user.isPending = true;
+              user.isFollowing = false;
+            } else {
+              user.isFollowing = true;
+              user.followersCount += 1;
+              user.isPending = false;
+            }
+            searchResults.users = [...searchResults.users];
+          }
         }
       }
     } catch (error) {
@@ -709,16 +732,24 @@
                       </div>
                     </div>
                   </button>
-                  <button
-                    class="follow-btn"
-                    class:following={user.isFollowing}
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      handleFollowToggle(user);
-                    }}
-                  >
-                    {user.isFollowing ? "Siguiendo" : "Seguir"}
-                  </button>
+                  {#if !$currentUser || ($currentUser.userId || ($currentUser as any).id) !== user.id}
+                    <button
+                      class="follow-btn flex items-center justify-center gap-1"
+                      class:following={user.isFollowing}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        handleFollowToggle(user);
+                      }}
+                    >
+                      {#if user.isFollowing}
+                        <UserCheck size={14} />
+                        <span>Siguiendo</span>
+                      {:else}
+                        <UserPlus size={14} />
+                        <span>Seguir</span>
+                      {/if}
+                    </button>
+                  {/if}
                 </div>
               {/each}
             </div>

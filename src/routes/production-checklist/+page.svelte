@@ -159,10 +159,8 @@
             items: [
                 {
                     label: "Sistema de Seguir (API)",
-                    status: "missing",
-                    critical: true,
-                    detail: "El botón de 'Seguir' que aparece junto al nombre del autor no hace nada. Es puramente decorativo ahora mismo.",
-                    action: "Conectar el botón con el servidor para que realmente registre que sigues a esa persona.",
+                    status: "done",
+                    detail: "Sistema completo conectado backend y frontend. Botón 'Seguir' funcional con estados optimistas y soporte para cuentas privadas (solicitudes pendientes vs. aprobadas).",
                 },
                 {
                     label: "Navegación en Avatar",
@@ -181,16 +179,14 @@
                 },
                 {
                     label: "Actividad/Notificaciones",
-                    status: "partial",
-                    note: "Solo datos mockeados",
-                    detail: "El panel de notificaciones muestra datos inventados, no notificaciones reales. No te enterarás si alguien vota tu encuesta.",
-                    action: "Conectar con el servidor para mostrar notificaciones reales.",
+                    status: "done",
+                    detail: "Implementación completa. Backend registra eventos (Follow, Vote, Comment). Modal muestra notificaciones reales con filtros, avatares, tiempos relativos ('hace 5 min') y navegación al contenido.",
                 },
                 {
                     label: "Mensajes Directos (DM)",
-                    status: "missing",
-                    detail: "No hay forma de enviar mensajes privados a otros usuarios. En muchas redes sociales esto es fundamental.",
-                    action: "Crear sistema completo de chat: lista de conversaciones, envío de mensajes, notificaciones push.",
+                    status: "partial",
+                    detail: "Backend (Modelos, API básica) y conteo de no leídos implementado. Falta UI completa para listar conversaciones y chat.",
+                    action: "Crear pantalla de conversaciones y chat individual.",
                 },
                 {
                     label: "Compartir en Apps Externas",

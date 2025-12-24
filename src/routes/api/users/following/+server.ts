@@ -4,19 +4,16 @@ import { prisma } from '$lib/server/prisma';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
-    const userId = url.searchParams.get('userId'); // Opcional: ID de usuario específico
+    const userId = url.searchParams.get('userId');
     const limit = Number(url.searchParams.get('limit') || '50');
     const search = url.searchParams.get('search') || '';
-
-    // Si no hay usuario especificado, intentar usar el usuario autenticado (si tienes auth en locals)
-    // Pero como aquí parece que usamos stores en el cliente, asumiremos que pasamos el ID o un parámetro "me"
-    // Para simplificar, requeriremos userId en la query por ahora
 
     if (!userId) {
         return json({ error: 'User ID is required' }, { status: 400 });
     }
 
     try {
+        // Buscar gente a la que SIGO
         const following = await prisma.userFollower.findMany({
             where: {
                 followerId: parseInt(userId),
@@ -29,31 +26,57 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             },
             take: limit,
             include: {
-                following: {
-                    select: {
-                        id: true,
-                        username: true,
-                        displayName: true,
-                        avatarUrl: true
-                    }
-                }
-            },
-            orderBy: {
-                createdAt: 'desc'
+                following: { select: { id: true, username: true, displayName: true, avatarUrl: true } }
             }
         });
 
-        // Mapear para devolver lista plana de usuarios
-        const users = following.map(f => ({
-            id: f.following.id,
-            username: f.following.username,
-            name: f.following.displayName, // Mapeamos displayName a name para consistencia con el frontend
-            avatar: f.following.avatarUrl
-        }));
+        // Buscar gente que ME SIGUE (Followers)
+        const followers = await prisma.userFollower.findMany({
+            where: {
+                followingId: parseInt(userId),
+                follower: {
+                    OR: [
+                        { username: { contains: search, mode: 'insensitive' } },
+                        { displayName: { contains: search, mode: 'insensitive' } }
+                    ]
+                }
+            },
+            take: limit,
+            include: {
+                follower: { select: { id: true, username: true, displayName: true, avatarUrl: true } }
+            }
+        });
 
-        return json(users);
+        // Combinar listas y eliminar duplicados por ID
+        const combinedUsers = new Map();
+
+        following.forEach(f => {
+            combinedUsers.set(f.following.id, {
+                id: f.following.id,
+                username: f.following.username,
+                name: f.following.displayName,
+                avatar: f.following.avatarUrl,
+                relation: 'following'
+            });
+        });
+
+        followers.forEach(f => {
+            if (combinedUsers.has(f.follower.id)) {
+                combinedUsers.get(f.follower.id).relation = 'mutual';
+            } else {
+                combinedUsers.set(f.follower.id, {
+                    id: f.follower.id,
+                    username: f.follower.username,
+                    name: f.follower.displayName,
+                    avatar: f.follower.avatarUrl,
+                    relation: 'follower'
+                });
+            }
+        });
+
+        return json(Array.from(combinedUsers.values()));
     } catch (error) {
-        console.error('Error fetching following:', error);
+        console.error('Error fetching connected users:', error);
         return json({ error: 'Internal server error' }, { status: 500 });
     }
 };
