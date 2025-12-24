@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fly, scale } from "svelte/transition";
   import {
     BarChart2,
     Check,
@@ -87,10 +88,27 @@
   }: Props = $props();
 
   import { currentUser } from "$lib/stores/auth";
+  import { loginModalOpen } from "$lib/stores/globalState";
+  import PostOptionsModal from "$lib/components/PostOptionsModal.svelte";
 
   // Follow logic
   let isFollowing = $state(post.isFollowing || false);
   let isPending = $state(post.isPending || false);
+  let showOptionsModal = $state(false);
+
+  function handleReport() {
+    alert(
+      "Reporte enviado. Gracias por ayudar a mantener segura la comunidad.",
+    );
+    // TODO: Implement actual report API
+  }
+
+  function handleDelete() {
+    if (confirm("¿Estás seguro de que quieres eliminar esta encuesta?")) {
+      // TODO: Implement actual delete API
+      alert("Encuesta eliminada (simulación)");
+    }
+  }
 
   $effect(() => {
     isFollowing = post.isFollowing || false;
@@ -105,7 +123,10 @@
   );
 
   async function handleFollow() {
-    if (!$currentUser) return;
+    if (!$currentUser) {
+      loginModalOpen.set(true);
+      return;
+    }
     const oldFollow = isFollowing;
     const oldPending = isPending;
 
@@ -353,21 +374,14 @@
     return vote === optionId;
   }
 
-  function handleOptionVote(optionId: string) {
-    if (isClosed) return;
-    if (post.type === "tierlist") {
-      onToggleRank(post.id, optionId);
-    } else {
-      onVote(post.id, optionId);
-    }
-  }
-
   // State for showing closed poll info popup
   let showClosedInfo = $state(false);
 
+  // Quiz Feedback State
+  let quizFeedback = $state<"correct" | "incorrect" | null>(null);
+
   function toggleClosedPollInfo() {
     showClosedInfo = !showClosedInfo;
-    // Auto-hide after 4 seconds
     if (showClosedInfo) {
       setTimeout(() => {
         showClosedInfo = false;
@@ -390,6 +404,46 @@
       }),
     };
   });
+
+  function handleOptionVote(optionId: string) {
+    if (isClosed) return;
+
+    // Auth Check
+    if (!$currentUser) {
+      loginModalOpen.set(true);
+      return;
+    }
+
+    // Visibility Check (Basic Client-Side)
+    // If private/friends-only and not author/friend (complex logic, relying mostly on backend,
+    // but at least auth check blocks anonymous votes)
+
+    if (post.type === "tierlist") {
+      onToggleRank(post.id, optionId);
+    } else {
+      // Quiz Feedback Logic
+      // Quiz Feedback Logic
+      if (post.type === "quiz") {
+        // Robust check: compare as strings to handle number/string mismatch
+        // AND check against hashId if available (in case frontend uses hashes)
+        const targetId = String(optionId);
+        const correctId = String(post.correctOptionId);
+        const correctHash = (post as any).correctOptionHashId;
+
+        const isCorrect =
+          targetId === correctId || (correctHash && targetId === correctHash);
+
+        quizFeedback = isCorrect ? "correct" : "incorrect";
+
+        // Auto-hide feedback after 2s
+        setTimeout(() => {
+          quizFeedback = null;
+        }, 2500);
+      }
+
+      onVote(post.id, optionId);
+    }
+  }
 </script>
 
 <article
@@ -656,6 +710,7 @@
             <!-- Actions (Top) -->
             <div class="flex items-center gap-1">
               <button
+                onclick={() => (showOptionsModal = true)}
                 class="text-slate-200 hover:text-white p-1.5 hover:bg-white/10 rounded-full transition-all active:scale-95 bg-black/20 backdrop-blur-sm"
               >
                 <MoreVertical size={16} />
@@ -1219,4 +1274,73 @@
       </div>
     </div>
   </div>
+  <!-- Quiz Feedback Overlay -->
+  {#if quizFeedback === "correct"}
+    <div
+      class="absolute inset-0 pointer-events-none z-50 flex items-center justify-center overflow-hidden rounded-xl"
+      in:scale={{ duration: 300, start: 0.8 }}
+      out:scale={{ duration: 200, start: 0.8, opacity: 0 }}
+    >
+      <div class="absolute inset-0 bg-emerald-500/20 backdrop-blur-[2px]"></div>
+      <div
+        class="text-[5rem] md:text-[8rem] animate-bounce drop-shadow-2xl z-10"
+      >
+        🎉
+      </div>
+
+      <!-- Simple CSS confetti particles -->
+      {#each Array(12) as _, i}
+        <div
+          class="absolute w-2 h-2 rounded-full animate-ping"
+          style="
+                      top: {50 + (Math.random() * 40 - 20)}%;
+                      left: {50 + (Math.random() * 40 - 20)}%;
+                      background-color: {[
+            '#ff0000',
+            '#00ff00',
+            '#0000ff',
+            '#ffff00',
+            '#ff00ff',
+          ][Math.floor(Math.random() * 5)]};
+                      opacity: 0.8;
+                      animation-duration: {0.6 + Math.random() * 0.4}s;
+                      animation-delay: {Math.random() * 0.1}s;
+                  "
+        ></div>
+      {/each}
+
+      <div
+        class="absolute bottom-10 bg-emerald-500 py-2 px-6 rounded-full text-white font-black text-xl shadow-lg animate-bounce"
+      >
+        ¡Correcto!
+      </div>
+    </div>
+  {:else if quizFeedback === "incorrect"}
+    <div
+      class="absolute inset-0 pointer-events-none z-50 flex items-center justify-center overflow-hidden rounded-xl"
+      in:scale={{ duration: 300, start: 0.8 }}
+      out:scale={{ duration: 200, start: 0.8, opacity: 0 }}
+    >
+      <div class="absolute inset-0 bg-red-500/20 backdrop-blur-[2px]"></div>
+      <div
+        class="text-[5rem] md:text-[8rem] animate-pulse drop-shadow-2xl z-10"
+      >
+        😢
+      </div>
+
+      <div
+        class="absolute bottom-10 bg-red-500 py-2 px-6 rounded-full text-white font-black text-xl shadow-lg"
+      >
+        ¡Fallaste!
+      </div>
+    </div>
+  {/if}
 </article>
+
+<PostOptionsModal
+  isOpen={showOptionsModal}
+  {post}
+  onClose={() => (showOptionsModal = false)}
+  onReport={handleReport}
+  onDelete={handleDelete}
+/>

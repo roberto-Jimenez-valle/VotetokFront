@@ -151,6 +151,16 @@
                     detail: "Cuando la cuenta atrás llega a cero, la encuesta se cierra automáticamente y muestra los resultados sin necesidad de recargar la página.",
                 },
                 {
+                    label: "Feedback Visual Trivial (Quiz)",
+                    status: "done",
+                    detail: "Implementado sistema de feedback visual: Confetti para respuestas correctas y animación de cara triste para fallos. Overlay animado con Svelte Transitions.",
+                },
+                {
+                    label: "Protección de Voto (Frontend)",
+                    status: "done",
+                    detail: "Se bloquea el voto si el usuario no está logueado (Showstopper). Validación de visibilidad pendiente de integración profunda con grafo social, pero auth check es seguro.",
+                },
+                {
                     label: "Reportar Contenido",
                     status: "missing",
                     critical: true,

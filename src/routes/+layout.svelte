@@ -8,6 +8,7 @@
 	import InstallPWABanner from "$lib/InstallPWABanner.svelte";
 	import MediaEmbed from "$lib/components/MediaEmbed.svelte";
 	import CookieBanner from "$lib/CookieBanner.svelte";
+	import AuthModal from "$lib/AuthModal.svelte";
 	// Store unificado de autenticación
 	import { setCurrentUser, setAuth, initAuth } from "$lib/stores/auth";
 	// Store para fullscreen iframe
@@ -16,6 +17,7 @@
 		closeFullscreenIframe,
 		initFullscreenIframeHistoryHandler,
 		preloadIframeUrl,
+		loginModalOpen,
 	} from "$lib/stores/globalState";
 
 	let { children } = $props();
@@ -222,6 +224,9 @@
 
 	<!-- Banner de Cookies GDPR -->
 	<CookieBanner />
+
+	<!-- Global Auth Modal -->
+	<AuthModal bind:isOpen={$loginModalOpen} />
 {/if}
 
 <!-- FULLSCREEN IFRAME OVERLAY (renderizado desde layout para evitar problemas de z-index) -->
