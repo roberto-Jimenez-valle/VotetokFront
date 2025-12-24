@@ -47,6 +47,7 @@ model Poll {
   imageUrl        String?           @map("image_url")
   type            String            @default("standard")
   status          String            @default("active")
+  visibility      String            @default("public")  // public, followers, mutuals
   isRell          Boolean           @default(false) @map("is_rell")
   originalPollId  Int?              @map("original_poll_id")
   correctOptionId Int?              @map("correct_option_id")
@@ -67,6 +68,7 @@ model Poll {
   @@index([category])
   @@index([status])
   @@index([type])
+  @@index([visibility])
   @@index([isRell])
   @@index([originalPollId])
   @@index([createdAt])

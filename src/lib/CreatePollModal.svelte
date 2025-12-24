@@ -195,6 +195,31 @@
   let selectedUserIds = $state<string[]>([]);
   let userSearchQuery = $state("");
 
+  // --- ESTADOS DE VISIBILIDAD ---
+  const VISIBILITY_MODES = [
+    {
+      id: "public",
+      label: "Público",
+      desc: "Cualquier persona puede ver esta encuesta",
+      icon: Globe,
+    },
+    {
+      id: "followers",
+      label: "Solo seguidores",
+      desc: "Solo quienes te siguen pueden verla",
+      icon: Users,
+    },
+    {
+      id: "mutuals",
+      label: "Solo amigos",
+      desc: "Solo amigos mutuos (os seguís mutuamente)",
+      icon: UserPlus,
+    },
+  ];
+
+  let visibility = $state("public");
+  let showVisibilityModal = $state(false);
+
   // --- ESTADOS DE DURACIÓN ---
   let startsNow = $state(true);
   let startDate = $state("");
@@ -754,6 +779,7 @@
         userId: $currentUser.userId || ($currentUser as any).id,
         title: question.trim(),
         type: type,
+        visibility: visibility, // public, followers, or mutuals
         options: options.map((opt, idx) => ({
           optionKey: opt.id,
           optionLabel: opt.title || `Opción ${idx + 1}`,
@@ -1091,6 +1117,7 @@
     ];
     collabMode = "me";
     selectedUserIds = [];
+    visibility = "public";
     startsNow = true;
     selectedDuration = "indefinite";
     customEndDate = "";
@@ -1682,6 +1709,79 @@
         </div>
       {/if}
 
+      <!-- MODAL DE VISIBILIDAD -->
+      {#if showVisibilityModal}
+        <div
+          class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+          transition:fade
+        >
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onclick={() => (showVisibilityModal = false)}
+          ></div>
+          <div
+            class="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-[2.5rem] p-6 shadow-2xl"
+            in:scale={{ start: 0.95, duration: 300 }}
+          >
+            <div class="flex justify-between items-center py-2 mb-6">
+              <h3
+                class="text-base sm:text-lg md:text-xl font-black uppercase tracking-widest text-white/90 ml-2"
+              >
+                ¿Quién puede ver?
+              </h3>
+              <button
+                onclick={() => (showVisibilityModal = false)}
+                class="p-3 bg-white/5 rounded-full"
+                ><X class="w-[1.25rem] h-[1.25rem]" /></button
+              >
+            </div>
+
+            <div class="space-y-3">
+              {#each VISIBILITY_MODES as mode}
+                <button
+                  onclick={() => {
+                    visibility = mode.id;
+                    showVisibilityModal = false;
+                  }}
+                  class={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${visibility === mode.id ? "bg-indigo-500/20 border-indigo-500 text-white" : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"}`}
+                >
+                  <div
+                    class={`p-3 rounded-xl ${visibility === mode.id ? "bg-indigo-500 text-white" : "bg-white/10 text-white/40"}`}
+                  >
+                    <mode.icon class="w-5 h-5" />
+                  </div>
+                  <div class="text-left flex-1">
+                    <div class="font-bold text-sm">{mode.label}</div>
+                    <div class="text-xs opacity-60">{mode.desc}</div>
+                  </div>
+                  {#if visibility === mode.id}
+                    <Check class="w-5 h-5 text-indigo-400" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+
+            <div class="mt-6 p-4 bg-white/5 rounded-xl border border-white/10">
+              <p class="text-xs text-white/50 leading-relaxed">
+                {#if visibility === "public"}
+                  <span class="text-indigo-400 font-bold">🌍 Público:</span> Cualquier
+                  persona en VouTop podrá ver y votar en tu encuesta.
+                {:else if visibility === "followers"}
+                  <span class="text-indigo-400 font-bold">👥 Seguidores:</span> Solo
+                  las personas que te siguen podrán ver esta encuesta.
+                {:else}
+                  <span class="text-indigo-400 font-bold">🤝 Amigos:</span> Solo
+                  las personas con las que tienes una relación mutua (os seguís ambos)
+                  podrán verla.
+                {/if}
+              </p>
+            </div>
+          </div>
+        </div>
+      {/if}
+
       <!-- MODAL DE AYUDA / INFO -->
       {#if showHelpModal && activeTypeData}
         <div
@@ -1766,6 +1866,22 @@
               <span class="text-[0.6rem] font-black"
                 >{selectedUserIds.length}</span
               >
+            {/if}
+          </button>
+
+          <!-- Visibilidad -->
+          <button
+            onclick={() => (showVisibilityModal = true)}
+            class={`flex items-center justify-center transition-all border active:scale-90 ${visibility !== "public" ? "bg-indigo-500 text-white border-indigo-500 shadow-xl" : "bg-white/5 text-white/40 border-white/5"} w-10 py-2.5 rounded-full`}
+            title={VISIBILITY_MODES.find((v) => v.id === visibility)?.label ||
+              "Público"}
+          >
+            {#if visibility === "public"}
+              <Globe class="w-[1rem] h-[1rem]" />
+            {:else if visibility === "followers"}
+              <Users class="w-[1rem] h-[1rem]" />
+            {:else}
+              <UserPlus class="w-[1rem] h-[1rem]" />
             {/if}
           </button>
 

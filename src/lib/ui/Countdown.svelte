@@ -1,12 +1,18 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
 
-    export let date: string | Date | undefined;
-    export let fallback: string = "Expira pronto";
+    interface Props {
+        date: string | Date | undefined;
+        fallback?: string;
+        onExpire?: () => void;
+    }
 
-    let timeString = "";
+    let { date, fallback = "Expira pronto", onExpire }: Props = $props();
+
+    let timeString = $state("");
     let interval: ReturnType<typeof setInterval>;
-    let isExpired = false;
+    let isExpired = $state(false);
+    let hasNotifiedExpiry = false;
 
     function updateTime() {
         if (!date) {
@@ -21,6 +27,12 @@
         if (diff <= 0) {
             timeString = "Cerrada";
             isExpired = true;
+
+            // Only notify once when it expires
+            if (!hasNotifiedExpiry && onExpire) {
+                hasNotifiedExpiry = true;
+                onExpire();
+            }
             return;
         }
 
@@ -51,4 +63,4 @@
     });
 </script>
 
-<span>{timeString}</span>
+<span class={isExpired ? "text-red-400" : ""}>{timeString}</span>

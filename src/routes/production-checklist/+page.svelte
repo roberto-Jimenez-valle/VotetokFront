@@ -31,11 +31,8 @@
             items: [
                 {
                     label: "Login con Google (OAuth)",
-                    status: "missing",
-                    critical: true,
-                    note: "Único método de acceso permitido",
-                    detail: "Ahora mismo no hay forma de que un usuario real entre en la app. Necesitamos conectar el botón de 'Iniciar Sesión' con Google. Cuando el usuario pulse, se abrirá una ventana de Google donde elige su cuenta, y automáticamente entrará a VoteTok sin necesidad de crear contraseñas.",
-                    action: "Configurar las credenciales de Google Cloud Console y añadir el flujo OAuth al modal de login.",
+                    status: "done",
+                    detail: "El login con Google está completamente implementado. El AuthModal abre un popup de OAuth, el backend procesa el callback y crea/actualiza usuarios automáticamente. Ver GOOGLE_OAUTH_SETUP.md para la configuración.",
                 },
                 {
                     label: "Persistencia JWT (LocalStorage)",
@@ -49,18 +46,13 @@
                 },
                 {
                     label: "Lógica de Refresh Token",
-                    status: "missing",
-                    critical: true,
-                    note: "Fallo silencioso en 401 actualmente",
-                    detail: "Si el usuario deja la app abierta mucho tiempo, su sesión puede caducar. Actualmente, cuando esto pasa, la app falla sin avisar. Lo ideal es que automáticamente pida un nuevo pase sin que el usuario lo note.",
-                    action: "Implementar un sistema que detecte cuando la sesión caduca y la renueve automáticamente en segundo plano.",
+                    status: "done",
+                    detail: "Sistema completo implementado: endpoint /api/auth/refresh, auto-refresh proactivo antes de expiración, y fetchWithAuth() que reintenta automáticamente en errores 401.",
                 },
                 {
                     label: "Rutas Protegidas (Middleware)",
-                    status: "partial",
-                    note: "Solo chequeos básicos en cliente",
-                    detail: "Algunas páginas deberían ser privadas (como el perfil, crear encuesta). Ahora solo comprobamos en el navegador si el usuario está logueado, pero un hacker podría saltárselo.",
-                    action: "Añadir una capa de protección en el servidor que bloquee peticiones no autorizadas.",
+                    status: "done",
+                    detail: "Middleware completo implementado en hooks.server.ts: App Signature, JWT extraction, Rate Limiting, Security Headers. Helpers en auth.ts: requireAuth(), requireRole(), requireOwnership() para protección granular de endpoints.",
                 },
             ],
         },
@@ -98,10 +90,8 @@
                 },
                 {
                     label: "Skeleton Loaders",
-                    status: "missing",
-                    note: "Actualmente usa spinners simples",
-                    detail: "Cuando el contenido carga, ahora aparece un círculo girando. Es más moderno y agradable mostrar 'esqueletos' grises que simulan la forma del contenido mientras carga.",
-                    action: "Sustituir los spinners por componentes skeleton animados.",
+                    status: "done",
+                    detail: "Componente Skeleton.svelte creado con variantes: text, card, poll, avatar, image, button. Integrado en VotingFeed para la carga inicial y placeholders de avatares.",
                 },
                 {
                     label: "Optimización de Imágenes (CDN)",
@@ -112,9 +102,8 @@
                 },
                 {
                     label: "Pull-to-Refresh",
-                    status: "missing",
-                    detail: "En otras apps, puedes arrastrar hacia abajo para refrescar el contenido. Esto aún no funciona en VoteTok.",
-                    action: "Añadir el gesto de 'tirar hacia abajo' para recargar el feed.",
+                    status: "done",
+                    detail: "Implementado en VotingFeed: arrastra hacia abajo cuando estés arriba del todo para refrescar. Indicador visual con flecha que se invierte al alcanzar el umbral y spinner durante la carga.",
                 },
             ],
         },
@@ -140,10 +129,8 @@
                 },
                 {
                     label: "Cuenta Atrás (Expiración)",
-                    status: "partial",
-                    note: "Solo visual, falta evento auto-close",
-                    detail: "Se muestra cuánto tiempo falta para que cierre una encuesta, pero cuando llega a cero, la encuesta sigue pareciendo abierta hasta que alguien recarga.",
-                    action: "Hacer que automáticamente la encuesta se cierre visualmente cuando expire el tiempo.",
+                    status: "done",
+                    detail: "Cuando la cuenta atrás llega a cero, la encuesta se cierra automáticamente y muestra los resultados sin necesidad de recargar la página.",
                 },
                 {
                     label: "Reportar Contenido",
@@ -160,10 +147,8 @@
                 },
                 {
                     label: "Ajustes de Visibilidad",
-                    status: "missing",
-                    note: "Público vs Solo Amigos",
-                    detail: "Todas las encuestas son públicas. Sería bueno poder elegir que solo tus seguidores puedan verla.",
-                    action: "Añadir un selector de privacidad al crear encuesta.",
+                    status: "done",
+                    detail: "Selector de visibilidad añadido al crear encuesta: Público, Solo seguidores, o Solo amigos mutuos. Campo visibility en la BD y UI completa.",
                 },
             ],
         },

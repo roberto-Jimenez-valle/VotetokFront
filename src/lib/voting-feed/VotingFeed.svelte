@@ -17,6 +17,7 @@
   import CreatePollModal from "$lib/CreatePollModal.svelte";
   import UserProfileModal from "$lib/UserProfileModal.svelte";
   import Select from "$lib/ui/Select.svelte";
+  import Skeleton from "$lib/ui/Skeleton.svelte";
   import { apiCall } from "$lib/api/client";
   import { currentUser } from "$lib/stores/auth";
 
@@ -70,6 +71,71 @@
   let isCreatePollModalOpen = $state(false);
   let buttonColors = $state<string[]>([]);
   let isDesktop = $state(false);
+
+  // Pull-to-Refresh states
+  let pullStartY = $state(0);
+  let pullDistance = $state(0);
+  let isPulling = $state(false);
+  let isRefreshing = $state(false);
+  const PULL_THRESHOLD = 70; // Minimum pull distance to trigger refresh
+  const MAX_PULL = 180; // Maximum visual pull distance (more drag room)
+
+  function handleTouchStart(e: TouchEvent) {
+    // Only enable pull-to-refresh when at top of scroll
+    if (feedContainer && feedContainer.scrollTop === 0) {
+      pullStartY = e.touches[0].clientY;
+      isPulling = true;
+    }
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    if (!isPulling || isRefreshing) return;
+
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - pullStartY;
+
+    // Only pull down, not up
+    if (diff > 0) {
+      // Apply resistance (slow down as you pull more)
+      pullDistance = Math.min(diff * 0.5, MAX_PULL);
+
+      // Prevent default scroll when pulling
+      if (pullDistance > 10) {
+        e.preventDefault();
+      }
+    }
+  }
+
+  async function handleTouchEnd() {
+    if (!isPulling) return;
+    isPulling = false;
+
+    if (pullDistance >= PULL_THRESHOLD && !isRefreshing) {
+      // Trigger refresh
+      isRefreshing = true;
+      pullDistance = 50; // Keep some pull distance during refresh
+
+      try {
+        // Show skeleton during refresh (removed silent mode)
+        await fetchPolls();
+        await fetchTrendingPosts();
+        loadFriendStories();
+      } finally {
+        isRefreshing = false;
+        // Bounce animation - briefly overshoot before settling
+        pullDistance = -20;
+        setTimeout(() => {
+          pullDistance = 0;
+        }, 150);
+      }
+    } else {
+      // Cancel - animate back with slight bounce
+      pullDistance = -10;
+      setTimeout(() => {
+        pullDistance = 0;
+      }, 150);
+    }
+  }
 
   onMount(() => {
     const checkDesktop = () => {
@@ -450,12 +516,16 @@
     return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   }
 
-  async function fetchPolls(loadMore = false) {
+  async function fetchPolls(loadMore = false, silent = false) {
     if (loadMore) {
       if (isLoadingMore || !hasMore) return;
       isLoadingMore = true;
-    } else {
+    } else if (!silent) {
+      // Only show loading state if not a silent refresh (like pull-to-refresh)
       isLoading = true;
+      page = 1;
+      hasMore = true;
+    } else {
       page = 1;
       hasMore = true;
     }
@@ -821,10 +891,23 @@
   <!-- Main Content -->
   <main class="flex-1 overflow-hidden relative">
     {#if isLoading}
-      <div class="h-full flex items-center justify-center">
-        <div class="flex flex-col items-center gap-4">
-          <Loader2 size={40} class="animate-spin text-indigo-500" />
-          <p class="text-slate-400 text-sm">Cargando encuestas...</p>
+      <!-- Skeleton Loading State -->
+      <div class="h-full overflow-y-auto pb-24">
+        <div class="feed-container-width mx-auto px-4 pt-4 space-y-4">
+          <!-- Story avatars skeleton -->
+          <div class="flex gap-4 pb-4 overflow-hidden">
+            {#each Array(6) as _}
+              <div class="flex flex-col items-center gap-1.5 min-w-[72px]">
+                <Skeleton circle size="64px" />
+                <Skeleton width="48px" height="12px" rounded="4px" />
+              </div>
+            {/each}
+          </div>
+
+          <!-- Poll skeletons -->
+          {#each Array(3) as _}
+            <Skeleton variant="poll" />
+          {/each}
         </div>
       </div>
     {:else if error}
@@ -853,10 +936,83 @@
         </div>
       </div>
     {:else if currentView === "feed"}
+      <!-- Pull-to-Refresh Indicator - Dark gray animated -->
+      {#if pullDistance > 0 || isRefreshing}
+        {@const progress = Math.min(pullDistance / PULL_THRESHOLD, 1)}
+        {@const isReady = pullDistance >= PULL_THRESHOLD}
+        <div
+          class="fixed left-1/2 -translate-x-1/2 z-50 flex items-center justify-center pointer-events-none lg:pl-20"
+          style="top: calc(4rem + {Math.min(
+            pullDistance * 0.6,
+            40,
+          )}px); opacity: {Math.min(pullDistance / (PULL_THRESHOLD * 0.3), 1)};"
+        >
+          <!-- Outer pulsing ring -->
+          <div
+            class="absolute rounded-full transition-all duration-300"
+            style="
+              width: {40 + progress * 20}px;
+              height: {40 + progress * 20}px;
+              background: radial-gradient(circle, transparent 60%, rgba(255, 255, 255, {isReady
+              ? '0.15'
+              : '0.05'}) 100%);
+              animation: {isRefreshing
+              ? 'pulse-ring 1s ease-in-out infinite'
+              : 'none'};
+            "
+          ></div>
+
+          <!-- Main indicator circle - Dark gray -->
+          <div
+            class="relative w-11 h-11 rounded-full flex items-center justify-center shadow-2xl transition-all duration-200"
+            style="
+              transform: scale({0.7 + progress * 0.4}) rotate({pullDistance *
+              2}deg);
+              background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+              border: 2px solid rgba(255, 255, 255, {isReady ? '0.2' : '0.08'});
+              box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            "
+          >
+            {#if isRefreshing}
+              <!-- Spinning loader -->
+              <Loader2
+                size={20}
+                class="animate-spin text-gray-400"
+                style="animation-duration: 0.7s;"
+              />
+            {:else}
+              <!-- Arrow that rotates -->
+              <svg
+                class="w-5 h-5 transition-all duration-300"
+                style="transform: rotate({isReady ? 180 : 0}deg) scale({0.8 +
+                  progress * 0.3}); color: {isReady
+                  ? 'rgba(255, 255, 255, 0.9)'
+                  : 'rgba(255, 255, 255, 0.5)'};"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="6,9 12,15 18,9"></polyline>
+              </svg>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
       <div
         class="h-full overflow-y-auto scroll-smooth pb-24"
         bind:this={feedContainer}
         onscroll={handleScroll}
+        ontouchstart={handleTouchStart}
+        ontouchmove={handleTouchMove}
+        ontouchend={handleTouchEnd}
+        style="transform: translateY({pullDistance *
+          0.5}px); transition: {isPulling
+          ? 'none'
+          : 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'}; overscroll-behavior: none; touch-action: pan-y;"
       >
         <div class="feed-container-width mx-auto min-h-full bg-black/20 pb-10">
           {#if activeTab === "Para ti" || activeTab === "Amigos"}
@@ -894,12 +1050,12 @@
 
                   {#if sortedFriendStories.length === 0}
                     <!-- Placeholder avatars when loading -->
-                    {#each Array(6) as _, i}
+                    {#each Array(6) as _}
                       <div
-                        class="flex flex-col items-center gap-1.5 min-w-[72px] animate-pulse"
+                        class="flex flex-col items-center gap-1.5 min-w-[72px]"
                       >
-                        <div class="w-16 h-16 rounded-full bg-slate-700"></div>
-                        <div class="w-12 h-3 rounded bg-slate-700"></div>
+                        <Skeleton circle size="64px" />
+                        <Skeleton width="48px" height="12px" rounded="4px" />
                       </div>
                     {/each}
                   {/if}
@@ -1244,7 +1400,7 @@
                 {switchToReels}
                 viewMode="feed"
               />
-              <div class="h-[1px] w-full bg-white/5 my-4"></div>
+              <div class="h-[1px] w-full bg-white/10 my-4"></div>
             {/each}
 
             <!-- Loading more indicator -->
@@ -1635,5 +1791,11 @@
     .reel-content {
       max-width: min(70vw, 1300px);
     }
+  }
+
+  /* Disable browser's native pull-to-refresh */
+  :global(html),
+  :global(body) {
+    overscroll-behavior-y: contain;
   }
 </style>

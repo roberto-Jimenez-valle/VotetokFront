@@ -23,6 +23,7 @@
     Clock,
     Infinity as InfinityIcon,
     Globe,
+    Lock,
   } from "lucide-svelte";
   import type {
     Post,
@@ -78,6 +79,13 @@
   let expandedScrollRef: HTMLElement | null = $state(null);
   let currentExpandedIndex = $state(0);
 
+  // Track if the countdown just expired (for real-time visual update)
+  let expiredByCountdown = $state(false);
+
+  function handleCountdownExpire() {
+    expiredByCountdown = true;
+  }
+
   // Scroll to the clicked option when expanded, or to last option when adding
   $effect(() => {
     if (expandedPostId === post.id && expandedOptionId && expandedScrollRef) {
@@ -129,8 +137,10 @@
   }
 
   const config = $derived(POST_CONFIGS[post.type] || POST_CONFIGS.standard);
+  // Check if closed by initial date OR by countdown expiring in real-time
   const isClosed = $derived(
-    post.endsAt ? new Date(post.endsAt) < new Date() : false,
+    expiredByCountdown ||
+      (post.endsAt ? new Date(post.endsAt) < new Date() : false),
   );
   const hasVoted = $derived(!!userVotes[post.id]);
   const shouldShowResults = $derived(hasVoted || isClosed);
@@ -254,12 +264,41 @@
       onVote(post.id, optionId);
     }
   }
+
+  // State for showing closed poll info popup
+  let showClosedInfo = $state(false);
+
+  function toggleClosedPollInfo() {
+    showClosedInfo = !showClosedInfo;
+    // Auto-hide after 4 seconds
+    if (showClosedInfo) {
+      setTimeout(() => {
+        showClosedInfo = false;
+      }, 4000);
+    }
+  }
+
+  const closedDateFormatted = $derived.by(() => {
+    if (!post.endsAt) return null;
+    const date = new Date(post.endsAt);
+    return {
+      date: date.toLocaleDateString("es-ES", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+      time: date.toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+  });
 </script>
 
 <article
   class="relative {isReels
     ? 'flex-1 h-full flex flex-col overflow-hidden'
-    : 'mb-6'} w-full"
+    : 'mb-3'} w-full"
 >
   {#if !isReels}
     <div
@@ -267,13 +306,11 @@
     ></div>
   {/if}
 
-  <div
-    class="relative {isReels ? 'flex-1 flex flex-col min-h-0' : 'pb-4 pl-0.5'}"
-  >
+  <div class="relative {isReels ? 'flex-1 flex flex-col min-h-0' : 'pl-0.5'}">
     <!-- Header -->
     {#if !isReels}
       {@const Icon = getIconComponent(config.icon)}
-      <div class="px-5 pt-4 pb-2">
+      <div class="px-5 pt-2 pb-2">
         <div class="flex gap-3">
           <!-- Avatar -->
           <div class="relative flex-shrink-0 group cursor-pointer self-start">
@@ -320,7 +357,11 @@
                   class="flex items-center gap-1 text-orange-400/90 flex-shrink-0"
                 >
                   <Clock size={10} strokeWidth={2.5} />
-                  <Countdown date={post.endsAt} fallback="Expira pronto" />
+                  <Countdown
+                    date={post.endsAt}
+                    fallback="Expira pronto"
+                    onExpire={handleCountdownExpire}
+                  />
                 </div>
               {:else}
                 <div
@@ -350,12 +391,16 @@
                 class="text-slate-500 hover:text-indigo-400 p-1.5 rounded-full hover:bg-white/5 transition-all active:scale-95"
                 title="Ver en modo Top"
               >
-                <Maximize size={16} />
+                <img
+                  src="/rel_ico.PNG"
+                  alt="Reels"
+                  class="w-5 h-5 opacity-70 hover:opacity-100 transition-opacity"
+                />
               </button>
               <button
                 class="text-slate-500 hover:text-white p-1.5 hover:bg-white/5 rounded-full transition-all active:scale-95"
               >
-                <MoreVertical size={16} />
+                <MoreVertical size={20} />
               </button>
             </div>
           </div>
@@ -438,7 +483,11 @@
                   class="flex items-center gap-1 text-orange-400/90 flex-shrink-0"
                 >
                   <Clock size={10} strokeWidth={2.5} />
-                  <Countdown date={post.endsAt} fallback="Expira pronto" />
+                  <Countdown
+                    date={post.endsAt}
+                    fallback="Expira pronto"
+                    onExpire={handleCountdownExpire}
+                  />
                 </div>
               {:else}
                 <div
@@ -901,9 +950,9 @@
 
     <!-- Footer Icons -->
     <div
-      class="mt-auto shrink-0 pt-4 {isReels
-        ? 'pb-14'
-        : 'pb-4'} flex items-center justify-between {isReels ? 'px-6' : 'px-4'}"
+      class="mt-auto shrink-0 pt-2 {isReels
+        ? 'pb-4'
+        : 'pb-0'} flex items-center justify-between {isReels ? 'px-6' : 'px-4'}"
     >
       <div class="flex items-center gap-3">
         <div
@@ -949,18 +998,73 @@
           </button>
         </div>
         <div class="w-px h-[1rem] bg-white/10"></div>
-        <div>
-          <button
-            onclick={() => setAdding(post.id)}
-            class="flex items-center justify-center w-[2.2rem] h-[2.2rem] rounded-full text-black transition-all duration-300 shadow-lg group hover:scale-110"
-            style="background-color: #9ec264;"
-          >
-            <Plus
-              size="1.1rem"
-              strokeWidth={3}
-              class="group-hover:rotate-90 transition-transform duration-300"
-            />
-          </button>
+        <div class="relative">
+          {#if isClosed}
+            <!-- Poll is closed - show lock icon with popup on click -->
+            <button
+              onclick={toggleClosedPollInfo}
+              class="flex items-center justify-center w-[2.2rem] h-[2.2rem] rounded-full bg-slate-700/50 text-slate-500 border border-slate-600/30 hover:bg-slate-600/50 hover:text-slate-400 transition-all active:scale-95"
+              title="Encuesta cerrada"
+            >
+              <Lock size="1rem" strokeWidth={2.5} />
+            </button>
+
+            <!-- Info popup -->
+            {#if showClosedInfo}
+              <div
+                class="absolute bottom-full right-0 mb-2 w-56 p-3 rounded-xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200 z-50"
+              >
+                <!-- Arrow -->
+                <div
+                  class="absolute -bottom-1.5 right-4 w-3 h-3 bg-slate-900/95 rotate-45 border-r border-b border-white/10"
+                ></div>
+
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="p-1.5 rounded-lg bg-red-500/20">
+                    <Lock size={14} class="text-red-400" />
+                  </div>
+                  <span class="text-sm font-bold text-white"
+                    >Encuesta Cerrada</span
+                  >
+                </div>
+
+                {#if closedDateFormatted}
+                  <p class="text-xs text-slate-400 mb-1.5">
+                    Finalizó el <span class="text-slate-300 font-medium"
+                      >{closedDateFormatted.date}</span
+                    >
+                    a las
+                    <span class="text-slate-300 font-medium"
+                      >{closedDateFormatted.time}</span
+                    >
+                  </p>
+                {/if}
+
+                <div
+                  class="flex items-center gap-1.5 pt-2 border-t border-white/5"
+                >
+                  <BarChart2 size={12} class="text-indigo-400" />
+                  <span class="text-xs text-slate-400">Total:</span>
+                  <span class="text-xs font-bold text-white"
+                    >{post.totalVotes.toLocaleString()} votos</span
+                  >
+                </div>
+              </div>
+            {/if}
+          {:else}
+            <!-- Poll is open - show add button -->
+            <button
+              onclick={() => setAdding(post.id)}
+              class="flex items-center justify-center w-[2.2rem] h-[2.2rem] rounded-full text-black transition-all duration-300 shadow-lg group hover:scale-110"
+              style="background-color: #9ec264;"
+            >
+              <Plus
+                size="1.1rem"
+                strokeWidth={3}
+                class="group-hover:rotate-90 transition-transform duration-300"
+              />
+            </button>
+          {/if}
         </div>
       </div>
     </div>
