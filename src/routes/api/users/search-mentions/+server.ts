@@ -72,13 +72,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         avatarUrl: true,
         verified: true,
         isPrivate: true,
-        followers: {
-          where: { followerId: userId },
-          select: { followerId: true } // Me siguen a mi? No, esto es quienes le siguen a EL candidato. Si aparece mi ID, yo le sigo.
+        followers: { // Relación "UserFollowers": Registros donde el candidato es el seguidor
+          where: { followingId: userId }, // ¿Sigue al usuario actual?
+          select: { followingId: true } 
         },
-        following: {
-          where: { followingId: userId },
-          select: { followingId: true } // A quienes sigue EL candidato. Si aparece mi ID, él me sigue.
+        following: { // Relación "UserFollowing": Registros donde el candidato es seguido
+          where: { followerId: userId }, // ¿Es seguido por el usuario actual?
+          select: { followerId: true } 
         }
       },
       take: limit * 2 // Traemos un poco más para filtrar
@@ -89,10 +89,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       if (!candidate.isPrivate) return true;
 
       // 2. Si es privado, debe ser amigo (mutual).
-      // Yo le sigo (estoy en sus followers)
-      const iFollowThem = candidate.followers.length > 0;
-      // Él me sigue (estoy en sus following)
-      const theyFollowMe = candidate.following.length > 0;
+      // Él me sigue (estoy en su lista de 'followers' - donde él es el follower)
+      const theyFollowMe = candidate.followers.length > 0;
+      // Yo le sigo (estoy en su lista de 'following' - donde él es el seguido)
+      const iFollowThem = candidate.following.length > 0;
 
       return iFollowThem && theyFollowMe;
     }).slice(0, limit);
