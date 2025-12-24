@@ -38,6 +38,7 @@ export interface Post {
   collaborators?: { userId: number }[];
   isFollowing?: boolean;
   isPending?: boolean;
+  isReposted?: boolean;
 }
 
 export interface UserVotes {

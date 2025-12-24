@@ -28,7 +28,7 @@
     pollTitle = ''
   }: {
     isOpen: boolean;
-    pollId: number;
+    pollId: number | string;
     pollTitle?: string;
   } = $props();
   

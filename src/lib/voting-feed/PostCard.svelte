@@ -56,6 +56,11 @@
     setAdding: (postId: string | null) => void;
     switchToReels: (postId: string) => void;
     viewMode?: ViewMode;
+    // New interaction handlers
+    onComment?: (post: Post) => void;
+    onShare?: (post: Post) => void;
+    onRepost?: (post: Post) => void;
+    onAvatarClick?: (post: Post) => void;
   }
 
   let {
@@ -75,6 +80,10 @@
     setAdding,
     switchToReels,
     viewMode = "feed",
+    onComment,
+    onShare,
+    onRepost,
+    onAvatarClick,
   }: Props = $props();
 
   import { currentUser } from "$lib/stores/auth";
@@ -401,7 +410,13 @@
       <div class="px-5 pt-2 pb-2">
         <div class="flex gap-3">
           <!-- Avatar -->
-          <div class="relative flex-shrink-0 group cursor-pointer self-start">
+          <div
+            class="relative flex-shrink-0 group cursor-pointer self-start"
+            onclick={() => onAvatarClick?.(post)}
+            role="button"
+            tabindex="0"
+            onkeydown={(e) => e.key === "Enter" && onAvatarClick?.(post)}
+          >
             <div
               class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347] shadow-lg group-hover:shadow-[#9ec264]/20 transition-all"
             >
@@ -417,13 +432,14 @@
           <div class="flex-1 min-w-0 flex flex-col pt-0.5">
             <!-- Row 1: Name & Follow -->
             <div class="flex items-center gap-2 mb-0.5">
-              <h3
-                class="font-bold text-white text-sm tracking-tight hover:text-[#9ec264] cursor-pointer truncate transition-colors"
+              <button
+                onclick={() => onAvatarClick?.(post)}
+                class="font-bold text-white text-sm tracking-tight hover:text-[#9ec264] cursor-pointer truncate transition-colors text-left"
                 style="max-width: 14ch;"
                 title={post.author}
               >
                 {post.author}
-              </h3>
+              </button>
               {#if !isSelf}
                 <button
                   onclick={handleFollow}
@@ -543,7 +559,13 @@
           </button>
 
           <!-- Avatar -->
-          <div class="relative flex-shrink-0 group cursor-pointer self-start">
+          <div
+            class="relative flex-shrink-0 group cursor-pointer self-start"
+            onclick={() => onAvatarClick?.(post)}
+            role="button"
+            tabindex="0"
+            onkeydown={(e) => e.key === "Enter" && onAvatarClick?.(post)}
+          >
             <div
               class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347] shadow-lg group-hover:shadow-[#9ec264]/20 transition-all"
             >
@@ -559,13 +581,14 @@
           <div class="flex-1 min-w-0 flex flex-col pt-0.5">
             <!-- Row 1: Name & Follow -->
             <div class="flex items-center gap-2 mb-0.5">
-              <h3
-                class="font-bold text-white text-sm tracking-tight hover:text-[#9ec264] cursor-pointer truncate transition-colors"
+              <button
+                onclick={() => onAvatarClick?.(post)}
+                class="font-bold text-white text-sm tracking-tight hover:text-[#9ec264] cursor-pointer truncate transition-colors text-left"
                 style="max-width: 14ch;"
                 title={post.author}
               >
                 {post.author}
-              </h3>
+              </button>
               {#if !isSelf}
                 <button
                   onclick={handleFollow}
@@ -1089,6 +1112,7 @@
           class="flex items-center {isReels ? 'gap-[1rem]' : 'gap-[1.5rem]'}"
         >
           <button
+            onclick={() => onComment?.(post)}
             class="flex items-center gap-[0.4rem] text-slate-400 hover:text-blue-400 transition-colors group"
           >
             <MessageCircle
@@ -1098,6 +1122,7 @@
             <span class="text-[0.7rem] font-bold">{post.comments || 0}</span>
           </button>
           <button
+            onclick={() => onRepost?.(post)}
             class="flex items-center gap-[0.4rem] text-slate-400 hover:text-emerald-400 transition-colors group"
           >
             <Repeat2
@@ -1112,6 +1137,7 @@
             <Bookmark size="1.1rem" />
           </button>
           <button
+            onclick={() => onShare?.(post)}
             class="text-slate-400 hover:text-indigo-400 transition-colors hover:scale-110 transform"
           >
             <Share2 size="1.1rem" />

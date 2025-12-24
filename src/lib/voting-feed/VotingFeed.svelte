@@ -16,6 +16,8 @@
   import NavBottom from "$lib/nav-bottom.svelte";
   import CreatePollModal from "$lib/CreatePollModal.svelte";
   import UserProfileModal from "$lib/UserProfileModal.svelte";
+  import CommentsModal from "$lib/components/CommentsModal.svelte";
+  import ShareModal from "$lib/components/ShareModal.svelte";
   import Select from "$lib/ui/Select.svelte";
   import Skeleton from "$lib/ui/Skeleton.svelte";
   import { apiCall } from "$lib/api/client";
@@ -162,6 +164,16 @@
   // Profile modal states
   let isProfileModalOpen = $state(false);
   let selectedProfileUserId = $state<number | null>(null);
+
+  // Comments Modal State
+  let isCommentsModalOpen = $state(false);
+  let commentsPollId = $state<string | number>("");
+  let commentsPollTitle = $state("");
+
+  // Share Modal State
+  let isShareModalOpen = $state(false);
+  let sharePollHashId = $state("");
+  let sharePollTitle = $state("");
 
   // TopTabs state
   let activeTab = $state<"Para ti" | "Tendencias" | "Amigos" | "Live">(
@@ -845,8 +857,100 @@
     isCreatePollModalOpen = false;
   }
 
+  // Handle interactions
+  function handleComment(post: Post) {
+    commentsPollId = post.id;
+    commentsPollTitle = post.question;
+    isCommentsModalOpen = true;
+  }
+
+  function handleShare(post: Post) {
+    sharePollHashId = post.id; // Assuming id is the hashId or we have a hashId field. Post type says id is string.
+    sharePollTitle = post.question;
+    isShareModalOpen = true;
+  }
+
+  async function handleRepost(post: Post) {
+    if (!post || post.isReposted) return;
+    
+    // Optimistic update
+    posts = posts.map(p => {
+      if (p.id === post.id) {
+        return {
+          ...p,
+          reposts: (p.reposts || 0) + 1,
+          isReposted: true
+        };
+      }
+      return p;
+    });
+
+    try {
+      const res = await apiCall(`/api/polls/${post.id}/repost`, { method: 'POST' });
+      if (!res.ok) {
+        // Revert on error
+        posts = posts.map(p => {
+          if (p.id === post.id) {
+            return {
+              ...p,
+              reposts: Math.max(0, (p.reposts || 0) - 1),
+              isReposted: false
+            };
+          }
+          return p;
+        });
+        console.error("Error reposting");
+      }
+    } catch (e) {
+      console.error("Error reposting:", e);
+    }
+  }
+
+  function handleAvatarClick(post: Post) {
+    if (post.userId) {
+      selectedProfileUserId = post.userId;
+      isProfileModalOpen = true;
+    }
+  }
+
+  async function handleFriendStoryClick(friendId: string) {
+    if (!friendId) return;
+    
+    // Load that user's polls and switch to reels
+    isLoading = true;
+    try {
+      // Use the polls endpoint
+      const response = await apiCall(`/api/users/${friendId}/polls`);
+      if (response.ok) {
+        const data = await response.json();
+        const userPolls = (data.data || data.polls || data || []).map(transformApiPoll);
+        
+        if (userPolls.length > 0) {
+          posts = userPolls;
+          currentView = "reels";
+          // We are now in a "user mode". goHome needs to handle this.
+        } else {
+          // If no polls, open profile
+          selectedProfileUserId = Number(friendId);
+          isProfileModalOpen = true;
+        }
+      }
+    } catch (e) {
+      console.error("Error loading user reels:", e);
+      // Fallback to profile
+      selectedProfileUserId = Number(friendId);
+      isProfileModalOpen = true;
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  // Ref Updated goHome
   function goHome() {
     currentView = "feed";
+    // Reload main feed to ensure we aren't stuck on user polls
+    fetchPolls();
+    
     // Scroll to top
     const feedContainer = document.querySelector(".overflow-y-auto");
     if (feedContainer) {
@@ -1027,10 +1131,7 @@
                   {#each sortedFriendStories as friend (friend.id)}
                     <button
                       class="flex flex-col items-center gap-1.5 min-w-[72px]"
-                      onclick={() => {
-                        selectedFriendId = friend.id;
-                        currentView = "reels";
-                      }}
+                      onclick={() => handleFriendStoryClick(friend.id)}
                     >
                       <!-- Avatar with VouTop gradient ring -->
                       <div
@@ -1403,6 +1504,10 @@
                 {setAdding}
                 {switchToReels}
                 viewMode="feed"
+                onComment={handleComment}
+                onShare={handleShare}
+                onRepost={handleRepost}
+                onAvatarClick={handleAvatarClick}
               />
               <div class="h-[1px] w-full bg-white/10 my-4"></div>
             {/each}
@@ -1483,6 +1588,10 @@
                   {setAdding}
                   {switchToReels}
                   viewMode="reels"
+                  onComment={handleComment}
+                  onShare={handleShare}
+                  onRepost={handleRepost}
+                  onAvatarClick={handleAvatarClick}
                 />
               </div>
             {:else}
@@ -1530,6 +1639,20 @@
   <UserProfileModal
     bind:isOpen={isProfileModalOpen}
     bind:userId={selectedProfileUserId}
+  />
+
+  <!-- Comments Modal -->
+  <CommentsModal
+    bind:isOpen={isCommentsModalOpen}
+    pollId={commentsPollId}
+    pollTitle={commentsPollTitle}
+  />
+
+  <!-- Share Modal -->
+  <ShareModal
+    bind:isOpen={isShareModalOpen}
+    pollHashId={sharePollHashId}
+    pollTitle={sharePollTitle}
   />
 </div>
 
