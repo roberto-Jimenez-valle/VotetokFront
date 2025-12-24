@@ -257,12 +257,13 @@
 
     if (postType === "quiz" && hasVoted) {
       if (isCorrectOption) {
-        statusColor = "ring-2 ring-emerald-500/80 border-transparent";
-        bgOverlay = "bg-emerald-900/30";
-        glowEffect = "shadow-[0_0_20px_rgba(16,185,129,0.3)]";
+        statusColor =
+          "border-2 border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-[1.02] z-10";
+        bgOverlay = "bg-emerald-500/10";
       } else if (isSelected) {
-        statusColor = "ring-2 ring-red-500/80 border-transparent";
-        bgOverlay = "bg-red-900/30";
+        statusColor =
+          "border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] z-10";
+        bgOverlay = "bg-red-500/10";
       } else {
         statusColor = "opacity-40 grayscale-[0.8]";
       }
@@ -486,11 +487,14 @@
         {#if hasVoted && !isEditing}
           <div class="absolute bottom-0 left-0 w-full h-1.5 bg-slate-800/50">
             <div
-              class="h-full rounded-r-full shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all duration-1000 ease-out {isCorrectOption
+              class="h-full rounded-r-full shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all duration-1000 ease-out
+              {isCorrectOption
                 ? 'bg-emerald-500'
-                : postType === 'quiz'
+                : postType === 'quiz' && isSelected
                   ? 'bg-red-500'
-                  : option.bgBar || 'bg-indigo-500'}"
+                  : postType === 'quiz'
+                    ? 'bg-slate-600'
+                    : option.bgBar || 'bg-indigo-500'}"
               style="width: {percent}%"
             ></div>
           </div>

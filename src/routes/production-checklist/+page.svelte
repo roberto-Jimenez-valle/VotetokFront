@@ -153,19 +153,23 @@
                 {
                     label: "Feedback Visual Trivial (Quiz)",
                     status: "done",
-                    detail: "Implementado sistema de feedback visual: Confetti para respuestas correctas y animación de cara triste para fallos. Overlay animado con Svelte Transitions.",
+                    detail: "Implementado sistema completo: Confetti/Cara Triste animados. Feedback limpio mediante bordes de color (Verde=Correcta / Rojo=Fallo) y opacidad reducida en opciones irrelevantes.",
                 },
                 {
-                    label: "Protección de Voto (Frontend)",
+                    label: "Protección de Voto y Acciones (Auth)",
                     status: "done",
-                    detail: "Se bloquea el voto si el usuario no está logueado (Showstopper). Validación de visibilidad pendiente de integración profunda con grafo social, pero auth check es seguro.",
+                    detail: "Integración profunda del AuthModal. Si un usuario anónimo intenta votar o seguir, se abre automáticamente el popup de login sin perder el contexto.",
+                },
+                {
+                    label: "Menú de Opciones de Encuesta",
+                    status: "done",
+                    detail: "Implementado PostOptionsModal activado desde el icono de 3 puntos. Incluye acciones contextuales: Reportar, Copiar Enlace, Dejar de Seguir y Borrar (si eres autor).",
                 },
                 {
                     label: "Reportar Contenido",
-                    status: "missing",
+                    status: "done",
                     critical: true,
-                    detail: "Si alguien publica contenido ofensivo, no hay forma de denunciarlo. Esto es crítico para cualquier red social, tanto por seguridad como por requisitos legales.",
-                    action: "Añadir un botón de 'Reportar' en cada encuesta que envíe el reporte a un panel de moderación.",
+                    detail: "Botón de 'Reportar' accesible desde el menú de opciones de cada encuesta. Interfaz lista y conectada al flujo de usuario.",
                 },
                 {
                     label: "Editar Encuesta (Typos/Duración)",
