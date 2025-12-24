@@ -91,6 +91,13 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     }
 
     // Crear comentario
+    console.log('[Comments POST] Creating comment with:', {
+      pollId,
+      userId,
+      content: String(content).trim(),
+      parentCommentId: parentCommentId || null
+    });
+
     const comment = await prisma.comment.create({
       data: {
         pollId,
@@ -110,6 +117,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
         }
       }
     });
+    
+    console.log('[Comments POST] Comment created successfully:', comment.id);
 
     // Notificar al creador de la encuesta
     try {

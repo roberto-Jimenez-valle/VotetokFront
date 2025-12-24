@@ -887,22 +887,28 @@
 
     try {
       const res = await apiCall(`/api/polls/${post.id}/repost`, { method: 'POST' });
-      if (!res.ok) {
-        // Revert on error
-        posts = posts.map(p => {
-          if (p.id === post.id) {
-            return {
-              ...p,
-              reposts: Math.max(0, (p.reposts || 0) - 1),
-              isReposted: false
-            };
-          }
-          return p;
-        });
-        console.error("Error reposting");
-      }
-    } catch (e) {
+      // apiCall throws on error, so this block might be redundant if using try/catch properly around apiCall
+      // but let's keep it consistent with previous code style which seemed to expect apiCall to return response
+      // Wait, apiCall throws if !response.ok. So we only reach here if ok.
+    } catch (e: any) {
       console.error("Error reposting:", e);
+      // Revert optimistic update
+      posts = posts.map(p => {
+        if (p.id === post.id) {
+          return {
+            ...p,
+            reposts: Math.max(0, (p.reposts || 0) - 1),
+            isReposted: false
+          };
+        }
+        return p;
+      });
+      
+      // Show error to user
+      // Using alert for now as per minimal implementation, can be replaced with toast
+      if (e.message) {
+         alert(e.message);
+      }
     }
   }
 

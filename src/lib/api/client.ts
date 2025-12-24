@@ -103,9 +103,11 @@ export async function apiCall(
       throw new ApiError('Sesión expirada. Por favor inicia sesión de nuevo.', 'SESSION_EXPIRED', 401, error)
     }
 
-    // Error específico con código
-    if (error.code) {
-      throw new ApiError(error.message || response.statusText, error.code, response.status, error)
+    // Error específico con código o mensaje
+    if (error.code || error.message || error.error) {
+      const errorMessage = error.message || error.error || response.statusText
+      const errorCode = error.code || 'API_ERROR'
+      throw new ApiError(errorMessage, errorCode, response.status, error)
     }
 
     throw new ApiError(response.statusText, 'API_ERROR', response.status)

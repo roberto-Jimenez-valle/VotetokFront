@@ -1,5 +1,6 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 /**
  * POST /api/polls/[id]/view
@@ -7,9 +8,9 @@ import { prisma } from '$lib/server/prisma';
  */
 export const POST: RequestHandler = async ({ params, locals, getClientAddress }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id);
     
-    if (isNaN(pollId)) {
+    if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
     
@@ -85,9 +86,9 @@ export const POST: RequestHandler = async ({ params, locals, getClientAddress })
  */
 export const GET: RequestHandler = async ({ params }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id);
     
-    if (isNaN(pollId)) {
+    if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
     

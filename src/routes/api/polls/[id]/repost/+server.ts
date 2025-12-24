@@ -1,22 +1,28 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 /**
  * POST /api/polls/[id]/repost
  * Republicar una encuesta (crear repost)
- */
+ */// POST
 export const POST: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = Number(params.id);
+    console.log('[Repost API] POST request received for id:', params.id);
+    const pollId = parsePollIdInternal(params.id);
+    console.log('[Repost API] Parsed pollId:', pollId);
     
-    if (isNaN(pollId)) {
-      throw error(400, 'ID de encuesta inválido');
+    if (!pollId) {
+      console.log('[Repost API] Invalid poll ID');
+      return json({ success: false, message: 'ID de encuesta inválido' }, { status: 400 });
     }
     
     // Verificar autenticación
     const userId = locals.user?.userId || locals.user?.id;
+    console.log('[Repost API] User ID:', userId);
+    
     if (!userId) {
-      throw error(401, 'Debes iniciar sesión para republicar');
+      return json({ success: false, message: 'Debes iniciar sesión para republicar' }, { status: 401 });
     }
     
     // Verificar que la encuesta existe
@@ -26,12 +32,14 @@ export const POST: RequestHandler = async ({ params, locals }) => {
     });
     
     if (!poll) {
-      throw error(404, 'Encuesta no encontrada');
+      console.log('[Repost API] Poll not found');
+      return json({ success: false, message: 'Encuesta no encontrada' }, { status: 404 });
     }
     
     // No permitir republicar tu propia encuesta
     if (poll.userId === Number(userId)) {
-      throw error(400, 'No puedes republicar tu propia encuesta');
+      console.log('[Repost API] Attempted self-repost');
+      return json({ success: false, message: 'No puedes republicar tu propia encuesta' }, { status: 400 });
     }
     
     // Verificar si ya existe un repost
@@ -46,7 +54,8 @@ export const POST: RequestHandler = async ({ params, locals }) => {
     });
     
     if (existingRepost) {
-      throw error(400, 'Ya has republicado esta encuesta');
+      console.log('[Repost API] Already reposted');
+      return json({ success: false, message: 'Ya has republicado esta encuesta' }, { status: 400 });
     }
     
     // Crear el repost
@@ -76,8 +85,10 @@ export const POST: RequestHandler = async ({ params, locals }) => {
     });
   } catch (err: any) {
     console.error('[Repost] Error:', err);
-    if (err.status) throw err;
-    throw error(500, `Error al republicar: ${err.message}`);
+    return json({ 
+      success: false, 
+      message: err.message || 'Error al republicar' 
+    }, { status: err.status || 500 });
   }
 };
 
@@ -87,16 +98,16 @@ export const POST: RequestHandler = async ({ params, locals }) => {
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id);
     
-    if (isNaN(pollId)) {
-      throw error(400, 'ID de encuesta inválido');
+    if (!pollId) {
+      return json({ success: false, message: 'ID de encuesta inválido' }, { status: 400 });
     }
     
     // Verificar autenticación
     const userId = locals.user?.userId || locals.user?.id;
     if (!userId) {
-      throw error(401, 'Debes iniciar sesión');
+      return json({ success: false, message: 'Debes iniciar sesión' }, { status: 401 });
     }
     
     // Buscar el repost existente
@@ -111,7 +122,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
     });
     
     if (!existingRepost) {
-      throw error(404, 'No has republicado esta encuesta');
+      return json({ success: false, message: 'No has republicado esta encuesta' }, { status: 404 });
     }
     
     // Eliminar el repost
@@ -136,8 +147,10 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
     });
   } catch (err: any) {
     console.error('[Repost DELETE] Error:', err);
-    if (err.status) throw err;
-    throw error(500, `Error al eliminar repost: ${err.message}`);
+    return json({ 
+      success: false, 
+      message: err.message || 'Error al eliminar repost' 
+    }, { status: err.status || 500 });
   }
 };
 
@@ -147,9 +160,9 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
  */
 export const GET: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id);
     
-    if (isNaN(pollId)) {
+    if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
     

@@ -118,9 +118,9 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
  */
 export const GET: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id);
     
-    if (isNaN(pollId)) {
+    if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
     

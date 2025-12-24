@@ -59,7 +59,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     return json({
       data: [],
       meta: {
-        pollId: Number(params.id),
+        pollId: parsePollIdInternal(params.id) || 0,
         days: Number(url.searchParams.get('days') || '30'),
         startDate: new Date().toISOString(),
         endDate: new Date().toISOString(),

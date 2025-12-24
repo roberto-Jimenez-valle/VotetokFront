@@ -1,10 +1,15 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 export const GET: RequestHandler = async ({ params }) => {
-  const pollId = Number(params.id);
+  const pollId = parsePollIdInternal(params.id);
 
   // Verificar que la encuesta existe
+  if (!pollId) {
+    throw error(404, 'Poll not found');
+  }
+
   const poll = await prisma.poll.findUnique({
     where: { id: pollId },
     select: { id: true },
