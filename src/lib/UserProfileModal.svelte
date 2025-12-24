@@ -13,6 +13,7 @@
     Loader2,
     TrendingUp,
     BarChart,
+    ClipboardList,
   } from "lucide-svelte";
   import { createEventDispatcher, onMount } from "svelte";
   import SinglePollSection from "$lib/globe/cards/sections/SinglePollSection.svelte";
@@ -177,8 +178,9 @@
         userVotes = [];
       }
 
-      // TODO: Verificar si seguimos al usuario (cuando haya autenticación)
-      isFollowing = false;
+      // Establecer estado de seguimiento desde la respuesta de la API
+      isFollowing = userData.isFollowing || false;
+      isPending = userData.isPending || false;
     } catch (err: any) {
       error = err.message || "Error al cargar el perfil";
       console.error("[UserProfileModal] Error:", err);
@@ -449,6 +451,7 @@
                   ? userData.avatarUrl
                   : `https://i.pravatar.cc/150?u=${userData.username}`}
                 alt={userData.displayName}
+                referrerpolicy="no-referrer"
                 onerror={(e: Event) => {
                   if (e.target && userData.avatarUrl) {
                     (e.target as HTMLImageElement).src =
@@ -495,6 +498,20 @@
 
             {#if userData.bio}
               <p class="bio">{userData.bio}</p>
+            {/if}
+
+            {#if userData.username === 'robertojimenezvalle'}
+              <a
+                href="/production-checklist"
+                class="checklist-link"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  closeModal();
+                }}
+              >
+                <ClipboardList size={14} />
+                Production Checklist
+              </a>
             {/if}
 
             <div class="profile-meta">
@@ -1029,6 +1046,28 @@
     margin: 12px 0;
   }
 
+  .checklist-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 8px;
+    color: #34d399;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+  }
+
+  .checklist-link:hover {
+    background: rgba(16, 185, 129, 0.2);
+    transform: translateY(-1px);
+  }
+
+  
   .profile-meta {
     display: flex;
     flex-wrap: wrap;

@@ -6,7 +6,7 @@ import { prisma } from '$lib/server/prisma';
  * GET /api/users/[id]
  * Obtiene el perfil completo de un usuario por ID
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
   try {
     console.log('[API /users/[id]] Request params:', params);
     const userId = parseInt(params.id);
@@ -20,6 +20,9 @@ export const GET: RequestHandler = async ({ params }) => {
     }
     
     console.log('[API /users/[id]] Fetching user:', userId);
+    
+    // Get current user from locals to check follow status
+    const currentUser = locals.user;
 
     // Obtener usuario con información adicional
     const user = await prisma.user.findUnique({
@@ -33,6 +36,7 @@ export const GET: RequestHandler = async ({ params }) => {
         verified: true,
         countryIso3: true,
         createdAt: true,
+        isPrivate: true,
         // Contadores
         _count: {
           select: {
@@ -45,7 +49,18 @@ export const GET: RequestHandler = async ({ params }) => {
             followers: true,
             following: true,
           }
-        }
+        },
+        // Check if current user is following this user
+        ...(currentUser?.userId ? {
+          followers: {
+            where: {
+              followerId: currentUser.userId
+            },
+            select: {
+              status: true
+            }
+          }
+        } : {})
       }
     });
 
@@ -55,6 +70,19 @@ export const GET: RequestHandler = async ({ params }) => {
         { success: false, error: 'Usuario no encontrado' },
         { status: 404 }
       );
+    }
+    
+    // Determine follow status
+    let isFollowing = false;
+    let isPending = false;
+    
+    if (currentUser?.userId && user.followers && user.followers.length > 0) {
+      const relationship = user.followers[0];
+      if (relationship.status === 'accepted') {
+        isFollowing = true;
+      } else if (relationship.status === 'pending') {
+        isPending = true;
+      }
     }
     
     console.log('[API /users/[id]] User found:', {
@@ -75,6 +103,8 @@ export const GET: RequestHandler = async ({ params }) => {
         verified: user.verified,
         countryIso3: user.countryIso3,
         createdAt: user.createdAt,
+        isFollowing,
+        isPending,
         stats: {
           pollsCount: user._count.polls,
           votesCount: user._count.votes,
