@@ -40,6 +40,12 @@
   let submitting = $state(false);
   let error = $state<string | null>(null);
   let inputRef = $state<HTMLTextAreaElement | null>(null);
+
+  // Mentions
+  let showMentions = $state(false);
+  let mentionResults = $state<any[]>([]);
+  let mentionIndex = $state(0);
+  let mentionStart = 0;
   
   // Auth modal
   let showAuthModal = $state(false);
@@ -181,10 +187,104 @@
   }
   
   function handleKeydown(e: KeyboardEvent) {
+    if (showMentions && mentionResults.length > 0) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        mentionIndex = (mentionIndex - 1 + mentionResults.length) % mentionResults.length;
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        mentionIndex = (mentionIndex + 1) % mentionResults.length;
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        selectMention(mentionResults[mentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        showMentions = false;
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submitComment();
     }
+  }
+
+  async function handleInput(e: Event) {
+    const target = e.target as HTMLTextAreaElement;
+    const val = target.value;
+    const cursorPos = target.selectionStart;
+    
+    // Detect @ mention
+    const textBefore = val.slice(0, cursorPos);
+    const lastAt = textBefore.lastIndexOf('@');
+    
+    if (lastAt !== -1) {
+      // Check if start of line or preceded by space/newline
+      const charBeforeAt = lastAt > 0 ? textBefore[lastAt - 1] : ' ';
+      if (/[\s\n]/.test(charBeforeAt)) {
+        const query = textBefore.slice(lastAt + 1);
+        // Search if no spaces in query (username)
+        if (!/\s/.test(query)) {
+          mentionStart = lastAt;
+          
+          if (query.length > 0) {
+            await searchMentions(query);
+            if (mentionResults.length > 0) {
+                showMentions = true;
+            } else {
+                showMentions = false;
+            }
+          } else {
+            showMentions = false;
+          }
+          return;
+        }
+      }
+    }
+    
+    showMentions = false;
+  }
+
+  async function searchMentions(query: string) {
+    try {
+      const res = await apiGet(`/api/users/search-mentions?q=${encodeURIComponent(query)}&limit=5`);
+      mentionResults = res.users || [];
+      mentionIndex = 0;
+      showMentions = mentionResults.length > 0;
+    } catch (e) {
+      console.error('Error searching mentions:', e);
+      showMentions = false;
+    }
+  }
+
+  function selectMention(user: any) {
+    if (!inputRef) return;
+    
+    const val = inputRef.value;
+    const before = val.slice(0, mentionStart);
+    const after = val.slice(inputRef.selectionStart);
+    
+    const insertion = `@${user.username} `;
+    newComment = before + insertion + after;
+    
+    showMentions = false;
+    mentionResults = [];
+    
+    // Focus back and move cursor
+    setTimeout(() => {
+      if (inputRef) {
+        inputRef.focus();
+        const newCursor = mentionStart + insertion.length;
+        inputRef.setSelectionRange(newCursor, newCursor);
+      }
+    }, 10);
   }
 </script>
 
@@ -319,6 +419,34 @@
     
     <!-- Input Area -->
     <div class="input-area">
+      {#if showMentions && mentionResults.length > 0}
+        <div class="mentions-list" transition:fade={{ duration: 100 }}>
+          {#each mentionResults as user, i}
+            <button 
+              class="mention-item {i === mentionIndex ? 'selected' : ''}"
+              onclick={() => selectMention(user)}
+              onmouseenter={() => mentionIndex = i}
+              type="button"
+            >
+              <img 
+                src={user.avatarUrl || DEFAULT_AVATAR} 
+                alt={user.username}
+                class="mention-avatar"
+              />
+              <div class="mention-info">
+                <span class="mention-username">@{user.username}</span>
+                <span class="mention-name">{user.displayName}</span>
+              </div>
+              {#if user.verified}
+                <svg class="verified-badge" viewBox="0 0 24 24" width="14" height="14">
+                  <path fill="#3b82f6" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                </svg>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
       {#if replyingTo}
         <div class="replying-to">
           <span>Respondiendo a <strong>@{replyingTo.user.username}</strong></span>
@@ -338,6 +466,7 @@
           <textarea
             bind:this={inputRef}
             bind:value={newComment}
+            oninput={handleInput}
             placeholder={replyingTo ? 'Escribe tu respuesta...' : 'Añade un comentario...'}
             rows="1"
             onkeydown={handleKeydown}
@@ -594,6 +723,75 @@
     padding-bottom: max(16px, calc(16px + env(safe-area-inset-bottom)));
     background: #1a1a1a;
     flex-shrink: 0;
+    position: relative;
+  }
+  
+  .mentions-list {
+    position: absolute;
+    bottom: 100%;
+    left: 16px;
+    width: 250px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #1f1f1f;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .mention-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    background: none;
+    border: none;
+    color: white;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  .mention-item:last-child {
+    border-bottom: none;
+  }
+  
+  .mention-item:hover, .mention-item.selected {
+    background: rgba(59, 130, 246, 0.15);
+  }
+  
+  .mention-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  
+  .mention-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .mention-username {
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+  }
+  
+  .mention-name {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .replying-to {

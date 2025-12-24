@@ -122,6 +122,39 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
       }
     }).catch(err => console.error('[Comment Notification] Error:', err));
 
+    // PROCESAR MENCIONES
+    // Buscar patrones @username
+    const mentionRegex = /@(\w+)/g;
+    const matches = [...content.matchAll(mentionRegex)];
+    const mentionedUsernames = [...new Set(matches.map(m => m[1]))]; // Unique usernames
+
+    if (mentionedUsernames.length > 0) {
+      // Buscar usuarios por username
+      prisma.user.findMany({
+        where: {
+          username: { in: mentionedUsernames },
+          id: { not: Number(userId) } // No notificarse a sí mismo
+        },
+        select: { id: true, username: true }
+      }).then(mentionedUsers => {
+        // Crear notificaciones para cada usuario mencionado
+        mentionedUsers.forEach(user => {
+          createNotification({
+            userId: user.id,
+            actorId: Number(userId),
+            type: 'MENTION',
+            message: 'te mencionó en un comentario',
+            data: {
+              pollId: poll.id,
+              pollTitle: poll.title,
+              commentId: comment.id,
+              contentSnippet: content.length > 50 ? content.substring(0, 47) + '...' : content
+            }
+          }).catch(err => console.error(`[Mention Notification] Error notifying ${user.username}:`, err));
+        });
+      }).catch(err => console.error('[Mention Processing] Error:', err));
+    }
+
     return json({ data: comment }, { status: 201 });
   } catch (error) {
     console.error('Error creating comment:', error);
