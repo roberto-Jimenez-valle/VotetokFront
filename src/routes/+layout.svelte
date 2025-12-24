@@ -7,10 +7,16 @@
 	import UnderConstruction from "$lib/UnderConstruction.svelte";
 	import InstallPWABanner from "$lib/InstallPWABanner.svelte";
 	import MediaEmbed from "$lib/components/MediaEmbed.svelte";
+	import CookieBanner from "$lib/CookieBanner.svelte";
 	// Store unificado de autenticación
 	import { setCurrentUser, setAuth, initAuth } from "$lib/stores/auth";
 	// Store para fullscreen iframe
-	import { fullscreenIframe, closeFullscreenIframe, initFullscreenIframeHistoryHandler, preloadIframeUrl } from "$lib/stores/globalState";
+	import {
+		fullscreenIframe,
+		closeFullscreenIframe,
+		initFullscreenIframeHistoryHandler,
+		preloadIframeUrl,
+	} from "$lib/stores/globalState";
 
 	let { children } = $props();
 	let hasAccess = $state(false);
@@ -53,14 +59,15 @@
 	onMount(() => {
 		// 🔐 Verificar acceso
 		const access = localStorage.getItem("voutop-access");
-		
+
 		// Auto-bypass para desarrollo en red local
-		const isLocalNetwork = window.location.hostname.startsWith('192.168.') ||
-			window.location.hostname.startsWith('172.') ||
-			window.location.hostname.startsWith('10.') ||
-			window.location.hostname === 'localhost' ||
-			window.location.hostname === '127.0.0.1';
-		
+		const isLocalNetwork =
+			window.location.hostname.startsWith("192.168.") ||
+			window.location.hostname.startsWith("172.") ||
+			window.location.hostname.startsWith("10.") ||
+			window.location.hostname === "localhost" ||
+			window.location.hostname === "127.0.0.1";
+
 		hasAccess = access === "granted" || isLocalNetwork;
 
 		// Si no tiene acceso, no continuar con el resto de la inicialización
@@ -70,7 +77,7 @@
 			);
 			return;
 		}
-		
+
 		if (isLocalNetwork) {
 			console.log("🏠 Acceso automático desde red local");
 		}
@@ -212,24 +219,27 @@
 
 	<!-- Banner de instalación PWA -->
 	<InstallPWABanner />
+
+	<!-- Banner de Cookies GDPR -->
+	<CookieBanner />
 {/if}
 
 <!-- FULLSCREEN IFRAME OVERLAY (renderizado desde layout para evitar problemas de z-index) -->
 {#if $fullscreenIframe}
-	<div 
-		class="fullscreen-iframe-overlay" 
+	<div
+		class="fullscreen-iframe-overlay"
 		style="background-image: url('{$fullscreenIframe.thumbnail}');"
 		in:scale={{ duration: 450, start: 0.4, opacity: 1, easing: quintOut }}
 		out:scale={{ duration: 280, start: 0.85, opacity: 0, easing: cubicOut }}
 	>
 		<!-- Overlay oscuro suave sobre el thumbnail -->
-		<div 
+		<div
 			class="fullscreen-overlay-dim"
 			in:fade={{ duration: 400, delay: 100 }}
 			out:fade={{ duration: 200 }}
 		></div>
-		
-		<button 
+
+		<button
 			class="fullscreen-back-btn"
 			onclick={closeFullscreenIframe}
 			type="button"
@@ -237,16 +247,32 @@
 			in:fly={{ y: -40, duration: 500, delay: 200, easing: backOut }}
 			out:fly={{ y: -30, duration: 200, easing: cubicOut }}
 		>
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-				<path d="M19 12H5M12 19l-7-7 7-7"/>
+			<svg
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.5"
+			>
+				<path d="M19 12H5M12 19l-7-7 7-7" />
 			</svg>
 			<span>Volver</span>
 		</button>
-		
-		<div 
-			class="fullscreen-iframe-container" 
-			in:scale={{ duration: 500, start: 0.8, opacity: 0, delay: 150, easing: quintOut }}
-			out:scale={{ duration: 200, start: 0.92, opacity: 0, easing: cubicOut }}
+
+		<div
+			class="fullscreen-iframe-container"
+			in:scale={{
+				duration: 500,
+				start: 0.8,
+				opacity: 0,
+				delay: 150,
+				easing: quintOut,
+			}}
+			out:scale={{
+				duration: 200,
+				start: 0.92,
+				opacity: 0,
+				easing: cubicOut,
+			}}
 		>
 			<MediaEmbed
 				url={$fullscreenIframe.url}
@@ -404,7 +430,9 @@
 		.fullscreen-iframe-container :global(.media-embed),
 		.fullscreen-iframe-container :global(.embed-container) {
 			max-width: 100% !important;
-			max-height: calc(100dvh - 80px - env(safe-area-inset-top, 0px)) !important;
+			max-height: calc(
+				100dvh - 80px - env(safe-area-inset-top, 0px)
+			) !important;
 		}
 
 		.fullscreen-back-btn {

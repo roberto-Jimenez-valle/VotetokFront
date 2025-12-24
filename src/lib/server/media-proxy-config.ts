@@ -342,7 +342,11 @@ export const MEDIA_PROXY_CONFIG: MediaProxyConfig = {
     '*.voutop.com',
     'www.voutop.com',
     'localhost',
-    '127.0.0.1'
+    '127.0.0.1',
+
+    // User reported / Misc
+    'udimg.com',
+    'ferrero.com'
   ],
   
   // Tipos MIME permitidos

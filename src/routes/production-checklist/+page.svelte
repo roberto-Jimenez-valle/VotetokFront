@@ -13,6 +13,24 @@
         ArrowLeft,
     } from "lucide-svelte";
     import { fly } from "svelte/transition";
+    import type { ComponentType } from "svelte";
+
+    // Type definition for checklist items
+    interface ChecklistItem {
+        label: string;
+        status: "done" | "partial" | "missing";
+        detail: string;
+        note?: string;
+        critical?: boolean;
+        action?: string;
+    }
+
+    interface ChecklistGroup {
+        title: string;
+        icon: ComponentType;
+        color: string;
+        items: ChecklistItem[];
+    }
 
     // Estado de expansión de cada item
     let expandedItems = $state<Record<string, boolean>>({});
@@ -23,7 +41,7 @@
     }
 
     // Datos de la lista de control con detalles extendidos
-    const checklistGroups = [
+    const checklistGroups: ChecklistGroup[] = [
         {
             title: "🔐 Autenticación y Seguridad",
             icon: Shield,
@@ -236,16 +254,100 @@
                 },
                 {
                     label: "Borrar Cuenta (GDPR)",
-                    status: "missing",
-                    critical: true,
-                    detail: "Legalmente, los usuarios europeos tienen derecho a eliminar todos sus datos. Ahora mismo no pueden. Esto puede ser un problema legal importante.",
-                    action: "Añadir opción en ajustes para solicitar eliminación completa de cuenta y datos.",
+                    status: "done",
+                    detail: "Implementado endpoint /api/user/delete-account que elimina todos los datos del usuario de forma segura, anonimizando votos pero eliminando contenido creado.",
                 },
                 {
                     label: "Lista de Bloqueados",
                     status: "missing",
                     detail: "Si bloqueas a alguien (si esa función existiera), no hay forma de ver o gestionar a quién has bloqueado.",
                     action: "Crear pantalla de gestión de usuarios bloqueados.",
+                },
+            ],
+        },
+        {
+            title: "⚖️ Legal & GDPR",
+            icon: Shield,
+            color: "text-green-500",
+            items: [
+                {
+                    label: "Página Legal Completa (/legal)",
+                    status: "done",
+                    detail: "Página con pestañas para Aviso Legal, Política de Privacidad, Términos y Condiciones, y Política de Cookies. Textos finales en español adaptados a legislación española y europea.",
+                },
+                {
+                    label: "Banner de Cookies (GDPR)",
+                    status: "done",
+                    detail: "CookieBanner.svelte implementado: aparece en primera visita, permite aceptar todas, solo esenciales, o personalizar. Guarda preferencias en localStorage y servidor si está logueado.",
+                },
+                {
+                    label: "Verificación de Edad (+16)",
+                    status: "done",
+                    detail: "AgeVerificationModal.svelte: requiere confirmar ser mayor de 16 años antes de interactuar. Checkboxes integrados en AuthModal durante el registro.",
+                },
+                {
+                    label: "Consentimiento de Términos",
+                    status: "done",
+                    detail: "Durante el login, el usuario debe aceptar Términos de Uso y Política de Privacidad. Checkboxes obligatorios en AuthModal antes de continuar con Google OAuth.",
+                },
+                {
+                    label: "API de Consentimiento",
+                    status: "done",
+                    detail: "Endpoint /api/user/consent (GET/POST) para obtener y guardar consentimiento del usuario. Modelo UserConsent en Prisma con versionado de documentos.",
+                },
+                {
+                    label: "Modelo UserConsent (BD)",
+                    status: "done",
+                    detail: "Tabla en PostgreSQL que almacena: isOver16, termsAccepted, privacyAccepted, cookiesEssential/Analytics/Advertising, versiones de documentos, IP y timestamps.",
+                },
+            ],
+        },
+        {
+            title: "🛡️ Seguridad Anti-Bot",
+            icon: Shield,
+            color: "text-red-500",
+            items: [
+                {
+                    label: "Rate Limiting Estricto",
+                    status: "done",
+                    detail: "Sistema de rate limiting por minuto: 5 votos/min, 3 comentarios/min, 1 encuesta/min, 10 follows/min. Diferenciado por rol (user/premium/admin). Respuesta 429 sin detalles.",
+                },
+                {
+                    label: "Verificación Server-Side",
+                    status: "done",
+                    detail: "userGuard.ts: cada acción verifica token válido, usuario +16, cuenta no baneada. guardUserAction() y guardUserRead() para protección granular de endpoints.",
+                },
+                {
+                    label: "Sistema Honeypot",
+                    status: "done",
+                    detail: "honeypot.ts: campos ocultos en formularios que bots rellenan pero humanos ignoran. Si detectado, respuesta de éxito falso sin procesar acción.",
+                },
+                {
+                    label: "Detector de Comportamiento",
+                    status: "done",
+                    detail: "behaviorDetector.ts: analiza patrones sospechosos (votación rápida, comentarios repetitivos, user agents de bots). Acumula puntos de sospecha automáticamente.",
+                },
+                {
+                    label: "Sistema Shadowban",
+                    status: "done",
+                    detail: "Usuarios sospechosos son shadowbanned: sus acciones parecen funcionar pero no tienen efecto real. El bot cree que ganó mientras sus datos no contaminan métricas.",
+                },
+                {
+                    label: "Campos de Seguridad en User",
+                    status: "done",
+                    detail: "Modelo User extendido con: isBanned, banReason, bannedAt, isShadowbanned, isSuspect, suspectScore, lastActiveAt. Auto-shadowban al superar umbral de sospecha.",
+                },
+                {
+                    label: "Helper secureAction()",
+                    status: "done",
+                    detail: "Función unificada para proteger endpoints: verifica honeypot, usuario, comportamiento, y devuelve respuesta apropiada (shadowban o acción real). Uso simple en cualquier endpoint.",
+                },
+                {
+                    label: "CAPTCHA Invisible",
+                    status: "missing",
+                    note: "Preparado para Cloudflare Turnstile",
+                    detail: "Infraestructura lista pero falta integrar Cloudflare Turnstile en puntos críticos: crear cuenta, crear encuesta, picos de spam.",
+                    action: "Registrar en Cloudflare, obtener keys, integrar en frontend y validar en backend.",
                 },
             ],
         },
@@ -293,7 +395,7 @@
                     >
                     <span
                         class="px-2 py-1 rounded bg-slate-800 text-slate-400 text-xs font-mono"
-                        >v0.9.3</span
+                        >v0.9.5</span
                     >
                 </div>
                 <h1

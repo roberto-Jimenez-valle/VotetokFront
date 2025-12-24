@@ -21,6 +21,16 @@ model User {
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
   isPrivate       Boolean             @default(false) @map("is_private")
+  
+  // Campos de seguridad anti-bot
+  isBanned        Boolean             @default(false) @map("is_banned")
+  banReason       String?             @map("ban_reason")
+  bannedAt        DateTime?           @map("banned_at")
+  isShadowbanned  Boolean             @default(false) @map("is_shadowbanned")
+  isSuspect       Boolean             @default(false) @map("is_suspect")
+  suspectScore    Int                 @default(0) @map("suspect_score")  // Puntuación de sospecha acumulada
+  lastActiveAt    DateTime?           @map("last_active_at")
+  
   notifications   Notification[]      @relation("UserNotifications")
   sentNotifications Notification[]    @relation("NotificationActor")
   comments        Comment[]
@@ -37,6 +47,7 @@ model User {
   collaborations  PollCollaborator[]
   conversationParticipations ConversationParticipant[]
   sentMessages    Message[]
+  consent         UserConsent?
 
   @@index([username])
   @@index([countryIso3])
@@ -374,4 +385,41 @@ model Message {
   @@index([conversationId])
   @@index([createdAt])
   @@map("messages")
+}
+
+// Modelo para almacenar consentimientos GDPR del usuario
+model UserConsent {
+  id                  Int      @id @default(autoincrement())
+  userId              Int      @unique @map("user_id")
+  
+  // Verificación de edad
+  isOver16            Boolean  @default(false) @map("is_over_16")
+  ageVerifiedAt       DateTime? @map("age_verified_at")
+  
+  // Aceptación de términos legales
+  termsAccepted       Boolean  @default(false) @map("terms_accepted")
+  termsAcceptedAt     DateTime? @map("terms_accepted_at")
+  termsVersion        String?  @map("terms_version") // Para trackear versión de términos
+  
+  // Aceptación de política de privacidad
+  privacyAccepted     Boolean  @default(false) @map("privacy_accepted")
+  privacyAcceptedAt   DateTime? @map("privacy_accepted_at")
+  privacyVersion      String?  @map("privacy_version")
+  
+  // Consentimiento de cookies
+  cookiesEssential    Boolean  @default(true) @map("cookies_essential") // Siempre true
+  cookiesAnalytics    Boolean  @default(false) @map("cookies_analytics")
+  cookiesAdvertising  Boolean  @default(false) @map("cookies_advertising")
+  cookiesConsentAt    DateTime? @map("cookies_consent_at")
+  
+  // Metadatos
+  ipAddress           String?  @map("ip_address")
+  userAgent           String?  @map("user_agent")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("user_consents")
 }

@@ -54,6 +54,7 @@
   let touchStartY = 0;
   let currentTranslateY = $state(0);
   let isDragging = $state(false);
+  let scrollContainer = $state<HTMLElement | null>(null);
   
   const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23374151"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%236b7280"/%3E%3C/svg%3E';
   
@@ -172,6 +173,10 @@
   
   function handleTouchMove(e: TouchEvent) {
     if (!isDragging) return;
+    
+    // Only allow drag if we are at the top of the scroll container
+    if (scrollContainer && scrollContainer.scrollTop > 0) return;
+
     const deltaY = e.touches[0].clientY - touchStartY;
     if (deltaY > 0) {
       currentTranslateY = deltaY;
@@ -323,7 +328,7 @@
     </div>
     
     <!-- Comments List -->
-    <div class="comments-list">
+    <div class="comments-list" bind:this={scrollContainer}>
       {#if loading}
         <div class="loading-state">
           <Loader2 class="animate-spin" size={32} />
@@ -575,10 +580,12 @@
   .comments-list {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 16px;
     min-height: 100px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    overscroll-behavior-y: contain;
   }
 
   .comments-list::-webkit-scrollbar {
@@ -917,13 +924,11 @@
   
   @media (min-width: 640px) {
     .comments-modal {
+      width: 100%;
       max-width: 800px;
-      width: 800px;
       height: 80vh;
       max-height: 80vh;
-      left: 50%;
-      right: auto;
-      margin-left: -400px; /* Half of max-width */
+      margin: 0 auto;
       border-radius: 20px 20px 0 0;
     }
   }
@@ -931,8 +936,6 @@
   @media (min-width: 1024px) {
     .comments-modal {
       max-width: 900px;
-      width: 900px;
-      margin-left: -450px;
     }
   }
 </style>

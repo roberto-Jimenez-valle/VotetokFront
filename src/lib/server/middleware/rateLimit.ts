@@ -19,40 +19,44 @@ interface RateLimitRecord {
 const rateLimitStore = new Map<string, RateLimitRecord>()
 
 // Configuración de límites por tipo
+// Estrategia anti-bot: límites estrictos por minuto para matar bots baratos
 export const RATE_LIMITS = {
-  // Anónimos (por IP)
+  // Anónimos (por IP) - Solo lectura permitida
   anonymous: {
-    vote: { max: 100, windowMs: 3600000 },     // 100 votos/hora
-    view: { max: 2000, windowMs: 3600000 },    // 2000 views/hora (aumentado para lectura)
-    geocode: { max: 50, windowMs: 3600000 },   // 50 geocodes/hora
-    api: { max: 1500, windowMs: 3600000 }      // 1500 requests/hora general (aumentado)
+    vote: { max: 5, windowMs: 60000 },         // 5 votos/minuto (anti-spam)
+    view: { max: 100, windowMs: 60000 },       // 100 views/minuto
+    geocode: { max: 10, windowMs: 60000 },     // 10 geocodes/minuto
+    api: { max: 60, windowMs: 60000 }          // 60 requests/minuto general
   },
-  
-  // Usuarios autenticados
+
+  // Usuarios autenticados - Límites estrictos por minuto
   user: {
-    vote: { max: 500, windowMs: 3600000 },           // 500 votos/hora
-    poll_create: { max: 20, windowMs: 86400000 },    // 20 encuestas/día
-    comment: { max: 100, windowMs: 86400000 },       // 100 comentarios/día
-    follow: { max: 50, windowMs: 86400000 },         // 50 follows/día
-    api: { max: 2000, windowMs: 3600000 }            // 2000 requests/hora
+    vote: { max: 5, windowMs: 60000 },         // 5 votos/minuto
+    poll_create: { max: 1, windowMs: 60000 },  // 1 encuesta/minuto
+    comment: { max: 3, windowMs: 60000 },      // 3 comentarios/minuto
+    follow: { max: 10, windowMs: 60000 },      // 10 follows/minuto
+    message: { max: 10, windowMs: 60000 },     // 10 mensajes/minuto
+    api: { max: 120, windowMs: 60000 }         // 120 requests/minuto
   },
-  
-  // Premium
+
+  // Premium - Límites más generosos
   premium: {
-    vote: { max: 2000, windowMs: 3600000 },
-    poll_create: { max: 100, windowMs: 86400000 },
-    comment: { max: 500, windowMs: 86400000 },
-    follow: { max: 200, windowMs: 86400000 },
-    api: { max: 10000, windowMs: 3600000 }
+    vote: { max: 15, windowMs: 60000 },
+    poll_create: { max: 3, windowMs: 60000 },
+    comment: { max: 10, windowMs: 60000 },
+    follow: { max: 30, windowMs: 60000 },
+    message: { max: 30, windowMs: 60000 },
+    api: { max: 300, windowMs: 60000 }
   },
-  
+
   // Admin (sin límites prácticos)
   admin: {
-    vote: { max: 999999, windowMs: 3600000 },
-    poll_create: { max: 999999, windowMs: 86400000 },
-    comment: { max: 999999, windowMs: 86400000 },
-    follow: { max: 999999, windowMs: 86400000 },
-    api: { max: 999999, windowMs: 3600000 }
+    vote: { max: 999999, windowMs: 60000 },
+    poll_create: { max: 999999, windowMs: 60000 },
+    comment: { max: 999999, windowMs: 60000 },
+    follow: { max: 999999, windowMs: 60000 },
+    message: { max: 999999, windowMs: 60000 },
+    api: { max: 999999, windowMs: 60000 }
   }
 } as const
 
@@ -70,7 +74,7 @@ function checkRateLimit(key: string, config: RateLimitConfig): { allowed: boolea
       resetAt: now + config.windowMs
     }
     rateLimitStore.set(key, newRecord)
-    
+
     return {
       allowed: true,
       remaining: config.max - 1,
@@ -78,22 +82,14 @@ function checkRateLimit(key: string, config: RateLimitConfig): { allowed: boolea
     }
   }
 
-  // Si alcanzó el límite
+  // Si alcanzó el límite - NO dar detalles al atacante
   if (record.count >= config.max) {
-    const retryAfter = Math.ceil((record.resetAt - now) / 1000)
-    
-    throw error(429, {
-      message: `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
-      code: 'RATE_LIMIT_EXCEEDED',
-      retryAfter,
-      limit: config.max,
-      resetAt: record.resetAt
-    })
+    throw error(429, 'Too many requests')
   }
 
   // Incrementar contador
   record.count++
-  
+
   return {
     allowed: true,
     remaining: config.max - record.count,
@@ -111,7 +107,7 @@ export async function rateLimitByIP(
 ): Promise<{ remaining: number; resetAt: number }> {
   const config = customConfig || RATE_LIMITS.anonymous[action]
   const key = `ip:${ip}:${action}`
-  
+
   const result = checkRateLimit(key, config)
   return { remaining: result.remaining, resetAt: result.resetAt }
 }
@@ -133,7 +129,7 @@ export async function rateLimitByUser(
   const limitsForRole = RATE_LIMITS[role] || RATE_LIMITS.user
   const config = customConfig || (limitsForRole as any)[action] || RATE_LIMITS.user.api
   const key = `user:${userId}:${action}`
-  
+
   const result = checkRateLimit(key, config)
   return { remaining: result.remaining, resetAt: result.resetAt }
 }
@@ -151,14 +147,14 @@ export async function rateLimitGlobal(ip: string): Promise<void> {
 export function cleanExpiredRecords(): number {
   const now = Date.now()
   let cleaned = 0
-  
+
   for (const [key, record] of rateLimitStore.entries()) {
     if (now > record.resetAt) {
       rateLimitStore.delete(key)
       cleaned++
     }
   }
-  
+
   return cleaned
 }
 
