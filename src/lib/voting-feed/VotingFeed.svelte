@@ -859,16 +859,21 @@
 
   async function handleNotificationClick(event: CustomEvent) {
     const { pollId, userId, type, commentId } = event.detail;
-    
-    console.log("[VotingFeed] Handling notification click:", { pollId, userId, type, commentId });
+
+    console.log("[VotingFeed] Handling notification click:", {
+      pollId,
+      userId,
+      type,
+      commentId,
+    });
 
     // Caso 1: Navegación a Encuesta / Comentario
     if (pollId) {
-      // Intentar encontrar el post existente. 
+      // Intentar encontrar el post existente.
       // Nota: posts usa HashIDs, pero pollId de notificación puede ser numérico.
       // Si no coinciden, fallará aquí y haremos fetch, lo cual es seguro.
       let targetPost = posts.find((p) => p.id === String(pollId));
-      
+
       if (!targetPost) {
         // Fetch the poll
         isLoading = true;
@@ -877,13 +882,15 @@
           if (response.ok) {
             const data = await response.json();
             const pollData = data.data || data;
-            
+
             if (pollData) {
               const transformedPoll = transformApiPoll(pollData);
-              
+
               // Verificar si ya existe con el ID transformado (HashID)
-              const existingIndex = posts.findIndex(p => p.id === transformedPoll.id);
-              
+              const existingIndex = posts.findIndex(
+                (p) => p.id === transformedPoll.id,
+              );
+
               if (existingIndex !== -1) {
                 // Actualizar existente
                 const newPosts = [...posts];
@@ -906,9 +913,9 @@
 
       if (targetPost) {
         switchToReels(targetPost.id);
-        
+
         // Si hay commentId o es tipo comentario/mención, abrir modal
-        if (commentId || type === 'comment' || type === 'mention') {
+        if (commentId || type === "comment" || type === "mention") {
           setTimeout(() => {
             commentsPollId = targetPost!.id;
             commentsPollTitle = targetPost!.question;
@@ -920,7 +927,10 @@
     }
 
     // Caso 2: Navegación a Perfil de Usuario (Follows)
-    if (userId && (type === 'new_follower' || type === 'follow_request' || !pollId)) {
+    if (
+      userId &&
+      (type === "new_follower" || type === "follow_request" || !pollId)
+    ) {
       selectedProfileUserId = Number(userId);
       isProfileModalOpen = true;
     }
@@ -941,42 +951,44 @@
 
   async function handleRepost(post: Post) {
     if (!post || post.isReposted) return;
-    
+
     // Optimistic update
-    posts = posts.map(p => {
+    posts = posts.map((p) => {
       if (p.id === post.id) {
         return {
           ...p,
           reposts: (p.reposts || 0) + 1,
-          isReposted: true
+          isReposted: true,
         };
       }
       return p;
     });
 
     try {
-      const res = await apiCall(`/api/polls/${post.id}/repost`, { method: 'POST' });
+      const res = await apiCall(`/api/polls/${post.id}/repost`, {
+        method: "POST",
+      });
       // apiCall throws on error, so this block might be redundant if using try/catch properly around apiCall
       // but let's keep it consistent with previous code style which seemed to expect apiCall to return response
       // Wait, apiCall throws if !response.ok. So we only reach here if ok.
     } catch (e: any) {
       console.error("Error reposting:", e);
       // Revert optimistic update
-      posts = posts.map(p => {
+      posts = posts.map((p) => {
         if (p.id === post.id) {
           return {
             ...p,
             reposts: Math.max(0, (p.reposts || 0) - 1),
-            isReposted: false
+            isReposted: false,
           };
         }
         return p;
       });
-      
+
       // Show error to user
       // Using alert for now as per minimal implementation, can be replaced with toast
       if (e.message) {
-         alert(e.message);
+        alert(e.message);
       }
     }
   }
@@ -990,7 +1002,7 @@
 
   async function handleFriendStoryClick(friendId: string) {
     if (!friendId) return;
-    
+
     // Load that user's polls and switch to reels
     isLoading = true;
     try {
@@ -998,8 +1010,10 @@
       const response = await apiCall(`/api/users/${friendId}/polls`);
       if (response.ok) {
         const data = await response.json();
-        const userPolls = (data.data || data.polls || data || []).map(transformApiPoll);
-        
+        const userPolls = (data.data || data.polls || data || []).map(
+          transformApiPoll,
+        );
+
         if (userPolls.length > 0) {
           posts = userPolls;
           currentView = "reels";
@@ -1025,7 +1039,7 @@
     currentView = "feed";
     // Reload main feed to ensure we aren't stuck on user polls
     fetchPolls();
-    
+
     // Scroll to top
     const feedContainer = document.querySelector(".overflow-y-auto");
     if (feedContainer) {
@@ -1715,6 +1729,10 @@
   <UserProfileModal
     bind:isOpen={isProfileModalOpen}
     bind:userId={selectedProfileUserId}
+    on:pollClick={(e) => {
+      const { pollId } = e.detail;
+      switchToReels(pollId);
+    }}
   />
 
   <!-- Comments Modal -->

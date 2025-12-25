@@ -1,9 +1,25 @@
 <script lang="ts">
-  import { Check, X, Minimize2, Sparkles } from "lucide-svelte";
+  import {
+    Check,
+    X,
+    Minimize2,
+    Sparkles,
+    Palette,
+    Image as ImageIcon,
+    RefreshCw,
+    Trash2,
+    Send,
+    Loader2,
+    Search,
+  } from "lucide-svelte";
+  import { fly, fade } from "svelte/transition";
   import type { VoteOption, PostType, ViewMode } from "./types";
   import { POST_CONFIGS } from "./types";
   import { calculatePercent } from "./helpers";
   import SocialAvatars from "./SocialAvatars.svelte";
+  import { searchGiphy, getBestGifUrl } from "$lib/services/giphy";
+  import { searchTenor, getBestTenorUrl } from "$lib/services/tenor";
+  import GiphyPicker from "$lib/components/GiphyPicker.svelte";
 
   interface Props {
     option: VoteOption;
@@ -162,6 +178,96 @@
   let fetchedThumbnail = $state<string | null>(null);
   let thumbnailLoading = $state(false);
 
+  // Rich Editing State
+  let editColor = $state("#9ec264");
+  let showColorPicker = $state(false);
+  let editImage = $state<string | null>(null);
+  let isAutoFetchingGif = $state(false);
+  let showGiphyPicker = $state(false);
+
+  // Gif Pagination State
+  let tenorPos = $state("");
+  let giphyOffset = $state(0);
+  let currentSource = $state("tenor");
+
+  async function handleAutoGif(next = false) {
+    if (!editText.trim()) {
+      if (inputRef) {
+        inputRef.focus();
+        // Visual shake/error effect could go here
+      }
+      return;
+    }
+
+    isAutoFetchingGif = true;
+
+    if (!next) {
+      tenorPos = "";
+      giphyOffset = 0;
+      currentSource = "tenor";
+    }
+
+    try {
+      let url = null;
+
+      // Try Tenor
+      if (currentSource === "tenor") {
+        // @ts-ignore
+        const results = await searchTenor(editText, {
+          limit: 1,
+          pos: next ? tenorPos : "",
+        });
+
+        if (results && results.length > 0) {
+          url = getBestTenorUrl(results[0]);
+          // @ts-ignore
+          if (results.next) tenorPos = results.next;
+        } else {
+          currentSource = "giphy"; // Fallback to secondary source
+        }
+      }
+
+      // Try Giphy (if Tenor failed or source switched)
+      if (!url && currentSource === "giphy") {
+        const gResults = await searchGiphy(editText, {
+          limit: 1,
+          offset: giphyOffset,
+        });
+        if (gResults && gResults.length > 0) {
+          url = getBestGifUrl(gResults[0]);
+          giphyOffset++;
+        }
+      }
+
+      if (url) {
+        editImage = url;
+        imageError = false;
+      }
+    } catch (err) {
+      console.error("Gif fetch error", err);
+    } finally {
+      isAutoFetchingGif = false;
+    }
+  }
+
+  const quickColors = [
+    "#9ec264", // lime
+    "#10b981", // emerald
+    "#06b6d4", // cyan
+    "#3b82f6", // blue
+    "#6366f1", // indigo
+    "#8b5cf6", // violet
+    "#ec4899", // pink
+    "#f43f5e", // rose
+    "#f97316", // orange
+    "#eab308", // yellow
+  ];
+
+  function selectColor(c: string) {
+    editColor = c;
+    showColorPicker = false;
+  }
+
   // Reset exiting state when the option gets ranked (reappears in the full list)
   $effect(() => {
     if (rank !== null) {
@@ -186,13 +292,16 @@
   // Determine the actual image URL to use
   const actualImageUrl = $derived(
     fetchedThumbnail ||
+      editImage ||
       (isDirectImage(option.image || "") ? option.image : null),
   );
 
   // Determine if we should show image (has image URL and no error)
-  // Show image if: type is 'image' OR there's a valid image URL
+  // Show image if: type is 'image' OR there's a valid image URL OR we are editing an image
   const showImage = $derived(
-    (option.type === "image" || option.image) && actualImageUrl && !imageError,
+    (option.type === "image" || option.image || editImage) &&
+      actualImageUrl &&
+      !imageError,
   );
 
   function handleImageError() {
@@ -308,11 +417,13 @@
     <!-- Background -->
     <div
       class="absolute inset-0 w-full h-full"
-      style={!showImage
-        ? option.colorFrom?.startsWith("hsl")
-          ? `background: linear-gradient(135deg, ${option.colorFrom}, ${option.colorTo || "transparent"})`
-          : `background: ${option.colorFrom?.includes("#") ? option.colorFrom : ""}` // Fallback for pure hex
-        : ""}
+      style={isEditing
+        ? `background: ${editColor}`
+        : !showImage
+          ? option.colorFrom?.startsWith("hsl")
+            ? `background: linear-gradient(135deg, ${option.colorFrom}, ${option.colorTo || "transparent"})`
+            : `background: ${option.colorFrom?.includes("#") ? option.colorFrom : ""}`
+          : ""}
       class:bg-gradient-to-br={!showImage &&
         !option.colorFrom?.startsWith("hsl")}
       class:from-indigo-600={!showImage &&
@@ -335,7 +446,7 @@
           ? `background: linear-gradient(135deg, ${option.colorFrom}, ${option.colorTo})`
           : ""}
       ></div>
-      {#if showImage && !isEditing}
+      {#if showImage}
         <img
           src={actualImageUrl}
           class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-in-out {isExpanded
@@ -518,35 +629,178 @@
         </div>
 
         {#if isEditing}
-          <!-- Expanded Editing View -->
-          <div class="flex-1 flex flex-col items-center justify-center p-6">
-            <div class="w-full max-w-md">
-              <span
-                class="text-sm uppercase font-bold text-[#9ec264] mb-3 flex items-center gap-2 justify-center"
+          <!-- Click Catcher to prevent bounce/toggle -->
+          <div
+            class="absolute inset-0 z-0"
+            onclick={(e) => e.stopPropagation()}
+            role="presentation"
+          ></div>
+          <!-- Giphy Picker Modal (Fullscreen) -->
+          {#if showGiphyPicker}
+            <div
+              class="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center animate-in fade-in"
+              onclick={(e) => {
+                e.stopPropagation();
+              }}
+              role="dialog"
+              aria-modal="true"
+            >
+              <!-- Close Button floating top-right -->
+              <button
+                class="absolute top-4 right-4 z-[100000] p-2 bg-black/50 rounded-full text-white/50 hover:text-white"
+                onclick={() => (showGiphyPicker = false)}
               >
-                <Sparkles size={16} /> Nueva Opción
-              </span>
-              <textarea
-                bind:this={inputRef}
-                placeholder="Escribe tu idea..."
-                class="w-full bg-white/10 border border-white/20 rounded-xl text-xl font-bold text-white placeholder-white/40 focus:ring-2 focus:ring-[#9ec264] resize-none leading-tight outline-none p-4 backdrop-blur-sm"
-                rows={4}
-                bind:value={editText}
-                onclick={(e) => e.stopPropagation()}
-              ></textarea>
+                <X size={24} />
+              </button>
+
+              <div class="w-full h-full">
+                <GiphyPicker
+                  onSelect={(url) => {
+                    editImage = url;
+                    showGiphyPicker = false;
+                    imageError = false;
+                  }}
+                  onClose={() => (showGiphyPicker = false)}
+                  optionColor={editColor}
+                  initialSearch={editText}
+                />
+              </div>
+            </div>
+          {/if}
+
+          <!-- Rich Editor Mode (Inline) -->
+
+          <!-- Badge -->
+          <div class="absolute top-4 left-4 z-50">
+            <div
+              class="bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10"
+            >
+              <span
+                class="text-xs font-black text-white/80 uppercase tracking-wider"
+                ># Nueva</span
+              >
             </div>
           </div>
 
+          <!-- Main Input Area -->
           <div
-            class="relative z-40 p-6 pb-8 bg-gradient-to-t from-black via-black/60 to-transparent"
+            class="absolute inset-0 z-40 flex flex-col justify-center px-8 pointer-events-none"
           >
-            <button
-              onclick={handleEditConfirm}
-              class="w-full py-4 rounded-full text-sm font-black tracking-widest uppercase shadow-lg transition-all"
-              style="background-color: #9ec264; color: black;"
+            <textarea
+              bind:this={inputRef}
+              class="pointer-events-auto w-full bg-transparent border-none font-black text-3xl sm:text-4xl text-white placeholder-white/30 focus:ring-0 resize-none leading-tight outline-none drop-shadow-md"
+              placeholder="Escribe aquí..."
+              rows={3}
+              maxlength={200}
+              bind:value={editText}
+              onclick={(e) => e.stopPropagation()}
+            ></textarea>
+
+            <!-- Confirm Button -->
+            <div
+              class="mt-6 pointer-events-auto flex justify-start animate-in fade-in slide-in-from-bottom-2"
             >
-              Añadir Opción
-            </button>
+              <button
+                onclick={handleEditConfirm}
+                class="bg-white text-black px-6 py-2.5 rounded-full font-black text-sm tracking-wide shadow-xl active:scale-95 transition-transform flex items-center gap-2 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!editText.trim()}
+              >
+                <Send size={16} strokeWidth={2.5} />
+                AÑADIR
+              </button>
+            </div>
+          </div>
+
+          <!-- Floating Actions -->
+          <div
+            class="absolute bottom-6 right-4 z-[100] flex flex-col gap-2 pointer-events-auto"
+          >
+            <div
+              class="flex flex-col items-center rounded-[1.5rem] border transition-all overflow-visible bg-slate-900 border-white/20 text-white shadow-xl"
+            >
+              <!-- Manual Search (Always visible) -->
+              <button
+                type="button"
+                class="p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center relative cursor-pointer"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  showGiphyPicker = true;
+                }}
+                title="Buscar GIF manualmente"
+              >
+                <Search size={20} strokeWidth={1.5} />
+              </button>
+
+              {#if editImage}
+                <!-- Refresh (Next GIF) -->
+                <button
+                  type="button"
+                  class="p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center relative cursor-pointer"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    handleAutoGif(true);
+                  }}
+                  disabled={isAutoFetchingGif}
+                  title="Siguiente GIF"
+                >
+                  {#if isAutoFetchingGif}
+                    <Loader2 size={20} class="animate-spin text-white/70" />
+                  {:else}
+                    <RefreshCw size={20} strokeWidth={1.5} />
+                  {/if}
+                </button>
+
+                <!-- Trash (Remove GIF) -->
+                <button
+                  type="button"
+                  class="p-3 w-full hover:bg-red-500/20 border-b border-white/5 transition-colors flex items-center justify-center relative cursor-pointer text-red-400 hover:text-red-300"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    editImage = null;
+                  }}
+                  title="Quitar imagen"
+                >
+                  <Trash2 size={20} strokeWidth={1.5} />
+                </button>
+              {:else}
+                <!-- New GIF Auto -->
+                <button
+                  type="button"
+                  class="p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center relative cursor-pointer"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    handleAutoGif(false);
+                  }}
+                  disabled={isAutoFetchingGif}
+                  title="Buscar imagen automática"
+                >
+                  {#if isAutoFetchingGif}
+                    <Loader2 size={20} class="animate-spin text-white/70" />
+                  {:else}
+                    <ImageIcon size={20} strokeWidth={1.5} />
+                  {/if}
+                </button>
+
+                <!-- Color (Modal Toggle) -->
+                <div class="relative w-full flex flex-col items-center">
+                  <button
+                    type="button"
+                    class={`p-3 w-full transition-all flex items-center justify-center cursor-pointer ${showColorPicker ? "bg-white text-black" : "hover:bg-white/10 text-white/70"}`}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      showColorPicker = !showColorPicker;
+                    }}
+                    title="Cambiar color"
+                  >
+                    <Palette
+                      size={20}
+                      strokeWidth={1.5}
+                      fill={showColorPicker ? "currentColor" : "none"}
+                    />
+                  </button>
+                </div>
+              {/if}
+            </div>
           </div>
         {:else}
           <!-- Normal Expanded View - Clicking the empty space closes it -->
@@ -656,4 +910,62 @@
       </div>
     {/if}
   </div>
+
+  <!-- Color Picker Modal (Fixed Bottom) -->
+  {#if showColorPicker}
+    <div
+      class="fixed inset-0 z-[99999] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in"
+      onclick={(e) => {
+        e.stopPropagation();
+        showColorPicker = false;
+      }}
+      role="dialog"
+      tabindex="-1"
+    >
+      <div
+        class="w-full max-w-md bg-[#111] p-6 pb-8 rounded-t-3xl border-t border-x border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] flex flex-col gap-6 animate-in slide-in-from-bottom duration-300"
+        onclick={(e) => e.stopPropagation()}
+        role="document"
+      >
+        <div class="flex justify-between items-center">
+          <h3
+            class="text-lg font-black text-white uppercase tracking-widest pl-2 border-l-4 border-white"
+          >
+            Color de Opción
+          </h3>
+          <button
+            onclick={() => (showColorPicker = false)}
+            class="p-2 bg-white/5 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div class="grid grid-cols-5 gap-4 px-2">
+          {#each quickColors as c}
+            <button
+              class="aspect-square rounded-full border-2 transition-all active:scale-95 flex items-center justify-center shadow-lg {c ===
+              editColor
+                ? 'border-white scale-110 shadow-[0_0_15px_rgba(255,255,255,0.4)]'
+                : 'border-transparent hover:border-white/30'}"
+              style="background: {c}"
+              onclick={(e) => {
+                e.stopPropagation();
+                selectColor(c);
+              }}
+              aria-label="Seleccionar color"
+            >
+              {#if c === editColor}
+                <Check
+                  size={20}
+                  class="text-white drop-shadow-md"
+                  strokeWidth={3}
+                />
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
 {/if}

@@ -90,11 +90,23 @@
   import { currentUser } from "$lib/stores/auth";
   import { loginModalOpen } from "$lib/stores/globalState";
   import PostOptionsModal from "$lib/components/PostOptionsModal.svelte";
+  import CollabOptionEditor from "$lib/components/CollabOptionEditor.svelte";
 
   // Follow logic
   let isFollowing = $state(post.isFollowing || false);
   let isPending = $state(post.isPending || false);
   let showOptionsModal = $state(false);
+  let showCollabEditor = $state(false);
+
+  function handleCollabSubmit(text: string, img?: string, color?: string) {
+    onAddCollab(post.id, text);
+    // TODO: En el futuro pasar img y color cuando el backend lo soporte
+    showCollabEditor = false;
+  }
+
+  // Bookmark logic
+  let isBookmarked = $state(post.isBookmarked || false);
+  let isBookmarking = $state(false);
 
   function handleReport() {
     alert(
@@ -113,6 +125,7 @@
   $effect(() => {
     isFollowing = post.isFollowing || false;
     isPending = post.isPending || false;
+    isBookmarked = post.isBookmarked || false;
   });
 
   const isSelf = $derived(
@@ -165,6 +178,36 @@
       isFollowing = oldFollow;
       isPending = oldPending;
       console.error("Error following:", e);
+    }
+  }
+
+  async function handleBookmark() {
+    if (!$currentUser) {
+      loginModalOpen.set(true);
+      return;
+    }
+
+    if (isBookmarking) return; // Prevent double-clicks
+
+    const oldBookmarked = isBookmarked;
+
+    // Optimistic update
+    isBookmarked = !isBookmarked;
+    isBookmarking = true;
+
+    try {
+      const method = oldBookmarked ? "DELETE" : "POST";
+      const res = await fetch(`/api/polls/${post.id}/bookmark`, { method });
+
+      if (!res.ok) {
+        throw new Error("API Error");
+      }
+    } catch (e) {
+      // Revert on error
+      isBookmarked = oldBookmarked;
+      console.error("Error bookmarking:", e);
+    } finally {
+      isBookmarking = false;
     }
   }
 
@@ -582,7 +625,9 @@
                 />
               </button>
               <button
+                onclick={() => (showOptionsModal = true)}
                 class="text-slate-500 hover:text-white p-1.5 hover:bg-white/5 rounded-full transition-all active:scale-95"
+                title="Más opciones"
               >
                 <MoreVertical size={20} />
               </button>
@@ -1194,9 +1239,19 @@
             <span class="text-[0.7rem] font-bold">{post.reposts || 0}</span>
           </button>
           <button
-            class="text-slate-400 hover:text-yellow-400 transition-colors hover:scale-110 transform"
+            onclick={handleBookmark}
+            disabled={isBookmarking}
+            class="transition-colors hover:scale-110 transform {isBookmarked
+              ? 'text-yellow-400'
+              : 'text-slate-400 hover:text-yellow-400'} {isBookmarking
+              ? 'opacity-50'
+              : ''}"
+            title={isBookmarked ? "Quitar de guardados" : "Guardar encuesta"}
           >
-            <Bookmark size="1.1rem" />
+            <Bookmark
+              size="1.1rem"
+              fill={isBookmarked ? "currentColor" : "none"}
+            />
           </button>
           <button
             onclick={() => onShare?.(post)}

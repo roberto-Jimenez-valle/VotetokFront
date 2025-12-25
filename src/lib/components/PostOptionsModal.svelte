@@ -46,7 +46,7 @@
 
 {#if isOpen}
     <div
-        class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
+        class="fixed inset-0 z-[9999999] flex items-end sm:items-center justify-center sm:p-4"
     >
         <!-- Backdrop -->
         <div

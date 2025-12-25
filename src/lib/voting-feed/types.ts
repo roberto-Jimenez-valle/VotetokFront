@@ -39,6 +39,7 @@ export interface Post {
   isFollowing?: boolean;
   isPending?: boolean;
   isReposted?: boolean;
+  isBookmarked?: boolean;
 }
 
 export interface UserVotes {

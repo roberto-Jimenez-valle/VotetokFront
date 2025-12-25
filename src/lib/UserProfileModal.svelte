@@ -14,9 +14,18 @@
     TrendingUp,
     BarChart,
     ClipboardList,
+    Bookmark,
   } from "lucide-svelte";
   import { createEventDispatcher, onMount } from "svelte";
-  import SinglePollSection from "$lib/globe/cards/sections/SinglePollSection.svelte";
+  import PostCard from "$lib/voting-feed/PostCard.svelte";
+  import type {
+    Post,
+    UserVotes,
+    RankingDrafts,
+    SwipeIndices,
+  } from "$lib/voting-feed/types";
+  import CommentsModal from "$lib/components/CommentsModal.svelte";
+  import ShareModal from "$lib/components/ShareModal.svelte";
   import { apiCall, apiDelete } from "$lib/api/client";
   import { currentUser } from "$lib/stores";
   import {
@@ -42,17 +51,25 @@
   let isFollowing = $state(false);
   let isPending = $state(false);
   let followLoading = $state(false);
-  let activeTab = $state<"polls" | "votes">("polls");
+  let activeTab = $state<"polls" | "votes" | "saved">("polls");
+  let savedPolls = $state<any[]>([]);
+  let loadingSaved = $state(false);
 
-  // Sistema de paginación para encuestas
-  let pollPages = $state<Record<string, number>>({});
-  let activeAccordions = $state<Record<string, number>>({});
-  let votesState = $state<Record<string, string>>({}); // Estado local de votos
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let isDragging = false;
-  let currentDragPollId: string | null = null;
-  let currentDragGrid: HTMLElement | null = null;
+  // Estados para PostCard
+  let userVotesMap = $state<UserVotes>({});
+  let rankingDrafts = $state<RankingDrafts>({});
+  let swipeIndices = $state<SwipeIndices>({});
+  let expandedPostId = $state<string | null>(null);
+  let expandedOptionId = $state<string | null>(null);
+  let addingPostId = $state<string | null>(null);
+
+  // Modals
+  let isCommentsModalOpen = $state(false);
+  let commentsPollId = $state<string | number>("");
+  let commentsPollTitle = $state("");
+  let isShareModalOpen = $state(false);
+  let sharePollHashId = $state("");
+  let sharePollTitle = $state("");
 
   // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
@@ -79,6 +96,7 @@
       userData = null;
       userPolls = [];
       userVotes = [];
+      savedPolls = [];
       activeTab = "polls";
       error = null;
       userId = null;
@@ -181,11 +199,214 @@
       // Establecer estado de seguimiento desde la respuesta de la API
       isFollowing = userData.isFollowing || false;
       isPending = userData.isPending || false;
+
+      // Cargar encuestas guardadas solo si es el propio perfil
+      const myUserId = $currentUser?.userId || ($currentUser as any)?.id;
+      if (myUserId && Number(myUserId) === userData.id) {
+        loadSavedPolls();
+      }
     } catch (err: any) {
       error = err.message || "Error al cargar el perfil";
       console.error("[UserProfileModal] Error:", err);
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadSavedPolls() {
+    if (!userData?.id) return;
+
+    loadingSaved = true;
+    try {
+      const res = await apiCall(`/api/users/${userData.id}/bookmarks?limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        savedPolls = (data.data || []).map((poll: any) => ({
+          ...poll,
+          options: (poll.options || []).map((opt: any) => ({
+            ...opt,
+            key: opt.key || opt.optionKey,
+            label: opt.label || opt.optionLabel,
+          })),
+        }));
+      }
+    } catch (err) {
+      console.error("[UserProfileModal] Error al cargar guardados:", err);
+    } finally {
+      loadingSaved = false;
+    }
+  }
+
+  // Color palette for options (same as VotingFeed)
+  const OPTION_COLORS = [
+    { from: "from-red-600", to: "to-red-900", bar: "bg-red-500" },
+    { from: "from-blue-600", to: "to-blue-900", bar: "bg-blue-500" },
+    { from: "from-emerald-600", to: "to-emerald-900", bar: "bg-emerald-500" },
+    { from: "from-amber-600", to: "to-amber-900", bar: "bg-amber-500" },
+    { from: "from-purple-600", to: "to-purple-900", bar: "bg-purple-500" },
+    { from: "from-pink-600", to: "to-pink-900", bar: "bg-pink-500" },
+  ];
+
+  function getTimeAgo(dateString: string): string {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "ahora";
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffHours < 24) return `${diffHours}h`;
+    if (diffDays < 7) return `${diffDays}d`;
+    return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  }
+
+  // Transform API poll data to Post format for PostCard
+  function transformToPost(apiPoll: any): Post {
+    const totalVotes =
+      apiPoll.stats?.totalVotes ||
+      apiPoll.options?.reduce(
+        (sum: number, opt: any) =>
+          sum + (opt.votes || opt.voteCount || opt._count?.votes || 0),
+        0,
+      ) ||
+      0;
+
+    return {
+      id: apiPoll.hashId || String(apiPoll.id),
+      type: apiPoll.type || "standard",
+      author:
+        apiPoll.user?.displayName ||
+        apiPoll.user?.username ||
+        userData?.displayName ||
+        "Usuario",
+      avatar:
+        apiPoll.user?.avatarUrl ||
+        userData?.avatarUrl ||
+        `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiPoll.userId}`,
+      time: getTimeAgo(apiPoll.createdAt || new Date().toISOString()),
+      question: apiPoll.title || "Sin título",
+      totalVotes,
+      comments: apiPoll.stats?.comments || apiPoll._count?.comments || 0,
+      reposts: apiPoll.stats?.interactions || apiPoll._count?.interactions || 0,
+      likes: 0,
+      userId: apiPoll.user?.id || apiPoll.userId,
+      collabMode: apiPoll.collabMode,
+      collaborators: apiPoll.collaborators,
+      isFollowing: false,
+      isPending: false,
+      isBookmarked: true, // If in saved, it's bookmarked
+      endsAt: apiPoll.closedAt,
+      correctOptionId: apiPoll.correctOptionHashId,
+      options: (apiPoll.options || []).map((opt: any, idx: number) => {
+        const colors = OPTION_COLORS[idx % OPTION_COLORS.length];
+        const optionImage = opt.imageUrl || opt.image_url;
+        return {
+          id: opt.hashId || String(opt.id),
+          title:
+            opt.label ||
+            opt.optionLabel ||
+            opt.key ||
+            opt.optionKey ||
+            `Opción ${idx + 1}`,
+          votes: opt.votes || opt.voteCount || opt._count?.votes || 0,
+          friends: [],
+          type: optionImage ? ("image" as const) : ("text" as const),
+          image: optionImage,
+          colorFrom: colors.from,
+          colorTo: colors.to,
+          bgBar: colors.bar,
+        };
+      }),
+    };
+  }
+
+  // Derived posts transformed to Post format
+  let transformedUserPolls = $derived(userPolls.map(transformToPost));
+  let transformedUserVotes = $derived(
+    userVotes
+      .filter((v: any) => v.poll)
+      .map((v: any) => transformToPost(v.poll)),
+  );
+  let transformedSavedPolls = $derived(savedPolls.map(transformToPost));
+
+  // PostCard handlers
+  function handleVote(postId: string, value: string | string[]) {
+    userVotesMap = { ...userVotesMap, [postId]: value };
+  }
+
+  function handleToggleRank(postId: string, optionId: string) {
+    const currentDraft = rankingDrafts[postId] || [];
+    if (currentDraft.includes(optionId)) {
+      rankingDrafts = {
+        ...rankingDrafts,
+        [postId]: currentDraft.filter((id) => id !== optionId),
+      };
+    } else {
+      rankingDrafts = {
+        ...rankingDrafts,
+        [postId]: [...currentDraft, optionId],
+      };
+    }
+  }
+
+  function handlePopRank(postId: string) {
+    const currentDraft = rankingDrafts[postId] || [];
+    if (currentDraft.length === 0) return;
+    rankingDrafts = { ...rankingDrafts, [postId]: currentDraft.slice(0, -1) };
+  }
+
+  function handleSwipe(postId: string, direction: "left" | "right") {
+    const idx = swipeIndices[postId] || 0;
+    swipeIndices = { ...swipeIndices, [postId]: idx + 1 };
+  }
+
+  function handleAddCollab(postId: string, text: string) {
+    if (!text.trim()) {
+      addingPostId = null;
+      return;
+    }
+    addingPostId = null;
+  }
+
+  function setExpanded(postId: string | null, optionId: string | null) {
+    expandedPostId = postId;
+    expandedOptionId = optionId;
+  }
+
+  function setAdding(postId: string | null) {
+    addingPostId = postId;
+  }
+
+  function switchToReels(postId: string) {
+    // Close profile and open post in reels view
+    dispatch("pollClick", { pollId: postId });
+    closeModal();
+  }
+
+  function handleComment(post: Post) {
+    commentsPollId = post.id;
+    commentsPollTitle = post.question;
+    isCommentsModalOpen = true;
+  }
+
+  function handleShare(post: Post) {
+    sharePollHashId = post.id;
+    sharePollTitle = post.question;
+    isShareModalOpen = true;
+  }
+
+  function handleRepost(post: Post) {
+    // TODO: Implement repost
+    console.log("Repost:", post.id);
+  }
+
+  function handleAvatarClick(post: Post) {
+    // Already in profile modal, could switch to that user's profile
+    if (post.userId && post.userId !== userData?.id) {
+      userId = post.userId;
+      loadUserData();
     }
   }
 
@@ -235,147 +456,6 @@
     } finally {
       followLoading = false;
     }
-  }
-
-  function handlePollClick(pollId: number) {
-    dispatch("pollClick", { pollId });
-  }
-
-  function handleSetActive(e: CustomEvent) {
-    const { pollId, index } = e.detail;
-    activeAccordions = { ...activeAccordions, [pollId]: index };
-  }
-
-  function handlePageChange(e: CustomEvent) {
-    const { pollId, page } = e.detail;
-    pollPages = { ...pollPages, [pollId]: page };
-  }
-
-  // Manejar arrastre horizontal para cambiar entre opciones
-  function handleDragStart(e: CustomEvent) {
-    const { event, pollId } = e.detail;
-
-    const target = event.target as HTMLElement;
-    currentDragGrid = target.closest(".vote-cards-grid");
-    if (!currentDragGrid) {
-      console.log("[UserProfileModal] No se encontró vote-cards-grid");
-      return;
-    }
-
-    const touch = "touches" in event ? event.touches[0] : event;
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-    currentDragPollId = pollId.toString();
-    isDragging = false;
-
-    // Limpiar listeners previos
-    document.removeEventListener(
-      "pointermove",
-      handleCardDragMove as EventListener,
-    );
-    document.removeEventListener("pointerup", handleCardDragEnd);
-    document.removeEventListener(
-      "touchmove",
-      handleCardDragMove as EventListener,
-    );
-    document.removeEventListener("touchend", handleCardDragEnd);
-
-    // Agregar listeners globales
-    document.addEventListener(
-      "pointermove",
-      handleCardDragMove as EventListener,
-      { passive: true },
-    );
-    document.addEventListener("pointerup", handleCardDragEnd);
-    document.addEventListener(
-      "touchmove",
-      handleCardDragMove as EventListener,
-      { passive: true },
-    );
-    document.addEventListener("touchend", handleCardDragEnd);
-  }
-
-  function handleCardDragMove(e: PointerEvent | TouchEvent) {
-    if (!currentDragGrid || !currentDragPollId) return;
-
-    const touch = "touches" in e ? e.touches[0] : e;
-    const deltaX = touch.clientX - touchStartX;
-    const deltaY = touch.clientY - touchStartY;
-
-    // Detectar movimiento horizontal
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 20) {
-      isDragging = true;
-
-      let currentIndex = activeAccordions[currentDragPollId] ?? 0;
-      const cards = currentDragGrid.querySelectorAll(".vote-card");
-      const totalCards = cards.length;
-
-      // Cambiar a siguiente/anterior opción
-      if (deltaX < -50 && currentIndex < totalCards - 1) {
-        // Swipe izquierda - siguiente opción
-        activeAccordions = {
-          ...activeAccordions,
-          [currentDragPollId]: currentIndex + 1,
-        };
-        touchStartX = touch.clientX;
-        console.log("[UserProfileModal] Cambiando a opción:", currentIndex + 1);
-      } else if (deltaX < -50 && currentIndex === totalCards - 1) {
-        // Última opción, cambiar de página
-        const poll = [...userPolls, ...userVotes.map((v) => v.poll)].find(
-          (p) => p.id.toString() === currentDragPollId,
-        );
-        if (poll) {
-          const currentPage = pollPages[currentDragPollId] || 0;
-          const totalPages = Math.ceil(poll.options.length / 4);
-          if (currentPage < totalPages - 1) {
-            pollPages = { ...pollPages, [currentDragPollId]: currentPage + 1 };
-            activeAccordions = { ...activeAccordions, [currentDragPollId]: 0 };
-            touchStartX = touch.clientX;
-            console.log(
-              "[UserProfileModal] Cambiando a página:",
-              currentPage + 1,
-            );
-          }
-        }
-      } else if (deltaX > 50 && currentIndex > 0) {
-        // Swipe derecha - opción anterior
-        activeAccordions = {
-          ...activeAccordions,
-          [currentDragPollId]: currentIndex - 1,
-        };
-        touchStartX = touch.clientX;
-        console.log("[UserProfileModal] Cambiando a opción:", currentIndex - 1);
-      } else if (deltaX > 50 && currentIndex === 0) {
-        // Primera opción, cambiar a página anterior
-        const currentPage = pollPages[currentDragPollId] || 0;
-        if (currentPage > 0) {
-          pollPages = { ...pollPages, [currentDragPollId]: currentPage - 1 };
-          activeAccordions = { ...activeAccordions, [currentDragPollId]: 3 };
-          touchStartX = touch.clientX;
-          console.log(
-            "[UserProfileModal] Cambiando a página:",
-            currentPage - 1,
-          );
-        }
-      }
-    }
-  }
-
-  function handleCardDragEnd() {
-    isDragging = false;
-    currentDragGrid = null;
-    currentDragPollId = null;
-
-    document.removeEventListener(
-      "pointermove",
-      handleCardDragMove as EventListener,
-    );
-    document.removeEventListener("pointerup", handleCardDragEnd);
-    document.removeEventListener(
-      "touchmove",
-      handleCardDragMove as EventListener,
-    );
-    document.removeEventListener("touchend", handleCardDragEnd);
   }
 
   function formatDate(date: string) {
@@ -500,7 +580,7 @@
               <p class="bio">{userData.bio}</p>
             {/if}
 
-            {#if userData.username === 'robertojimenezvalle'}
+            {#if userData.username === "robertojimenezvalle"}
               <a
                 href="/production-checklist"
                 class="checklist-link"
@@ -575,6 +655,16 @@
             <TrendingUp size={18} />
             <span>Votaciones ({userVotes.length})</span>
           </button>
+          {#if $currentUser && ($currentUser.userId || ($currentUser as any).id) === userData.id}
+            <button
+              class="tab-btn"
+              class:active={activeTab === "saved"}
+              onclick={() => (activeTab = "saved")}
+            >
+              <Bookmark size={18} />
+              <span>Guardadas ({savedPolls.length})</span>
+            </button>
+          {/if}
         </div>
 
         <!-- Contenido de tabs -->
@@ -587,93 +677,28 @@
                   <p>Aún no ha publicado encuestas</p>
                 </div>
               {:else}
-                {#each userPolls as poll (poll.id)}
-                  <SinglePollSection
-                    {poll}
-                    state="expanded"
-                    activeAccordionIndex={activeAccordions[poll.id] ?? 0}
-                    currentPage={pollPages[poll.id] || 0}
-                    userVotes={votesState}
-                    multipleVotes={{}}
-                    pollIndex={0}
-                    pollTitleExpanded={{}}
-                    pollTitleTruncated={{}}
-                    pollTitleElements={{}}
-                    voteEffectActive={false}
-                    voteEffectPollId={null}
-                    displayVotes={{}}
-                    voteClickX={0}
-                    voteClickY={0}
-                    voteIconX={0}
-                    voteIconY={0}
-                    voteEffectColor="#10b981"
-                    on:openPollById={(e) => {
-                      handlePollClick(e.detail.pollId);
-                      closeModal();
-                    }}
-                    on:dragStart={(e) => handleDragStart(e)}
-                    on:setActive={(e) => handleSetActive(e)}
-                    on:pageChange={handlePageChange}
-                    on:optionClick={(e) => {
-                      const { pollId, optionKey } = e.detail;
-                      console.log(
-                        "[UserProfileModal] Voto recibido:",
-                        e.detail,
-                      );
-                      // Actualizar estado local de votos
-                      const pollIdStr = pollId.toString();
-                      const currentVote = votesState[pollIdStr];
-
-                      if (currentVote === optionKey) {
-                        // Desvoto - eliminar
-                        delete votesState[pollIdStr];
-                        votesState = { ...votesState };
-                        console.log("[UserProfileModal] Voto eliminado");
-                      } else {
-                        // Nuevo voto
-                        votesState = { ...votesState, [pollIdStr]: optionKey };
-                        console.log(
-                          "[UserProfileModal] Voto registrado:",
-                          optionKey,
-                        );
-                      }
-                    }}
-                    on:yesNoVote={(e) => {
-                      const { pollId, optionKey, answer } = e.detail;
-                      console.log(
-                        "[UserProfileModal] Voto Sí/No recibido:",
-                        e.detail,
-                      );
-                      const pollIdStr = pollId.toString();
-                      votesState = { ...votesState, [pollIdStr]: optionKey };
-                    }}
-                    on:clearVote={async (e) => {
-                      const { pollId } = e.detail;
-                      const pollIdStr = pollId.toString();
-                      console.log(
-                        "[UserProfileModal] clearVote recibido para:",
-                        pollIdStr,
-                      );
-
-                      try {
-                        const numericPollId =
-                          typeof pollId === "string"
-                            ? parseInt(pollId)
-                            : pollId;
-
-                        // Usar apiDelete con autenticación
-                        await apiDelete(`/api/polls/${numericPollId}/vote`);
-
-                        delete votesState[pollIdStr];
-                        votesState = { ...votesState };
-                        console.log("[UserProfileModal] ✅ Voto eliminado");
-                      } catch (error) {
-                        console.error(
-                          "[UserProfileModal] Error al eliminar voto:",
-                          error,
-                        );
-                      }
-                    }}
+                {#each transformedUserPolls as post (post.id)}
+                  <PostCard
+                    {post}
+                    userVotes={userVotesMap}
+                    {rankingDrafts}
+                    {swipeIndices}
+                    {expandedPostId}
+                    {expandedOptionId}
+                    {addingPostId}
+                    onVote={handleVote}
+                    onToggleRank={handleToggleRank}
+                    onPopRank={handlePopRank}
+                    onSwipe={handleSwipe}
+                    onAddCollab={handleAddCollab}
+                    {setExpanded}
+                    {setAdding}
+                    {switchToReels}
+                    viewMode="feed"
+                    onComment={handleComment}
+                    onShare={handleShare}
+                    onRepost={handleRepost}
+                    onAvatarClick={handleAvatarClick}
                   />
                 {/each}
               {/if}
@@ -691,88 +716,72 @@
                   <p>Aún no ha votado en encuestas</p>
                 </div>
               {:else}
-                {#each userVotes as vote, voteIdx (vote.id)}
-                  {#if vote.poll && vote.poll.options && vote.selectedOption}
-                    {@const votedOptionIndex = vote.poll.options.findIndex(
-                      (opt: any) => opt.key === vote.selectedOption.key,
-                    )}
-                    {@const votedPage =
-                      votedOptionIndex >= 0
-                        ? Math.floor(votedOptionIndex / 4)
-                        : 0}
-                    {@const votedIndexInPage =
-                      votedOptionIndex >= 0 ? votedOptionIndex % 4 : 0}
-                    <SinglePollSection
-                      poll={vote.poll}
-                      state="expanded"
-                      activeAccordionIndex={activeAccordions[vote.poll.id] ??
-                        votedIndexInPage}
-                      currentPage={pollPages[vote.poll.id] ?? votedPage}
-                      userVotes={votesState}
-                      multipleVotes={{}}
-                      pollIndex={0}
-                      pollTitleExpanded={{}}
-                      pollTitleTruncated={{}}
-                      pollTitleElements={{}}
-                      voteEffectActive={false}
-                      voteEffectPollId={null}
-                      displayVotes={{}}
-                      voteClickX={0}
-                      voteClickY={0}
-                      voteIconX={0}
-                      voteIconY={0}
-                      voteEffectColor="#10b981"
-                      on:openPollById={(e) => {
-                        handlePollClick(e.detail.pollId);
-                        closeModal();
-                      }}
-                      on:dragStart={(e) => handleDragStart(e)}
-                      on:setActive={(e) => handleSetActive(e)}
-                      on:pageChange={handlePageChange}
-                      on:optionClick={(e) => {
-                        const { pollId, optionKey } = e.detail;
-                        const pollIdStr = pollId.toString();
-                        const currentVote = votesState[pollIdStr];
-                        if (currentVote === optionKey) {
-                          delete votesState[pollIdStr];
-                          votesState = { ...votesState };
-                        } else {
-                          votesState = {
-                            ...votesState,
-                            [pollIdStr]: optionKey,
-                          };
-                        }
-                      }}
-                      on:yesNoVote={(e) => {
-                        const { pollId, optionKey, answer } = e.detail;
-                        const pollIdStr = pollId.toString();
-                        votesState = { ...votesState, [pollIdStr]: optionKey };
-                      }}
-                      on:clearVote={async (e) => {
-                        const { pollId } = e.detail;
-                        const pollIdStr = pollId.toString();
-
-                        try {
-                          const numericPollId =
-                            typeof pollId === "string"
-                              ? parseInt(pollId)
-                              : pollId;
-
-                          // Usar apiDelete con autenticación
-                          await apiDelete(`/api/polls/${numericPollId}/vote`);
-
-                          delete votesState[pollIdStr];
-                          votesState = { ...votesState };
-                          console.log("[UserProfileModal] ✅ Voto eliminado");
-                        } catch (error) {
-                          console.error(
-                            "[UserProfileModal] Error al eliminar voto:",
-                            error,
-                          );
-                        }
-                      }}
-                    />
-                  {/if}
+                {#each transformedUserVotes as post (post.id)}
+                  <PostCard
+                    {post}
+                    userVotes={userVotesMap}
+                    {rankingDrafts}
+                    {swipeIndices}
+                    {expandedPostId}
+                    {expandedOptionId}
+                    {addingPostId}
+                    onVote={handleVote}
+                    onToggleRank={handleToggleRank}
+                    onPopRank={handlePopRank}
+                    onSwipe={handleSwipe}
+                    onAddCollab={handleAddCollab}
+                    {setExpanded}
+                    {setAdding}
+                    {switchToReels}
+                    viewMode="feed"
+                    onComment={handleComment}
+                    onShare={handleShare}
+                    onRepost={handleRepost}
+                    onAvatarClick={handleAvatarClick}
+                  />
+                {/each}
+              {/if}
+            </div>
+          {:else if activeTab === "saved"}
+            <div class="saved-list">
+              {#if loadingSaved}
+                <div class="loading-state">
+                  <Loader2 size={48} class="spinner" />
+                  <p>Cargando guardadas...</p>
+                </div>
+              {:else if savedPolls.length === 0}
+                <div class="empty-state">
+                  <Bookmark size={48} />
+                  <p>No tienes encuestas guardadas</p>
+                  <span class="empty-hint"
+                    >Pulsa el icono de guardado en las encuestas para añadirlas
+                    aquí</span
+                  >
+                </div>
+              {:else}
+                {#each transformedSavedPolls as post (post.id)}
+                  <PostCard
+                    {post}
+                    userVotes={userVotesMap}
+                    {rankingDrafts}
+                    {swipeIndices}
+                    {expandedPostId}
+                    {expandedOptionId}
+                    {addingPostId}
+                    onVote={handleVote}
+                    onToggleRank={handleToggleRank}
+                    onPopRank={handlePopRank}
+                    onSwipe={handleSwipe}
+                    onAddCollab={handleAddCollab}
+                    {setExpanded}
+                    {setAdding}
+                    {switchToReels}
+                    viewMode="feed"
+                    onComment={handleComment}
+                    onShare={handleShare}
+                    onRepost={handleRepost}
+                    onAvatarClick={handleAvatarClick}
+                  />
                 {/each}
               {/if}
             </div>
@@ -782,6 +791,20 @@
     </div>
   </div>
 {/if}
+
+<!-- Comments Modal -->
+<CommentsModal
+  bind:isOpen={isCommentsModalOpen}
+  pollId={commentsPollId}
+  pollTitle={commentsPollTitle}
+/>
+
+<!-- Share Modal -->
+<ShareModal
+  bind:isOpen={isShareModalOpen}
+  pollHashId={sharePollHashId}
+  pollTitle={sharePollTitle}
+/>
 
 <style>
   .modal-overlay {
@@ -1067,7 +1090,6 @@
     transform: translateY(-1px);
   }
 
-  
   .profile-meta {
     display: flex;
     flex-wrap: wrap;
@@ -1162,32 +1184,44 @@
     font-size: 16px;
   }
 
-  /* Polls List - usar SinglePollSection */
+  /* Polls List - usar PostCard */
   .polls-list {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 16px;
   }
 
-  .polls-list :global(.vote-cards-grid) {
-    touch-action: pan-x pan-y;
-  }
-
-  /* Asegurar que SinglePollSection ocupe todo el ancho como en rells */
-  .polls-list :global(.poll-item),
-  .votes-list :global(.poll-item) {
+  .polls-list :global(.post-card) {
     width: 100%;
-    max-width: none;
   }
 
-  /* Votes List - usar SinglePollSection */
+  /* Votes List - usar PostCard */
   .votes-list {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 16px;
   }
 
-  .votes-list :global(.vote-cards-grid) {
-    touch-action: pan-x pan-y;
+  .votes-list :global(.post-card) {
+    width: 100%;
+  }
+
+  /* Saved List - usar PostCard */
+  .saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .saved-list :global(.post-card) {
+    width: 100%;
+  }
+
+  .empty-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    max-width: 250px;
   }
 </style>

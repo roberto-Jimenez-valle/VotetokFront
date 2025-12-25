@@ -312,8 +312,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const currentUserId = locals.user?.userId;
     let followingIds = new Set<number>();
     let pendingIds = new Set<number>();
+    let bookmarkedPollIds = new Set<number>();
 
     if (currentUserId) {
+      // Get follows
       const follows = await prisma.userFollower.findMany({
         where: { followerId: currentUserId },
         select: { followingId: true, status: true }
@@ -322,6 +324,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         if (f.status === 'accepted') followingIds.add(f.followingId);
         else if (f.status === 'pending') pendingIds.add(f.followingId);
       });
+
+      // Get bookmarks
+      const bookmarks = await prisma.pollInteraction.findMany({
+        where: {
+          userId: currentUserId,
+          interactionType: 'bookmark'
+        },
+        select: { pollId: true }
+      });
+      bookmarks.forEach(b => bookmarkedPollIds.add(b.pollId));
     }
 
     const where = {
@@ -435,6 +447,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         correctOptionHashId,
         isFollowing: followingIds.has(poll.userId),
         isPending: pendingIds.has(poll.userId),
+        isBookmarked: bookmarkedPollIds.has(poll.id),
         user: poll.user ? {
           ...poll.user,
           hashId: encodeUserId(poll.user.id),

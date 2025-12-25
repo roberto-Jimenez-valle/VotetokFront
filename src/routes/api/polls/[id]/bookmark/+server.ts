@@ -1,5 +1,6 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 /**
  * POST /api/polls/[id]/bookmark
@@ -7,27 +8,27 @@ import { prisma } from '$lib/server/prisma';
  */
 export const POST: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = Number(params.id);
-    
-    if (isNaN(pollId)) {
+    const pollId = parsePollIdInternal(params.id || '');
+
+    if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
-    const userId = locals.user?.userId || locals.user?.id;
+
+    const userId = locals.user?.userId || (locals.user as any)?.id;
     if (!userId) {
       throw error(401, 'Debes iniciar sesión para guardar');
     }
-    
+
     // Verificar que la encuesta existe
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       select: { id: true }
     });
-    
+
     if (!poll) {
       throw error(404, 'Encuesta no encontrada');
     }
-    
+
     // Verificar si ya existe un bookmark
     const existingBookmark = await prisma.pollInteraction.findUnique({
       where: {
@@ -38,11 +39,11 @@ export const POST: RequestHandler = async ({ params, locals }) => {
         }
       }
     });
-    
+
     if (existingBookmark) {
       throw error(400, 'Ya has guardado esta encuesta');
     }
-    
+
     // Crear el bookmark
     await prisma.pollInteraction.create({
       data: {
@@ -51,12 +52,12 @@ export const POST: RequestHandler = async ({ params, locals }) => {
         interactionType: 'bookmark'
       }
     });
-    
+
     // Obtener conteo actualizado
     const bookmarkCount = await prisma.pollInteraction.count({
       where: { pollId, interactionType: 'bookmark' }
     });
-    
+
     return json({ success: true, bookmarkCount });
   } catch (err: any) {
     console.error('[Bookmark] Error:', err);
@@ -71,17 +72,17 @@ export const POST: RequestHandler = async ({ params, locals }) => {
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = Number(params.id);
-    
-    if (isNaN(pollId)) {
+    const pollId = parsePollIdInternal(params.id || '');
+
+    if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
-    const userId = locals.user?.userId || locals.user?.id;
+
+    const userId = locals.user?.userId || (locals.user as any)?.id;
     if (!userId) {
       throw error(401, 'Debes iniciar sesión');
     }
-    
+
     const existingBookmark = await prisma.pollInteraction.findUnique({
       where: {
         pollId_userId_interactionType: {
@@ -91,19 +92,19 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
         }
       }
     });
-    
+
     if (!existingBookmark) {
       throw error(404, 'No has guardado esta encuesta');
     }
-    
+
     await prisma.pollInteraction.delete({
       where: { id: existingBookmark.id }
     });
-    
+
     const bookmarkCount = await prisma.pollInteraction.count({
       where: { pollId, interactionType: 'bookmark' }
     });
-    
+
     return json({ success: true, bookmarkCount });
   } catch (err: any) {
     console.error('[Bookmark DELETE] Error:', err);
@@ -118,18 +119,18 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
  */
 export const GET: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
-    const userId = locals.user?.userId || locals.user?.id;
-    
+
+    const userId = locals.user?.userId || (locals.user as any)?.id;
+
     const bookmarkCount = await prisma.pollInteraction.count({
       where: { pollId, interactionType: 'bookmark' }
     });
-    
+
     let hasBookmarked = false;
     if (userId) {
       const userBookmark = await prisma.pollInteraction.findUnique({
@@ -143,7 +144,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
       });
       hasBookmarked = !!userBookmark;
     }
-    
+
     return json({ bookmarkCount, hasBookmarked });
   } catch (err: any) {
     console.error('[Bookmark GET] Error:', err);

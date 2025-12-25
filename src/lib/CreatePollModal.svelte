@@ -292,7 +292,7 @@
         `/api/users/following?userId=${userId}&limit=100`,
       );
       if (response.data) {
-        followingUsers = response.data.map((u) => ({
+        followingUsers = response.data.map((u: any) => ({
           id: u.id.toString(), // Aseguramos que el ID sea string para comparaciones
           name: u.name,
           username: u.username,
