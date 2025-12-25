@@ -78,7 +78,7 @@
 		<!-- Textos -->
 		<div class="text-content">
 			<span class="status-badge">Versión Beta</span>
-			<h2 class="main-title">Experiencia en Desarrollo</h2>
+			<h2 class="main-title">Aplicación en Desarrollo</h2>
 			<p class="subtitle">
 				Estamos construyendo la nueva generación de votación social.
 			</p>

@@ -81,10 +81,6 @@
 			return;
 		}
 
-		if (isLocalNetwork) {
-			console.log("🏠 Acceso automático desde red local");
-		}
-
 		// 🔑 Capturar token de OAuth callback si existe en la URL
 		const urlParams = new URLSearchParams(window.location.search);
 		const authSuccess = urlParams.get("auth");
