@@ -200,7 +200,7 @@ export const POST: RequestHandler = async (event) => {
     // Crear la encuesta con opciones y hashtags en una transacción
     const poll = await prisma.$transaction(async (tx) => {
       // Crear la encuesta
-      const newPoll = await tx.poll.create({
+      let newPoll = await tx.poll.create({
         data: {
           userId: finalUserId,
           title: title.trim(),
@@ -236,6 +236,35 @@ export const POST: RequestHandler = async (event) => {
           }
         }
       });
+
+      // ACTUALIZACIÓN TRIVIAL: Asignar opción correcta si es tipo Quiz
+      if (type === 'quiz' && options) {
+        const correctOptInput = options.find((o: any) => o.isCorrect);
+        if (correctOptInput) {
+          const createdCorrectOption = newPoll.options.find(
+            (o) => o.optionKey === correctOptInput.optionKey
+          );
+
+          if (createdCorrectOption) {
+            newPoll = await tx.poll.update({
+              where: { id: newPoll.id },
+              data: { correctOptionId: createdCorrectOption.id },
+              include: {
+                options: true,
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatarUrl: true,
+                    verified: true
+                  }
+                }
+              }
+            });
+          }
+        }
+      }
 
       // Guardar colaboradores si el modo es "selected"
       if (settings?.collabMode === 'selected' && settings?.selectedUserIds?.length > 0) {

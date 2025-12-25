@@ -36,7 +36,11 @@
     totalOptions?: number;
     isHidden?: boolean;
     isEditing?: boolean;
-    onEditConfirm?: (text: string) => void;
+    onEditConfirm?: (
+      text: string,
+      image?: string | null,
+      color?: string,
+    ) => void;
     viewMode?: ViewMode;
   }
 
@@ -192,10 +196,7 @@
 
   async function handleAutoGif(next = false) {
     if (!editText.trim()) {
-      if (inputRef) {
-        inputRef.focus();
-        // Visual shake/error effect could go here
-      }
+      showGiphyPicker = true;
       return;
     }
 
@@ -355,7 +356,7 @@
 
   function handleEditConfirm(e: MouseEvent) {
     e.stopPropagation();
-    onEditConfirm?.(editText);
+    onEditConfirm?.(editText, editImage, editColor);
   }
 
   // Status colors based on vote state
@@ -682,9 +683,14 @@
             </div>
           </div>
 
+          <!-- Gradient Overlay -->
+          <div
+            class="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/95 via-black/60 to-transparent z-30 pointer-events-none"
+          ></div>
+
           <!-- Main Input Area -->
           <div
-            class="absolute inset-0 z-40 flex flex-col justify-center px-8 pointer-events-none"
+            class="absolute inset-0 z-40 flex flex-col justify-end px-6 pb-6 pointer-events-none"
           >
             <textarea
               bind:this={inputRef}
@@ -718,20 +724,19 @@
             <div
               class="flex flex-col items-center rounded-[1.5rem] border transition-all overflow-visible bg-slate-900 border-white/20 text-white shadow-xl"
             >
-              <!-- Manual Search (Always visible) -->
-              <button
-                type="button"
-                class="p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center relative cursor-pointer"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  showGiphyPicker = true;
-                }}
-                title="Buscar GIF manualmente"
-              >
-                <Search size={20} strokeWidth={1.5} />
-              </button>
-
               {#if editImage}
+                <!-- Manual Search -->
+                <button
+                  type="button"
+                  class="p-3 w-full hover:bg-white/5 border-b border-white/5 transition-colors flex items-center justify-center relative cursor-pointer"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    showGiphyPicker = true;
+                  }}
+                  title="Buscar GIF manualmente"
+                >
+                  <Search size={20} strokeWidth={1.5} />
+                </button>
                 <!-- Refresh (Next GIF) -->
                 <button
                   type="button"

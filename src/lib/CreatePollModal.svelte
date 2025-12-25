@@ -450,6 +450,8 @@
     if (newType === "quiz") {
       const currentOption = options[activeIndex] || options[0];
       if (currentOption) correctOptionId = currentOption.id;
+      // Trivial no soporta modo colaborativo
+      collabMode = "me";
     }
   }
 
@@ -1888,11 +1890,14 @@
 
           <button
             onclick={() => {
+              if (type === "quiz") return;
               showCollabModal = true;
               fetchFollowing();
             }}
-            class={`flex items-center justify-center transition-all border active:scale-90 ${collabMode !== "me" ? "bg-[#9ec264] text-black border-[#9ec264] shadow-xl" : "bg-white/5 text-white/40 border-white/5"} ${collabMode === "selected" && selectedUserIds.length > 0 ? "px-3.5 py-2.5 gap-2 rounded-full" : "w-10 py-2.5 rounded-full"}`}
-            title={getCollabLabel()}
+            class={`flex items-center justify-center transition-all border active:scale-90 ${collabMode !== "me" ? "bg-[#9ec264] text-black border-[#9ec264] shadow-xl" : "bg-white/5 text-white/40 border-white/5"} ${collabMode === "selected" && selectedUserIds.length > 0 ? "px-3.5 py-2.5 gap-2 rounded-full" : "w-10 py-2.5 rounded-full"} ${type === "quiz" ? "opacity-30 cursor-not-allowed" : ""}`}
+            title={type === "quiz"
+              ? "No disponible en Trivial"
+              : getCollabLabel()}
           >
             <activeCollabData.icon class="w-[1rem] h-[1rem]" />
             {#if collabMode === "selected" && selectedUserIds.length > 0}

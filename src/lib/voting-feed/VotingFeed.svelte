@@ -474,6 +474,21 @@
         // Check for option image - could be imageUrl, image_url, or thumbnailUrl
         const optionImage = opt.imageUrl || opt.image_url || opt.thumbnailUrl;
 
+        // Use stored color if available, otherwise fallback to index-based palette
+        let colorFrom = colors.from;
+        let colorTo = colors.to;
+        let bgBar = colors.bar;
+
+        if (opt.color) {
+          // If we have a custom color (hex), use it
+          // OptionCard expects CSS values or tailwind classes
+          // For simplicity, we use the same color for gradient or maybe calculate a darker shade?
+          // Using the hex directly works if OptionCard handles it, otherwise we might need to assume it works as a CSS value
+          colorFrom = opt.color;
+          colorTo = opt.color; // Flat color for now, or could adjust brightness
+          bgBar = `bg-[${opt.color}]`; // Tailwind arbitrary value, or just inline style elsewhere
+        }
+
         return {
           id: opt.hashId || String(opt.id),
           title:
@@ -492,9 +507,9 @@
             : [],
           type: optionImage ? ("image" as const) : ("text" as const),
           image: optionImage || pollImage,
-          colorFrom: colors.from,
-          colorTo: colors.to,
-          bgBar: colors.bar,
+          colorFrom: colorFrom,
+          colorTo: colorTo,
+          bgBar: bgBar,
         };
       }),
     };
@@ -760,27 +775,76 @@
     }
   }
 
-  function handleAddCollab(postId: string, text: string) {
+  async function handleAddCollab(
+    postId: string,
+    text: string,
+    image?: string | null,
+    color?: string,
+  ) {
     if (!text.trim()) {
       addingPostId = null;
       return;
     }
 
+    const tempId = `custom-${Date.now()}`;
+    const newOpt = {
+      id: tempId,
+      title: text,
+      votes: 0,
+      friends: [],
+      type: image ? ("image" as const) : ("text" as const),
+      image: image || undefined,
+      colorFrom: color || "from-slate-600",
+      colorTo: color || "to-slate-900",
+      bgBar: "bg-slate-500",
+    };
+
+    // Optimistic update
     posts = posts.map((p) => {
       if (p.id !== postId) return p;
-      const newOpt = {
-        id: `custom-${Date.now()}`,
-        title: text,
-        votes: 1,
-        friends: [],
-        type: "text" as const,
-        colorFrom: "from-slate-600",
-        colorTo: "to-slate-900",
-        bgBar: "bg-slate-500",
-      };
       return { ...p, options: [...p.options, newOpt] };
     });
     addingPostId = null;
+
+    try {
+      const response = await apiCall(`/api/polls/${postId}/options`, {
+        method: "POST",
+        body: JSON.stringify({
+          label: text,
+          imageUrl: image,
+          color: color,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const savedOption = result.data;
+
+        // Update with real data
+        posts = posts.map((p) => {
+          if (p.id !== postId) return p;
+          const opts = p.options.map((o) => {
+            if (o.id === tempId) {
+              return {
+                ...o,
+                id: savedOption.hashId || String(savedOption.id),
+                image: savedOption.imageUrl || savedOption.image_url || o.image,
+                // Ensure backend returned color is used if available
+                colorFrom: savedOption.color || o.colorFrom,
+                colorTo: savedOption.color || o.colorTo,
+              };
+            }
+            return o;
+          });
+          return { ...p, options: opts };
+        });
+      } else {
+        console.error("Failed to save option remotely");
+        // Optional: Show error or revert
+      }
+    } catch (err) {
+      console.error("Error saving option:", err);
+    }
   }
 
   function handleCreatePost(newPost: Post) {

@@ -52,7 +52,12 @@
     onToggleRank: (postId: string, optionId: string) => void;
     onPopRank: (postId: string) => void;
     onSwipe: (postId: string, direction: "left" | "right") => void;
-    onAddCollab: (postId: string, text: string) => void;
+    onAddCollab: (
+      postId: string,
+      text: string,
+      image?: string | null,
+      color?: string,
+    ) => void;
     setExpanded: (postId: string | null, optionId: string | null) => void;
     setAdding: (postId: string | null) => void;
     switchToReels: (postId: string) => void;
@@ -910,7 +915,8 @@
                         isHidden={expandedPostId === post.id &&
                           expandedOptionId === opt.id}
                         onToggleExpand={() => setExpanded(post.id, opt.id)}
-                        onEditConfirm={(txt) => onAddCollab(post.id, txt)}
+                        onEditConfirm={(txt, img, col) =>
+                          onAddCollab(post.id, txt, img, col)}
                         onVote={handleOptionVote}
                         {rank}
                         nextRank={rankingDraft.length + 1}
@@ -987,7 +993,8 @@
                             isHidden={expandedPostId === post.id &&
                               expandedOptionId === opt.id}
                             onToggleExpand={() => setExpanded(post.id, opt.id)}
-                            onEditConfirm={(txt) => onAddCollab(post.id, txt)}
+                            onEditConfirm={(txt, img, col) =>
+                              onAddCollab(post.id, txt, img, col)}
                             onVote={handleOptionVote}
                             {rank}
                             nextRank={rankingDraft.length + 1}
@@ -1039,7 +1046,8 @@
                       isHidden={expandedPostId === post.id &&
                         expandedOptionId === opt.id}
                       onToggleExpand={() => setExpanded(post.id, opt.id)}
-                      onEditConfirm={(txt) => onAddCollab(post.id, txt)}
+                      onEditConfirm={(txt, img, col) =>
+                        onAddCollab(post.id, txt, img, col)}
                       onVote={handleOptionVote}
                       {rank}
                       nextRank={rankingDraft.length + 1}
@@ -1082,8 +1090,8 @@
                     // Switch to Reels mode when clicking on expanded option
                     switchToReels(post.id);
                   }}
-                  onEditConfirm={(txt) => {
-                    onAddCollab(post.id, txt);
+                  onEditConfirm={(txt, img, col) => {
+                    onAddCollab(post.id, txt, img, col);
                     setAdding(null);
                   }}
                   onVote={(optId) => {
