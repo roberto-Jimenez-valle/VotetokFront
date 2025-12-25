@@ -72,6 +72,11 @@
                     status: "done",
                     detail: "Middleware completo implementado en hooks.server.ts: App Signature, JWT extraction, Rate Limiting, Security Headers. Helpers en auth.ts: requireAuth(), requireRole(), requireOwnership() para protección granular de endpoints.",
                 },
+                {
+                    label: "Página de Mantenimiento (Under Construction)",
+                    status: "done",
+                    detail: "Diseño profesional 'dark mode' con logo oficial, animaciones orbitales y acceso mediante código secreto (5 clicks) para proteger el acceso durante el desarrollo.",
+                },
             ],
         },
         {
