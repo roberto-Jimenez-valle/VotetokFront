@@ -1001,22 +1001,6 @@
                         />
                       {/if}
                     {/each}
-
-                    <!-- Vertical scrub line -->
-                    {#if scrubIndex !== null && smoothLinePaths[0]}
-                      {@const activeX =
-                        smoothLinePaths[0].points[activeLineIndex]?.x ?? 0}
-                      <line
-                        x1={activeX}
-                        y1="0"
-                        x2={activeX}
-                        y2={LINE_VIEWBOX_HEIGHT}
-                        stroke="rgba(255,255,255,0.4)"
-                        stroke-width="1"
-                        stroke-dasharray="4,4"
-                        vector-effect="non-scaling-stroke"
-                      />
-                    {/if}
                   </svg>
 
                   <!-- Time reference labels -->
