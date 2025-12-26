@@ -1679,6 +1679,10 @@
     pointer-events: none;
   }
 
+  .donut-segment:focus {
+    outline: none;
+  }
+
   /* Header Friends */
   .header-friends {
     display: flex;
