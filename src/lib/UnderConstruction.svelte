@@ -138,7 +138,7 @@
 <style>
 	:global(body) {
 		margin: 0;
-		background: #0f0f11;
+		background: #000000;
 		font-family: "Inter", system-ui, sans-serif;
 	}
 

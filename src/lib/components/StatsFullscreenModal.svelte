@@ -135,10 +135,23 @@
     { code: "COL", name: "Colombia", flag: "🇨🇴" },
   ];
 
-  // Initialize visible options when modal opens
+  // Track last initialized poll to reset visibility when poll changes
+  let lastInitializedPollId = $state<string | number | null>(null);
+
+  // Initialize visible options when modal opens or poll changes
   $effect(() => {
-    if (isOpen && options.length > 0 && visibleOptions.size === 0) {
-      visibleOptions = new Set(options.map((o) => o.key || o.optionKey || ""));
+    if (isOpen && options.length > 0) {
+      // If first open OR poll changed, reset visible options to show all
+      if (visibleOptions.size === 0 || lastInitializedPollId !== pollId) {
+        console.log(
+          "[StatsModal] Initializing visible options for poll:",
+          pollId,
+        );
+        visibleOptions = new Set(
+          options.map((o) => o.key || o.optionKey || ""),
+        );
+        lastInitializedPollId = pollId;
+      }
     }
   });
 
@@ -165,7 +178,7 @@
 
   // Computed values
   const sortedOptions = $derived.by(() => {
-    console.log("[StatsModal] Computing sortedOptions, options:", options);
+    // Creating a new array to avoid mutating the original options
     return [...options].sort((a, b) => (b.votes || 0) - (a.votes || 0));
   });
 
@@ -259,6 +272,9 @@
     isOpen = false;
     lastLoadedPollId = null;
     lastLoadedRange = null;
+    lastInitializedPollId = null; // Reset initialization tracking
+    visibleOptions = new Set(); // Clear visible options
+    activeView = "stats"; // Reset view to default
     onClose?.();
   }
 
@@ -267,10 +283,12 @@
   }
 
   function handleTouchStart(e: TouchEvent) {
+    if (activeView === "globe") return;
     touchStartY = e.touches[0].clientY;
   }
 
   function handleTouchMove(e: TouchEvent) {
+    if (activeView === "globe") return;
     const diff = e.touches[0].clientY - touchStartY;
     if (diff > 0) {
       modalTranslateY = Math.min(diff * 0.5, 150);
@@ -278,6 +296,7 @@
   }
 
   function handleTouchEnd() {
+    if (activeView === "globe") return;
     if (modalTranslateY > 80) {
       handleClose();
     }
