@@ -39,6 +39,7 @@
   import { POST_CONFIGS } from "./types";
   import OptionCard from "./OptionCard.svelte";
   import Countdown from "$lib/ui/Countdown.svelte";
+  import { apiCall } from "$lib/api/client";
 
   interface Props {
     post: Post;
@@ -155,7 +156,7 @@
         (oldFollow || oldPending) && !isFollowing && !isPending;
       const method = isDeleting ? "DELETE" : "POST";
 
-      const res = await fetch(`/api/users/${targetId}/follow`, { method });
+      const res = await apiCall(`/api/users/${targetId}/follow`, { method });
       if (!res.ok) throw new Error("API Error");
 
       if (!isDeleting) {
@@ -188,15 +189,24 @@
 
     try {
       const method = oldBookmarked ? "DELETE" : "POST";
-      const res = await fetch(`/api/polls/${post.id}/bookmark`, { method });
+      const res = await apiCall(`/api/polls/${post.id}/bookmark`, { method });
 
       if (!res.ok) {
         throw new Error("API Error");
       }
-    } catch (e) {
-      // Revert on error
-      isBookmarked = oldBookmarked;
-      console.error("Error bookmarking:", e);
+    } catch (e: any) {
+      // If error is "already bookmarked/removed", keep the optimistic state
+      // since it matches what the server already has
+      if (e.status === 400) {
+        console.log(
+          "[PostCard] Bookmark state already matches server, keeping optimistic update",
+        );
+        // Don't revert - the state is already correct on the server
+      } else {
+        // Revert on other errors
+        isBookmarked = oldBookmarked;
+        console.error("Error bookmarking:", e);
+      }
     } finally {
       isBookmarking = false;
     }
@@ -1376,17 +1386,22 @@
         >
           <button
             onclick={() => onComment?.(post)}
-            class="flex items-center gap-[0.4rem] text-slate-400 hover:text-blue-400 transition-colors group"
+            class="flex items-center gap-[0.4rem] transition-colors group {post.hasCommented
+              ? 'text-blue-400'
+              : 'text-slate-400 hover:text-blue-400'}"
           >
             <MessageCircle
               size="1.1rem"
               class="group-hover:scale-110 transition-transform"
+              fill={post.hasCommented ? "currentColor" : "none"}
             />
             <span class="text-[0.7rem] font-bold">{post.comments || 0}</span>
           </button>
           <button
             onclick={() => onRepost?.(post)}
-            class="flex items-center gap-[0.4rem] text-slate-400 hover:text-emerald-400 transition-colors group"
+            class="flex items-center gap-[0.4rem] transition-colors group {post.isReposted
+              ? 'text-emerald-400'
+              : 'text-slate-400 hover:text-emerald-400'}"
           >
             <Repeat2
               size="1.1rem"

@@ -485,6 +485,10 @@
       collaborators: apiPoll.collaborators, // Añadido
       userId: apiPoll.user?.id || apiPoll.userId, // Añadido para verificar permisos
       isFollowing: apiPoll.isFollowing, // Añadido
+      isPending: apiPoll.isPending, // Añadido
+      isBookmarked: apiPoll.isBookmarked, // Añadido
+      isReposted: apiPoll.isReposted, // Añadido
+      hasCommented: apiPoll.hasCommented, // Añadido
       totalVotes,
       comments: apiPoll._count?.comments || 0,
       reposts: apiPoll._count?.interactions || 0,
@@ -1327,7 +1331,12 @@
   }
 
   async function handleRepost(post: Post) {
-    if (!post || post.isReposted) return;
+    // Find current state from posts array to avoid stale reference
+    const currentPost = posts.find((p) => p.id === post.id);
+    if (!currentPost || currentPost.isReposted) {
+      console.log("[VotingFeed] Already reposted or post not found, skipping");
+      return;
+    }
 
     // Optimistic update
     posts = posts.map((p) => {
@@ -1350,22 +1359,28 @@
       // Wait, apiCall throws if !response.ok. So we only reach here if ok.
     } catch (e: any) {
       console.error("Error reposting:", e);
-      // Revert optimistic update
-      posts = posts.map((p) => {
-        if (p.id === post.id) {
-          return {
-            ...p,
-            reposts: Math.max(0, (p.reposts || 0) - 1),
-            isReposted: false,
-          };
-        }
-        return p;
-      });
 
-      // Show error to user
-      // Using alert for now as per minimal implementation, can be replaced with toast
-      if (e.message) {
-        alert(e.message);
+      // If error is "already reposted" (400), keep the optimistic state
+      if (e.status === 400) {
+        console.log("[VotingFeed] Already reposted, keeping optimistic update");
+        // Don't revert - the state is already correct on the server
+      } else {
+        // Revert optimistic update for other errors
+        posts = posts.map((p) => {
+          if (p.id === post.id) {
+            return {
+              ...p,
+              reposts: Math.max(0, (p.reposts || 0) - 1),
+              isReposted: false,
+            };
+          }
+          return p;
+        });
+
+        // Show error to user
+        if (e.message && e.status !== 400) {
+          alert(e.message);
+        }
       }
     }
   }

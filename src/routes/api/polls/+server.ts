@@ -342,6 +342,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     let followingIds = new Set<number>();
     let pendingIds = new Set<number>();
     let bookmarkedPollIds = new Set<number>();
+    let repostedPollIds = new Set<number>();
+    let commentedPollIds = new Set<number>();
 
     if (currentUserId) {
       // Get follows
@@ -363,6 +365,24 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         select: { pollId: true }
       });
       bookmarks.forEach(b => bookmarkedPollIds.add(b.pollId));
+
+      // Get reposts (from pollInteraction with type 'repost')
+      const reposts = await prisma.pollInteraction.findMany({
+        where: {
+          userId: currentUserId,
+          interactionType: 'repost'
+        },
+        select: { pollId: true }
+      });
+      reposts.forEach(r => repostedPollIds.add(r.pollId));
+
+      // Get commented polls
+      const comments = await prisma.comment.findMany({
+        where: { userId: currentUserId },
+        select: { pollId: true },
+        distinct: ['pollId']
+      });
+      comments.forEach(c => commentedPollIds.add(c.pollId));
     }
 
     const where = {
@@ -500,6 +520,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         isFollowing: followingIds.has(poll.userId),
         isPending: pendingIds.has(poll.userId),
         isBookmarked: bookmarkedPollIds.has(poll.id),
+        isReposted: repostedPollIds.has(poll.id),
+        hasCommented: commentedPollIds.has(poll.id),
         user: poll.user ? {
           ...poll.user,
           hashId: encodeUserId(poll.user.id),
