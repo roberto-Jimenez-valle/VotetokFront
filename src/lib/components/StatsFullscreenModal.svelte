@@ -268,15 +268,68 @@
     }
   }
 
-  function handleClose() {
+  function handleClose(fromHistory = false) {
     isOpen = false;
     lastLoadedPollId = null;
     lastLoadedRange = null;
     lastInitializedPollId = null; // Reset initialization tracking
     visibleOptions = new Set(); // Clear visible options
     activeView = "stats"; // Reset view to default
+
+    if (!fromHistory) {
+      if (window.location.hash === "#stats-view") {
+        try {
+          history.back();
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+
     onClose?.();
   }
+
+  // Handle Back Button / History Integration
+  $effect(() => {
+    if (!isOpen) return;
+
+    // Push new state when modal opens
+    // We use a hash to ensure mobile browsers treat this as a navigation event robustly
+    const state = { modal: "stats_fullscreen", pollId };
+    const hash = "#stats-view";
+
+    // Only push if we aren't already there (avoids loops if effect re-runs)
+    if (window.location.hash !== hash) {
+      try {
+        history.pushState(
+          state,
+          "",
+          window.location.pathname + window.location.search + hash,
+        );
+      } catch (e) {
+        console.warn("Could not push history state", e);
+      }
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      // If we are no longer on the hash (back button pressed), close
+      if (window.location.hash !== hash) {
+        handleClose(true);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Cleanup: if we are closing (effect cleanup) and the hash is still there, remove it
+      // This happens when we close via X button (handleClose calls history.back(), but just in case)
+      if (window.location.hash === hash && isOpen) {
+        // If isOpen is true during cleanup, it means unmount or something else.
+        // We generally rely on handleClose to manage history.back()
+      }
+    };
+  });
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) handleClose();
@@ -453,7 +506,11 @@
             </div>
           </div>
         </div>
-        <button class="close-btn" onclick={handleClose} aria-label="Cerrar">
+        <button
+          class="close-btn"
+          onclick={() => handleClose()}
+          aria-label="Cerrar"
+        >
           <X size={20} strokeWidth={2.5} />
         </button>
       </header>
@@ -713,8 +770,8 @@
             {/if}
           </div>
 
-          <!-- Options List / Legend (Visible ONLY if NOT in Globe view) -->
-          {#if activeView !== "globe"}
+          <!-- Options List / Legend (Visible ONLY in Stats view) -->
+          {#if activeView === "stats"}
             <div
               class="options-list"
               style="padding-bottom: 20px; pointer-events: auto;"
@@ -849,7 +906,7 @@
   }
 
   .modal-title {
-    font-size: 18px;
+    font-size: 1rem;
     font-weight: 700;
     color: white;
     margin: 0;

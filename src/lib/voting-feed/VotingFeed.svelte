@@ -2634,12 +2634,6 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  @media screen and (min-width: 768px) {
-    .reels-container {
-      background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);
-    }
-  }
-
   .reels-container::-webkit-scrollbar {
     display: none;
   }
