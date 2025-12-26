@@ -804,7 +804,7 @@
             style="position: relative; width: 100%; {activeView === 'globe'
               ? 'display: none;'
               : activeView === 'trend'
-                ? 'height: 420px; min-height: 400px; margin-bottom: 24px; flex-shrink: 0;'
+                ? 'height: 50vh; min-height: 300px; max-height: 500px; margin-bottom: 16px; flex-shrink: 0;'
                 : 'height: 320px; min-height: 320px; margin-bottom: 24px; flex-shrink: 0;'}"
             in:fade={{ duration: 200 }}
           >
@@ -1022,9 +1022,9 @@
                   <!-- Time reference labels -->
                   {#if smoothLinePaths[0] && smoothLinePaths[0].points.length > 0}
                     {@const pts = smoothLinePaths[0].points}
-                    {@const firstTs = pts[0]?.timestamp}
-                    {@const lastTs = pts[pts.length - 1]?.timestamp}
-                    {@const midTs = pts[Math.floor(pts.length / 2)]?.timestamp}
+                    {@const len = pts.length}
+                    {@const getTs = (index: number) =>
+                      pts[Math.min(index, len - 1)]?.timestamp}
                     {@const formatTime = (ts: number | undefined) => {
                       if (!ts) return "";
                       const d = new Date(ts);
@@ -1040,9 +1040,19 @@
                       });
                     }}
                     <div class="time-labels">
-                      <span class="time-label">{formatTime(firstTs)}</span>
-                      <span class="time-label">{formatTime(midTs)}</span>
-                      <span class="time-label">{formatTime(lastTs)}</span>
+                      <span class="time-label">{formatTime(getTs(0))}</span>
+                      <span class="time-label"
+                        >{formatTime(getTs(Math.floor(len * 0.25)))}</span
+                      >
+                      <span class="time-label"
+                        >{formatTime(getTs(Math.floor(len * 0.5)))}</span
+                      >
+                      <span class="time-label"
+                        >{formatTime(getTs(Math.floor(len * 0.75)))}</span
+                      >
+                      <span class="time-label"
+                        >{formatTime(getTs(len - 1))}</span
+                      >
                     </div>
                   {/if}
                 </div>
