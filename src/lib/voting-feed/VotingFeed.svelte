@@ -802,6 +802,47 @@
           }
         }
 
+        // Obtener geolocalización real
+        let latitude = 40.4168; // Fallback Madrid
+        let longitude = -3.7038;
+        let subdivisionId = null;
+
+        try {
+          // 1. GPS
+          const pos = await new Promise<GeolocationPosition>(
+            (resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                timeout: 3000,
+              });
+            },
+          );
+          latitude = pos.coords.latitude;
+          longitude = pos.coords.longitude;
+        } catch (err) {
+          // 2. IP Fallback
+          try {
+            const ipRes = await fetch("https://ipapi.co/json/");
+            if (ipRes.ok) {
+              const ipData = (await ipRes.ok) ? await ipRes.json() : null;
+              if (ipData?.latitude) {
+                latitude = ipData.latitude;
+                longitude = ipData.longitude;
+              }
+            }
+          } catch (e) {}
+        }
+
+        // 3. Geocode
+        try {
+          const geoRes = await apiCall(
+            `/api/geocode?lat=${latitude}&lon=${longitude}`,
+          );
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            if (geoData.found) subdivisionId = geoData.subdivisionId;
+          }
+        } catch (e) {}
+
         // Then send votes sequentially to preserve order
         // Use for...of to await sequentially
         for (const optionId of value) {
@@ -813,10 +854,9 @@
               method: "POST",
               body: JSON.stringify({
                 optionId: numericOptionId,
-                // Add default geolocation
-                latitude: 40.4168,
-                longitude: -3.7038,
-                subdivisionId: null,
+                latitude,
+                longitude,
+                subdivisionId,
               }),
             });
           }
@@ -932,11 +972,52 @@
     // 3. API Call
     try {
       if (numericOptionId) {
+        // Obtener geolocalización real
+        let latitude = 40.4168; // Fallback Madrid
+        let longitude = -3.7038;
+        let subdivisionId = null;
+
+        try {
+          // 1. GPS
+          const pos = await new Promise<GeolocationPosition>(
+            (resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                timeout: 3000,
+              });
+            },
+          );
+          latitude = pos.coords.latitude;
+          longitude = pos.coords.longitude;
+        } catch (err) {
+          // 2. IP Fallback
+          try {
+            const ipRes = await fetch("https://ipapi.co/json/");
+            if (ipRes.ok) {
+              const ipData = await ipRes.json();
+              if (ipData?.latitude) {
+                latitude = ipData.latitude;
+                longitude = ipData.longitude;
+              }
+            }
+          } catch (e) {}
+        }
+
+        // 3. Geocode
+        try {
+          const geoRes = await apiCall(
+            `/api/geocode?lat=${latitude}&lon=${longitude}`,
+          );
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            if (geoData.found) subdivisionId = geoData.subdivisionId;
+          }
+        } catch (e) {}
+
         const payload = {
           optionId: numericOptionId,
-          latitude: 40.4168,
-          longitude: -3.7038,
-          subdivisionId: null,
+          latitude,
+          longitude,
+          subdivisionId,
         };
 
         console.log("[VotingFeed] Voting with payload:", payload);
@@ -1060,13 +1141,42 @@
           )?.numericId;
 
           if (numericOptionId) {
+            // Geolocation for swipe votes
+            let latitude = 40.4168;
+            let longitude = -3.7038;
+            let subdivisionId = null;
+
+            try {
+              const pos = await new Promise<GeolocationPosition>(
+                (resolve, reject) => {
+                  navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    timeout: 2000,
+                  });
+                },
+              );
+              latitude = pos.coords.latitude;
+              longitude = pos.coords.longitude;
+            } catch (e) {
+              // Fallback basic (similar to others, keeping it concise)
+            }
+
+            try {
+              const geoRes = await apiCall(
+                `/api/geocode?lat=${latitude}&lon=${longitude}`,
+              );
+              if (geoRes.ok) {
+                const geoData = await geoRes.json();
+                if (geoData.found) subdivisionId = geoData.subdivisionId;
+              }
+            } catch (e) {}
+
             await apiCall(`/api/polls/${postId}/vote`, {
               method: "POST",
               body: JSON.stringify({
                 optionId: numericOptionId,
-                latitude: 40.4168,
-                longitude: -3.7038,
-                subdivisionId: null,
+                latitude,
+                longitude,
+                subdivisionId,
               }),
             });
           }

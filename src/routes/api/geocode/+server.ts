@@ -19,29 +19,59 @@ export const GET: RequestHandler = async ({ url }) => {
   console.log('[Geocode] 📍 Buscando ubicación para:', { lat, lon });
 
   try {
-    // PASO 1: Determinar país más cercano (nivel 1) para saber qué TopoJSON cargar
-    const nearestCountry = await prisma.$queryRaw<Array<{
-      subdivision_id: string;
-      name: string;
-    }>>`
-      SELECT subdivision_id, name
-      FROM subdivisions
-      WHERE level = 1 
-        AND latitude IS NOT NULL 
-        AND longitude IS NOT NULL
-      ORDER BY 
-        ((latitude - ${lat}) * (latitude - ${lat}) + 
-         (longitude - ${lon}) * (longitude - ${lon}))
-      LIMIT 1
-    `;
-
-    if (!nearestCountry || nearestCountry.length === 0) {
-      console.log('[Geocode] ⚠️ No se encontró país cercano');
-      return json({ found: false, subdivisionId: null, subdivisionName: null });
+    // PASO 1: Determinar país usando point-in-polygon con world TopoJSON
+    let countryCode: string | null = null;
+    const testPoint = point([lon, lat]);
+    
+    // Intentar con world GeoJSON primero (más preciso)
+    const worldGeoPath = path.join(process.cwd(), 'static', 'maps', 'countries-110m-iso.json');
+    if (fs.existsSync(worldGeoPath)) {
+      try {
+        const worldData = JSON.parse(fs.readFileSync(worldGeoPath, 'utf-8'));
+        // El archivo puede ser GeoJSON directo o TopoJSON
+        const worldGeoJSON: any = worldData.type === 'FeatureCollection' 
+          ? worldData 
+          : topojson.feature(worldData, worldData.objects[Object.keys(worldData.objects)[0]]);
+        
+        for (const feature of worldGeoJSON.features) {
+          if (booleanPointInPolygon(testPoint, feature)) {
+            // Obtener código ISO3 del país
+            const props = feature.properties;
+            countryCode = props.ISO3_CODE || props.ISO_A3 || props.iso_a3 || props.ADM0_A3 || props.adm0_a3 || props.ISO_A3_EH;
+            console.log('[Geocode] 🌍 País detectado por point-in-polygon:', countryCode, '-', props.NAME_ENGL || props.NAME || props.name);
+            break;
+          }
+        }
+      } catch (e) {
+        console.log('[Geocode] ⚠️ Error leyendo world GeoJSON:', e);
+      }
     }
+    
+    // Fallback a centroid si point-in-polygon no encontró país
+    if (!countryCode) {
+      const nearestCountry = await prisma.$queryRaw<Array<{
+        subdivision_id: string;
+        name: string;
+      }>>`
+        SELECT subdivision_id, name
+        FROM subdivisions
+        WHERE level = 1 
+          AND latitude IS NOT NULL 
+          AND longitude IS NOT NULL
+        ORDER BY 
+          ((latitude - ${lat}) * (latitude - ${lat}) + 
+           (longitude - ${lon}) * (longitude - ${lon}))
+        LIMIT 1
+      `;
 
-    const countryCode = nearestCountry[0].subdivision_id;
-    console.log('[Geocode] 🌍 País más cercano:', countryCode, '-', nearestCountry[0].name);
+      if (!nearestCountry || nearestCountry.length === 0) {
+        console.log('[Geocode] ⚠️ No se encontró país cercano');
+        return json({ found: false, subdivisionId: null, subdivisionName: null });
+      }
+
+      countryCode = nearestCountry[0].subdivision_id;
+      console.log('[Geocode] 🌍 País por centroide (fallback):', countryCode, '-', nearestCountry[0].name);
+    }
 
     // PASO 2: Intentar point-in-polygon con TopoJSON del país
     const topoPath = path.join(process.cwd(), 'static', 'geojson', countryCode, `${countryCode}.topojson`);
@@ -68,17 +98,36 @@ export const GET: RequestHandler = async ({ url }) => {
             
             if (subdivisionId) {
               // Encontrado con point-in-polygon!
-              const subdivision = await prisma.subdivision.findFirst({
+              // Primero buscar nivel 2
+              let subdivision = await prisma.subdivision.findFirst({
                 where: { subdivisionId, level: 2 }
               });
 
+              // Si no existe nivel 2, buscar nivel 3 que empiece con ese ID
+              if (!subdivision) {
+                console.log('[Geocode] ⚠️ Nivel 2 no encontrado, buscando nivel 3...');
+                subdivision = await prisma.subdivision.findFirst({
+                  where: { 
+                    subdivisionId: { startsWith: subdivisionId + '.' },
+                    level: 3 
+                  }
+                });
+              }
+
+              // Si aún no existe, buscar cualquier nivel que coincida exactamente
+              if (!subdivision) {
+                subdivision = await prisma.subdivision.findFirst({
+                  where: { subdivisionId }
+                });
+              }
+
               if (subdivision) {
-                console.log('[Geocode] ✅ Point-in-polygon:', subdivision.name, `(${subdivisionId})`);
+                console.log('[Geocode] ✅ Point-in-polygon:', subdivision.name, `(${subdivision.subdivisionId}, level ${subdivision.level})`);
                 return json({
                   found: true,
                   subdivisionId: subdivision.id,
                   subdivisionName: subdivision.name,
-                  subdivisionLevel: 2,
+                  subdivisionLevel: subdivision.level,
                   method: 'point-in-polygon'
                 });
               } else {

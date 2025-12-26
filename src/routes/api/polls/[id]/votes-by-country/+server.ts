@@ -91,9 +91,20 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		}
 
 		const hoursLabel = hours ? `últimas ${hours}h` : 'todos';
-		console.log(`[API votes-by-country] Poll ${pollId} (${hoursLabel}): ${votes.length} votos, ${Object.keys(countryVotes).length} países`);
+		const totalVotes = votes.length;
+		const totalWithSubdivision = votesWithSubdivision.length;
 
-		return json({ data: countryVotes });
+		console.log(`[API votes-by-country] Poll ${pollId} (${hoursLabel}): ${totalVotes} total, ${totalWithSubdivision} with subdiv, ${Object.keys(countryVotes).length} countries`);
+
+		return json({
+			data: countryVotes,
+			debug: {
+				totalVotes,
+				totalWithSubdivision,
+				pollId,
+				hoursLabel
+			}
+		});
 
 	} catch (error) {
 		console.error('[API] Error loading country votes:', error);

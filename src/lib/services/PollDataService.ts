@@ -29,7 +29,7 @@ export class PollDataService {
    */
   async loadVotesByCountry(pollId: number | string, hours?: number): Promise<VotesBySubdivision> {
     try {
-      const url = hours 
+      const url = hours
         ? `/api/polls/${pollId}/votes-by-country?hours=${hours}`
         : `/api/polls/${pollId}/votes-by-country`;
       const response = await apiCall(url);
@@ -39,14 +39,15 @@ export class PollDataService {
         return {};
       }
 
-      const { data } = await response.json();
+      const json = await response.json();
+      const data = json.data || json;
       const hoursLabel = hours ? `últimas ${hours}h` : 'todos';
       console.log(`[PollDataService] ✅ Votos por país (${hoursLabel}):`, Object.keys(data || {}).length, 'países');
 
-      return data || {};
+      return json;
     } catch (error) {
       console.error('[PollDataService] ❌ Error loading votes by country:', error);
-      return {};
+      return { data: {} };
     }
   }
 

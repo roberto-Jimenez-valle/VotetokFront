@@ -2544,10 +2544,11 @@
         try {
           // Cargar datos usando el filtro de tiempo actual
           const hoursFilter = TIME_FILTER_HOURS[trendingTimeFilter];
-          const data = await pollDataService.loadVotesByCountry(
+          const result = await pollDataService.loadVotesByCountry(
             activePoll.id,
             hoursFilter,
           );
+          const data = (result as any).data || result;
 
           // Verificar si la navegación sigue siendo válida
           if (navToken !== currentNavigationToken) {
@@ -5303,10 +5304,11 @@
             );
           } else {
             // Nivel world: cargar por países
-            pollData = await pollDataService.loadVotesByCountry(
+            const result = await pollDataService.loadVotesByCountry(
               poll.id,
               hoursFilter,
             );
+            pollData = (result as any).data || result;
           }
 
           // Sumar TODOS los votos de esta encuesta por región (país o subdivisión)
@@ -5700,6 +5702,7 @@
       options: Array<{
         id?: number;
         key: string;
+        optionKey?: string;
         label: string;
         color: string;
         votes: number;
@@ -5845,7 +5848,7 @@
       // Silenciar error - no es crítico si falla
     }
 
-    // CRÍTICO: Asegurar que poll.options también está formateado correctamente
+          // CRÍTICO: Asegurar que poll.options también está formateado correctamente
     const formattedPoll = {
       ...pollDataFromApi,
       friendsByOption: friendsByOption,
@@ -5858,7 +5861,8 @@
         return {
           ...opt,
           id: opt.id || apiOption?.id,
-          key: opt.key || apiOption?.optionKey || `opt-${idx}`,
+          // Priorizar la key de la API (optionKey) para asegurar que coincida con los datos de votos
+          key: apiOption?.optionKey || opt.key || opt.optionKey || `opt-${idx}`,
           optionKey: apiOption?.optionKey || opt.key || `opt-${idx}`,
           label:
             opt.label ||
@@ -5901,14 +5905,15 @@
 
     // Actualizar colorMap con los colores de las opciones DE LA ENCUESTA
     const newColorMap: Record<string, string> = {};
-    options.forEach((option) => {
+    formattedPoll.options.forEach((option: any) => {
       const k = option.key || (option as any).optionKey;
       if (k) newColorMap[k] = option.color;
       if ((option as any).optionKey)
         newColorMap[(option as any).optionKey] = option.color;
-      newColorMap[option.label] = option.color; // También por label
+      if (option.label) newColorMap[option.label] = option.color; // También por label
     });
     colorMap = newColorMap;
+    console.log("[handleOpenPollInGlobe] 🎨 colorMap actualizado:", Object.keys(colorMap));
 
     // CARGAR DATOS REALES DE LA ENCUESTA DESDE LA API
     const newAnswersData: Record<string, Record<string, number>> = {};
@@ -5919,10 +5924,14 @@
       console.log(
         `[handleOpenPollInGlobe] Cargando votos de poll ${poll.id} para las últimas ${trendingTimeFilter}`,
       );
-      const data = await pollDataService.loadVotesByCountry(
+      const result = (await pollDataService.loadVotesByCountry(
         poll.id,
         hoursFilter,
-      );
+      )) as any;
+
+      // Manejar tanto {data, debug} como solo data (compatibilidad)
+      const data = result.data || result;
+      const debug = result.debug || {};
 
       console.log(
         `[handleOpenPollInGlobe] 🛰️ API Response for votes-by-country:`,
@@ -5931,8 +5940,15 @@
           status: data ? "success" : "empty",
           keys: data ? Object.keys(data).length : 0,
           sample: data ? Object.keys(data).slice(0, 5) : [],
+          debug,
         },
       );
+
+      if (debug.totalVotes > 0 && debug.totalWithSubdivision === 0) {
+        console.warn(
+          `[handleOpenPollInGlobe] ⚠️ ESTE POLL TIENE ${debug.totalVotes} VOTOS PERO NINGUNO TIENE SUBDIVISIÓN (PAÍS). Por eso no se pinta.`,
+        );
+      }
 
       // *** PROCESAMIENTO PROGRESIVO: Pintar a medida que procesamos cada país ***
       const countries = Object.entries(data);
@@ -5977,7 +5993,7 @@
         }
       }
     } catch (error) {
-      // Si falla la carga de datos, continuar
+      console.error(`[handleOpenPollInGlobe] ❌ Error cargando votos:`, error);
     }
 
     // Guardar en cache mundial
@@ -7420,10 +7436,11 @@
 
         if (navigationState.level === "world") {
           // Recargar votos por país con el nuevo filtro
-          const data = await pollDataService.loadVotesByCountry(
+          const result = await pollDataService.loadVotesByCountry(
             activePoll.id,
             hoursFilter,
           );
+          const data = (result as any).data || result;
           updateAnswersData(data);
           worldLevelAnswers = data;
 
@@ -8365,9 +8382,10 @@
             // Crear opciones formateadas
             const options =
               initialPoll.options?.map((opt: any) => ({
-                key: opt.key,
-                label: opt.label || opt.text,
-                color: opt.color,
+                // Preferir ID o optionKey antes que title, ya que los votos suelen venir por ID/Key
+                key: opt.key || opt.optionKey || opt.id || opt.title,
+                label: opt.label || opt.text || opt.title,
+                color: opt.color || opt.colorFrom || opt.bgBar,
                 votes: opt.votes || 0,
               })) || [];
 

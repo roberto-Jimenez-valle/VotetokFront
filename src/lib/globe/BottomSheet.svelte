@@ -1824,15 +1824,27 @@
           const geocodeData = await geocodeResponse.json();
           if (geocodeData.found && geocodeData.subdivisionId) {
             subdivisionId = geocodeData.subdivisionId;
+            console.log(
+              `[sendVoteToBackend] ✅ Subdivisión encontrada: ${geocodeData.subdivisionName} (ID: ${subdivisionId}, método: ${geocodeData.method}, ubicación: ${locationMethod})`,
+            );
+          } else {
+            console.warn(
+              `[sendVoteToBackend] ⚠️ Geocode no encontró subdivisión para lat=${latitude}, lon=${longitude}`,
+            );
           }
+        } else {
+          console.warn(
+            `[sendVoteToBackend] ⚠️ Geocode API error: ${geocodeResponse.status}`,
+          );
         }
-      } catch (geocodeError) {}
+      } catch (geocodeError) {
+        console.error("[sendVoteToBackend] ❌ Error en geocodificación:", geocodeError);
+      }
 
-      // Si no hay subdivisionId, usar null (el voto aún debe enviarse)
-      // El backend aceptará votos sin subdivisión
+      // Si no hay subdivisionId, intentar un retry con timeout más largo
       if (!subdivisionId) {
-        console.log(
-          "[sendVoteToBackend] ⚠️ Sin subdivisionId, enviando voto sin subdivisión",
+        console.warn(
+          `[sendVoteToBackend] ⚠️ Sin subdivisionId tras geocode. Lat: ${latitude}, Lon: ${longitude}, Método: ${locationMethod}`,
         );
       }
 
