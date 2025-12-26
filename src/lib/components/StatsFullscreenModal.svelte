@@ -204,6 +204,37 @@
     user: pollCreator,
   });
 
+  // Calculate hidden option keys for GlobeGL (options NOT in visibleOptions)
+  const hiddenOptionKeys = $derived.by(() => {
+    if (visibleOptions.size === 0) return []; // All visible
+
+    const allKeys = options.map((o) => o.key || o.optionKey || "");
+    return allKeys.filter((key) => !visibleOptions.has(key));
+  });
+
+  // Filtered post for GlobeGL - only includes visible options
+  // This triggers a proper re-render when options are toggled
+  const filteredPost = $derived({
+    id: pollId,
+    title: pollTitle,
+    question: pollTitle,
+    totalVotes,
+    options: options
+      .filter((o) => {
+        if (visibleOptions.size === 0) return true;
+        const key = o.key || o.optionKey || "";
+        return visibleOptions.has(key);
+      })
+      .map((o) => ({
+        ...o,
+        id: o.id || o.key,
+        numericId: o.id || o.key,
+        title: getOptionLabel(o),
+        votes: o.votes || 0,
+      })),
+    user: pollCreator,
+  });
+
   // Aggregate all friends who voted across all options
   let participatingFriends = $state<FriendVote[]>([]);
 
@@ -678,8 +709,10 @@
 
       <!-- Globe Background Layer -->
       {#if activeView === "globe"}
-        <div class="globe-background" transition:fade={{ duration: 300 }}>
-          <GlobeGL embedMode={true} initialPoll={post} />
+        <div class="globe-background">
+          {#key hiddenOptionKeys.join(",")}
+            <GlobeGL embedMode={true} initialPoll={filteredPost} />
+          {/key}
           <div class="globe-overlay-gradient"></div>
         </div>
       {/if}

@@ -170,8 +170,8 @@
     isRefreshing = true;
     lastColorMapHash = currentHash;
 
-    // Si se solicita fade, animar SIEMPRE
-    if (withFade) {
+    // Si se solicita fade, animar SIEMPRE (excepto en embedMode)
+    if (withFade && !embedMode) {
       animateFadeIn(600); // 0.6 segundos - rápido pero visible
     } else {
       // Una sola llamada a refresh (eliminada la redundancia)
@@ -211,6 +211,7 @@
   export let embedMode: boolean = false; // Modo embed: solo globo y bottomsheet, sin controles
   export let initialPoll: any = null; // Encuesta inicial para modo embed (se abre automáticamente)
   export let embedPalette: any = null; // Paleta de colores para modo embed
+  export let hiddenOptionKeys: string[] = []; // Keys de opciones ocultas (para filtrar colores sin recargar)
   // Loader opcional para datos por región (bbox) cuando el usuario se acerca (no usado actualmente)
   export const loadRegionData:
     | null
@@ -233,6 +234,27 @@
   // Helper para actualizar answersData y sincronizar con el store global
   function updateAnswersData(newData: Record<string, Record<string, number>>) {
     globalAnswersData.set(newData);
+  }
+
+  // Reactivo: cuando hiddenOptionKeys cambia, recalcular colores sin recargar geometría
+  // Usamos un hash del array para forzar reactividad
+  $: hiddenKeysHash = hiddenOptionKeys?.join(",") || "";
+
+  $: if (hiddenKeysHash !== undefined && globe && answersData) {
+    // Invalidar cache de isoDominantKey para forzar recálculo
+    isoDominantKey = {};
+    // Recalcular colores para todos los países con las opciones visibles
+    for (const iso of Object.keys(answersData || {})) {
+      isoDominantKey[iso] = getDominantKeyUtil(
+        iso,
+        answersData,
+        hiddenOptionKeys,
+      );
+    }
+    // Refrescar solo los colores, no la geometría
+    requestAnimationFrame(() => {
+      globe?.refreshPolyColors?.();
+    });
   }
 
   let isoIntensity: Record<string, number> = {};
@@ -852,21 +874,29 @@
     // Solo establecer POV inicial la primera vez
     if (_initVersion === 0) {
       try {
-        // Inicializar con altitud máxima y dar dos vueltas rápidas
-        const initialAltitude = MAX_ZOOM_ALTITUDE;
-        // Posición inicial
-        globe?.pointOfView({ lat: 20, lng: 0, altitude: MAX_ZOOM_ALTITUDE }, 0);
+        if (embedMode) {
+          // En modo embed, ir directo a una vista estable sin animación
+          globe?.pointOfView({ lat: 20, lng: 0, altitude: 2.0 }, 0);
+        } else {
+          // Inicializar con altitud máxima y dar dos vueltas rápidas (SOLO si no es embedMode)
+          const initialAltitude = MAX_ZOOM_ALTITUDE;
+          // Posición inicial
+          globe?.pointOfView(
+            { lat: 20, lng: 0, altitude: MAX_ZOOM_ALTITUDE },
+            0,
+          );
 
-        // Después de un pequeño delay, iniciar la rotación de dos vueltas
-        setTimeout(() => {
-          if (globe && _initVersion === 1) {
-            // Dos vueltas completas (720 grados) en 2 segundos
-            globe?.pointOfView(
-              { lat: 20, lng: 720, altitude: MAX_ZOOM_ALTITUDE },
-              2000,
-            );
-          }
-        }, 200);
+          // Después de un pequeño delay, iniciar la rotación de dos vueltas
+          setTimeout(() => {
+            if (globe && _initVersion === 1) {
+              // Dos vueltas completas (720 grados) en 2 segundos
+              globe?.pointOfView(
+                { lat: 20, lng: 720, altitude: MAX_ZOOM_ALTITUDE },
+                2000,
+              );
+            }
+          }, 200);
+        }
       } catch {}
     }
     _initVersion++;
@@ -7788,7 +7818,7 @@
   // Old handlePolygonClick function removed - now using new click-based navigation system
 
   function getDominantKey(iso: string): string {
-    return getDominantKeyUtil(iso, answersData);
+    return getDominantKeyUtil(iso, answersData, hiddenOptionKeys);
   }
 
   function polyCapColor(feat: any): string {

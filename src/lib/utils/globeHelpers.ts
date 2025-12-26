@@ -18,13 +18,17 @@ export function nameOf(d: any): string {
 
 export function getDominantKey(
   iso: string,
-  answersData: Record<string, Record<string, number>>
+  answersData: Record<string, Record<string, number>>,
+  hiddenKeys: string[] = []
 ): string {
   const rec = answersData?.[iso];
   if (!rec) return 'No data';
   let kBest = '';
   let vBest = -Infinity;
+  const hiddenSet = new Set(hiddenKeys);
   for (const [k, v] of Object.entries(rec)) {
+    // Skip hidden keys
+    if (hiddenSet.has(k)) continue;
     const n = typeof v === 'number' ? v : Number(v);
     if (n > vBest) {
       vBest = n;
