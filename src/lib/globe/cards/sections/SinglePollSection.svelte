@@ -10,7 +10,7 @@
   import MediaEmbed from "$lib/components/MediaEmbed.svelte";
   import FriendsVotesModal from "$lib/components/FriendsVotesModal.svelte";
   import PollOptionCard from "$lib/components/PollOptionCard.svelte";
-  import StatsBottomModal from "$lib/components/StatsBottomModal.svelte";
+  import StatsFullscreenModal from "$lib/components/StatsFullscreenModal.svelte";
   import CommentsModal from "$lib/components/CommentsModal.svelte";
   import Portal from "$lib/components/Portal.svelte";
   import ShareModal from "$lib/components/ShareModal.svelte";
@@ -1582,6 +1582,9 @@
               onFriendsClick={() => {
                 showFriendsVotesModal = true;
               }}
+              onStatsClick={() => {
+                showStatsModal = true;
+              }}
               isClickable={false}
               compact={activeAccordionIndex !== index}
             />
@@ -1723,7 +1726,13 @@
                   ? votedOptionData.color
                   : 'inherit'}">{hasVotedAnyOption ? "Votado" : "Votar"}</span
               >
-              <p>
+              <p
+                class="votes-count-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  showStatsModal = true;
+                }}
+              >
                 {formatCount(poll.stats?.totalVotes || poll.totalVotes)} votos
               </p>
             </div>
@@ -2105,12 +2114,19 @@
                 {/if}
               </div>
             {/if}
-            <span
-              class="mini-action-count {currentOptionVoted ? 'voted' : ''}"
-              style={currentOptionVoted ? `color: ${currentOptionColor}` : ""}
-              >{formatCount(poll.stats?.totalVotes || poll.totalVotes)}</span
-            >
           </button>
+          <span
+            class="mini-action-count clickable {currentOptionVoted ? 'voted' : ''}"
+            style={currentOptionVoted ? `color: ${currentOptionColor}` : ""}
+            role="button"
+            tabindex="0"
+            onclick={(e) => {
+              e.stopPropagation();
+              showStatsModal = true;
+            }}
+            onkeydown={(e) => e.key === 'Enter' && (showStatsModal = true)}
+            >{formatCount(poll.stats?.totalVotes || poll.totalVotes)}</span
+          >
         </div>
 
         <!-- Comentarios -->
@@ -2320,17 +2336,32 @@
 
 <!-- MODAL DE ESTADÍSTICAS (Portal para salir del BottomSheet) -->
 <Portal>
-  <StatsBottomModal
+  <StatsFullscreenModal
     bind:isOpen={showStatsModal}
-    pollId={poll.id}
+    pollId={poll.hashId || poll.id}
     pollTitle={poll.title || poll.question || "Estadísticas"}
-    options={poll.options?.map((opt: any) => ({
-      key: opt.key || opt.optionKey,
-      label: opt.label || opt.optionLabel,
-      color: opt.color,
-      votes: opt.voteCount || opt.votes || 0,
-    })) || []}
+    pollCreator={poll.user ? {
+      id: poll.user.id,
+      username: poll.user.username,
+      displayName: poll.user.displayName,
+      avatarUrl: poll.user.avatarUrl
+    } : undefined}
+    options={poll.options?.map((opt: any) => {
+      const label = opt.label || opt.optionLabel || opt.optionText || opt.text || `Opción ${opt.key || opt.optionKey}`;
+      console.log('[StatsModal mapping] opt.label:', opt.label, 'opt.optionLabel:', opt.optionLabel, 'Final label:', label);
+      return {
+        key: opt.key || opt.optionKey,
+        label: label,
+        color: opt.color,
+        votes: opt.voteCount || opt.votes || opt.pct || 0,
+        friendVotes: opt.friendVotes || [],
+      };
+    }) || []}
     onClose={() => (showStatsModal = false)}
+    onOpenInGlobe={() => {
+      showStatsModal = false;
+      handleOpenInGlobe();
+    }}
   />
 </Portal>
 
@@ -4870,6 +4901,35 @@
 
   .mini-action-count.voted {
     color: var(--vote-color, #10b981);
+  }
+  
+  .mini-action-count.clickable {
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border-radius: 6px;
+  }
+  
+  .mini-action-count.clickable:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.05);
+  }
+  
+  .mini-action-count.clickable:active {
+    transform: scale(0.95);
+  }
+  
+  .votes-count-btn {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  
+  .votes-count-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .mini-more-btn-scroll {

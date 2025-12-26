@@ -1,12 +1,17 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 export const GET: RequestHandler = async ({ params, url }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id);
     const days = Number(url.searchParams.get('days') || '30');
 
     // Verificar que la encuesta existe
+    if (!pollId) {
+        throw error(404, 'Poll not found');
+    }
+
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       select: { id: true },
@@ -59,7 +64,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     return json({
       data: [],
       meta: {
-        pollId: parsePollIdInternal(params.id) || 0,
+        pollId: Number(params.id),
         days: Number(url.searchParams.get('days') || '30'),
         startDate: new Date().toISOString(),
         endDate: new Date().toISOString(),

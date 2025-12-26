@@ -21,8 +21,16 @@ export interface VoteOption {
   bgBar: string;
 }
 
+export interface PostUser {
+  id: number | string;
+  username?: string;
+  displayName?: string;
+  avatarUrl?: string;
+}
+
 export interface Post {
   id: string;
+  hashId?: string;
   numericId?: number;
   type: PostType;
   author: string;
@@ -37,6 +45,7 @@ export interface Post {
   correctOptionId?: string; // For quiz type
   endsAt?: string; // For polls ending soon
   userId?: number;
+  user?: PostUser;
   collabMode?: string;
   collaborators?: { userId: number }[];
   isFollowing?: boolean;

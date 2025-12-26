@@ -5848,7 +5848,7 @@
       // Silenciar error - no es crítico si falla
     }
 
-          // CRÍTICO: Asegurar que poll.options también está formateado correctamente
+    // CRÍTICO: Asegurar que poll.options también está formateado correctamente
     const formattedPoll = {
       ...pollDataFromApi,
       friendsByOption: friendsByOption,
@@ -5913,7 +5913,10 @@
       if (option.label) newColorMap[option.label] = option.color; // También por label
     });
     colorMap = newColorMap;
-    console.log("[handleOpenPollInGlobe] 🎨 colorMap actualizado:", Object.keys(colorMap));
+    console.log(
+      "[handleOpenPollInGlobe] 🎨 colorMap actualizado:",
+      Object.keys(colorMap),
+    );
 
     // CARGAR DATOS REALES DE LA ENCUESTA DESDE LA API
     const newAnswersData: Record<string, Record<string, number>> = {};
@@ -8897,8 +8900,10 @@
   });
 </script>
 
-<!-- Fondo dinámico que cubre toda la pantalla con el color actual del tema -->
-<div class="dynamic-background" style="background-color: {bgColor};"></div>
+{#if !embedMode}
+  <!-- Fondo dinámico que cubre toda la pantalla con el color actual del tema -->
+  <div class="dynamic-background" style="background-color: {bgColor};"></div>
+{/if}
 
 <GlobeCanvas
   bind:this={globe}
@@ -10323,7 +10328,7 @@
 {/if}
 
 <!-- Overlay semi-transparente para bloquear clics -->
-{#if isZooming}
+{#if isZooming && !embedMode}
   <div class="zoom-overlay" transition:fade={{ duration: 150 }}></div>
 {/if}
 

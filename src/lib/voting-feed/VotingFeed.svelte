@@ -19,6 +19,7 @@
   import CommentsModal from "$lib/components/CommentsModal.svelte";
   import ShareModal from "$lib/components/ShareModal.svelte";
   import PostOptionsModal from "$lib/components/PostOptionsModal.svelte";
+  import StatsFullscreenModal from "$lib/components/StatsFullscreenModal.svelte";
   import PollStatsModal from "$lib/components/PollStatsModal.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Select from "$lib/ui/Select.svelte";
@@ -198,6 +199,7 @@
   // Poll Stats Modal State
   let isStatsModalOpen = $state(false);
   let statsModalPost = $state<Post | null>(null);
+  let isStatsBottomModalOpen = $state(false);
 
   // TopTabs state
   let activeTab = $state<"Para ti" | "Tendencias" | "Amigos" | "Live">(
@@ -2392,13 +2394,71 @@
     onCancel={() => (isConfirmOpen = false)}
   />
 
-  <PollStatsModal
-    isOpen={isStatsModalOpen}
-    post={statsModalPost}
-    userVote={statsModalPost ? userVotes[statsModalPost.id] || null : null}
+  <StatsFullscreenModal
+    bind:isOpen={isStatsModalOpen}
+    pollId={statsModalPost?.hashId || statsModalPost?.id || ""}
+    pollTitle={statsModalPost?.question || "Estadísticas"}
+    pollCreator={statsModalPost?.user ||
+    statsModalPost?.avatar ||
+    statsModalPost?.author
+      ? {
+          id: statsModalPost.user?.id
+            ? typeof statsModalPost.user.id === "string"
+              ? parseInt(statsModalPost.user.id, 10)
+              : statsModalPost.user.id
+            : statsModalPost.userId || 0,
+          username:
+            statsModalPost.user?.username || statsModalPost.author || "unknown",
+          displayName:
+            statsModalPost.user?.displayName || statsModalPost.author,
+          avatarUrl: statsModalPost.user?.avatarUrl || statsModalPost.avatar,
+        }
+      : undefined}
+    options={statsModalPost?.options?.map((opt: any) => {
+      const label =
+        opt.title ||
+        opt.label ||
+        opt.optionLabel ||
+        opt.optionText ||
+        opt.text ||
+        `Opción ${opt.key || opt.optionKey || opt.id}`;
+      // Map friends to friendVotes format (Friend has 'avatar', FriendVote expects 'avatarUrl')
+      const friendVotes = (
+        opt.friends ||
+        opt.friendVotes ||
+        opt.friendVoters ||
+        []
+      ).map((f: any) => ({
+        id: typeof f.id === "string" ? parseInt(f.id, 10) || 0 : f.id || 0,
+        username: f.username || f.name || "user",
+        displayName: f.displayName || f.name,
+        avatarUrl: f.avatarUrl || f.avatar || "",
+      }));
+      return {
+        key: opt.key || opt.optionKey || opt.id,
+        label: label,
+        color: opt.color || opt.colorFrom || "#888888",
+        votes: opt.voteCount || opt.votes || 0,
+        friendVotes: friendVotes,
+      };
+    }) || []}
     onClose={() => {
       isStatsModalOpen = false;
       statsModalPost = null;
+    }}
+    onOpenInGlobe={() => {
+      // Abrir StatsBottomModal con datos globales
+      isStatsBottomModalOpen = true;
+    }}
+  />
+
+  <!-- Modal del Globo 3D -->
+  <PollStatsModal
+    isOpen={isStatsBottomModalOpen}
+    post={statsModalPost}
+    userVote={statsModalPost ? userVotes[statsModalPost.id] || null : null}
+    onClose={() => {
+      isStatsBottomModalOpen = false;
     }}
   />
 </div>

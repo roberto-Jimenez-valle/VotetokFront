@@ -1,10 +1,15 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 // Endpoint público - no requiere autenticación
 export const GET: RequestHandler = async ({ params, url }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id || '');
+    
+    if (!pollId) {
+      throw error(400, 'Invalid poll ID');
+    }
     const days = Number(url.searchParams.get('days') || '30');
     
     console.log('[API votes-history] Consultando votos para poll', pollId, 'últimos', days, 'días');

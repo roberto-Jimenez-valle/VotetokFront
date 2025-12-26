@@ -54,7 +54,12 @@
     getLabelWithoutUrl: (label: string) => string;
     // Tipo de encuesta
     pollType?: string;
-    pollTypes?: readonly { id: string; label: string; icon: any }[];
+    pollTypes?: readonly {
+      id: string;
+      label: string;
+      icon: any;
+      color: string;
+    }[];
     onChangePollType?: (type: string) => void;
     onOpenTypeOptionsModal?: () => void;
     // Acciones adicionales

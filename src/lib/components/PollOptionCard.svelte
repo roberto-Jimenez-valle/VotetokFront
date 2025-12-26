@@ -67,6 +67,7 @@
 
     // Callbacks para vista
     onFriendsClick?: () => void;
+    onStatsClick?: () => void;
     onClick?: (e: MouseEvent | KeyboardEvent) => void;
     onDoubleClick?: () => void;
 
@@ -104,6 +105,7 @@
     onToggleCorrect,
     isCorrect = false,
     onFriendsClick,
+    onStatsClick,
     onClick,
     onDoubleClick,
     showRemoveOption = false,
@@ -637,12 +639,19 @@
         <!-- Footer - PORCENTAJE SOLO SI HA VOTADO -->
         <div class="card-bottom-row">
           {#if userHasVoted}
-            <div class="card-percentage">
+            <button
+              type="button"
+              class="card-percentage clickable"
+              onclick={(e) => {
+                e.stopPropagation();
+                onStatsClick?.();
+              }}
+            >
               <span class="percentage-value">{Math.round(percentage)}%</span>
               {#if showPercentageLabel && mode === "view"}
                 <span class="percentage-label">DE LOS VOTOS</span>
               {/if}
-            </div>
+            </button>
           {:else}
             <div class="card-percentage-placeholder"></div>
           {/if}
@@ -882,12 +891,19 @@
 
         <div class="option-footer">
           {#if userHasVoted}
-            <div class="percentage-display">
+            <button
+              type="button"
+              class="percentage-display clickable"
+              onclick={(e) => {
+                e.stopPropagation();
+                onStatsClick?.();
+              }}
+            >
               <span class="percentage-value">{Math.round(percentage)}%</span>
               {#if showPercentageLabel}
                 <span class="percentage-label">DE LOS VOTOS</span>
               {/if}
-            </div>
+            </button>
           {:else}
             <div class="percentage-display-placeholder"></div>
           {/if}
@@ -1046,12 +1062,19 @@
           <!-- Vista de porcentaje para modo view -->
           {#if userHasVoted}
             <div class="card-bottom-row">
-              <div class="card-percentage">
+              <button
+                type="button"
+                class="card-percentage clickable"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onStatsClick?.();
+                }}
+              >
                 <span class="percentage-value">{Math.round(percentage)}%</span>
                 {#if showPercentageLabel}
                   <span class="percentage-label">DE LOS VOTOS</span>
                 {/if}
-              </div>
+              </button>
               {#if friends.length > 0}
                 <button
                   type="button"
@@ -1512,6 +1535,45 @@
   .card-percentage {
     display: flex;
     flex-direction: column;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    cursor: default;
+  }
+  
+  .card-percentage.clickable {
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  
+  .card-percentage.clickable:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+  
+  .card-percentage.clickable:active {
+    transform: scale(0.98);
+  }
+  
+  .percentage-display.clickable {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  
+  .percentage-display.clickable:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+  
+  .percentage-display.clickable:active {
+    transform: scale(0.98);
   }
 
   /* Layout texto puro (sin área superior) */
