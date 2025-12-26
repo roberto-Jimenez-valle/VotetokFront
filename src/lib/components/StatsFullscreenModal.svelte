@@ -312,10 +312,8 @@
     }
 
     const handlePopState = (event: PopStateEvent) => {
-      // If we are no longer on the hash (back button pressed), close
-      if (window.location.hash !== hash) {
-        handleClose(true);
-      }
+      // Always close when navigating history (back button) while modal is open
+      handleClose(true);
     };
 
     window.addEventListener("popstate", handlePopState);
