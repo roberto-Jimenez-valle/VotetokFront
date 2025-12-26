@@ -10,6 +10,7 @@
         UserMinus,
         Trash2,
         Edit2,
+        RotateCcw,
     } from "lucide-svelte";
     import { currentUser } from "$lib/stores/auth";
     import type { Post } from "$lib/voting-feed/types";
@@ -20,27 +21,51 @@
         onClose: () => void;
         onReport?: () => void;
         onDelete?: () => void;
+        onAdminDelete?: () => void;
+        onAdminReset?: () => void;
     }
 
-    let { isOpen, post, onClose, onReport, onDelete }: Props = $props();
+    let {
+        isOpen,
+        post,
+        onClose,
+        onReport,
+        onDelete,
+        onAdminDelete,
+        onAdminReset,
+    }: Props = $props();
 
     const isAuthor = $derived(
         $currentUser?.userId === post.userId ||
             $currentUser?.username === post.author,
     );
 
-    function handleAction(action: string) {
-        if (action === "report") onReport?.();
-        if (action === "delete") onDelete?.();
+    const isSuperAdmin = $derived(
+        $currentUser?.email === "voutop.oficial@gmail.com",
+    );
 
-        // Copy link
-        if (action === "copy") {
+    function handleAction(action: string) {
+        console.log("[PostOptionsModal] Action clicked:", action);
+
+        if (action === "report") {
+            onReport?.();
+            onClose();
+        } else if (action === "delete") {
+            onDelete?.();
+        } // Don't close immediately allow handler
+        else if (action === "admin_delete") {
+            onAdminDelete?.();
+        } else if (action === "admin_reset") {
+            onAdminReset?.();
+        } else if (action === "copy") {
             const link = `${window.location.origin}/poll/${post.id}`;
             navigator.clipboard.writeText(link);
-            alert("Enlace copiado al portapapeles"); // Replace with toast later
+            alert("Enlace copiado al portapapeles");
+            onClose();
+        } else {
+            // Other actions like unfollow/not_interested
+            onClose();
         }
-
-        onClose();
     }
 </script>
 
@@ -79,6 +104,35 @@
 
             <!-- Actions List -->
             <div class="space-y-1">
+                {#if isSuperAdmin}
+                    <div
+                        class="bg-red-900/20 rounded-xl mb-2 border border-red-500/20 overflow-hidden"
+                    >
+                        <div
+                            class="px-3 py-1 bg-red-900/40 text-[10px] uppercase font-bold text-red-400 tracking-wider"
+                        >
+                            Super Admin
+                        </div>
+                        <button
+                            onclick={() => handleAction("admin_delete")}
+                            class="w-full flex items-center gap-3 p-3 hover:bg-white/5 text-red-400 transition-colors text-left"
+                        >
+                            <Trash2 size={20} />
+                            <span class="font-bold text-sm"
+                                >Eliminar Encuesta (Forzado)</span
+                            >
+                        </button>
+                        <button
+                            onclick={() => handleAction("admin_reset")}
+                            class="w-full flex items-center gap-3 p-3 hover:bg-white/5 text-orange-400 transition-colors text-left border-t border-red-500/10"
+                        >
+                            <RotateCcw size={20} />
+                            <span class="font-bold text-sm">Resetear Votos</span
+                            >
+                        </button>
+                    </div>
+                {/if}
+
                 {#if isAuthor}
                     <button
                         onclick={() => handleAction("delete")}

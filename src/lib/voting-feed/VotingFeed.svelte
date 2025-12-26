@@ -18,6 +18,8 @@
   import UserProfileModal from "$lib/UserProfileModal.svelte";
   import CommentsModal from "$lib/components/CommentsModal.svelte";
   import ShareModal from "$lib/components/ShareModal.svelte";
+  import PostOptionsModal from "$lib/components/PostOptionsModal.svelte";
+  import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Select from "$lib/ui/Select.svelte";
   import Skeleton from "$lib/ui/Skeleton.svelte";
   import { apiCall } from "$lib/api/client";
@@ -50,6 +52,8 @@
   let userVotes = $state<UserVotes>({});
   let rankingDrafts = $state<RankingDrafts>({});
   let swipeIndices = $state<SwipeIndices>({});
+  // Track liked options during swipe mode (before final submission)
+  let swipeLikes = $state<Record<string, string[]>>({});
   let currentView = $state<ViewMode>("feed");
 
   let expandedPostId = $state<string | null>(null);
@@ -73,6 +77,17 @@
   let isCreatePollModalOpen = $state(false);
   let buttonColors = $state<string[]>([]);
   let isDesktop = $state(false);
+
+  // Confirmation Modal
+  let isConfirmOpen = $state(false);
+  let confirmConfig = $state({
+    title: "",
+    message: "",
+    confirmText: "Confirmar",
+    cancelText: "Cancelar",
+    isDangerous: false,
+    onConfirm: async () => {},
+  });
 
   // Pull-to-Refresh states
   let pullStartY = $state(0);
@@ -174,6 +189,10 @@
   let isShareModalOpen = $state(false);
   let sharePollHashId = $state("");
   let sharePollTitle = $state("");
+
+  // Post Options Modal State (Global to avoid z-index/stacking context issues)
+  let isOptionsModalOpen = $state(false);
+  let optionsModalPost = $state<Post | null>(null);
 
   // TopTabs state
   let activeTab = $state<"Para ti" | "Tendencias" | "Amigos" | "Live">(
@@ -452,7 +471,10 @@
 
     return {
       id: apiPoll.hashId || String(apiPoll.id),
-      type: pollType,
+      numericId: apiPoll.id,
+      // Map backend 'ranking' to frontend 'tierlist' to ensure OptionCard renders correctly
+      type:
+        apiPoll.type === "ranking" ? "tierlist" : (apiPoll.type as PostType),
       author: apiPoll.user?.displayName || apiPoll.user?.username || "Anónimo",
       avatar:
         apiPoll.user?.avatarUrl ||
@@ -491,20 +513,28 @@
 
         return {
           id: opt.hashId || String(opt.id),
+          numericId: opt.id,
           title:
             opt.optionLabel ||
             opt.optionText ||
             opt.text ||
             `Opción ${idx + 1}`,
           votes: opt.voteCount || opt._count?.votes || 0,
-          friends: opt.createdBy
-            ? [
-                {
-                  id: String(opt.createdBy.id),
-                  avatar: opt.createdBy.avatarUrl || "",
-                },
-              ]
-            : [],
+          friends: (opt.friendVoters || [])
+            .map((v: any) => ({
+              id: String(v.id),
+              avatar: v.avatarUrl || "",
+            }))
+            .concat(
+              opt.createdBy
+                ? [
+                    {
+                      id: String(opt.createdBy.id),
+                      avatar: opt.createdBy.avatarUrl || "",
+                    },
+                  ]
+                : [],
+            ),
           type: optionImage ? ("image" as const) : ("text" as const),
           image: optionImage || pollImage,
           colorFrom: colorFrom,
@@ -646,10 +676,24 @@
 
         // Transform to userVotes format
         const votesMap: UserVotes = {};
-        votes.forEach((vote: any) => {
+        // Reverse to process from Oldest to Newest (FIFO) to match optimistic order
+        votes.reverse().forEach((vote: any) => {
           const pollId = vote.poll?.hashId || String(vote.pollId);
           const optionId = vote.option?.hashId || String(vote.optionId);
-          votesMap[pollId] = optionId;
+
+          if (!pollId || !optionId) {
+            return;
+          }
+
+          if (votesMap[pollId]) {
+            if (Array.isArray(votesMap[pollId])) {
+              (votesMap[pollId] as string[]).push(optionId);
+            } else {
+              votesMap[pollId] = [votesMap[pollId] as string, optionId];
+            }
+          } else {
+            votesMap[pollId] = optionId;
+          }
         });
         userVotes = votesMap;
       }
@@ -718,23 +762,186 @@
   });
 
   // Handlers
-  function handleVote(postId: string, value: string | string[]) {
-    if (userVotes[postId]) return;
+  async function handleVote(postId: string, value: string | string[]) {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
 
+    const isMulti = ["tierlist", "ranking", "multiple", "swipe"].includes(
+      post.type,
+    );
+
+    // Block standard single-vote polls if already voted
+    if (!isMulti && userVotes[postId]) return;
+
+    // 4. Handle Array of Votes (Ranking / Tierlist)
+    if (Array.isArray(value)) {
+      // Optimistic Update
+      const previousVotes = userVotes[postId];
+      userVotes = { ...userVotes, [postId]: value };
+
+      try {
+        // First, clear existing votes to ensure clean slate (and correct order)
+        // Only if we know we have votes locally
+        if (previousVotes) {
+          try {
+            await apiCall(`/api/polls/${postId}/vote`, { method: "DELETE" });
+          } catch (delErr: any) {
+            // Ignore 404 (Not Found) - means user hasn't voted yet, which is fine
+            if (delErr.status !== 404) {
+              throw delErr;
+            }
+          }
+        }
+
+        // Then send votes sequentially to preserve order
+        // Use for...of to await sequentially
+        for (const optionId of value) {
+          const numericOptionId = post.options.find(
+            (o) => o.id === optionId,
+          )?.numericId;
+          if (numericOptionId) {
+            await apiCall(`/api/polls/${postId}/vote`, {
+              method: "POST",
+              body: JSON.stringify({
+                optionId: numericOptionId,
+                // Add default geolocation
+                latitude: 40.4168,
+                longitude: -3.7038,
+                subdivisionId: null,
+              }),
+            });
+          }
+        }
+
+        // Refetch to confirm
+        fetchUserVotes();
+      } catch (err) {
+        console.error("Error submitting ranking votes:", err);
+        // Revert optimistic update
+        userVotes = { ...userVotes, [postId]: previousVotes };
+        alert("Error al guardar tu ranking. Inténtalo de nuevo.");
+      }
+      return;
+    }
+
+    // 5. Handle Single Vote (Standard, Swipe, or Toggle in Ranking)
+    // 1. Resolve Numeric ID
+    let numericOptionId: number | undefined;
+    if (value !== "done" && !Array.isArray(value)) {
+      numericOptionId = post.options.find((o) => o.id === value)?.numericId;
+    }
+
+    if (!numericOptionId && !Array.isArray(value) && value !== "done") {
+      console.error("Could not find numeric option ID for vote. Stale state?");
+      alert(
+        "Error: Datos desactualizados. Por favor recarga la página para habilitar el voto.",
+      );
+      return;
+    }
+
+    // 2. Optimistic Update Logic
+    const previousVotes = userVotes[postId];
+    let newVotesValue: string | string[] | undefined = value; // Use undefined for deletion
+
+    if (isMulti && !Array.isArray(value)) {
+      // Toggle logic for Multi/Tierlist
+      const currentVotes = Array.isArray(previousVotes)
+        ? previousVotes
+        : previousVotes
+          ? [previousVotes]
+          : [];
+
+      if (currentVotes.includes(value)) {
+        // Remove
+        const filtered = currentVotes.filter((v) => v !== value);
+        newVotesValue =
+          filtered.length === 0
+            ? undefined
+            : filtered.length === 1
+              ? filtered[0]
+              : filtered;
+      } else {
+        // Add
+        newVotesValue = [...currentVotes, value];
+      }
+    }
+
+    // Apply to UI (Posts count update simplified: standard +1, multi depends on toggle)
     posts = posts.map((p) => {
       if (p.id !== postId) return p;
-      let newTotal = p.totalVotes + 1;
+
+      let newTotal = p.totalVotes;
       let newOptions = [...p.options];
+
       if (!Array.isArray(value)) {
+        // Single interaction
+        // Determine direction
+        const isAdding = Array.isArray(newVotesValue)
+          ? newVotesValue.includes(value)
+          : newVotesValue === value;
+
+        const delta = isAdding ? 1 : -1;
+        newTotal += delta;
         newOptions = newOptions.map((o) =>
-          o.id === value ? { ...o, votes: o.votes + 1 } : o,
+          o.id === value ? { ...o, votes: Math.max(0, o.votes + delta) } : o,
         );
       }
-      return { ...p, options: newOptions, totalVotes: newTotal };
+
+      return { ...p, options: newOptions, totalVotes: Math.max(0, newTotal) };
     });
 
-    userVotes = { ...userVotes, [postId]: value };
+    // Update global userVotes
+    if (
+      newVotesValue === undefined ||
+      (Array.isArray(newVotesValue) && newVotesValue.length === 0)
+    ) {
+      const newMap = { ...userVotes };
+      delete newMap[postId];
+      userVotes = newMap;
+    } else {
+      userVotes = { ...userVotes, [postId]: newVotesValue };
+    }
+
     expandedPostId = null;
+
+    // 3. API Call
+    try {
+      if (numericOptionId) {
+        const payload = {
+          optionId: numericOptionId,
+          latitude: 40.4168,
+          longitude: -3.7038,
+          subdivisionId: null,
+        };
+
+        console.log("[VotingFeed] Voting with payload:", payload);
+
+        const urlId = post.numericId || postId;
+        const response = await apiCall(`/api/polls/${urlId}/vote`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error("Vote failed");
+        }
+      }
+    } catch (err) {
+      console.error("Error submitting vote:", err);
+      alert("Error al guardar el voto. Por favor intenta de nuevo.");
+
+      // Revert Optimistic Update
+      if (previousVotes === undefined) {
+        const newMap = { ...userVotes };
+        delete newMap[postId];
+        userVotes = newMap;
+      } else {
+        userVotes = { ...userVotes, [postId]: previousVotes };
+      }
+
+      // Note: Reverting post counts perfectly is complex here without saving 'delta'.
+      // Assumption: User will reload or accept slight count drift on error until refresh.
+    }
   }
 
   function handleToggleRank(postId: string, optionId: string) {
@@ -763,15 +970,99 @@
     };
   }
 
-  function handleSwipe(postId: string, direction: "left" | "right") {
+  async function handleSwipe(postId: string, direction: "left" | "right") {
     const idx = swipeIndices[postId] || 0;
     const post = posts.find((p) => p.id === postId);
     if (!post) return;
 
-    if (idx < post.options.length - 1) {
-      swipeIndices = { ...swipeIndices, [postId]: idx + 1 };
-    } else {
-      handleVote(postId, "done");
+    const currentOption = post.options[idx];
+    if (!currentOption) return;
+
+    // Track like/dislike locally
+    if (direction === "right") {
+      // Add to likes
+      const currentLikes = swipeLikes[postId] || [];
+      swipeLikes = {
+        ...swipeLikes,
+        [postId]: [...currentLikes, currentOption.id],
+      };
+
+      // Optimistic UI update for this option's vote count ONLY (not totalVotes yet)
+      posts = posts.map((p) => {
+        if (p.id !== postId) return p;
+        return {
+          ...p,
+          // Don't increment totalVotes here - do it once at the end
+          options: p.options.map((o) =>
+            o.id === currentOption.id ? { ...o, votes: o.votes + 1 } : o,
+          ),
+        };
+      });
+    }
+    // If direction is "left", we don't add to likes (dislike = no vote)
+
+    // Move to next option
+    const nextIdx = idx + 1;
+    swipeIndices = { ...swipeIndices, [postId]: nextIdx };
+
+    // Check if we've swiped through all options
+    if (nextIdx >= post.options.length) {
+      // Swiping complete - submit all liked votes to backend
+      const likedOptions = swipeLikes[postId] || [];
+
+      // Mark as voted with the list of liked options
+      if (likedOptions.length > 0) {
+        userVotes = { ...userVotes, [postId]: likedOptions };
+
+        // NOW increment totalVotes by 1 (one user = one total vote)
+        posts = posts.map((p) => {
+          if (p.id !== postId) return p;
+          return {
+            ...p,
+            totalVotes: p.totalVotes + 1,
+          };
+        });
+      } else {
+        // User disliked everything - mark as "done" with empty array
+        userVotes = { ...userVotes, [postId]: "done" };
+      }
+
+      // Submit votes to backend
+      try {
+        for (const optionId of likedOptions) {
+          const numericOptionId = post.options.find(
+            (o) => o.id === optionId,
+          )?.numericId;
+
+          if (numericOptionId) {
+            await apiCall(`/api/polls/${postId}/vote`, {
+              method: "POST",
+              body: JSON.stringify({
+                optionId: numericOptionId,
+                latitude: 40.4168,
+                longitude: -3.7038,
+                subdivisionId: null,
+              }),
+            });
+          }
+        }
+        console.log(
+          `[VotingFeed] Swipe complete for ${postId}. Voted for:`,
+          likedOptions,
+        );
+      } catch (err) {
+        console.error("Error submitting swipe votes:", err);
+        alert("Error al guardar tus votos. Por favor intenta de nuevo.");
+        // Revert on error
+        const newVotes = { ...userVotes };
+        delete newVotes[postId];
+        userVotes = newVotes;
+      }
+
+      // Clean up swipeLikes for this post
+      const newSwipeLikes = { ...swipeLikes };
+      delete newSwipeLikes[postId];
+      swipeLikes = newSwipeLikes;
     }
   }
 
@@ -828,6 +1119,7 @@
               return {
                 ...o,
                 id: savedOption.hashId || String(savedOption.id),
+                numericId: savedOption.id,
                 image: savedOption.imageUrl || savedOption.image_url || o.image,
                 // Ensure backend returned color is used if available
                 colorFrom: savedOption.color || o.colorFrom,
@@ -1013,6 +1305,11 @@
     isShareModalOpen = true;
   }
 
+  function handleOpenOptions(post: Post) {
+    optionsModalPost = post;
+    isOptionsModalOpen = true;
+  }
+
   async function handleRepost(post: Post) {
     if (!post || post.isReposted) return;
 
@@ -1109,6 +1406,100 @@
     if (feedContainer) {
       feedContainer.scrollTo({ top: 0, behavior: "smooth" });
     }
+  }
+
+  // Delete Handler (Admin or Author)
+  async function handleDeletePost(post: Post, isAdminForce = false) {
+    // Close modal first
+    isOptionsModalOpen = false;
+
+    confirmConfig = {
+      title: isAdminForce ? "⚠️ Borrar Encuesta (Admin)" : "Eliminar Encuesta",
+      message: isAdminForce
+        ? "Esta acción borrará la encuesta permanentemente. ¿Continuar?"
+        : "¿Estás seguro de que deseas eliminar esta encuesta?",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      isDangerous: true,
+      onConfirm: async () => {
+        isConfirmOpen = false;
+        console.log(
+          "[VotingFeed] Deleting post:",
+          post.id,
+          "AdminForce:",
+          isAdminForce,
+        );
+        try {
+          const response = await apiCall(`/api/polls/${post.id}`, {
+            method: "DELETE",
+          });
+
+          if (response.ok) {
+            console.log("[VotingFeed] Post deleted successfully");
+            posts = posts.filter((p) => p.id !== post.id);
+            trendingPosts = trendingPosts.filter((p) => p.id !== post.id);
+
+            if (currentView === "reels") goHome();
+          } else {
+            const data = await response.json();
+            console.error("[VotingFeed] Delete failed:", data);
+            alert(data.message || "Error al eliminar la encuesta.");
+          }
+        } catch (e) {
+          console.error("[VotingFeed] Network error during delete:", e);
+          alert("Error de conexión al intentar eliminar.");
+        }
+      },
+    };
+    isConfirmOpen = true;
+  }
+
+  async function handleAdminReset(post: Post) {
+    isOptionsModalOpen = false;
+
+    confirmConfig = {
+      title: "⚠️ Resetear Votos (Admin)",
+      message:
+        "Esto borrará TODOS los votos de esta encuesta. Es irreversible. ¿Continuar?",
+      confirmText: "Resetear Votos",
+      cancelText: "Cancelar",
+      isDangerous: true,
+      onConfirm: async () => {
+        isConfirmOpen = false;
+        try {
+          const response = await apiCall(`/api/polls/${post.id}/reset-votes`, {
+            method: "DELETE",
+          });
+          if (response.ok) {
+            // Update local state
+            posts = posts.map((p) => {
+              if (p.id === post.id) {
+                return {
+                  ...p,
+                  totalVotes: 0,
+                  options: p.options.map((o) => ({ ...o, votes: 0 })),
+                };
+              }
+              return p;
+            });
+
+            // Clear user vote locally
+            const newVotes = { ...userVotes };
+            delete newVotes[post.id];
+            userVotes = newVotes;
+
+            alert("Votos reseteados exitosamente.");
+          } else {
+            const data = await response.json();
+            alert(data.message || "Error al resetear.");
+          }
+        } catch (e) {
+          console.error(e);
+          alert("Error de red.");
+        }
+      },
+    };
+    isConfirmOpen = true;
   }
 
   // Handle tab change
@@ -1661,6 +2052,7 @@
                 onShare={handleShare}
                 onRepost={handleRepost}
                 onAvatarClick={handleAvatarClick}
+                onOpenOptions={handleOpenOptions}
               />
               <div class="h-[1px] w-full bg-white/10 my-4"></div>
             {/each}
@@ -1745,6 +2137,7 @@
                   onShare={handleShare}
                   onRepost={handleRepost}
                   onAvatarClick={handleAvatarClick}
+                  onOpenOptions={handleOpenOptions}
                 />
               </div>
             {:else}
@@ -1811,6 +2204,39 @@
     bind:isOpen={isShareModalOpen}
     pollHashId={sharePollHashId}
     pollTitle={sharePollTitle}
+  />
+
+  <!-- Post Options Modal -->
+  {#if optionsModalPost}
+    <PostOptionsModal
+      isOpen={isOptionsModalOpen}
+      post={optionsModalPost}
+      onClose={() => (isOptionsModalOpen = false)}
+      onReport={() => alert("Reporte enviado")}
+      onDelete={() => {
+        console.log("[VotingFeed] onDelete prop triggered");
+        if (optionsModalPost) handleDeletePost(optionsModalPost, false);
+      }}
+      onAdminDelete={() => {
+        console.log("[VotingFeed] onAdminDelete prop triggered");
+        if (optionsModalPost) handleDeletePost(optionsModalPost, true);
+      }}
+      onAdminReset={() => {
+        console.log("[VotingFeed] onAdminReset prop triggered");
+        if (optionsModalPost) handleAdminReset(optionsModalPost);
+      }}
+    />
+  {/if}
+
+  <ConfirmModal
+    isOpen={isConfirmOpen}
+    title={confirmConfig.title}
+    message={confirmConfig.message}
+    confirmText={confirmConfig.confirmText}
+    cancelText={confirmConfig.cancelText}
+    isDangerous={confirmConfig.isDangerous}
+    onConfirm={confirmConfig.onConfirm}
+    onCancel={() => (isConfirmOpen = false)}
   />
 </div>
 

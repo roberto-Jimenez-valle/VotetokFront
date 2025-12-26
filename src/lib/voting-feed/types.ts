@@ -5,10 +5,12 @@ export type PostType = 'standard' | 'quiz' | 'tierlist' | 'swipe' | 'collab';
 export interface Friend {
   id: string;
   avatar: string;
+  rank?: number;
 }
 
 export interface VoteOption {
   id: string;
+  numericId?: number;
   title: string;
   votes: number;
   friends: Friend[];
@@ -21,6 +23,7 @@ export interface VoteOption {
 
 export interface Post {
   id: string;
+  numericId?: number;
   type: PostType;
   author: string;
   avatar: string;

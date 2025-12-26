@@ -5,7 +5,7 @@ import { parsePollIdInternal, encodePollId, encodeUserId, encodeOptionId } from 
 export const GET: RequestHandler = async ({ params, locals }) => {
   // Soporta tanto IDs numéricos (interno) como hashes
   console.log('[API GET Poll] Param ID recibido:', params.id);
-  const pollId = parsePollIdInternal(params.id);
+  const pollId = parsePollIdInternal(params.id!);
   console.log('[API GET Poll] ID parseado:', pollId);
   if (!pollId) {
     console.error('[API GET Poll] ❌ ID inválido:', params.id);
@@ -59,7 +59,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
   // Buscar votos del usuario actual SOLO por userId (no por IP)
   const userId = locals.user?.userId;
-  
+
   let userVotes: string[] = [];
   if (userId) {
     const existingVotes = await prisma.vote.findMany({
@@ -76,14 +76,14 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         }
       }
     });
-    
+
     console.log('[API GET Poll] Votos del usuario', userId, ':', existingVotes.length);
-    
+
     userVotes = existingVotes
       .map(v => v.option?.optionKey)
       .filter((key): key is string => key !== null && key !== undefined);
   }
-  
+
   // Para compatibilidad, también incluir userVote (el primero o null)
   const userVote = userVotes.length > 0 ? userVotes[0] : null;
 
@@ -116,7 +116,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
-  const pollId = parsePollIdInternal(params.id);
+  const pollId = parsePollIdInternal(params.id!);
   if (!pollId) {
     throw error(400, 'Invalid poll ID');
   }
@@ -141,10 +141,37 @@ export const PUT: RequestHandler = async ({ params, request }) => {
   return json({ data: poll });
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
-  const pollId = parsePollIdInternal(params.id);
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+  const pollId = parsePollIdInternal(params.id!);
   if (!pollId) {
     throw error(400, 'Invalid poll ID');
+  }
+
+  const user = locals.user;
+  if (!user) {
+    throw error(401, 'Unauthorized');
+  }
+
+  // Check ownership or admin status
+  const poll = await prisma.poll.findUnique({
+    where: { id: pollId },
+    select: { userId: true }
+  });
+
+  if (!poll) {
+    throw error(404, 'Poll not found');
+  }
+
+  console.log('[API DELETE Poll] User requesting delete:', user.userId, user.email);
+
+  const isSuperAdmin = (user.email || '').toLowerCase() === 'voutop.oficial@gmail.com';
+  const isAuthor = poll.userId === user.userId;
+
+  console.log('[API DELETE Poll] Checks:', { isSuperAdmin, isAuthor, pollOwner: poll.userId });
+
+  if (!isAuthor && !isSuperAdmin) {
+    console.error('[API DELETE Poll] ❌ Forbidden. User:', user.userId, 'Email:', user.email);
+    throw error(403, `Forbidden. Server sees Your Email as: '${user.email || 'undefined'}'. Required: 'voutop.oficial@gmail.com'`);
   }
 
   await prisma.poll.delete({

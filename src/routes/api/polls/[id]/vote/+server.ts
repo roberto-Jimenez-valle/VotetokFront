@@ -76,8 +76,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     }
 
     // Determinar si es encuesta múltiple (usar campo 'type' de la BD)
-    const isMultiplePoll = option.poll.type === 'multiple';
-    console.log('[API Vote] 📊 Tipo de encuesta:', option.poll.type, '| Múltiple:', isMultiplePoll);
+    const isMultiplePoll = ['multiple', 'tierlist', 'ranking'].includes(option.poll.type);
+    console.log('[API Vote] 📊 Tipo de encuesta:', option.poll.type, '| Múltiple/Accumulable:', isMultiplePoll);
 
     // Verificar si el usuario ya votó (solo por userId, no por IP)
 

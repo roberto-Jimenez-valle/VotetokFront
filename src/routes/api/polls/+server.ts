@@ -452,6 +452,29 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     const [polls, total] = await Promise.all([pollsQuery, countQuery]);
 
+    // Fetch Friend Votes (if authenticated and following people)
+    let friendVotes: any[] = [];
+    if (currentUserId && followingIds.size > 0 && polls.length > 0) {
+      const pollIds = polls.map(p => p.id);
+
+      friendVotes = await prisma.vote.findMany({
+        where: {
+          pollId: { in: pollIds },
+          userId: { in: Array.from(followingIds) }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              avatarUrl: true
+            }
+          }
+        },
+        take: 500 // Limit total friend votes to avoid massive response
+      });
+    }
+
     type PollWithData = Prisma.PollGetPayload<{ include: typeof pollInclude }>;
 
     const transformedPolls = (polls as PollWithData[]).map(poll => {
@@ -481,16 +504,28 @@ export const GET: RequestHandler = async ({ url, locals }) => {
           ...poll.user,
           hashId: encodeUserId(poll.user.id),
         } : null,
-        options: pollOptions.map((option: any) => ({
-          ...option,
-          hashId: encodeOptionId(option.id),
-          voteCount: option._count?.votes || 0,
-          avatarUrl: option.createdBy?.avatarUrl || null,
-          createdBy: option.createdBy ? {
-            ...option.createdBy,
-            hashId: encodeUserId(option.createdBy.id),
-          } : null,
-        }))
+        options: pollOptions.map((option: any) => {
+          // Find friend votes for this option
+          const voters = friendVotes.filter(v => v.pollId === poll.id && v.optionId === option.id);
+          // Limit to max 3 friends per option to keep payload small
+          const friendVoters = voters.slice(0, 3).map((v: any) => ({
+            id: v.user.id,
+            username: v.user.username,
+            avatarUrl: v.user.avatarUrl
+          }));
+
+          return {
+            ...option,
+            hashId: encodeOptionId(option.id),
+            voteCount: option._count?.votes || 0,
+            avatarUrl: option.createdBy?.avatarUrl || null,
+            createdBy: option.createdBy ? {
+              ...option.createdBy,
+              hashId: encodeUserId(option.createdBy.id),
+            } : null,
+            friendVoters
+          };
+        })
       };
     });
 

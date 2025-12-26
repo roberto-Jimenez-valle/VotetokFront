@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { encodePollId, encodeOptionId } from '$lib/server/hashids';
 
 /**
  * GET /api/users/[id]/votes
@@ -12,7 +13,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     const userId = parseInt(params.id);
     const limit = parseInt(url.searchParams.get('limit') || '20');
     const offset = parseInt(url.searchParams.get('offset') || '0');
-    
+
     console.log('[API /users/[id]/votes] Fetching votes for user:', userId, 'limit:', limit, 'offset:', offset);
 
     if (isNaN(userId)) {
@@ -94,7 +95,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     });
 
     console.log('[API /users/[id]/votes] Found', votes.length, 'votes');
-    
+
     // Formatear respuesta
     const formattedVotes = votes.map(vote => ({
       id: vote.id,
@@ -106,6 +107,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
       },
       poll: {
         id: vote.poll.id,
+        hashId: encodePollId(vote.poll.id),
         title: vote.poll.title,
         description: vote.poll.description,
         category: vote.poll.category,
@@ -115,6 +117,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
         user: vote.poll.user,
         options: vote.poll.options.map((opt: any) => ({
           id: opt.id,
+          hashId: encodeOptionId(opt.id),
           key: opt.optionKey,
           label: opt.optionLabel,
           color: opt.color,
@@ -127,8 +130,9 @@ export const GET: RequestHandler = async ({ params, url }) => {
           comments: vote.poll._count.comments
         }
       },
-      selectedOption: {
+      option: { // Matches frontend expectation 'vote.option'
         id: vote.option.id,
+        hashId: encodeOptionId(vote.option.id),
         key: vote.option.optionKey,
         label: vote.option.optionLabel,
         color: vote.option.color,
@@ -149,8 +153,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
     console.error('[API /users/[id]/votes] Error stack:', error instanceof Error ? error.stack : 'No stack');
     console.error('[API /users/[id]/votes] Error message:', error instanceof Error ? error.message : error);
     return json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Error al obtener votos',
         details: error instanceof Error ? error.message : String(error)
       },

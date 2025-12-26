@@ -67,6 +67,7 @@
     onShare?: (post: Post) => void;
     onRepost?: (post: Post) => void;
     onAvatarClick?: (post: Post) => void;
+    onOpenOptions?: (post: Post) => void;
   }
 
   let {
@@ -90,17 +91,16 @@
     onShare,
     onRepost,
     onAvatarClick,
+    onOpenOptions,
   }: Props = $props();
 
   import { currentUser } from "$lib/stores/auth";
   import { loginModalOpen } from "$lib/stores/globalState";
-  import PostOptionsModal from "$lib/components/PostOptionsModal.svelte";
   import CollabOptionEditor from "$lib/components/CollabOptionEditor.svelte";
 
   // Follow logic
   let isFollowing = $state(post.isFollowing || false);
   let isPending = $state(post.isPending || false);
-  let showOptionsModal = $state(false);
   let showCollabEditor = $state(false);
 
   function handleCollabSubmit(text: string, img?: string, color?: string) {
@@ -112,20 +112,6 @@
   // Bookmark logic
   let isBookmarked = $state(post.isBookmarked || false);
   let isBookmarking = $state(false);
-
-  function handleReport() {
-    alert(
-      "Reporte enviado. Gracias por ayudar a mantener segura la comunidad.",
-    );
-    // TODO: Implement actual report API
-  }
-
-  function handleDelete() {
-    if (confirm("¿Estás seguro de que quieres eliminar esta encuesta?")) {
-      // TODO: Implement actual delete API
-      alert("Encuesta eliminada (simulación)");
-    }
-  }
 
   $effect(() => {
     isFollowing = post.isFollowing || false;
@@ -245,6 +231,47 @@
   let expandedScrollRef: HTMLElement | null = $state(null);
   let currentExpandedIndex = $state(0);
 
+  // Drag-to-swipe state (Tinder-style)
+  let dragStartX = $state(0);
+  let dragCurrentX = $state(0);
+  let isDragging = $state(false);
+  const SWIPE_THRESHOLD = 100; // Pixels to trigger swipe
+
+  function handleDragStart(e: TouchEvent | MouseEvent) {
+    if (swipeAnim) return;
+    isDragging = true;
+    dragStartX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    dragCurrentX = 0;
+  }
+
+  function handleDragMove(e: TouchEvent | MouseEvent) {
+    if (!isDragging) return;
+    const currentX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    dragCurrentX = currentX - dragStartX;
+  }
+
+  function handleDragEnd() {
+    if (!isDragging) return;
+    isDragging = false;
+
+    if (dragCurrentX > SWIPE_THRESHOLD) {
+      // Swiped right - Like
+      handleSwipeTrigger("right");
+    } else if (dragCurrentX < -SWIPE_THRESHOLD) {
+      // Swiped left - Dislike
+      handleSwipeTrigger("left");
+    }
+    // Reset
+    dragCurrentX = 0;
+    dragStartX = 0;
+  }
+
+  // Computed drag styles
+  const dragRotation = $derived(isDragging ? dragCurrentX * 0.05 : 0);
+  const dragOpacity = $derived(
+    isDragging ? 1 - Math.abs(dragCurrentX) / 400 : 1,
+  );
+
   // Track if the countdown just expired (for real-time visual update)
   let expiredByCountdown = $state(false);
 
@@ -319,7 +346,13 @@
       (post.endsAt ? new Date(post.endsAt) < new Date() : false),
   );
   const hasVoted = $derived(!!userVotes[post.id]);
-  const shouldShowResults = $derived(hasVoted || isClosed);
+  const isSwipeComplete = $derived(
+    post.type === "swipe" &&
+      (swipeIndices[post.id] || 0) >= post.options.length,
+  );
+  const shouldShowResults = $derived(
+    (post.type === "swipe" ? isSwipeComplete : hasVoted) || isClosed,
+  );
   const rankingDraft = $derived(rankingDrafts[post.id] || []);
   const isRankingComplete = $derived(
     post.type === "tierlist" &&
@@ -333,13 +366,26 @@
   const maxItemsGrid = $derived(isReels ? 6 : 4);
   const containerHeight = $derived(isReels ? "flex-1 min-h-0" : "h-72");
 
+  // Flag to disable transition when new card appears
+  let noTransition = $state(false);
+
   function handleSwipeTrigger(dir: "left" | "right") {
-    if (swipeAnim) return;
+    if (swipeAnim || isDragging) return;
+
+    // Directly trigger the swipe animation - card slides smoothly off screen
     swipeAnim = dir;
+
     setTimeout(() => {
+      // Disable transition before showing new card
+      noTransition = true;
       onSwipe(post.id, dir);
       swipeAnim = null;
-    }, 300);
+
+      // Re-enable transition after a frame
+      requestAnimationFrame(() => {
+        noTransition = false;
+      });
+    }, 450); // Wait for animation to complete
   }
 
   const finalRanking = $derived(
@@ -630,7 +676,7 @@
                 />
               </button>
               <button
-                onclick={() => (showOptionsModal = true)}
+                onclick={() => onOpenOptions?.(post)}
                 class="text-slate-500 hover:text-white p-1.5 hover:bg-white/5 rounded-full transition-all active:scale-95"
                 title="Más opciones"
               >
@@ -770,7 +816,7 @@
             <!-- Actions (Top) -->
             <div class="flex items-center gap-1">
               <button
-                onclick={() => (showOptionsModal = true)}
+                onclick={() => onOpenOptions?.(post)}
                 class="text-slate-200 hover:text-white p-1.5 hover:bg-white/10 rounded-full transition-all active:scale-95 bg-black/20 backdrop-blur-sm"
               >
                 <MoreVertical size={16} />
@@ -822,53 +868,155 @@
               {/if}
             </div>
 
-            <div
-              class="absolute inset-0 z-10 w-full h-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden {swipeAnim ===
-              'left'
-                ? 'transition-all duration-300 -translate-x-[150%] -rotate-12 opacity-0'
-                : swipeAnim === 'right'
-                  ? 'transition-all duration-300 translate-x-[150%] rotate-12 opacity-0'
-                  : 'transition-all duration-300'}"
-            >
-              <img
-                src={post.options[swipeIndex].image ||
-                  `https://picsum.photos/seed/${post.options[swipeIndex].id}/600/800`}
-                class="absolute inset-0 w-full h-full object-cover"
-                alt=""
-              />
+            {#key swipeIndex}
               <div
-                class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"
-              ></div>
-              <div class="absolute bottom-20 left-6 right-6 z-10">
-                <h3
-                  class="text-3xl font-black text-white drop-shadow-lg leading-none"
-                >
-                  {post.options[swipeIndex].title}
-                </h3>
-                <p
-                  class="text-xs font-bold text-white/60 mt-2 uppercase tracking-widest"
-                >
-                  {swipeIndex + 1} de {post.options.length}
-                </p>
-              </div>
-              <div
-                class="absolute bottom-5 w-full flex justify-center gap-10 px-8 z-30"
+                class="absolute inset-0 z-10 w-full h-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing select-none"
+                style="
+                transform: translateX({swipeAnim === 'left'
+                  ? -window.innerWidth * 1.5
+                  : swipeAnim === 'right'
+                    ? window.innerWidth * 1.5
+                    : isDragging
+                      ? dragCurrentX
+                      : 0}px) rotate({swipeAnim === 'left'
+                  ? -20
+                  : swipeAnim === 'right'
+                    ? 20
+                    : dragRotation}deg);
+                opacity: {swipeAnim ? 0 : dragOpacity};
+                transition: {isDragging || noTransition
+                  ? 'none'
+                  : 'transform 400ms ease-out, opacity 400ms ease-out'};
+              "
+                ontouchstart={handleDragStart}
+                ontouchmove={handleDragMove}
+                ontouchend={handleDragEnd}
+                onmousedown={handleDragStart}
+                onmousemove={handleDragMove}
+                onmouseup={handleDragEnd}
+                onmouseleave={handleDragEnd}
+                role="button"
+                tabindex="0"
               >
-                <button
-                  onclick={() => handleSwipeTrigger("left")}
-                  class="p-4 bg-slate-950/50 hover:bg-red-500/90 text-red-500 hover:text-white rounded-full backdrop-blur-md border border-white/10 transition-all active:scale-95"
+                <!-- Green glow overlay (right/like) -->
+                {#if (isDragging && dragCurrentX > 0) || swipeAnim === "right"}
+                  <div
+                    class="absolute inset-0 z-40 pointer-events-none rounded-2xl border-4"
+                    style="background: linear-gradient(135deg, rgba(34, 197, 94, {swipeAnim ===
+                    'right'
+                      ? 0.5
+                      : Math.min(
+                          dragCurrentX / 80,
+                          0.6,
+                        )}) 0%, rgba(158, 194, 100, {swipeAnim === 'right'
+                      ? 0.3
+                      : Math.min(
+                          dragCurrentX / 100,
+                          0.4,
+                        )}) 100%); border-color: rgba(34, 197, 94, {swipeAnim ===
+                    'right'
+                      ? 1
+                      : Math.min(
+                          dragCurrentX / 60,
+                          1,
+                        )}); box-shadow: inset 0 0 {swipeAnim === 'right'
+                      ? 100
+                      : Math.min(
+                          dragCurrentX,
+                          120,
+                        )}px rgba(34, 197, 94, {swipeAnim === 'right'
+                      ? 0.7
+                      : Math.min(dragCurrentX / 100, 0.8)}), 0 0 {swipeAnim ===
+                    'right'
+                      ? 30
+                      : Math.min(
+                          dragCurrentX / 2,
+                          40,
+                        )}px rgba(34, 197, 94, 0.6);"
+                  ></div>
+                {/if}
+
+                <!-- Red glow overlay (left/nope) -->
+                {#if (isDragging && dragCurrentX < 0) || swipeAnim === "left"}
+                  <div
+                    class="absolute inset-0 z-40 pointer-events-none rounded-2xl border-4"
+                    style="background: linear-gradient(135deg, rgba(239, 68, 68, {swipeAnim ===
+                    'left'
+                      ? 0.5
+                      : Math.min(
+                          -dragCurrentX / 80,
+                          0.6,
+                        )}) 0%, rgba(220, 38, 38, {swipeAnim === 'left'
+                      ? 0.3
+                      : Math.min(
+                          -dragCurrentX / 100,
+                          0.4,
+                        )}) 100%); border-color: rgba(239, 68, 68, {swipeAnim ===
+                    'left'
+                      ? 1
+                      : Math.min(
+                          -dragCurrentX / 60,
+                          1,
+                        )}); box-shadow: inset 0 0 {swipeAnim === 'left'
+                      ? 100
+                      : Math.min(
+                          -dragCurrentX,
+                          120,
+                        )}px rgba(239, 68, 68, {swipeAnim === 'left'
+                      ? 0.7
+                      : Math.min(-dragCurrentX / 100, 0.8)}), 0 0 {swipeAnim ===
+                    'left'
+                      ? 30
+                      : Math.min(
+                          -dragCurrentX / 2,
+                          40,
+                        )}px rgba(239, 68, 68, 0.6);"
+                  ></div>
+                {/if}
+
+                <img
+                  src={post.options[swipeIndex].image ||
+                    `https://picsum.photos/seed/${post.options[swipeIndex].id}/600/800`}
+                  class="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  alt=""
+                  draggable="false"
+                />
+                <div
+                  class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none"
+                ></div>
+                <div
+                  class="absolute bottom-20 left-6 right-6 z-10 pointer-events-none"
                 >
-                  <X size={28} />
-                </button>
-                <button
-                  onclick={() => handleSwipeTrigger("right")}
-                  class="p-4 bg-slate-950/50 hover:text-white rounded-full backdrop-blur-md border border-white/10 transition-all active:scale-95"
-                  style="color: #9ec264;"
+                  <h3
+                    class="text-3xl font-black text-white drop-shadow-lg leading-none"
+                  >
+                    {post.options[swipeIndex].title}
+                  </h3>
+                  <p
+                    class="text-xs font-bold text-white/60 mt-2 uppercase tracking-widest"
+                  >
+                    {swipeIndex + 1} de {post.options.length}
+                  </p>
+                </div>
+                <div
+                  class="absolute bottom-5 w-full flex justify-center gap-8 px-8 z-30"
                 >
-                  <Heart size={28} fill="currentColor" />
-                </button>
+                  <button
+                    onclick={() => handleSwipeTrigger("left")}
+                    class="p-3 bg-slate-950/50 hover:bg-red-500/90 text-red-500 hover:text-white rounded-full backdrop-blur-md border border-white/10 transition-all active:scale-95"
+                  >
+                    <X size={22} />
+                  </button>
+                  <button
+                    onclick={() => handleSwipeTrigger("right")}
+                    class="p-3 bg-slate-950/50 hover:text-white rounded-full backdrop-blur-md border border-white/10 transition-all active:scale-95"
+                    style="color: #9ec264;"
+                  >
+                    <Heart size={22} fill="currentColor" />
+                  </button>
+                </div>
               </div>
-            </div>
+            {/key}
           {:else}
             <div class="text-white text-center">
               <Check size={40} class="mx-auto mb-2 text-emerald-500" />
@@ -1406,11 +1554,3 @@
     </div>
   {/if}
 </article>
-
-<PostOptionsModal
-  isOpen={showOptionsModal}
-  {post}
-  onClose={() => (showOptionsModal = false)}
-  onReport={handleReport}
-  onDelete={handleDelete}
-/>

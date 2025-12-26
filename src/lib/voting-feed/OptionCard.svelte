@@ -375,7 +375,12 @@
           "border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] z-10";
         bgOverlay = "bg-red-500/10";
       } else {
-        statusColor = "opacity-25 grayscale scale-[0.98] transition-all";
+        // Only dim if there are actual votes, otherwise keep it visible but maybe just grayscale
+        if (postTotalVotes > 0) {
+          statusColor = "opacity-25 grayscale scale-[0.98] transition-all";
+        } else {
+          statusColor = "grayscale opacity-80 scale-100 transition-all";
+        }
       }
     }
 
@@ -548,9 +553,13 @@
         >
           <div class="flex-1 min-w-0">
             {#if !isEditing}
+              {@const visibleFriends =
+                postType === "tierlist" && rank
+                  ? option.friends.filter((f) => f.rank === rank)
+                  : option.friends}
               <SocialAvatars
-                friends={option.friends}
-                revealed={hasVoted}
+                friends={visibleFriends}
+                revealed={hasVoted || (postType === "tierlist" && !!rank)}
                 size="small"
               />
             {/if}
