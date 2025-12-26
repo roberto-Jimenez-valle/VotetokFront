@@ -190,7 +190,9 @@
   });
 
   // Aggregate all friends who voted across all options
-  const participatingFriends = $derived.by(() => {
+  let participatingFriends = $state<FriendVote[]>([]);
+
+  $effect(() => {
     const friends = new Map<number, FriendVote>();
     for (const option of options) {
       if (option.friendVotes) {
@@ -199,7 +201,7 @@
         }
       }
     }
-    return Array.from(friends.values());
+    participatingFriends = Array.from(friends.values());
   });
 
   // Track last loaded poll to prevent duplicate calls
