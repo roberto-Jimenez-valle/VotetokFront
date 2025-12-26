@@ -19,6 +19,7 @@
   import CommentsModal from "$lib/components/CommentsModal.svelte";
   import ShareModal from "$lib/components/ShareModal.svelte";
   import PostOptionsModal from "$lib/components/PostOptionsModal.svelte";
+  import PollStatsModal from "$lib/components/PollStatsModal.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Select from "$lib/ui/Select.svelte";
   import Skeleton from "$lib/ui/Skeleton.svelte";
@@ -193,6 +194,10 @@
   // Post Options Modal State (Global to avoid z-index/stacking context issues)
   let isOptionsModalOpen = $state(false);
   let optionsModalPost = $state<Post | null>(null);
+
+  // Poll Stats Modal State
+  let isStatsModalOpen = $state(false);
+  let statsModalPost = $state<Post | null>(null);
 
   // TopTabs state
   let activeTab = $state<"Para ti" | "Tendencias" | "Amigos" | "Live">(
@@ -1330,6 +1335,11 @@
     isOptionsModalOpen = true;
   }
 
+  function handleStatsClick(post: Post) {
+    statsModalPost = post;
+    isStatsModalOpen = true;
+  }
+
   async function handleRepost(post: Post) {
     // Find current state from posts array to avoid stale reference
     const currentPost = posts.find((p) => p.id === post.id);
@@ -1700,7 +1710,7 @@
         <div class="feed-container-width mx-auto min-h-full bg-black/20 pb-10">
           {#if activeTab === "Para ti" || activeTab === "Amigos"}
             <!-- Instagram Stories Style - Friends with recent polls -->
-            <div class="px-4 py-4">
+            <div class="px-2 py-2">
               <div class="overflow-x-auto scrollbar-hide">
                 <div class="flex gap-4" style="width: max-content;">
                   {#each sortedFriendStories as friend (friend.id)}
@@ -2084,6 +2094,7 @@
                 onRepost={handleRepost}
                 onAvatarClick={handleAvatarClick}
                 onOpenOptions={handleOpenOptions}
+                onStatsClick={handleStatsClick}
               />
               <div class="h-[1px] w-full bg-white/10 my-4"></div>
             {/each}
@@ -2169,6 +2180,7 @@
                   onRepost={handleRepost}
                   onAvatarClick={handleAvatarClick}
                   onOpenOptions={handleOpenOptions}
+                  onStatsClick={handleStatsClick}
                 />
               </div>
             {:else}
@@ -2195,7 +2207,7 @@
   </main>
 
   <!-- Bottom/Sidebar Navigation -->
-  {#if (currentView !== "reels" || isDesktop) && !isCreatePollModalOpen}
+  {#if (currentView !== "reels" || isDesktop) && !isCreatePollModalOpen && !isStatsModalOpen}
     <NavBottom
       bind:hidden={hideNav}
       modalOpen={isCreatePollModalOpen}
@@ -2268,6 +2280,16 @@
     isDangerous={confirmConfig.isDangerous}
     onConfirm={confirmConfig.onConfirm}
     onCancel={() => (isConfirmOpen = false)}
+  />
+
+  <PollStatsModal
+    isOpen={isStatsModalOpen}
+    post={statsModalPost}
+    userVote={statsModalPost ? userVotes[statsModalPost.id] || null : null}
+    onClose={() => {
+      isStatsModalOpen = false;
+      statsModalPost = null;
+    }}
   />
 </div>
 

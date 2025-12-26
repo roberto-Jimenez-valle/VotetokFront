@@ -28,33 +28,56 @@ import { getDominantKey as getDominantKeyUtil } from '$lib/utils/globeHelpers';
 export function getFeatureId(f: any): string {
   const p = f?.properties ?? {};
 
-  // Nivel 3 (sub-subdivisiones): ID_2, GID_2, etc. - MÁS ESPECÍFICO
-  if (p.ID_2 || p.id_2 || p.GID_2 || p.gid_2) {
-    return String(p.ID_2 || p.id_2 || p.GID_2 || p.gid_2);
+  // 1. Preferir IDs jerárquicos explícitos (GADM style)
+  // GID_2: "ESP.1.1_1" -> "ESP.1.1"
+  if (p.GID_2) return p.GID_2.split('_')[0];
+  // GID_1: "ESP.1_1" -> "ESP.1"
+  if (p.GID_1) return p.GID_1.split('_')[0];
+
+  // 2. Extraer ISO base para construcción manual
+  // Natural Earth usa ISO_A3, pero si es -99 (disputado), ADM0_A3 suele tener el código
+  let iso = (p.ISO_A3 || p.ISO3_CODE || p.iso_a3 || '').toString().toUpperCase();
+  if (iso === '-99' || !iso) {
+    iso = (p.ADM0_A3 || p.adm0_a3 || p.GID_0 || p.ISO || '').toString().toUpperCase();
+  }
+  // Limpiar sufijos (ej: ESP_1 -> ESP, ESP.1 -> ESP)
+  iso = iso.split('_')[0].split('.')[0];
+
+  // 3. Si tenemos IDs numéricos de subdivisiones, construir el path jerárquico
+  // Nivel 3 (sub-subdivisiones): ID_2
+  if (p.ID_2 || p.id_2) {
+    const id1 = p.ID_1 || p.id_1 || '0';
+    const id2 = p.ID_2 || p.id_2;
+    return `${iso}.${id1}.${id2}`;
   }
 
-  // Nivel 2 (subdivisiones): ID_1, GID_1, etc.
-  if (p.ID_1 || p.id_1 || p.GID_1 || p.gid_1) {
-    return String(p.ID_1 || p.id_1 || p.GID_1 || p.gid_1);
+  // Nivel 2 (subdivisiones): ID_1
+  if (p.ID_1 || p.id_1) {
+    return `${iso}.${p.ID_1 || p.id_1}`;
   }
 
-  // Nivel 1 (países): ISO_A3, ISO3_CODE, iso_a3, ADM0_A3 - MENOS ESPECÍFICO
-  const iso_a3 = p.ISO_A3 || p.ISO3_CODE || p.iso_a3;
-  const adm0_a3 = p.ADM0_A3 || p.adm0_a3;
-
-  // Si ISO_A3 es "-99" (código inválido), usar ADM0_A3
-  if (iso_a3 && iso_a3 !== '-99') {
-    return iso_a3.toString().toUpperCase();
+  // 4. Nivel 1 (países): Usar el ISO normalizado
+  if (iso && iso !== '-99' && iso.length >= 2) {
+    return iso;
   }
-  if (adm0_a3 && adm0_a3 !== '-99') {
-    return adm0_a3.toString().toUpperCase();
+
+  // 5. Fallbacks finales
+  const fallback = p.id || p.ID || p.wb_a3 || p.WB_A3;
+  if (fallback && fallback !== '-99') {
+    return String(fallback).toUpperCase();
   }
 
   return '';
 }
 
 export function computeGlobeViewModel(geo: any, dataJson: GlobeDataJson): ComputeResult {
-  const answersData = dataJson?.ANSWERS ?? {};
+  // Normalizar ANSWERS a mayúsculas para evitar problemas de case-sensitivity del API
+  const rawAnswersData = dataJson?.ANSWERS ?? {};
+  const answersData: Record<string, Record<string, number>> = {};
+  for (const [k, v] of Object.entries(rawAnswersData)) {
+    answersData[k.toUpperCase()] = v as Record<string, number>;
+  }
+
   const colorMap = dataJson?.colors ?? {};
 
 

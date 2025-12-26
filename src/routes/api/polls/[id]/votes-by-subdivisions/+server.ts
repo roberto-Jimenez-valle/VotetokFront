@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 /**
  * GET /api/polls/{id}/votes-by-subdivisions?country={iso}
@@ -18,17 +19,21 @@ import { prisma } from '$lib/server/prisma';
  * }
  */
 export const GET: RequestHandler = async ({ params, url }) => {
-	const pollId = parseInt(params.id);
+	const pollId = parsePollIdInternal(params.id!);
 	const countryIso = url.searchParams.get('country');
 	const hoursParam = url.searchParams.get('hours');
 	const hours = hoursParam ? parseInt(hoursParam) : null;
+
+	if (!pollId) {
+		return json({ error: 'Invalid poll ID' }, { status: 400 });
+	}
 
 	if (!countryIso) {
 		return json({ error: 'Country ISO code is required' }, { status: 400 });
 	}
 
 	try {
-		
+
 		// Obtener todas las opciones de la encuesta
 		const pollOptions = await prisma.pollOption.findMany({
 			where: { pollId },
@@ -71,7 +76,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			}
 		});
 
-		
+
 		// Crear mapa de optionId -> optionKey
 		const optionIdToKey = new Map(
 			pollOptions.map(opt => [opt.id, opt.optionKey])
@@ -91,7 +96,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			if (!subdivisionVotes[fullKey]) {
 				subdivisionVotes[fullKey] = {};
 			}
-			subdivisionVotes[fullKey][optionKey] = 
+			subdivisionVotes[fullKey][optionKey] =
 				(subdivisionVotes[fullKey][optionKey] || 0) + 1;
 
 			// 2. TAMBIÉN agregar al nivel 2 (para visualización de estados)
@@ -103,12 +108,12 @@ export const GET: RequestHandler = async ({ params, url }) => {
 				if (!subdivisionVotes[level2Key]) {
 					subdivisionVotes[level2Key] = {};
 				}
-				subdivisionVotes[level2Key][optionKey] = 
+				subdivisionVotes[level2Key][optionKey] =
 					(subdivisionVotes[level2Key][optionKey] || 0) + 1;
 			}
 		}
 
-		
+
 		return json({ data: subdivisionVotes });
 
 	} catch (error) {

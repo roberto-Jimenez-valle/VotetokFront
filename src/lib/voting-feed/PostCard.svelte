@@ -69,6 +69,7 @@
     onRepost?: (post: Post) => void;
     onAvatarClick?: (post: Post) => void;
     onOpenOptions?: (post: Post) => void;
+    onStatsClick?: (post: Post) => void;
   }
 
   let {
@@ -93,6 +94,7 @@
     onRepost,
     onAvatarClick,
     onOpenOptions,
+    onStatsClick,
   }: Props = $props();
 
   import { currentUser } from "$lib/stores/auth";
@@ -1371,12 +1373,22 @@
         : 'pb-0'} flex items-center justify-between {isReels ? 'px-6' : 'px-4'}"
     >
       <div class="flex items-center gap-3">
-        <div
-          class="flex items-center gap-[0.4rem] text-slate-400 bg-slate-900/50 px-[0.7rem] py-[0.3rem] rounded-full border border-white/5 text-[0.75rem] font-bold"
+        <button
+          onclick={() => hasVoted && onStatsClick?.(post)}
+          disabled={!hasVoted}
+          class="flex items-center gap-[0.4rem] bg-slate-900/50 px-[0.7rem] py-[0.3rem] rounded-full border text-[0.75rem] font-bold transition-all {hasVoted
+            ? 'text-slate-300 border-white/10 hover:bg-slate-800/70 hover:border-white/20 cursor-pointer active:scale-95'
+            : 'text-slate-500 border-white/5 cursor-not-allowed'}"
+          title={hasVoted
+            ? "Ver estadísticas"
+            : "Vota para ver las estadísticas"}
         >
-          <BarChart2 size="0.75rem" class={config.color} />
+          <BarChart2
+            size="0.75rem"
+            class={hasVoted ? config.color : "text-slate-500"}
+          />
           <span>{post.totalVotes.toLocaleString()}</span>
-        </div>
+        </button>
       </div>
       <div
         class="flex items-center {isReels ? 'gap-[0.8rem]' : 'gap-[1.2rem]'}"

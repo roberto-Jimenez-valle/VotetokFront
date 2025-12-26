@@ -1,5 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 /**
  * GET /api/polls/[id]/votes-by-subdivision?country=ESP
@@ -9,10 +10,10 @@ import { prisma } from '$lib/server/prisma';
  */
 export const GET: RequestHandler = async ({ params, url }) => {
   try {
-    const pollId = Number(params.id);
+    const pollId = parsePollIdInternal(params.id!);
     const country = url.searchParams.get('country')?.toUpperCase();
 
-    if (isNaN(pollId)) {
+    if (!pollId) {
       return json({ error: 'Invalid poll ID' }, { status: 400 });
     }
 
@@ -22,7 +23,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 
     // Obtener votos de la encuesta filtrados por país (usando prefijo de subdivisionId)
     const countryPrefix = `${country}.`;
-    
+
     const votes = await prisma.vote.findMany({
       where: {
         pollId,

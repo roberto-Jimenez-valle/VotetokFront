@@ -44,6 +44,7 @@ export interface Post {
   isReposted?: boolean;
   hasCommented?: boolean;
   isBookmarked?: boolean;
+  category?: string;
 }
 
 export interface UserVotes {

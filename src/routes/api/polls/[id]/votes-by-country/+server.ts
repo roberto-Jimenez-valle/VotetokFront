@@ -1,33 +1,27 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 /**
  * GET /api/polls/{id}/votes-by-country
  * 
  * Retorna votos REALES agrupados por país
  * Endpoint de solo lectura sin rate limiting (datos públicos)
- * 
- * Response:
- * {
- *   "data": {
- *     "ESP": { "option1": 150, "option2": 200, "option3": 100 },
- *     "FRA": { "option1": 300, "option2": 250, "option3": 200 },
- *     ...
- *   }
- * }
  */
 export const GET: RequestHandler = async ({ params, url }) => {
-	const pollId = parseInt(params.id);
+	console.log(`[API votes-by-country] Request for ID: ${params.id}`);
+	const pollId = parsePollIdInternal(params.id!);
+	console.log(`[API votes-by-country] Decoded pollId: ${pollId}`);
+
 	const hoursParam = url.searchParams.get('hours');
 	const hours = hoursParam ? parseInt(hoursParam) : null;
 
-	if (isNaN(pollId)) {
+	if (!pollId) {
 		return json({ error: 'Invalid poll ID' }, { status: 400 });
 	}
 
 	try {
-
 		// Obtener todas las opciones de la encuesta
 		const pollOptions = await prisma.pollOption.findMany({
 			where: { pollId },
@@ -58,12 +52,18 @@ export const GET: RequestHandler = async ({ params, url }) => {
 				optionId: true,
 				subdivision: {
 					select: {
-						subdivisionId: true  // ESP.1.2 -> extraer ESP
+						subdivisionId: true
 					}
 				}
 			}
 		});
 
+		console.log(`[API votes-by-country] Poll ${pollId}: Found ${votes.length} total votes`);
+		const votesWithSubdivision = votes.filter(v => v.subdivision);
+		console.log(`[API votes-by-country] Votes with subdivision: ${votesWithSubdivision.length}`);
+		if (votes.length > 0 && votesWithSubdivision.length === 0) {
+			console.warn(`[API votes-by-country] ⚠️ ALERT: Poll has votes but NONE have subdivision data!`);
+		}
 
 		// Crear mapa de optionId -> optionKey
 		const optionIdToKey = new Map(
@@ -74,10 +74,10 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		const countryVotes: Record<string, Record<string, number>> = {};
 
 		for (const vote of votes) {
-			if (!vote.subdivision) continue;  // Skip si no tiene subdivisión
+			if (!vote.subdivision) continue;
 
 			// Extraer código país: ESP.1.2 -> ESP, ESP -> ESP
-			const countryIso = vote.subdivision.subdivisionId.split('.')[0];
+			const countryIso = vote.subdivision.subdivisionId.split('.')[0].toUpperCase();
 			const optionKey = optionIdToKey.get(vote.optionId);
 
 			if (!optionKey) continue;
@@ -89,7 +89,6 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			countryVotes[countryIso][optionKey] =
 				(countryVotes[countryIso][optionKey] || 0) + 1;
 		}
-
 
 		const hoursLabel = hours ? `últimas ${hours}h` : 'todos';
 		console.log(`[API votes-by-country] Poll ${pollId} (${hoursLabel}): ${votes.length} votos, ${Object.keys(countryVotes).length} países`);

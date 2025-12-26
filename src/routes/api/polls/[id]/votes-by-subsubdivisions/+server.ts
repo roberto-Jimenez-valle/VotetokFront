@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { parsePollIdInternal } from '$lib/server/hashids';
 
 /**
  * GET /api/polls/{id}/votes-by-subsubdivisions?country={iso}&subdivision={id}
@@ -23,11 +24,15 @@ import { prisma } from '$lib/server/prisma';
  * }
  */
 export const GET: RequestHandler = async ({ params, url }) => {
-	const pollId = parseInt(params.id);
+	const pollId = parsePollIdInternal(params.id!);
 	const countryIso = url.searchParams.get('country');
 	const subdivisionId = url.searchParams.get('subdivision');
 	const hoursParam = url.searchParams.get('hours');
 	const hours = hoursParam ? parseInt(hoursParam) : null;
+
+	if (!pollId) {
+		return json({ error: 'Invalid poll ID' }, { status: 400 });
+	}
 
 	if (!countryIso) {
 		return json({ error: 'Country ISO code is required' }, { status: 400 });
@@ -38,21 +43,16 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	}
 
 	try {
-		// Validar pollId
-		if (isNaN(pollId) || pollId <= 0) {
-			return json({ error: 'Invalid poll ID' }, { status: 400 });
-		}
-
 		// Normalizar subdivisionId para construir el patrón de búsqueda
 		// Si viene "1", convertir a "ESP.1"
 		// Si viene "ESP.1", mantener
-		const normalizedSubdivisionId = subdivisionId.includes('.') 
-			? subdivisionId 
+		const normalizedSubdivisionId = subdivisionId.includes('.')
+			? subdivisionId
 			: `${countryIso}.${subdivisionId}`;
-		
+
 		// Calcular fecha límite si se especificó hours
 		const dateLimit = hours ? new Date(Date.now() - hours * 60 * 60 * 1000) : null;
-		
+
 		console.log('[API votes-by-subsubdivisions] Buscando votos:', {
 			pollId,
 			countryIso,
@@ -60,7 +60,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			normalizedSubdivisionId,
 			hours: hours || 'todos'
 		});
-		
+
 		// Obtener todas las opciones de la encuesta
 		const pollOptions = await prisma.pollOption.findMany({
 			where: { pollId },
@@ -79,9 +79,9 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		// votes.subdivision_id es INTEGER (FK)
 		// subdivisions.subdivision_id es STRING jerárquico ("ESP.1.2")
 		const searchPattern = normalizedSubdivisionId + '.%';
-		
+
 		// Query con o sin filtro de fecha
-		const votes = dateLimit 
+		const votes = dateLimit
 			? await prisma.$queryRaw<Array<{ subdivisionId: string; optionId: number }>>`
 				SELECT s.subdivision_id as "subdivisionId", v.option_id as "optionId"
 				FROM votes v
@@ -97,10 +97,10 @@ export const GET: RequestHandler = async ({ params, url }) => {
 				WHERE v.poll_id = ${pollId}
 				  AND s.subdivision_id LIKE ${searchPattern}
 			`;
-		
+
 		console.log('[API votes-by-subsubdivisions] Votos encontrados:', votes.length);
 
-		
+
 		// Crear mapa de optionId -> optionKey
 		const optionIdToKey = new Map(
 			pollOptions.map(opt => [opt.id, opt.optionKey])
@@ -122,23 +122,23 @@ export const GET: RequestHandler = async ({ params, url }) => {
 				subSubdivisionVotes[subSubdivisionId] = {};
 			}
 
-			subSubdivisionVotes[subSubdivisionId][optionKey] = 
+			subSubdivisionVotes[subSubdivisionId][optionKey] =
 				(subSubdivisionVotes[subSubdivisionId][optionKey] || 0) + 1;
 		}
 
-				
+
 		return json({ data: subSubdivisionVotes });
 
 	} catch (error) {
 		console.error('[API votes-by-subsubdivisions] Error completo:', error);
 		console.error('[API votes-by-subsubdivisions] Stack:', error instanceof Error ? error.stack : 'No stack');
 		console.error('[API votes-by-subsubdivisions] Mensaje:', error instanceof Error ? error.message : String(error));
-		
+
 		// Retornar error detallado en desarrollo
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 		const isDev = process.env.NODE_ENV === 'development';
-		
-		return json({ 
+
+		return json({
 			error: 'Internal server error',
 			...(isDev && { details: errorMessage, stack: error instanceof Error ? error.stack : undefined })
 		}, { status: 500 });

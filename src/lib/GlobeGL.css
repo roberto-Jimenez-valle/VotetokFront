@@ -727,28 +727,6 @@ header {
   margin-bottom: 0;
 }
 
-/* Degradado superior suave para evitar corte recto */
-.globe-top-fade {
-  position: fixed;
-  top: 20;
-  left: 0;
-  right: 0;
-  height: 136px;
-  /* altura del degradado aumentada */
-  pointer-events: none;
-  z-index: 10;
-  /* por encima del canvas, por debajo de la UI */
-  transition: opacity 300ms ease, transform 300ms cubic-bezier(0.4, 0.0, 0.2, 1);
-}
-
-/* Ocultar degradado superior en móvil cuando BottomSheet está expandido */
-@media (max-width: 767px) {
-  body:has(.bottom-sheet.solid) .globe-top-fade {
-    opacity: 0;
-    transform: translateY(-100%);
-    -webkit-transform: translateY(-100%);
-  }
-}
 
 /* Bottom sheet estilo Google Maps */
 .bottom-sheet {
