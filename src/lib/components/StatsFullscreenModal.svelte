@@ -6,11 +6,12 @@
     TrendingUp,
     BarChart3,
     PieChart,
-    Globe, // Changed from Globe2
+    Globe,
     ChevronDown,
     Loader2,
     Eye,
     EyeOff,
+    LineChart,
   } from "lucide-svelte";
   import GlobeGL from "$lib/GlobeGL.svelte";
   import { onMount } from "svelte";
@@ -101,7 +102,8 @@
     { id: "24h", label: "24H", hours: 24 },
     { id: "7d", label: "7D", hours: 168 },
     { id: "30d", label: "30D", hours: 720 },
-    { id: "all", label: "Todo", hours: 8760 },
+    { id: "1y", label: "1Y", hours: 8760 },
+    { id: "all", label: "Todo", hours: 87600 },
   ];
   let selectedRange = $state("7d");
 
@@ -432,6 +434,221 @@
       document.body.style.overflow = "";
     };
   });
+
+  // ==================== ENHANCED LINE CHART ====================
+  // Scrubbing state
+  let scrubIndex = $state<number | null>(null);
+  let lineChartContainerEl = $state<HTMLDivElement | null>(null);
+
+  // Line chart viewbox constants
+  const LINE_VIEWBOX_WIDTH = 1000;
+  const LINE_VIEWBOX_HEIGHT = 300;
+  const LINE_PADDING_X = 40;
+  const LINE_PADDING_Y = 30;
+
+  // Active index for display (scrubbed or last)
+  const activeLineIndex = $derived.by(() => {
+    const pointsLength = smoothLinePaths[0]?.points?.length || 0;
+    if (scrubIndex !== null) return Math.min(scrubIndex, pointsLength - 1);
+    return Math.max(0, pointsLength - 1);
+  });
+
+  // Get votes at active index for each option - using the rendered points
+  const votesAtActiveIndex = $derived.by(() => {
+    if (!smoothLinePaths.length) return options.map((o) => o.votes || 0);
+
+    return smoothLinePaths.map((lp) => {
+      const point = lp.points[activeLineIndex];
+      return point?.votes || 0;
+    });
+  });
+
+  const totalVotesAtActiveIndex = $derived(
+    votesAtActiveIndex.reduce((sum, v) => sum + v, 0),
+  );
+
+  // Time label at active index
+  function getTimeLabel(timestamp: number): string {
+    const d = new Date(timestamp);
+    if (selectedRange === "24h") {
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    if (selectedRange === "7d" || selectedRange === "30d") {
+      return d.toLocaleDateString([], { day: "numeric", month: "short" });
+    }
+    return d.toLocaleDateString([], { month: "short", year: "2-digit" });
+  }
+
+  const currentTimeLabel = $derived.by(() => {
+    if (!smoothLinePaths.length || !smoothLinePaths[0].points.length)
+      return "Ahora";
+    const point = smoothLinePaths[0].points[activeLineIndex];
+    if (!point?.timestamp) return "Ahora";
+    return getTimeLabel(point.timestamp);
+  });
+
+  // Smooth curve control point calculation
+  function getControlPoint(
+    current: { x: number; y: number },
+    previous: { x: number; y: number } | null,
+    next: { x: number; y: number } | null,
+    reverse = false,
+    smoothing = 0.15,
+  ) {
+    const p = previous || current;
+    const n = next || current;
+    const angle = Math.atan2(n.y - p.y, n.x - p.x) + (reverse ? Math.PI : 0);
+    const length =
+      Math.sqrt(Math.pow(n.x - p.x, 2) + Math.pow(n.y - p.y, 2)) * smoothing;
+    return {
+      x: current.x + Math.cos(angle) * length,
+      y: current.y + Math.sin(angle) * length,
+    };
+  }
+
+  // Computed smooth line paths
+  const smoothLinePaths = $derived.by(() => {
+    if (historicalData.length < 2) return [];
+
+    // Filter out leading periods with zero votes (before poll started)
+    // Only apply this filter for longer time ranges where it makes sense
+    let dataToUse = historicalData;
+
+    // Find the first index where there's at least one vote
+    let firstNonZeroIndex = 0;
+    for (let i = 0; i < historicalData.length; i++) {
+      const totalVotesAtPoint =
+        historicalData[i].optionsData?.reduce(
+          (sum, o) => sum + (o.votes || 0),
+          0,
+        ) || 0;
+      if (totalVotesAtPoint > 0) {
+        firstNonZeroIndex = i;
+        break;
+      }
+    }
+
+    // Only filter if we still have at least 2 points after filtering
+    const filteredData = historicalData.slice(firstNonZeroIndex);
+    if (filteredData.length >= 2) {
+      dataToUse = filteredData;
+    }
+
+    // Use all options if visibleOptions is empty (not initialized yet)
+    const visibleOpts =
+      visibleOptions.size > 0
+        ? options.filter((o) => visibleOptions.has(o.key || o.optionKey || ""))
+        : options;
+
+    // Find global max across all data
+    const allVals: number[] = [];
+    for (const d of dataToUse) {
+      for (const o of d.optionsData || []) {
+        allVals.push(o.votes);
+      }
+    }
+    const globalMin = 0;
+    const globalMax = Math.max(...allVals, 1);
+    const range = globalMax - globalMin || 1;
+
+    return visibleOpts.map((opt, optIndex) => {
+      const points = dataToUse.map((d, i) => {
+        // Try multiple ways to find the matching option data
+        let found = d.optionsData?.find(
+          (o) =>
+            o.optionKey === opt.key ||
+            o.optionKey === opt.optionKey ||
+            o.optionKey === opt.id ||
+            String(o.optionKey) === String(opt.key) ||
+            String(o.optionKey) === String(opt.optionKey),
+        );
+
+        // Fallback: use index-based matching if keys don't match
+        if (!found && d.optionsData?.[optIndex]) {
+          found = d.optionsData[optIndex];
+        }
+
+        const votes = found?.votes || 0;
+        const x =
+          LINE_PADDING_X +
+          (i / (dataToUse.length - 1)) *
+            (LINE_VIEWBOX_WIDTH - LINE_PADDING_X * 2);
+        const y =
+          LINE_VIEWBOX_HEIGHT -
+          LINE_PADDING_Y -
+          ((votes - globalMin) / range) *
+            (LINE_VIEWBOX_HEIGHT - LINE_PADDING_Y * 2);
+        return { x, y, votes, timestamp: d.timestamp };
+      });
+
+      // Build smooth bezier path
+      const pathD = points.reduce((acc, point, i, arr) => {
+        if (i === 0) return `M ${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+        const cp1 = getControlPoint(arr[i - 1], arr[i - 2] || null, point);
+        const cp2 = getControlPoint(
+          point,
+          arr[i - 1],
+          arr[i + 1] || null,
+          true,
+        );
+        return `${acc} C ${cp1.x.toFixed(2)},${cp1.y.toFixed(2)} ${cp2.x.toFixed(2)},${cp2.y.toFixed(2)} ${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+      }, "");
+
+      return {
+        option: opt,
+        path: pathD,
+        points,
+      };
+    });
+  });
+
+  // Scrubbing handlers
+  function handleLineScrub(clientX: number) {
+    if (!lineChartContainerEl) return;
+
+    // Use the actual rendered points length, not raw historicalData
+    const pointsLength = smoothLinePaths[0]?.points?.length || 0;
+    if (pointsLength < 2) return;
+
+    const rect = lineChartContainerEl.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const width = rect.width;
+    if (width === 0) return;
+
+    const svgX = (x / width) * LINE_VIEWBOX_WIDTH;
+    const rawProgress =
+      (svgX - LINE_PADDING_X) / (LINE_VIEWBOX_WIDTH - 2 * LINE_PADDING_X);
+    const progress = Math.max(0, Math.min(1, rawProgress));
+    const index = Math.round(progress * (pointsLength - 1));
+
+    if (index >= 0 && index < pointsLength) {
+      scrubIndex = index;
+    }
+  }
+
+  function handleLineMouseMove(e: MouseEvent) {
+    handleLineScrub(e.clientX);
+  }
+
+  function handleLineTouchMove(e: TouchEvent) {
+    // Note: preventDefault removed to avoid passive event listener error
+    // touch-action: none on the container handles scroll prevention
+    handleLineScrub(e.touches[0].clientX);
+  }
+
+  function handleLineTouchStart(e: TouchEvent) {
+    handleLineScrub(e.touches[0].clientX);
+  }
+
+  function handleLineLeave() {
+    scrubIndex = null;
+  }
+
+  // Reset scrub on view change
+  $effect(() => {
+    activeView;
+    scrubIndex = null;
+  });
 </script>
 
 <svelte:window on:keydown={(e) => e.key === "Escape" && handleClose()} />
@@ -586,7 +803,9 @@
             class="visualization-container"
             style="position: relative; width: 100%; {activeView === 'globe'
               ? 'display: none;'
-              : 'height: 320px; min-height: 320px; margin-bottom: 24px; flex-shrink: 0;'}"
+              : activeView === 'trend'
+                ? 'height: 420px; min-height: 400px; margin-bottom: 24px; flex-shrink: 0;'
+                : 'height: 320px; min-height: 320px; margin-bottom: 24px; flex-shrink: 0;'}"
             in:fade={{ duration: 200 }}
           >
             <!-- Stats View: Donut -->
@@ -666,119 +885,166 @@
               </div>
             {/if}
 
-            <!-- Trend View: Line Chart -->
+            <!-- Trend View: Enhanced Line Chart with Scrubbing -->
             {#if activeView === "trend"}
               {#if historicalData.length > 1}
-                <div
-                  class="line-chart-container"
-                  style="height: 100%; border: none; background: transparent; padding: 0;"
-                >
-                  <svg
-                    viewBox="0 0 100 80"
-                    preserveAspectRatio="none"
-                    class="line-chart"
-                  >
-                    <!-- Grid lines -->
-                    {#each [0, 25, 50, 75, 100] as y}
-                      <line
-                        x1="0"
-                        y1={80 - y * 0.7}
-                        x2="100"
-                        y2={80 - y * 0.7}
-                        stroke="rgba(255,255,255,0.08)"
-                        stroke-width="0.3"
-                      />
-                    {/each}
+                <!-- Scrub Info Header -->
+                <div class="scrub-info">
+                  <div class="scrub-votes">
+                    <span class="scrub-votes-number"
+                      >{formatNumber(totalVotesAtActiveIndex)}</span
+                    >
+                    <span class="scrub-votes-label">votos</span>
+                  </div>
+                  <span class="scrub-time">{currentTimeLabel}</span>
+                </div>
 
-                    <!-- Gradient fills for each option -->
+                <!-- Chart Container -->
+                <div
+                  class="line-chart-container enhanced"
+                  bind:this={lineChartContainerEl}
+                  onmousemove={handleLineMouseMove}
+                  onmouseleave={handleLineLeave}
+                  ontouchmove={handleLineTouchMove}
+                  ontouchstart={handleLineTouchStart}
+                  ontouchend={handleLineLeave}
+                  role="img"
+                  aria-label="Gráfico de tendencias interactivo"
+                  style="touch-action: none; cursor: crosshair;"
+                >
+                  <!-- Hover value labels on the right -->
+                  {#if scrubIndex !== null}
+                    {#each smoothLinePaths as lp, i}
+                      {@const point = lp.points[activeLineIndex]}
+                      {#if point}
+                        {@const yPct = (point.y / LINE_VIEWBOX_HEIGHT) * 100}
+                        <div class="hover-value-label" style="top: {yPct}%">
+                          <div
+                            class="hover-dot"
+                            style="background-color: {lp.option.color}"
+                          ></div>
+                          <span class="hover-votes"
+                            >{formatNumber(point.votes)}</span
+                          >
+                        </div>
+                      {/if}
+                    {/each}
+                  {/if}
+
+                  <svg
+                    width="100%"
+                    height="100%"
+                    viewBox="0 0 {LINE_VIEWBOX_WIDTH} {LINE_VIEWBOX_HEIGHT}"
+                    preserveAspectRatio="none"
+                    class="line-chart-svg"
+                  >
+                    <!-- Clip path for active portion -->
                     <defs>
-                      {#each options.filter( (o) => visibleOptions.has(o.key || o.optionKey || ""), ) as option}
-                        <linearGradient
-                          id="gradient-{option.key}"
-                          x1="0%"
-                          y1="0%"
-                          x2="0%"
-                          y2="100%"
-                        >
-                          <stop
-                            offset="0%"
-                            stop-color={option.color}
-                            stop-opacity="0.4"
-                          />
-                          <stop
-                            offset="100%"
-                            stop-color={option.color}
-                            stop-opacity="0"
-                          />
-                        </linearGradient>
-                      {/each}
+                      <clipPath id="active-clip-multi">
+                        <rect
+                          x="0"
+                          y="0"
+                          width={scrubIndex !== null && smoothLinePaths[0]
+                            ? (smoothLinePaths[0].points[activeLineIndex]?.x ??
+                              LINE_VIEWBOX_WIDTH)
+                            : LINE_VIEWBOX_WIDTH}
+                          height={LINE_VIEWBOX_HEIGHT}
+                        />
+                      </clipPath>
                     </defs>
 
-                    <!-- Area fills and lines for each visible option -->
-                    {#each options.filter( (o) => visibleOptions.has(o.key || o.optionKey || ""), ) as option, optIdx}
-                      {@const dataPoints = historicalData.map((d, i) => {
-                        const optData = d.optionsData?.find(
-                          (o) =>
-                            o.optionKey === option.key ||
-                            o.optionKey === option.optionKey ||
-                            d.optionsData?.indexOf(o) === optIdx,
-                        );
-                        const maxVal = Math.max(
-                          ...historicalData.flatMap(
-                            (d) => d.optionsData?.map((o) => o.votes) || [0],
-                          ),
-                          1,
-                        );
-                        const x =
-                          historicalData.length > 1
-                            ? (i / (historicalData.length - 1)) * 100
-                            : 50;
-                        const y = 75 - ((optData?.votes || 0) / maxVal) * 65;
-                        return { x, y, votes: optData?.votes || 0 };
-                      })}
-                      {@const points = dataPoints
-                        .map((p) => `${p.x},${p.y}`)
-                        .join(" ")}
-                      {@const areaPath = `M ${dataPoints[0]?.x || 0},80 L ${points} L ${dataPoints[dataPoints.length - 1]?.x || 100},80 Z`}
-
-                      <!-- Area fill -->
+                    {#each smoothLinePaths as lp, i}
+                      <!-- Faded full line (background at 15% opacity) -->
                       <path
-                        d={areaPath}
-                        fill="url(#gradient-{option.key})"
-                        class="trend-area"
+                        d={lp.path}
+                        fill="none"
+                        stroke={lp.option.color}
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        opacity="0.15"
+                        vector-effect="non-scaling-stroke"
                       />
 
-                      <!-- Line -->
-                      {#if points && points.length > 0}
-                        <polyline
-                          {points}
-                          fill="none"
-                          stroke={option.color}
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="trend-line"
+                      <!-- Active clipped line (full opacity) -->
+                      <path
+                        d={lp.path}
+                        fill="none"
+                        stroke={lp.option.color}
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        clip-path="url(#active-clip-multi)"
+                        vector-effect="non-scaling-stroke"
+                      />
+
+                      <!-- Data point indicator -->
+                      {#if scrubIndex !== null}
+                        {@const pt = lp.points[activeLineIndex]}
+                        {#if pt}
+                          <circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r="5"
+                            fill={lp.option.color}
+                            stroke="black"
+                            stroke-width="2"
+                          />
+                        {/if}
+                      {:else if lp.points.length > 0}
+                        {@const lastPt = lp.points[lp.points.length - 1]}
+                        <circle
+                          cx={lastPt.x}
+                          cy={lastPt.y}
+                          r="4"
+                          fill={lp.option.color}
                         />
                       {/if}
-
-                      <!-- Interactive data points -->
-                      {#each dataPoints as point, i}
-                        <circle
-                          cx={point.x}
-                          cy={point.y}
-                          r="3"
-                          fill={option.color}
-                          stroke="#0a0a0c"
-                          stroke-width="1.5"
-                          class="data-point"
-                        >
-                          <title
-                            >{getOptionLabel(option)}: {point.votes} votos</title
-                          >
-                        </circle>
-                      {/each}
                     {/each}
+
+                    <!-- Vertical scrub line -->
+                    {#if scrubIndex !== null && smoothLinePaths[0]}
+                      {@const activeX =
+                        smoothLinePaths[0].points[activeLineIndex]?.x ?? 0}
+                      <line
+                        x1={activeX}
+                        y1="0"
+                        x2={activeX}
+                        y2={LINE_VIEWBOX_HEIGHT}
+                        stroke="rgba(255,255,255,0.4)"
+                        stroke-width="1"
+                        stroke-dasharray="4,4"
+                        vector-effect="non-scaling-stroke"
+                      />
+                    {/if}
                   </svg>
+
+                  <!-- Time reference labels -->
+                  {#if smoothLinePaths[0] && smoothLinePaths[0].points.length > 0}
+                    {@const pts = smoothLinePaths[0].points}
+                    {@const firstTs = pts[0]?.timestamp}
+                    {@const lastTs = pts[pts.length - 1]?.timestamp}
+                    {@const midTs = pts[Math.floor(pts.length / 2)]?.timestamp}
+                    {@const formatTime = (ts: number | undefined) => {
+                      if (!ts) return "";
+                      const d = new Date(ts);
+                      if (selectedRange === "24h") {
+                        return d.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                      }
+                      return d.toLocaleDateString([], {
+                        day: "numeric",
+                        month: "short",
+                      });
+                    }}
+                    <div class="time-labels">
+                      <span class="time-label">{formatTime(firstTs)}</span>
+                      <span class="time-label">{formatTime(midTs)}</span>
+                      <span class="time-label">{formatTime(lastTs)}</span>
+                    </div>
+                  {/if}
                 </div>
               {:else}
                 <div class="empty-state" style="height: 100%;">
@@ -1513,6 +1779,132 @@
     height: 320px;
     min-height: 280px;
     touch-action: pan-y pinch-zoom;
+  }
+
+  .line-chart-container.enhanced {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    user-select: none;
+  }
+
+  .line-chart-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .trend-line-animated {
+    stroke-dasharray: 3000;
+    stroke-dashoffset: 3000;
+    animation: drawLineSlow 1.5s ease forwards;
+  }
+
+  @keyframes drawLineSlow {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .end-point {
+    animation: pulsePoint 2s ease-in-out infinite;
+  }
+
+  @keyframes pulsePoint {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+
+  /* Time reference labels */
+  .time-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 8px 0;
+    pointer-events: none;
+  }
+
+  .time-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 500;
+  }
+
+  /* Hover value labels */
+  .hover-value-label {
+    position: absolute;
+    right: 0;
+    padding-right: 8px;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transform: translateY(-50%);
+    z-index: 20;
+  }
+
+  .hover-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .hover-votes {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.8);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Scrub info header */
+  .scrub-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 12px;
+  }
+
+  .scrub-votes {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .scrub-votes-number {
+    font-size: 2rem;
+    font-weight: 800;
+    color: white;
+    line-height: 1;
+    letter-spacing: -1px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scrub-votes-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .scrub-time {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 4px 10px;
+    border-radius: 12px;
   }
 
   .line-chart {
