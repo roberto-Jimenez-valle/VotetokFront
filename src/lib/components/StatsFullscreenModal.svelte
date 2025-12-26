@@ -612,6 +612,8 @@
                     {@const strokeWidth = isActive ? 32 : 28}
                     {#if segment.percentage > 0}
                       <path
+                        role="button"
+                        tabindex="0"
                         d={describeArc(
                           100,
                           100,
@@ -625,7 +627,26 @@
                         stroke-linecap="butt"
                         class="donut-segment"
                         class:active={isActive}
-                        style="--delay: {i * 50}ms"
+                        style="--delay: {i * 50}ms; cursor: pointer;"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          selectedOption =
+                            selectedOption === segment.option.key
+                              ? null
+                              : segment.option.key;
+                        }}
+                        onkeydown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            selectedOption =
+                              selectedOption === segment.option.key
+                                ? null
+                                : segment.option.key;
+                          }
+                        }}
+                        onmouseenter={() =>
+                          (hoveredOption = segment.option.key)}
+                        onmouseleave={() => (hoveredOption = null)}
                       />
                     {/if}
                   {/each}
