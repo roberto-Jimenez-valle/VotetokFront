@@ -10,8 +10,8 @@
   import MediaEmbed from "$lib/components/MediaEmbed.svelte";
   import FriendsVotesModal from "$lib/components/FriendsVotesModal.svelte";
   import PollOptionCard from "$lib/components/PollOptionCard.svelte";
-  import StatsFullscreenModal from "$lib/components/StatsFullscreenModal.svelte";
   import CommentsModal from "$lib/components/CommentsModal.svelte";
+
   import Portal from "$lib/components/Portal.svelte";
   import ShareModal from "$lib/components/ShareModal.svelte";
 
@@ -102,7 +102,11 @@
   }
 
   // Log inicial cuando el componente se monta
-  onMount(() => {
+  onMount(async () => {
+    // Cargar modal dinámicamente para romper ciclo de dependencia
+    const mod = await import("$lib/components/StatsFullscreenModal.svelte");
+    StatsFullscreenModal = mod.default;
+
     addDebugLog("✅ Debug console inicializada");
     if (poll) {
       addDebugLog(`📊 Poll ID: ${poll.id || "N/A"}`);
@@ -154,6 +158,7 @@
 
   // Estado para modal de estadísticas
   let showStatsModal: boolean = false;
+  let StatsFullscreenModal: any = null;
 
   // Estado para shares
   let shareCount: number = 0;
@@ -2116,7 +2121,9 @@
             {/if}
           </button>
           <span
-            class="mini-action-count clickable {currentOptionVoted ? 'voted' : ''}"
+            class="mini-action-count clickable {currentOptionVoted
+              ? 'voted'
+              : ''}"
             style={currentOptionVoted ? `color: ${currentOptionColor}` : ""}
             role="button"
             tabindex="0"
@@ -2124,7 +2131,7 @@
               e.stopPropagation();
               showStatsModal = true;
             }}
-            onkeydown={(e) => e.key === 'Enter' && (showStatsModal = true)}
+            onkeydown={(e) => e.key === "Enter" && (showStatsModal = true)}
             >{formatCount(poll.stats?.totalVotes || poll.totalVotes)}</span
           >
         </div>
@@ -2336,33 +2343,50 @@
 
 <!-- MODAL DE ESTADÍSTICAS (Portal para salir del BottomSheet) -->
 <Portal>
-  <StatsFullscreenModal
-    bind:isOpen={showStatsModal}
-    pollId={poll.hashId || poll.id}
-    pollTitle={poll.title || poll.question || "Estadísticas"}
-    pollCreator={poll.user ? {
-      id: poll.user.id,
-      username: poll.user.username,
-      displayName: poll.user.displayName,
-      avatarUrl: poll.user.avatarUrl
-    } : undefined}
-    options={poll.options?.map((opt: any) => {
-      const label = opt.label || opt.optionLabel || opt.optionText || opt.text || `Opción ${opt.key || opt.optionKey}`;
-      console.log('[StatsModal mapping] opt.label:', opt.label, 'opt.optionLabel:', opt.optionLabel, 'Final label:', label);
-      return {
-        key: opt.key || opt.optionKey,
-        label: label,
-        color: opt.color,
-        votes: opt.voteCount || opt.votes || opt.pct || 0,
-        friendVotes: opt.friendVotes || [],
-      };
-    }) || []}
-    onClose={() => (showStatsModal = false)}
-    onOpenInGlobe={() => {
-      showStatsModal = false;
-      handleOpenInGlobe();
-    }}
-  />
+  {#if StatsFullscreenModal}
+    <svelte:component
+      this={StatsFullscreenModal}
+      bind:isOpen={showStatsModal}
+      pollId={poll.hashId || poll.id}
+      pollTitle={poll.title || poll.question || "Estadísticas"}
+      pollCreator={poll.user
+        ? {
+            id: poll.user.id,
+            username: poll.user.username,
+            displayName: poll.user.displayName,
+            avatarUrl: poll.user.avatarUrl,
+          }
+        : undefined}
+      options={poll.options?.map((opt: any) => {
+        const label =
+          opt.label ||
+          opt.optionLabel ||
+          opt.optionText ||
+          opt.text ||
+          `Opción ${opt.key || opt.optionKey}`;
+        console.log(
+          "[StatsModal mapping] opt.label:",
+          opt.label,
+          "opt.optionLabel:",
+          opt.optionLabel,
+          "Final label:",
+          label,
+        );
+        return {
+          key: opt.key || opt.optionKey,
+          label: label,
+          color: opt.color,
+          votes: opt.voteCount || opt.votes || opt.pct || 0,
+          friendVotes: opt.friendVotes || [],
+        };
+      }) || []}
+      onClose={() => (showStatsModal = false)}
+      onOpenInGlobe={() => {
+        showStatsModal = false;
+        handleOpenInGlobe();
+      }}
+    />
+  {/if}
 </Portal>
 
 <!-- MODAL DE COMENTARIOS (Portal para salir del BottomSheet) -->
@@ -4902,24 +4926,26 @@
   .mini-action-count.voted {
     color: var(--vote-color, #10b981);
   }
-  
+
   .mini-action-count.clickable {
     cursor: pointer;
-    transition: transform 0.15s ease, opacity 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      opacity 0.15s ease;
     padding: 4px 8px;
     margin: -4px -8px;
     border-radius: 6px;
   }
-  
+
   .mini-action-count.clickable:hover {
     background: rgba(255, 255, 255, 0.1);
     transform: scale(1.05);
   }
-  
+
   .mini-action-count.clickable:active {
     transform: scale(0.95);
   }
-  
+
   .votes-count-btn {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.5);
@@ -4927,7 +4953,7 @@
     cursor: pointer;
     transition: color 0.15s ease;
   }
-  
+
   .votes-count-btn:hover {
     color: rgba(255, 255, 255, 0.8);
   }
