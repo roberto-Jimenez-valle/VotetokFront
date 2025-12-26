@@ -866,28 +866,44 @@
       }
     }
 
-    // Apply to UI (Posts count update simplified: standard +1, multi depends on toggle)
+    // Apply to UI (Posts count update)
+    // totalVotes should only change when user transitions from not-voted to voted (or reverse)
+    const wasVoted = !!previousVotes;
+    const willBeVoted =
+      newVotesValue !== undefined &&
+      !(Array.isArray(newVotesValue) && newVotesValue.length === 0);
+
     posts = posts.map((p) => {
       if (p.id !== postId) return p;
 
       let newTotal = p.totalVotes;
       let newOptions = [...p.options];
 
+      // Update individual option counts
       if (!Array.isArray(value)) {
-        // Single interaction
-        // Determine direction
+        // Single interaction - update option count
         const isAdding = Array.isArray(newVotesValue)
           ? newVotesValue.includes(value)
           : newVotesValue === value;
 
         const delta = isAdding ? 1 : -1;
-        newTotal += delta;
         newOptions = newOptions.map((o) =>
           o.id === value ? { ...o, votes: Math.max(0, o.votes + delta) } : o,
         );
       }
 
-      return { ...p, options: newOptions, totalVotes: Math.max(0, newTotal) };
+      // Update totalVotes ONLY when transitioning between voted/not-voted states
+      // (one user = one total vote, regardless of how many options they selected)
+      if (!wasVoted && willBeVoted) {
+        // First vote by this user
+        newTotal += 1;
+      } else if (wasVoted && !willBeVoted) {
+        // User is removing their last vote
+        newTotal = Math.max(0, newTotal - 1);
+      }
+      // If user was already voted and still voted, totalVotes doesn't change
+
+      return { ...p, options: newOptions, totalVotes: newTotal };
     });
 
     // Update global userVotes
