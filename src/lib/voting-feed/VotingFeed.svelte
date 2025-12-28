@@ -166,8 +166,17 @@
 
     const handlePopState = (e: PopStateEvent) => {
       if (currentView === "reels") {
-        // Restore feed using the proper exit/restore logic
-        switchToReels("");
+        // Only switch back to feed, but don't affect other modals
+        currentView = "feed";
+
+        // Restore the posts from cache if we were in user reels mode
+        if (isUserReelsMode && feedPostsCache.length > 0) {
+          posts = feedPostsCache;
+          isUserReelsMode = false;
+        }
+
+        // If we came from profile modal, ensure it stays open
+        // The profile modal's own popstate handler will handle the state correctly
       }
     };
     window.addEventListener("popstate", handlePopState);
@@ -399,7 +408,7 @@
             avatar:
               user.avatarUrl ||
               `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`,
-            hasNewPoll: user.rellsCount > 0 || user.totalActivity > 0,
+            hasNewPoll: user.hasNewPoll ?? false,
             pollCount: user.rellsCount || user.totalActivity || 1,
           }));
           return;
@@ -1409,8 +1418,16 @@
     currentView = "reels";
 
     // Push state to history for back button support
+    // Include info about the profile modal so we can restore it on back
     if (typeof history !== "undefined") {
-      history.pushState({ view: "reels" }, "");
+      history.pushState(
+        {
+          view: "reels",
+          fromProfile: isProfileModalOpen,
+          profileUserId: selectedProfileUserId,
+        },
+        "",
+      );
     }
 
     // Wait for DOM to update, then scroll to the correct position
@@ -1631,6 +1648,24 @@
         if (userPolls.length > 0) {
           posts = userPolls;
           currentView = "reels";
+
+          // Mark this user's hasNewPoll as false (they've been viewed)
+          friendStories = friendStories.map((f) =>
+            f.id === friendId ? { ...f, hasNewPoll: false } : f,
+          );
+
+          // Register views in the database for all Rels (fire and forget)
+          // This persists the viewed state so they won't show green border on reload
+          userPolls.forEach((poll: Post) => {
+            if (poll.isRell) {
+              apiCall(`/api/polls/${poll.id}/view`, { method: "POST" }).catch(
+                () => {
+                  // Silently ignore errors - view tracking is not critical
+                },
+              );
+            }
+          });
+
           // We are now in a "user mode". goHome needs to handle this.
         } else {
           // If no polls, open profile
@@ -1796,25 +1831,31 @@
   <!-- Main Content -->
   <main class="flex-1 overflow-hidden relative">
     {#if isLoading}
-      <!-- Skeleton Loading State -->
-      <div class="h-full overflow-y-auto pb-24">
-        <div class="feed-container-width mx-auto px-4 pt-4 space-y-4">
-          <!-- Story avatars skeleton -->
-          <div class="flex gap-4 pb-4 overflow-hidden">
-            {#each Array(6) as _}
-              <div class="flex flex-col items-center gap-1.5 min-w-[72px]">
-                <Skeleton circle size="64px" />
-                <Skeleton width="48px" height="12px" rounded="4px" />
-              </div>
+      <!-- Skeleton Loading State - adapts to current view -->
+      {#if currentView === "reels"}
+        <!-- Full-screen Reel skeleton -->
+        <Skeleton variant="reel" />
+      {:else}
+        <!-- Feed skeleton -->
+        <div class="h-full overflow-y-auto pb-24">
+          <div class="feed-container-width mx-auto px-4 pt-4 space-y-4">
+            <!-- Story avatars skeleton -->
+            <div class="flex gap-4 pb-4 overflow-hidden">
+              {#each Array(6) as _}
+                <div class="flex flex-col items-center gap-1.5 min-w-[72px]">
+                  <Skeleton circle size="64px" />
+                  <Skeleton width="48px" height="12px" rounded="4px" />
+                </div>
+              {/each}
+            </div>
+
+            <!-- Poll skeletons -->
+            {#each Array(3) as _}
+              <Skeleton variant="poll" />
             {/each}
           </div>
-
-          <!-- Poll skeletons -->
-          {#each Array(3) as _}
-            <Skeleton variant="poll" />
-          {/each}
         </div>
-      </div>
+      {/if}
     {:else if error}
       <div class="h-full flex items-center justify-center">
         <div class="flex flex-col items-center gap-4 text-center px-4">

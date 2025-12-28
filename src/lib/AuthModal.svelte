@@ -123,9 +123,11 @@
   });
 
   onDestroy(() => {
-    window.removeEventListener("message", handleMessage);
-    if (authPopup && !authPopup.closed) {
-      authPopup.close();
+    if (browser) {
+      window.removeEventListener("message", handleMessage);
+      if (authPopup && !authPopup.closed) {
+        authPopup.close();
+      }
     }
   });
 

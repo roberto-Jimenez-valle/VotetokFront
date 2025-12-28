@@ -55,6 +55,7 @@ export interface Post {
   hasCommented?: boolean;
   isBookmarked?: boolean;
   category?: string;
+  isRell?: boolean;
 }
 
 export interface UserVotes {

@@ -21,6 +21,7 @@
             | "text"
             | "card"
             | "poll"
+            | "reel"
             | "avatar"
             | "image"
             | "button"
@@ -153,6 +154,80 @@
                     class="skeleton-base skeleton-poll-option"
                     class:skeleton-animate={!isStatic}
                 ></div>
+            {/each}
+        </div>
+    </div>
+{:else if variant === "reel"}
+    <!-- Skeleton de Reel (pantalla completa estilo TikTok/Stories) -->
+    <div class="skeleton-reel {className}">
+        <!-- Background shimmer -->
+        <div
+            class="skeleton-reel-bg skeleton-base"
+            class:skeleton-animate={!isStatic}
+        ></div>
+
+        <!-- Header with avatar and username -->
+        <div class="skeleton-reel-header">
+            <div
+                class="skeleton-base skeleton-circle"
+                class:skeleton-animate={!isStatic}
+                style="width: 48px; height: 48px; flex-shrink: 0;"
+            ></div>
+            <div class="skeleton-reel-user-info">
+                <div
+                    class="skeleton-base"
+                    class:skeleton-animate={!isStatic}
+                    style="width: 120px; height: 16px; border-radius: 6px;"
+                ></div>
+                <div
+                    class="skeleton-base"
+                    class:skeleton-animate={!isStatic}
+                    style="width: 80px; height: 12px; border-radius: 4px; margin-top: 6px;"
+                ></div>
+            </div>
+        </div>
+
+        <!-- Center content area - Question placeholder -->
+        <div class="skeleton-reel-center">
+            <div
+                class="skeleton-base"
+                class:skeleton-animate={!isStatic}
+                style="width: 85%; height: 28px; border-radius: 8px; margin: 0 auto;"
+            ></div>
+            <div
+                class="skeleton-base"
+                class:skeleton-animate={!isStatic}
+                style="width: 65%; height: 28px; border-radius: 8px; margin: 16px auto 0;"
+            ></div>
+        </div>
+
+        <!-- Bottom options area -->
+        <div class="skeleton-reel-bottom">
+            <div class="skeleton-reel-options">
+                {#each Array(4) as _}
+                    <div
+                        class="skeleton-base skeleton-reel-option"
+                        class:skeleton-animate={!isStatic}
+                    ></div>
+                {/each}
+            </div>
+        </div>
+
+        <!-- Side actions bar -->
+        <div class="skeleton-reel-actions">
+            {#each Array(5) as _}
+                <div class="skeleton-reel-action">
+                    <div
+                        class="skeleton-base skeleton-circle"
+                        class:skeleton-animate={!isStatic}
+                        style="width: 44px; height: 44px;"
+                    ></div>
+                    <div
+                        class="skeleton-base"
+                        class:skeleton-animate={!isStatic}
+                        style="width: 28px; height: 10px; border-radius: 4px; margin-top: 6px;"
+                    ></div>
+                </div>
             {/each}
         </div>
     </div>
@@ -333,6 +408,93 @@
         width: 100%;
         height: 48px;
         border-radius: 12px;
+    }
+
+    /* ===== REEL (fullscreen story/tiktok style) ===== */
+    .skeleton-reel {
+        position: absolute;
+        inset: 0;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .skeleton-reel-bg {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            180deg,
+            rgba(30, 30, 50, 0.3) 0%,
+            rgba(20, 20, 40, 0.5) 30%,
+            rgba(10, 10, 30, 0.4) 70%,
+            rgba(0, 0, 0, 0.6) 100%
+        ) !important;
+    }
+
+    .skeleton-reel-header {
+        position: absolute;
+        top: 20px;
+        left: 16px;
+        right: 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        z-index: 10;
+    }
+
+    .skeleton-reel-user-info {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+
+    .skeleton-reel-center {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        transform: translateY(-100%);
+        padding: 0 24px;
+        text-align: center;
+        z-index: 10;
+    }
+
+    .skeleton-reel-bottom {
+        position: absolute;
+        bottom: 100px;
+        left: 16px;
+        right: 80px;
+        z-index: 10;
+    }
+
+    .skeleton-reel-options {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .skeleton-reel-option {
+        height: 60px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .skeleton-reel-actions {
+        position: absolute;
+        right: 12px;
+        bottom: 100px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+        z-index: 10;
+    }
+
+    .skeleton-reel-action {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
 
     /* ===== IMAGE ===== */

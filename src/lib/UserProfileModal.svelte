@@ -157,9 +157,21 @@
   });
 
   onMount(() => {
-    const handlePopState = () => {
-      if (isOpen) {
-        closeModal();
+    const handlePopState = (e: PopStateEvent) => {
+      // Only close if we're going back FROM the profile state
+      // Don't close if we're going back from a nested modal (like reels)
+      const state = e.state;
+      if (isOpen && (!state || !state.modal || state.modal !== "profile")) {
+        // Check if we're returning TO the profile from something else
+        if (state && state.modal === "profile") {
+          // We're returning to profile, don't close
+          return;
+        }
+        // Only close if we truly navigated away from profile
+        // Check if there's no view: reels in state (meaning we're not in reels)
+        if (!state || !state.view) {
+          closeModal();
+        }
       }
     };
 
