@@ -32,19 +32,25 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
     if (!poll) throw error(404, 'Encuesta no encontrada');
     if (poll.userId === Number(userId)) throw error(400, 'No puedes reportar tu propia encuesta');
 
-    const existingReport = await (prisma.report as any).findFirst({
-      where: { pollId, userId: Number(userId), commentId: null }
+    // Buscar reporte existente del usuario para esta encuesta
+    const existingReport = await (prisma as any).report.findFirst({
+      where: {
+        pollId,
+        userId: Number(userId)
+      }
     });
 
     if (existingReport) {
       return json({ success: true, message: 'Ya has reportado esta encuesta' });
     }
 
-    await (prisma.report as any).create({
-      data: { pollId, userId: Number(userId), reason, notes, commentId: null }
+    await (prisma as any).report.create({
+      data: { pollId, userId: Number(userId), reason, notes }
     });
 
-    const reportCount = await (prisma.report as any).count({ where: { pollId } });
+    const reportCount = await (prisma as any).report.count({
+      where: { pollId }
+    });
 
     if (reportCount >= REPORT_THRESHOLD_HIDE) {
       await prisma.poll.update({ where: { id: pollId }, data: { isHidden: true } });

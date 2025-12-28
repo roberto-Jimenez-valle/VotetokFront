@@ -136,25 +136,40 @@ export async function sendReportNotification(data: {
   try {
     // Si no hay credenciales de email configuradas, solo loguear
     const pass = env.EMAIL_PASS || process?.env?.EMAIL_PASS;
+    const user = env.EMAIL_USER || process?.env?.EMAIL_USER || 'voutop.oficial@gmail.com';
+
+    console.log('[Email] 🔍 DIAGNÓSTICO DE ENVÍO:');
+    console.log('[Email] - EMAIL_USER configurado:', !!user, user ? `(${user.substring(0, 5)}...)` : '');
+    console.log('[Email] - EMAIL_PASS configurado:', !!pass, pass ? `(${pass.length} chars)` : '');
+    console.log('[Email] - Destinatario:', ADMIN_EMAIL);
+    console.log('[Email] - Asunto:', subject.substring(0, 50));
+
     if (!pass) {
-      console.log('[Email] ⚠️ EMAIL_PASS no configurado en Railway/env. Email no enviado.');
+      console.log('[Email] ❌ EMAIL_PASS no configurado. Email NO enviado.');
       console.log('[Email] Detalles del reporte omitido:', { pollId, pollTitle, reason, reportCount });
       return { sent: false, reason: 'No email credentials configured' };
     }
 
+    console.log('[Email] 📤 Intentando enviar email...');
     const transporter = getTransporter();
-    await transporter.sendMail({
-      from: `"VoTok Moderación" <${env.EMAIL_USER || 'voutop.oficial@gmail.com'}>`,
+
+    const result = await transporter.sendMail({
+      from: `"VoTok Moderación" <${user}>`,
       to: ADMIN_EMAIL,
       subject,
       html
     });
 
-    console.log(`[Email] ✅ Notificación de reporte enviada a ${ADMIN_EMAIL}`);
-    return { sent: true };
-  } catch (error) {
-    console.error('[Email] Error enviando notificación:', error);
-    return { sent: false, error };
+    console.log(`[Email] ✅ Email enviado exitosamente!`);
+    console.log('[Email] - Message ID:', result.messageId);
+    console.log('[Email] - Response:', result.response);
+    return { sent: true, messageId: result.messageId };
+  } catch (error: any) {
+    console.error('[Email] ❌ ERROR al enviar notificación:');
+    console.error('[Email] - Mensaje:', error.message);
+    console.error('[Email] - Código:', error.code);
+    console.error('[Email] - Stack:', error.stack?.substring(0, 300));
+    return { sent: false, error: error.message };
   }
 }
 
