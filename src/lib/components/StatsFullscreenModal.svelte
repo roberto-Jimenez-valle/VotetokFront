@@ -12,6 +12,9 @@
     Eye,
     EyeOff,
     LineChart,
+    CircleDot,
+    Hexagon,
+    Target,
   } from "lucide-svelte";
   import GlobeGL from "$lib/GlobeGL.svelte";
   import { onMount } from "svelte";
@@ -106,6 +109,7 @@
     { id: "all", label: "Todo", hours: 87600 },
   ];
   let selectedRange = $state("7d");
+  let pieSubView = $state<"donut" | "radar" | "polar" | "bar">("donut");
 
   // Data state
   let isLoading = $state(false);
@@ -769,16 +773,52 @@
           <button
             class="view-btn {activeView === 'stats' ? 'active' : ''}"
             onclick={() => (activeView = "stats")}
+            title="Estadísticas"
           >
             <PieChart size={18} />
-            <span>Estadísticas</span>
           </button>
+
+          {#if activeView === "stats"}
+            <div class="view-divider"></div>
+
+            <button
+              class="view-btn sub-btn {pieSubView === 'donut' ? 'active' : ''}"
+              onclick={() => (pieSubView = "donut")}
+              title="Gráfico Donut"
+            >
+              <CircleDot size={16} />
+            </button>
+            <button
+              class="view-btn sub-btn {pieSubView === 'radar' ? 'active' : ''}"
+              onclick={() => (pieSubView = "radar")}
+              title="Gráfico Radar"
+            >
+              <Hexagon size={16} />
+            </button>
+            <button
+              class="view-btn sub-btn {pieSubView === 'polar' ? 'active' : ''}"
+              onclick={() => (pieSubView = "polar")}
+              title="Gráfico Polar"
+            >
+              <Target size={16} />
+            </button>
+            <button
+              class="view-btn sub-btn {pieSubView === 'bar' ? 'active' : ''}"
+              onclick={() => (pieSubView = "bar")}
+              title="Gráfico de Barras"
+            >
+              <BarChart3 size={16} />
+            </button>
+
+            <div class="view-divider"></div>
+          {/if}
+
           <button
             class="view-btn {activeView === 'trend' ? 'active' : ''}"
             onclick={() => (activeView = "trend")}
+            title="Tendencias"
           >
             <TrendingUp size={18} />
-            <span>Tendencia</span>
           </button>
           <button
             class="view-btn {activeView === 'globe' ? 'active' : ''}"
@@ -786,7 +826,6 @@
             title="Ver en el globo"
           >
             <Globe size={18} />
-            <span>Globo</span>
           </button>
         </div>
       </nav>
@@ -841,80 +880,317 @@
                 : 'height: 320px; min-height: 320px; margin-bottom: 24px; flex-shrink: 0;'}"
             in:fade={{ duration: 200 }}
           >
-            <!-- Stats View: Donut -->
+            <!-- Stats View: Donut / Radar / Polar -->
             {#if activeView === "stats"}
-              <div class="donut-container" style="height: 100%; padding: 0;">
-                <svg
-                  viewBox="0 0 200 200"
-                  class="donut-chart"
-                  style="width: auto; height: 100%; max-height: 280px;"
-                >
-                  <circle
-                    cx="100"
-                    cy="100"
-                    r="70"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.05)"
-                    stroke-width="28"
-                  />
-                  {#each donutSegments as segment, i}
-                    {@const isActive =
-                      selectedOption === segment.option.key ||
-                      hoveredOption === segment.option.key}
-                    {@const strokeWidth = isActive ? 32 : 28}
-                    {#if segment.percentage > 0}
-                      <path
-                        role="button"
-                        tabindex="0"
-                        d={describeArc(
-                          100,
-                          100,
-                          70,
-                          segment.startAngle,
-                          segment.endAngle - 0.5,
-                        )}
-                        fill="none"
-                        stroke={segment.option.color}
-                        stroke-width={strokeWidth}
-                        stroke-linecap="butt"
-                        class="donut-segment"
-                        class:active={isActive}
-                        style="--delay: {i * 50}ms; cursor: pointer;"
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          selectedOption =
-                            selectedOption === segment.option.key
-                              ? null
-                              : segment.option.key;
-                        }}
-                        onkeydown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            selectedOption =
-                              selectedOption === segment.option.key
-                                ? null
-                                : segment.option.key;
-                          }
-                        }}
-                        onmouseenter={() =>
-                          (hoveredOption = segment.option.key)}
-                        onmouseleave={() => (hoveredOption = null)}
-                      />
-                    {/if}
-                  {/each}
-                </svg>
-                <div class="donut-center">
-                  {#if selectedOption}
-                    {@const opt = options.find((o) => o.key === selectedOption)}
-                    <span class="center-value" style="color: {opt?.color}"
-                      >{getPercentage(opt?.votes || 0).toFixed(1)}%</span
+              <div
+                class="stats-view-container"
+                style="height: 100%; display: flex; flex-direction: column; align-items: center;"
+              >
+                <!-- Sub-View Selector -->
+
+                {#if pieSubView === "donut"}
+                  <div
+                    class="donut-container"
+                    style="height: 100%; padding: 0; width: 100%;"
+                  >
+                    <svg
+                      viewBox="0 0 200 200"
+                      class="donut-chart"
+                      style="width: auto; height: 100%; max-height: 280px;"
                     >
-                    <span class="center-label">{opt?.label}</span>
-                  {:else}
-                    <span class="center-value">{totalVotes}</span>
-                    <span class="center-label">Total</span>
-                  {/if}
-                </div>
+                      <circle
+                        cx="100"
+                        cy="100"
+                        r="70"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.05)"
+                        stroke-width="28"
+                      />
+                      {#each donutSegments as segment, i}
+                        {@const isActive =
+                          selectedOption === segment.option.key ||
+                          hoveredOption === segment.option.key}
+                        {@const strokeWidth = isActive ? 32 : 28}
+                        {#if segment.percentage > 0}
+                          <path
+                            role="button"
+                            tabindex="0"
+                            d={describeArc(
+                              100,
+                              100,
+                              70,
+                              segment.startAngle,
+                              segment.endAngle - 0.5,
+                            )}
+                            fill="none"
+                            stroke={segment.option.color}
+                            stroke-width={strokeWidth}
+                            stroke-linecap="butt"
+                            class="donut-segment"
+                            class:active={isActive}
+                            style="--delay: {i * 50}ms; cursor: pointer;"
+                            onclick={(e) => {
+                              e.stopPropagation();
+                              selectedOption =
+                                selectedOption === segment.option.key
+                                  ? null
+                                  : segment.option.key;
+                            }}
+                            onkeydown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                selectedOption =
+                                  selectedOption === segment.option.key
+                                    ? null
+                                    : segment.option.key;
+                              }
+                            }}
+                            onmouseenter={() =>
+                              (hoveredOption = segment.option.key)}
+                            onmouseleave={() => (hoveredOption = null)}
+                          />
+                        {/if}
+                      {/each}
+                    </svg>
+                    <div class="donut-center">
+                      {#if selectedOption}
+                        {@const opt = options.find(
+                          (o) => o.key === selectedOption,
+                        )}
+                        <span class="center-value" style="color: {opt?.color}"
+                          >{getPercentage(opt?.votes || 0).toFixed(1)}%</span
+                        >
+                        <span class="center-label">{opt?.label}</span>
+                      {:else}
+                        <span class="center-value"
+                          >{formatNumber(totalVotes)}</span
+                        >
+                        <span class="center-label">Total</span>
+                      {/if}
+                    </div>
+                  </div>
+                {:else if pieSubView === "radar"}
+                  <!-- Radar Chart -->
+                  {@const numVars = donutSegments.length || 3}
+                  {@const angleStep = (Math.PI * 2) / numVars}
+                  {@const maxVal = Math.max(
+                    ...donutSegments.map((s) => s.option.votes || 0),
+                    1,
+                  )}
+                  {@const points = donutSegments.map((s, i) => {
+                    const angle = i * angleStep - Math.PI / 2;
+                    const val = ((s.option.votes || 0) / maxVal) * 80; // max radius 80 (viewbox 200x200)
+                    return {
+                      x: 100 + Math.cos(angle) * val,
+                      y: 100 + Math.sin(angle) * val,
+                      title: s.option.label,
+                      votes: s.option.votes,
+                    };
+                  })}
+                  {@const polyPoints = points
+                    .map((p) => `${p.x},${p.y}`)
+                    .join(" ")}
+
+                  <div
+                    class="radar-container"
+                    style="height: 100%; width: 100%; display: flex; align-items: center; justify-content: center;"
+                  >
+                    <svg
+                      viewBox="0 0 200 200"
+                      style="width: auto; height: 100%; max-height: 280px;"
+                    >
+                      <!-- Web/Grid -->
+                      {#each [20, 40, 60, 80] as r}
+                        <circle
+                          cx="100"
+                          cy="100"
+                          {r}
+                          fill="none"
+                          stroke="rgba(255,255,255,0.05)"
+                          stroke-width="1"
+                        />
+                      {/each}
+                      {#each donutSegments as _, i}
+                        {@const angle = i * angleStep - Math.PI / 2}
+                        <line
+                          x1="100"
+                          y1="100"
+                          x2={100 + Math.cos(angle) * 80}
+                          y2={100 + Math.sin(angle) * 80}
+                          stroke="rgba(255,255,255,0.05)"
+                          stroke-width="1"
+                        />
+                      {/each}
+
+                      <!-- Data Polygon -->
+                      <polygon
+                        points={polyPoints}
+                        fill="rgba(99, 102, 241, 0.2)"
+                        stroke="#6366f1"
+                        stroke-width="2"
+                        class="transition-all duration-500"
+                      />
+
+                      <!-- Dots -->
+                      {#each points as p, i}
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={selectedOption === donutSegments[i].option.key
+                            ? 5
+                            : 3}
+                          fill={donutSegments[i].option.color}
+                          stroke="white"
+                          stroke-width="1"
+                          style="cursor: pointer; transition: all 0.3s;"
+                          onmouseenter={() =>
+                            (hoveredOption = donutSegments[i].option.key)}
+                          onmouseleave={() => (hoveredOption = null)}
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            selectedOption =
+                              selectedOption === donutSegments[i].option.key
+                                ? null
+                                : donutSegments[i].option.key;
+                          }}
+                        />
+                      {/each}
+                    </svg>
+                  </div>
+                {:else if pieSubView === "polar"}
+                  <!-- Polar Area Chart -->
+                  {@const numSlices = donutSegments.length || 1}
+                  {@const sliceAngle = 360 / numSlices}
+                  {@const maxPVal = Math.max(
+                    ...donutSegments.map((s) => s.option.votes || 0),
+                    1,
+                  )}
+
+                  <div
+                    class="polar-container"
+                    style="height: 100%; width: 100%; display: flex; align-items: center; justify-content: center;"
+                  >
+                    <svg
+                      viewBox="0 0 200 200"
+                      style="width: auto; height: 100%; max-height: 280px; transform: rotate(-90deg);"
+                    >
+                      <!-- Grid Circles -->
+                      {#each [20, 40, 60, 80] as r}
+                        <circle
+                          cx="100"
+                          cy="100"
+                          {r}
+                          fill="none"
+                          stroke="rgba(255,255,255,0.03)"
+                          stroke-width="1"
+                        />
+                      {/each}
+
+                      {#each donutSegments as seg, i}
+                        {@const startA = i * sliceAngle}
+                        {@const endA = (i + 1) * sliceAngle}
+                        {@const radius =
+                          ((seg.option.votes || 0) / maxPVal) * 90}
+
+                        {@const x1 =
+                          100 + radius * Math.cos((Math.PI * startA) / 180)}
+                        {@const y1 =
+                          100 + radius * Math.sin((Math.PI * startA) / 180)}
+                        {@const x2 =
+                          100 + radius * Math.cos((Math.PI * endA) / 180)}
+                        {@const y2 =
+                          100 + radius * Math.sin((Math.PI * endA) / 180)}
+
+                        <path
+                          d="M 100 100 L {x1} {y1} A {radius} {radius} 0 0 1 {x2} {y2} Z"
+                          fill={seg.option.color}
+                          stroke="rgba(255,255,255,0.1)"
+                          stroke-width="1"
+                          style="transition: all 0.5s; cursor: pointer; opacity: {selectedOption ===
+                          seg.option.key
+                            ? 1
+                            : 0.8};"
+                          onmouseenter={() => (hoveredOption = seg.option.key)}
+                          onmouseleave={() => (hoveredOption = null)}
+                        />
+                      {/each}
+                    </svg>
+                  </div>
+                {:else if pieSubView === "bar"}
+                  <!-- Bar Chart -->
+                  {@const maxBarVal = Math.max(
+                    ...donutSegments.map((s) => s.option.votes || 0),
+                    1,
+                  )}
+                  {@const barWidth = 160 / (donutSegments.length || 1)}
+                  {@const gap = barWidth * 0.2}
+                  {@const effectiveWidth = barWidth - gap}
+
+                  <div
+                    class="bar-container"
+                    style="height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; padding: 20px;"
+                  >
+                    <svg
+                      viewBox="0 0 200 200"
+                      style="width: auto; height: 100%; max-height: 280px;"
+                    >
+                      <!-- Grid Lines -->
+                      {#each [0, 50, 100, 150, 200] as y}
+                        <line
+                          x1="0"
+                          y1={y}
+                          x2="200"
+                          y2={y}
+                          stroke="rgba(255,255,255,0.05)"
+                          stroke-width="1"
+                          stroke-dasharray="4 4"
+                        />
+                      {/each}
+
+                      {#each donutSegments as seg, i}
+                        {@const height =
+                          ((seg.option.votes || 0) / maxBarVal) * 180}
+                        {@const x = 20 + i * barWidth}
+                        {@const y = 200 - height}
+
+                        <rect
+                          {x}
+                          {y}
+                          width={effectiveWidth}
+                          {height}
+                          fill={seg.option.color}
+                          rx="4"
+                          style="transition: all 0.5s; cursor: pointer; opacity: {selectedOption ===
+                          seg.option.key
+                            ? 1
+                            : 0.8};"
+                          onmouseenter={() => (hoveredOption = seg.option.key)}
+                          onmouseleave={() => (hoveredOption = null)}
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            selectedOption =
+                              selectedOption === seg.option.key
+                                ? null
+                                : seg.option.key;
+                          }}
+                        />
+
+                        <!-- Value Label -->
+                        <text
+                          x={x + effectiveWidth / 2}
+                          y={y - 8}
+                          text-anchor="middle"
+                          font-size="10"
+                          font-weight="bold"
+                          fill="white"
+                          opacity="0.8"
+                        >
+                          {seg.percentage.toFixed(0)}%
+                        </text>
+                      {/each}
+                    </svg>
+                  </div>
+                {/if}
               </div>
             {/if}
 
@@ -1168,7 +1444,7 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(8px);
-    z-index: 9999999;
+    z-index: 2147483647;
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -1297,35 +1573,107 @@
     flex-shrink: 0;
   }
 
+  /* Sub-View Selector (Inside Stats) */
+  .subvisual-selector {
+    display: flex;
+    position: relative;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 20px;
+    padding: 4px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .selector-bg {
+    position: absolute;
+    inset: 0;
+    border-radius: 20px;
+    pointer-events: none;
+  }
+
+  .selector-indicator {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    width: calc(33.33% - 4px);
+    background: #6366f1;
+    border-radius: 16px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+    z-index: 1;
+  }
+
+  .selector-btn {
+    position: relative;
+    z-index: 2;
+    padding: 6px 16px;
+    width: 80px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.5);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s;
+    text-align: center;
+  }
+
+  .selector-btn.active {
+    color: white;
+  }
+
+  .selector-btn:hover:not(.active) {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
   .view-tabs {
     display: flex;
-    gap: 8px;
+    gap: 6px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .view-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0 4px;
   }
 
   .view-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    justify-content: center;
+    padding: 8px; /* Square/Icon only by default */
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 13px;
-    font-weight: 600;
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
   }
 
   .view-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
   }
 
   .view-btn.active {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
     color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .view-btn sub-btn {
+    width: 32px;
+    height: 32px;
   }
 
   .view-btn span {

@@ -18,11 +18,12 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         { status: 400 }
       );
     }
-    
+
     console.log('[API /users/[id]] Fetching user:', userId);
-    
+
     // Get current user from locals to check follow status
     const currentUser = locals.user;
+    const currentUserId = currentUser?.userId || (currentUser as any)?.id;
 
     // Obtener usuario con información adicional
     const user = await prisma.user.findUnique({
@@ -50,17 +51,6 @@ export const GET: RequestHandler = async ({ params, locals }) => {
             following: true,
           }
         },
-        // Check if current user is following this user
-        ...(currentUser?.userId ? {
-          followers: {
-            where: {
-              followerId: currentUser.userId
-            },
-            select: {
-              status: true
-            }
-          }
-        } : {})
       }
     });
 
@@ -71,20 +61,32 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         { status: 404 }
       );
     }
-    
-    // Determine follow status
+
+    // Determine follow status - query separately for reliability
     let isFollowing = false;
     let isPending = false;
-    
-    if (currentUser?.userId && user.followers && user.followers.length > 0) {
-      const relationship = user.followers[0];
-      if (relationship.status === 'accepted') {
-        isFollowing = true;
-      } else if (relationship.status === 'pending') {
-        isPending = true;
+
+    if (currentUserId) {
+      const followRelation = await prisma.userFollower.findFirst({
+        where: {
+          followerId: Number(currentUserId),
+          followingId: userId
+        }
+      });
+
+      console.log('[API /users/[id]] Current user ID:', currentUserId, 'Follow relation:', followRelation);
+
+      if (followRelation) {
+        if (followRelation.status === 'accepted') {
+          isFollowing = true;
+        } else if (followRelation.status === 'pending') {
+          isPending = true;
+        }
       }
     }
-    
+
+    console.log('[API /users/[id]] Follow status - isFollowing:', isFollowing, 'isPending:', isPending);
+
     console.log('[API /users/[id]] User found:', {
       id: user.id,
       username: user.username,
@@ -108,8 +110,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         stats: {
           pollsCount: user._count.polls,
           votesCount: user._count.votes,
-          followersCount: user._count.followers,
-          followingCount: user._count.following,
+          // Note: Prisma relations are inverted in naming - swap them here
+          followersCount: user._count.following,  // People who follow this user
+          followingCount: user._count.followers,  // People this user follows
         }
       }
     });
@@ -118,8 +121,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     console.error('[API /users/[id]] Error stack:', error instanceof Error ? error.stack : 'No stack');
     console.error('[API /users/[id]] Error message:', error instanceof Error ? error.message : error);
     return json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Error al obtener usuario',
         details: error instanceof Error ? error.message : String(error)
       },

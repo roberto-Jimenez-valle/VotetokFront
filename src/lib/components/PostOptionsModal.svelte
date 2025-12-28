@@ -23,6 +23,8 @@
         onDelete?: () => void;
         onAdminDelete?: () => void;
         onAdminReset?: () => void;
+        onUnfollow?: () => void;
+        onNotInterested?: () => void;
     }
 
     let {
@@ -33,6 +35,8 @@
         onDelete,
         onAdminDelete,
         onAdminReset,
+        onUnfollow,
+        onNotInterested,
     }: Props = $props();
 
     const isAuthor = $derived(
@@ -62,8 +66,14 @@
             navigator.clipboard.writeText(link);
             alert("Enlace copiado al portapapeles");
             onClose();
+        } else if (action === "unfollow") {
+            onUnfollow?.();
+            onClose();
+        } else if (action === "not_interested") {
+            onNotInterested?.();
+            onClose();
         } else {
-            // Other actions like unfollow/not_interested
+            // Other actions
             onClose();
         }
     }

@@ -588,7 +588,10 @@
             onkeydown={(e) => e.key === "Enter" && onAvatarClick?.(post)}
           >
             <div
-              class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347] shadow-lg group-hover:shadow-[#9ec264]/20 transition-all"
+              class="w-10 h-10 rounded-full p-[2px] shadow-lg transition-all {post
+                .user?.hasUnseenReels
+                ? 'bg-gradient-to-br from-[#9ec264] to-[#7ba347] group-hover:shadow-[#9ec264]/20'
+                : 'bg-transparent'}"
             >
               <img
                 src={post.avatar}
@@ -610,25 +613,13 @@
               >
                 {post.author}
               </button>
-              {#if !isSelf}
+              {#if !isSelf && !isFollowing && !isPending}
                 <button
                   onclick={handleFollow}
-                  class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1 flex items-center {isFollowing
-                    ? '!bg-emerald-500/20 !text-emerald-400'
-                    : ''} {isPending
-                    ? '!bg-yellow-500/20 !text-yellow-400'
-                    : ''}"
+                  class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1 flex items-center"
                 >
-                  {#if isFollowing}
-                    <UserCheck size={14} class="mr-1" />
-                    <span>Siguiendo</span>
-                  {:else if isPending}
-                    <Clock size={14} class="mr-1" />
-                    <span>Solicitado</span>
-                  {:else}
-                    <UserPlus size={14} class="mr-1" />
-                    <span>Seguir</span>
-                  {/if}
+                  <UserPlus size={14} class="mr-1" />
+                  <span>Seguir</span>
                 </button>
               {/if}
             </div>
@@ -761,25 +752,13 @@
               >
                 {post.author}
               </button>
-              {#if !isSelf}
+              {#if !isSelf && !isFollowing && !isPending}
                 <button
                   onclick={handleFollow}
-                  class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1 flex items-center {isFollowing
-                    ? '!bg-emerald-500/20 !text-emerald-400'
-                    : ''} {isPending
-                    ? '!bg-yellow-500/20 !text-yellow-400'
-                    : ''}"
+                  class="bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-lg transition-colors flex-shrink-0 ml-1 flex items-center"
                 >
-                  {#if isFollowing}
-                    <UserCheck size={14} class="mr-1" />
-                    <span>Siguiendo</span>
-                  {:else if isPending}
-                    <Clock size={14} class="mr-1" />
-                    <span>Solicitado</span>
-                  {:else}
-                    <UserPlus size={14} class="mr-1" />
-                    <span>Seguir</span>
-                  {/if}
+                  <UserPlus size={14} class="mr-1" />
+                  <span>Seguir</span>
                 </button>
               {/if}
             </div>

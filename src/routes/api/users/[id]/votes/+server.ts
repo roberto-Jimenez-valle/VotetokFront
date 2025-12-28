@@ -1,72 +1,48 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
-import { encodePollId, encodeOptionId } from '$lib/server/hashids';
+import { encodePollId, encodeOptionId, encodeUserId } from '$lib/server/hashids';
 
 /**
  * GET /api/users/[id]/votes
  * Obtiene los votos realizados por un usuario
  */
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
   try {
     console.log('[API /users/[id]/votes] Request params:', params);
-    const userId = parseInt(params.id);
+    const profileUserId = parseInt(params.id);
     const limit = parseInt(url.searchParams.get('limit') || '20');
     const offset = parseInt(url.searchParams.get('offset') || '0');
+    const currentUserId = locals.user?.userId || (locals.user as any)?.id;
 
-    console.log('[API /users/[id]/votes] Fetching votes for user:', userId, 'limit:', limit, 'offset:', offset);
+    console.log('[API /users/[id]/votes] Fetching votes for user:', profileUserId, 'limit:', limit, 'offset:', offset);
 
-    if (isNaN(userId)) {
+    if (isNaN(profileUserId)) {
       return json(
         { success: false, error: 'ID de usuario inválido' },
         { status: 400 }
       );
     }
 
-    // Obtener votos del usuario
+    // Obtener votos del usuario con relaciones
     const votes = await prisma.vote.findMany({
       where: {
-        userId
+        userId: profileUserId
       },
-      select: {
-        id: true,
-        createdAt: true,
-        latitude: true,
-        longitude: true,
-        subdivisionId: true,
+      include: {
         poll: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            category: true,
-            imageUrl: true,
-            type: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatarUrl: true,
-                verified: true,
-              }
-            },
+          include: {
+            user: true,
             options: {
-              select: {
-                id: true,
-                optionKey: true,
-                optionLabel: true,
-                color: true,
-                displayOrder: true,
+              orderBy: {
+                displayOrder: 'asc'
+              },
+              include: {
                 _count: {
                   select: {
                     votes: true
                   }
                 }
-              },
-              orderBy: {
-                displayOrder: 'asc'
               }
             },
             _count: {
@@ -78,14 +54,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
             }
           }
         },
-        option: {
-          select: {
-            id: true,
-            optionKey: true,
-            optionLabel: true,
-            color: true,
-          }
-        }
+        option: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -96,48 +65,133 @@ export const GET: RequestHandler = async ({ params, url }) => {
 
     console.log('[API /users/[id]/votes] Found', votes.length, 'votes');
 
-    // Formatear respuesta
-    const formattedVotes = votes.map(vote => ({
-      id: vote.id,
-      createdAt: vote.createdAt,
-      location: {
-        latitude: vote.latitude,
-        longitude: vote.longitude,
-        subdivisionId: vote.subdivisionId
-      },
-      poll: {
-        id: vote.poll.id,
-        hashId: encodePollId(vote.poll.id),
-        title: vote.poll.title,
-        description: vote.poll.description,
-        category: vote.poll.category,
-        imageUrl: vote.poll.imageUrl,
-        type: vote.poll.type,
-        createdAt: vote.poll.createdAt,
-        user: vote.poll.user,
-        options: vote.poll.options.map((opt: any) => ({
-          id: opt.id,
-          hashId: encodeOptionId(opt.id),
-          key: opt.optionKey,
-          label: opt.optionLabel,
-          color: opt.color,
-          displayOrder: opt.displayOrder,
-          votes: opt._count?.votes || 0
-        })),
-        stats: {
-          totalVotes: vote.poll._count.votes,
-          interactions: vote.poll._count.interactions,
-          comments: vote.poll._count.comments
+    // Obtener IDs únicos de polls y sus autores
+    const pollIds = [...new Set(votes.map(v => v.poll.id))];
+    const authorIds = [...new Set(votes.map(v => v.poll.userId))];
+
+    // Si hay usuario actual, obtener sus relaciones
+    let followingIds = new Set<number>();
+    let pendingIds = new Set<number>();
+    let bookmarkedPollIds = new Set<number>();
+    let repostedPollIds = new Set<number>();
+    let commentedPollIds = new Set<number>();
+
+    if (currentUserId) {
+      // Obtener relaciones de seguimiento
+      const followRelations = await prisma.userFollower.findMany({
+        where: {
+          followerId: Number(currentUserId),
+          followingId: { in: authorIds }
         }
-      },
-      option: { // Matches frontend expectation 'vote.option'
-        id: vote.option.id,
-        hashId: encodeOptionId(vote.option.id),
-        key: vote.option.optionKey,
-        label: vote.option.optionLabel,
-        color: vote.option.color,
-      }
-    }));
+      });
+
+      followRelations.forEach((f: { status: string; followingId: number }) => {
+        if (f.status === 'accepted') {
+          followingIds.add(f.followingId);
+        } else if (f.status === 'pending') {
+          pendingIds.add(f.followingId);
+        }
+      });
+
+      // Obtener bookmarks del usuario actual
+      const bookmarks = await prisma.pollInteraction.findMany({
+        where: {
+          userId: Number(currentUserId),
+          pollId: { in: pollIds },
+          interactionType: 'bookmark'
+        },
+        select: { pollId: true }
+      });
+      bookmarkedPollIds = new Set(bookmarks.map(b => b.pollId));
+
+      // Obtener reposts del usuario actual
+      const reposts = await prisma.pollInteraction.findMany({
+        where: {
+          userId: Number(currentUserId),
+          pollId: { in: pollIds },
+          interactionType: 'repost'
+        },
+        select: { pollId: true }
+      });
+      repostedPollIds = new Set(reposts.map(r => r.pollId));
+
+      // Obtener comentarios del usuario actual
+      const comments = await prisma.comment.findMany({
+        where: {
+          userId: Number(currentUserId),
+          pollId: { in: pollIds }
+        },
+        select: { pollId: true },
+        distinct: ['pollId']
+      });
+      commentedPollIds = new Set(comments.map(c => c.pollId));
+    }
+
+    // Formatear respuesta
+    const formattedVotes = votes.map(vote => {
+      const poll = vote.poll;
+      const userObj = poll.user ? {
+        id: poll.user.id,
+        username: poll.user.username,
+        displayName: poll.user.displayName,
+        avatarUrl: poll.user.avatarUrl,
+        verified: poll.user.verified,
+        hashId: encodeUserId(poll.user.id),
+      } : null;
+
+      return {
+        id: vote.id,
+        createdAt: vote.createdAt,
+        location: {
+          latitude: vote.latitude,
+          longitude: vote.longitude,
+          subdivisionId: vote.subdivisionId
+        },
+        poll: {
+          id: poll.id,
+          hashId: encodePollId(poll.id),
+          title: poll.title,
+          description: poll.description,
+          category: poll.category,
+          imageUrl: poll.imageUrl,
+          type: poll.type,
+          createdAt: poll.createdAt,
+          closedAt: poll.closedAt,
+          isFollowing: followingIds.has(poll.userId),
+          isPending: pendingIds.has(poll.userId),
+          isBookmarked: bookmarkedPollIds.has(poll.id),
+          isReposted: repostedPollIds.has(poll.id),
+          hasCommented: commentedPollIds.has(poll.id),
+          user: userObj,
+          options: poll.options.map((opt: any) => ({
+            id: opt.id,
+            hashId: encodeOptionId(opt.id),
+            key: opt.optionKey,
+            label: opt.optionLabel,
+            optionLabel: opt.optionLabel,
+            color: opt.color,
+            imageUrl: opt.imageUrl,
+            displayOrder: opt.displayOrder,
+            voteCount: opt._count?.votes || 0,
+            votes: opt._count?.votes || 0
+          })),
+          stats: {
+            totalVotes: poll._count.votes,
+            interactions: poll._count.interactions,
+            comments: poll._count.comments
+          },
+          _count: poll._count
+        },
+        option: {
+          id: vote.option.id,
+          hashId: encodeOptionId(vote.option.id),
+          key: vote.option.optionKey,
+          label: vote.option.optionLabel,
+          color: vote.option.color,
+          imageUrl: vote.option.imageUrl,
+        }
+      };
+    });
 
     return json({
       success: true,

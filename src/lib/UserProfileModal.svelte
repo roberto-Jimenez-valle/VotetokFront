@@ -12,9 +12,12 @@
     Clock,
     Loader2,
     TrendingUp,
-    BarChart,
+    BarChart2,
     ClipboardList,
     Bookmark,
+    Users,
+    Vote,
+    Heart,
   } from "lucide-svelte";
   import { createEventDispatcher, onMount } from "svelte";
   import PostCard from "$lib/voting-feed/PostCard.svelte";
@@ -24,14 +27,27 @@
     RankingDrafts,
     SwipeIndices,
   } from "$lib/voting-feed/types";
+  import { transformApiPollToPost } from "$lib/voting-feed/pollUtils";
   import CommentsModal from "$lib/components/CommentsModal.svelte";
   import ShareModal from "$lib/components/ShareModal.svelte";
   import { apiCall, apiDelete } from "$lib/api/client";
   import { currentUser } from "$lib/stores";
+  import { logout } from "$lib/stores/auth";
+  import { loginModalOpen } from "$lib/stores/globalState";
   import {
     markImageFailed,
     shouldRetryImage,
   } from "$lib/stores/failed-images-store";
+  import {
+    Settings,
+    Bell,
+    Shield,
+    Moon,
+    Globe,
+    HelpCircle,
+    LogOut,
+    ArrowLeft,
+  } from "lucide-svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -51,10 +67,22 @@
   let isFollowing = $state(false);
   let isPending = $state(false);
   let followLoading = $state(false);
-  let activeTab = $state<"polls" | "votes" | "saved">("polls");
+  let activeTab = $state<
+    "polls" | "votes" | "saved" | "followers" | "following"
+  >("polls");
   let savedPolls = $state<any[]>([]);
   let loadingSaved = $state(false);
+  let showSettings = $state(false);
 
+  // Followers/Following lists
+  let followersList = $state<any[]>([]);
+  let followingList = $state<any[]>([]);
+  let loadingFollowers = $state(false);
+  let loadingFollowing = $state(false);
+  let hasLoadedFollowers = $state(false);
+  let hasLoadedFollowing = $state(false);
+
+  // Estados para PostCard
   // Estados para PostCard
   let userVotesMap = $state<UserVotes>({});
   let rankingDrafts = $state<RankingDrafts>({});
@@ -62,14 +90,6 @@
   let expandedPostId = $state<string | null>(null);
   let expandedOptionId = $state<string | null>(null);
   let addingPostId = $state<string | null>(null);
-
-  // Modals
-  let isCommentsModalOpen = $state(false);
-  let commentsPollId = $state<string | number>("");
-  let commentsPollTitle = $state("");
-  let isShareModalOpen = $state(false);
-  let sharePollHashId = $state("");
-  let sharePollTitle = $state("");
 
   // Swipe handlers para cerrar modal - SOLO si scroll está en top
   let modalTouchStartY = 0;
@@ -199,9 +219,51 @@
       // Establecer estado de seguimiento desde la respuesta de la API
       isFollowing = userData.isFollowing || false;
       isPending = userData.isPending || false;
+      console.log("[UserProfileModal] Follow state set from API:", {
+        isFollowing,
+        isPending,
+        userData_isFollowing: userData.isFollowing,
+        userData_isPending: userData.isPending,
+      });
+
+      // Cargar los votos del USUARIO ACTUAL (no del perfil) para saber qué encuestas ya votó
+      const myUserId = $currentUser?.userId || ($currentUser as any)?.id;
+      if (myUserId) {
+        try {
+          const myVotesRes = await apiCall(`/api/polls/my-votes`);
+          if (myVotesRes.ok) {
+            const myVotesData = await myVotesRes.json();
+            const votes = myVotesData.data || myVotesData || [];
+
+            // Transform to userVotesMap format (same as VotingFeed)
+            const votesMap: UserVotes = {};
+            (Array.isArray(votes) ? votes : []).forEach((vote: any) => {
+              const pollId = vote.poll?.hashId || String(vote.pollId);
+              const optionId = vote.option?.hashId || String(vote.optionId);
+
+              if (!pollId || !optionId) return;
+
+              if (votesMap[pollId]) {
+                if (Array.isArray(votesMap[pollId])) {
+                  (votesMap[pollId] as string[]).push(optionId);
+                } else {
+                  votesMap[pollId] = [votesMap[pollId] as string, optionId];
+                }
+              } else {
+                votesMap[pollId] = optionId;
+              }
+            });
+            userVotesMap = votesMap;
+          }
+        } catch (e) {
+          console.error(
+            "[UserProfileModal] Error loading current user votes:",
+            e,
+          );
+        }
+      }
 
       // Cargar encuestas guardadas solo si es el propio perfil
-      const myUserId = $currentUser?.userId || ($currentUser as any)?.id;
       if (myUserId && Number(myUserId) === userData.id) {
         loadSavedPolls();
       }
@@ -237,99 +299,89 @@
     }
   }
 
-  // Color palette for options (same as VotingFeed)
-  const OPTION_COLORS = [
-    { from: "from-red-600", to: "to-red-900", bar: "bg-red-500" },
-    { from: "from-blue-600", to: "to-blue-900", bar: "bg-blue-500" },
-    { from: "from-emerald-600", to: "to-emerald-900", bar: "bg-emerald-500" },
-    { from: "from-amber-600", to: "to-amber-900", bar: "bg-amber-500" },
-    { from: "from-purple-600", to: "to-purple-900", bar: "bg-purple-500" },
-    { from: "from-pink-600", to: "to-pink-900", bar: "bg-pink-500" },
-  ];
+  async function loadFollowers() {
+    if (!userData?.id || loadingFollowers) return;
 
-  function getTimeAgo(dateString: string): string {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return "ahora";
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-    return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+    loadingFollowers = true;
+    try {
+      const res = await apiCall(`/api/users/${userData.id}/followers`);
+      if (res.ok) {
+        const data = await res.json();
+        followersList = data.data || [];
+      }
+    } catch (err) {
+      console.error("[UserProfileModal] Error loading followers:", err);
+    } finally {
+      loadingFollowers = false;
+      hasLoadedFollowers = true;
+    }
   }
 
-  // Transform API poll data to Post format for PostCard
-  function transformToPost(apiPoll: any): Post {
-    const totalVotes =
-      apiPoll.stats?.totalVotes ||
-      apiPoll.options?.reduce(
-        (sum: number, opt: any) =>
-          sum + (opt.votes || opt.voteCount || opt._count?.votes || 0),
-        0,
-      ) ||
-      0;
+  async function loadFollowing() {
+    if (!userData?.id || loadingFollowing) return;
 
-    return {
-      id: apiPoll.hashId || String(apiPoll.id),
-      type: apiPoll.type || "standard",
-      author:
-        apiPoll.user?.displayName ||
-        apiPoll.user?.username ||
-        userData?.displayName ||
-        "Usuario",
-      avatar:
-        apiPoll.user?.avatarUrl ||
-        userData?.avatarUrl ||
-        `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiPoll.userId}`,
-      time: getTimeAgo(apiPoll.createdAt || new Date().toISOString()),
-      question: apiPoll.title || "Sin título",
-      totalVotes,
-      comments: apiPoll.stats?.comments || apiPoll._count?.comments || 0,
-      reposts: apiPoll.stats?.interactions || apiPoll._count?.interactions || 0,
-      likes: 0,
-      userId: apiPoll.user?.id || apiPoll.userId,
-      collabMode: apiPoll.collabMode,
-      collaborators: apiPoll.collaborators,
-      isFollowing: false,
-      isPending: false,
-      isBookmarked: true, // If in saved, it's bookmarked
-      endsAt: apiPoll.closedAt,
-      correctOptionId: apiPoll.correctOptionHashId,
-      options: (apiPoll.options || []).map((opt: any, idx: number) => {
-        const colors = OPTION_COLORS[idx % OPTION_COLORS.length];
-        const optionImage = opt.imageUrl || opt.image_url;
-        return {
-          id: opt.hashId || String(opt.id),
-          title:
-            opt.label ||
-            opt.optionLabel ||
-            opt.key ||
-            opt.optionKey ||
-            `Opción ${idx + 1}`,
-          votes: opt.votes || opt.voteCount || opt._count?.votes || 0,
-          friends: [],
-          type: optionImage ? ("image" as const) : ("text" as const),
-          image: optionImage,
-          colorFrom: colors.from,
-          colorTo: colors.to,
-          bgBar: colors.bar,
-        };
-      }),
-    };
+    loadingFollowing = true;
+    try {
+      const res = await apiCall(`/api/users/${userData.id}/following`);
+      if (res.ok) {
+        const data = await res.json();
+        followingList = data.data || [];
+      }
+    } catch (err) {
+      console.error("[UserProfileModal] Error loading following:", err);
+    } finally {
+      loadingFollowing = false;
+      hasLoadedFollowing = true;
+    }
+  }
+
+  function handleTabChange(tab: typeof activeTab) {
+    activeTab = tab;
+
+    // Load data on demand
+    if (tab === "followers" && !hasLoadedFollowers) {
+      loadFollowers();
+    } else if (tab === "following" && !hasLoadedFollowing) {
+      loadFollowing();
+    } else if (tab === "saved" && savedPolls.length === 0) {
+      loadSavedPolls();
+    }
+  }
+
+  // Use shared transformation utility from pollUtils
+  function transformToPost(apiPoll: any): Post {
+    return transformApiPollToPost(apiPoll, {
+      isProfileContext: true,
+      profileUser: userData,
+      parentIsFollowing: isFollowing,
+      parentIsPending: isPending,
+      activeTab,
+    });
+  }
+
+  function deduplicatePosts(posts: Post[]): Post[] {
+    const seen = new Set();
+    return posts.filter((post) => {
+      if (seen.has(post.id)) return false;
+      seen.add(post.id);
+      return true;
+    });
   }
 
   // Derived posts transformed to Post format
-  let transformedUserPolls = $derived(userPolls.map(transformToPost));
-  let transformedUserVotes = $derived(
-    userVotes
-      .filter((v: any) => v.poll)
-      .map((v: any) => transformToPost(v.poll)),
+  let transformedUserPolls = $derived(
+    deduplicatePosts(userPolls.map(transformToPost)),
   );
-  let transformedSavedPolls = $derived(savedPolls.map(transformToPost));
+  let transformedUserVotes = $derived(
+    deduplicatePosts(
+      userVotes
+        .filter((v: any) => v.poll)
+        .map((v: any) => transformToPost(v.poll)),
+    ),
+  );
+  let transformedSavedPolls = $derived(
+    deduplicatePosts(savedPolls.map(transformToPost)),
+  );
 
   // PostCard handlers
   function handleVote(postId: string, value: string | string[]) {
@@ -381,26 +433,63 @@
 
   function switchToReels(postId: string) {
     // Close profile and open post in reels view
-    dispatch("pollClick", { pollId: postId });
+    // Pass the current list of polls (likely from the active tab if they are polls)
+    // If we are in 'votes' or 'saved', we might want those?
+    // The user said "sus encuestas" (their polls), so usually implies the "polls" tab.
+    // Let's send the transformedUserPolls if activeTab is polls, otherwise maybe just the single poll or whatever list is active.
+
+    let contextPolls: Post[] = [];
+    if (activeTab === "polls") {
+      contextPolls = transformedUserPolls;
+    } else if (activeTab === "votes") {
+      contextPolls = transformedUserVotes;
+    } else if (activeTab === "saved") {
+      contextPolls = transformedSavedPolls;
+    }
+
+    dispatch("pollClick", { pollId: postId, polls: contextPolls });
     closeModal();
   }
 
   function handleComment(post: Post) {
-    commentsPollId = post.id;
-    commentsPollTitle = post.question;
-    isCommentsModalOpen = true;
+    dispatch("comment", { post });
   }
 
   function handleShare(post: Post) {
-    sharePollHashId = post.id;
-    sharePollTitle = post.question;
-    isShareModalOpen = true;
+    dispatch("share", { post });
   }
 
   function handleRepost(post: Post) {
-    // TODO: Implement repost
-    console.log("Repost:", post.id);
+    if (!$currentUser) {
+      loginModalOpen.set(true);
+      return;
+    }
+    dispatch("repost", { post });
   }
+
+  function handleStatsClick(post: Post) {
+    console.log("[UserProfileModal] Stats click for poll:", post.id);
+    dispatch("statsClick", { post });
+  }
+
+  // Sincronizar estado de seguimiento en todas las encuestas del modal
+  $effect(() => {
+    if (userPolls.length > 0) {
+      userPolls = userPolls.map((p) => ({ ...p, isFollowing, isPending }));
+    }
+  });
+
+  $effect(() => {
+    if (userVotes.length > 0) {
+      userVotes = userVotes.map((p) => ({ ...p, isFollowing, isPending }));
+    }
+  });
+
+  $effect(() => {
+    if (savedPolls.length > 0) {
+      savedPolls = savedPolls.map((p) => ({ ...p, isFollowing, isPending }));
+    }
+  });
 
   function handleAvatarClick(post: Post) {
     // Already in profile modal, could switch to that user's profile
@@ -412,6 +501,10 @@
 
   async function toggleFollow() {
     if (!userId || followLoading) return;
+    if (!$currentUser) {
+      loginModalOpen.set(true);
+      return;
+    }
 
     followLoading = true;
     try {
@@ -420,7 +513,14 @@
         const res = await apiCall(`/api/users/${userId}/follow`, {
           method: "DELETE",
         });
-        if (res.ok) isPending = false;
+        if (res.ok) {
+          isPending = false;
+          dispatch("followChange", {
+            userId,
+            isFollowing: false,
+            isPending: false,
+          });
+        }
       } else if (isFollowing) {
         // Dejar de seguir
         const res = await apiCall(`/api/users/${userId}/follow`, {
@@ -428,6 +528,11 @@
         });
         if (res.ok) {
           isFollowing = false;
+          dispatch("followChange", {
+            userId,
+            isFollowing: false,
+            isPending: false,
+          });
           if (userData)
             userData.stats.followersCount = Math.max(
               0,
@@ -436,18 +541,65 @@
         }
       } else {
         // Seguir
-        const res = await apiCall(`/api/users/${userId}/follow`, {
-          method: "POST",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === "pending") {
-            isPending = true;
-            isFollowing = false;
+        try {
+          const res = await apiCall(`/api/users/${userId}/follow`, {
+            method: "POST",
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "pending") {
+              isPending = true;
+              isFollowing = false;
+              dispatch("followChange", {
+                userId,
+                isFollowing: false,
+                isPending: true,
+              });
+            } else {
+              isFollowing = true;
+              isPending = false;
+              dispatch("followChange", {
+                userId,
+                isFollowing: true,
+                isPending: false,
+              });
+              if (userData) userData.stats.followersCount += 1;
+            }
           } else {
+            // Handle error response
+            if (res.status === 400) {
+              const errData = await res.json().catch(() => ({}));
+              // Check if error is "relationship exists"
+              if (errData.message && errData.message.includes("existe")) {
+                console.log(
+                  "[UserProfileModal] Ya se sigue al usuario, actualizando estado local.",
+                );
+                isFollowing = true;
+                isPending = false;
+                dispatch("followChange", {
+                  userId,
+                  isFollowing: true,
+                  isPending: false,
+                });
+              }
+            } else {
+              console.error("[UserProfileModal] Error al seguir:", res.status);
+            }
+          }
+        } catch (postErr: any) {
+          console.error("[UserProfileModal] Exception al seguir:", postErr);
+          // Si el error viene de apiCall, a veces lanza excepción con status
+          if (postErr.status === 400) {
+            console.log(
+              "[UserProfileModal] 400 caught via exception, asumiendo ya seguido.",
+            );
             isFollowing = true;
             isPending = false;
-            if (userData) userData.stats.followersCount += 1;
+            dispatch("followChange", {
+              userId,
+              isFollowing: true,
+              isPending: false,
+            });
           }
         }
       }
@@ -455,6 +607,31 @@
       console.error("[UserProfileModal] Error al seguir/dejar de seguir:", err);
     } finally {
       followLoading = false;
+    }
+  }
+
+  async function handleUnfollowUser(targetUserId: number) {
+    try {
+      const res = await apiCall(`/api/users/${targetUserId}/follow`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        // Remove from list immediately for better UX
+        followingList = followingList.filter((u) => u.id !== targetUserId);
+        // Also update local counters if this is the current user viewing their own profile
+        if (
+          userData &&
+          userData.id ===
+            Number($currentUser?.userId || ($currentUser as any)?.id)
+        ) {
+          userData.stats.followingCount = Math.max(
+            0,
+            userData.stats.followingCount - 1,
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[UserProfileModal] Error unfollowing from list:", err);
     }
   }
 
@@ -473,6 +650,19 @@
       return (num / 1000).toFixed(1) + "K";
     }
     return num.toString();
+  }
+
+  function handleLogout() {
+    console.log("[UserProfileModal] 🚪 Cerrando sesión...");
+    logout();
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("voutop-test-user");
+    }
+    currentUser.set(null);
+    closeModal();
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   }
 </script>
 
@@ -499,15 +689,109 @@
   >
     <!-- Header -->
     <div class="modal-header">
-      <h2 id="user-profile-modal-title">Perfil</h2>
-      <button onclick={closeModal} class="close-btn" aria-label="Cerrar">
-        <X size={24} />
-      </button>
+      {#if showSettings}
+        <button
+          onclick={() => (showSettings = false)}
+          class="close-btn"
+          aria-label="Volver"
+        >
+          <ArrowLeft size={24} />
+        </button>
+        <h2>Ajustes</h2>
+      {:else}
+        <h2 id="user-profile-modal-title">Perfil</h2>
+      {/if}
+
+      <div class="flex items-center gap-2">
+        {#if !showSettings && $currentUser && ($currentUser.userId || ($currentUser as any).id) === userData?.id}
+          <button
+            onclick={() => (showSettings = true)}
+            class="close-btn"
+            aria-label="Ajustes"
+          >
+            <Settings size={24} />
+          </button>
+        {/if}
+        <button onclick={closeModal} class="close-btn" aria-label="Cerrar">
+          <X size={24} />
+        </button>
+      </div>
     </div>
 
     <!-- Content -->
     <div class="modal-content" bind:this={scrollContainer}>
-      {#if loading && !userData}
+      {#if showSettings}
+        <!-- Menú de Ajustes (Importado del antiguo ProfileModal) -->
+        <div class="settings-view" transition:fade={{ duration: 200 }}>
+          <div class="menu-section">
+            <h4 class="menu-title">Cuenta</h4>
+
+            <button
+              class="menu-item"
+              onclick={() => console.log("Configuración")}
+            >
+              <Settings size={20} />
+              <span>Configuración</span>
+            </button>
+
+            <button
+              class="menu-item"
+              onclick={() => console.log("Notificaciones")}
+            >
+              <Bell size={20} />
+              <span>Notificaciones</span>
+            </button>
+
+            <button class="menu-item" onclick={() => console.log("Privacidad")}>
+              <Shield size={20} />
+              <span>Privacidad y seguridad</span>
+            </button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="menu-section">
+            <h4 class="menu-title">Apariencia</h4>
+
+            <button class="menu-item" onclick={() => console.log("Tema")}>
+              <Moon size={20} />
+              <span>Modo oscuro</span>
+              <div class="toggle-switch active">
+                <div class="toggle-thumb"></div>
+              </div>
+            </button>
+
+            <button class="menu-item" onclick={() => console.log("Idioma")}>
+              <Globe size={20} />
+              <span>Idioma</span>
+              <span class="menu-value">Español</span>
+            </button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="menu-section">
+            <h4 class="menu-title">Soporte</h4>
+
+            <button class="menu-item" onclick={() => console.log("Ayuda")}>
+              <HelpCircle size={20} />
+              <span>Ayuda y soporte</span>
+            </button>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Botón de logout -->
+          <button class="logout-btn" onclick={handleLogout}>
+            <LogOut size={20} />
+            <span>Cerrar sesión</span>
+          </button>
+
+          <div class="text-center mt-8 text-xs text-slate-600">
+            v0.9.5 (Beta)
+          </div>
+        </div>
+      {:else if loading && !userData}
         <div class="loading-state">
           <Loader2 size={48} class="spinner" />
           <p>Cargando perfil...</p>
@@ -520,10 +804,7 @@
       {:else if userData}
         <!-- Perfil del usuario -->
         <div class="profile-header">
-          <!-- Banner (opcional) -->
-          <div class="profile-banner"></div>
-
-          <!-- Avatar y botón de seguir -->
+          <!-- Avatar y botón de seguir (Banner eliminado) -->
           <div class="profile-top">
             <div class="profile-avatar">
               <img
@@ -607,65 +888,79 @@
               </span>
             </div>
           </div>
-
-          <!-- Stats -->
-          <div class="stats-row">
-            <div class="stat-item">
-              <span class="stat-value"
-                >{formatNumber(userData.stats.pollsCount)}</span
-              >
-              <span class="stat-label">Encuestas</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value"
-                >{formatNumber(userData.stats.votesCount)}</span
-              >
-              <span class="stat-label">Votos</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value"
-                >{formatNumber(userData.stats.followersCount)}</span
-              >
-              <span class="stat-label">Seguidores</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value"
-                >{formatNumber(userData.stats.followingCount)}</span
-              >
-              <span class="stat-label">Siguiendo</span>
-            </div>
-          </div>
         </div>
 
-        <!-- Tabs -->
-        <div class="tabs-container">
+        <!-- Profile Tabs (Sticky on scroll) -->
+        <nav class="profile-tabs">
           <button
-            class="tab-btn"
+            class="tab-pill"
             class:active={activeTab === "polls"}
-            onclick={() => (activeTab = "polls")}
+            onclick={() => handleTabChange("polls")}
           >
-            <BarChart size={18} />
-            <span>Encuestas ({userPolls.length})</span>
-          </button>
-          <button
-            class="tab-btn"
-            class:active={activeTab === "votes"}
-            onclick={() => (activeTab = "votes")}
-          >
-            <TrendingUp size={18} />
-            <span>Votaciones ({userVotes.length})</span>
-          </button>
-          {#if $currentUser && ($currentUser.userId || ($currentUser as any).id) === userData.id}
-            <button
-              class="tab-btn"
-              class:active={activeTab === "saved"}
-              onclick={() => (activeTab = "saved")}
+            <span class="tab-icon"><BarChart2 size={18} /></span>
+            <span class="tab-num"
+              >{formatNumber(userData.stats.pollsCount)}</span
             >
-              <Bookmark size={18} />
-              <span>Guardadas ({savedPolls.length})</span>
+            {#if activeTab === "polls"}
+              <span class="tab-name">Encuestas</span>
+            {/if}
+          </button>
+
+          <button
+            class="tab-pill"
+            class:active={activeTab === "votes"}
+            onclick={() => handleTabChange("votes")}
+          >
+            <span class="tab-icon"><Vote size={18} /></span>
+            <span class="tab-num"
+              >{formatNumber(userData.stats.votesCount)}</span
+            >
+            {#if activeTab === "votes"}
+              <span class="tab-name">Votos</span>
+            {/if}
+          </button>
+
+          <button
+            class="tab-pill"
+            class:active={activeTab === "followers"}
+            onclick={() => handleTabChange("followers")}
+          >
+            <span class="tab-icon"><Users size={18} /></span>
+            <span class="tab-num"
+              >{formatNumber(userData.stats.followersCount)}</span
+            >
+            {#if activeTab === "followers"}
+              <span class="tab-name">Seguidores</span>
+            {/if}
+          </button>
+
+          <button
+            class="tab-pill"
+            class:active={activeTab === "following"}
+            onclick={() => handleTabChange("following")}
+          >
+            <span class="tab-icon"><UserPlus size={18} /></span>
+            <span class="tab-num"
+              >{formatNumber(userData.stats.followingCount)}</span
+            >
+            {#if activeTab === "following"}
+              <span class="tab-name">Siguiendo</span>
+            {/if}
+          </button>
+
+          {#if $currentUser && (Number($currentUser.userId) === userData.id || Number(($currentUser as any).id) === userData.id)}
+            <button
+              class="tab-pill"
+              class:active={activeTab === "saved"}
+              onclick={() => handleTabChange("saved")}
+            >
+              <span class="tab-icon"><Bookmark size={18} /></span>
+              {#if activeTab === "saved"}
+                <span class="tab-name">Guardados</span>
+              {/if}
             </button>
           {/if}
-        </div>
+        </nav>
 
         <!-- Contenido de tabs -->
         <div class="tab-content">
@@ -673,7 +968,7 @@
             <div class="polls-list">
               {#if userPolls.length === 0}
                 <div class="empty-state">
-                  <BarChart size={48} />
+                  <BarChart2 size={48} />
                   <p>Aún no ha publicado encuestas</p>
                 </div>
               {:else}
@@ -699,6 +994,7 @@
                     onShare={handleShare}
                     onRepost={handleRepost}
                     onAvatarClick={handleAvatarClick}
+                    onStatsClick={handleStatsClick}
                   />
                 {/each}
               {/if}
@@ -738,6 +1034,7 @@
                     onShare={handleShare}
                     onRepost={handleRepost}
                     onAvatarClick={handleAvatarClick}
+                    onStatsClick={handleStatsClick}
                   />
                 {/each}
               {/if}
@@ -781,7 +1078,108 @@
                     onShare={handleShare}
                     onRepost={handleRepost}
                     onAvatarClick={handleAvatarClick}
+                    onStatsClick={handleStatsClick}
                   />
+                {/each}
+              {/if}
+            </div>
+          {:else if activeTab === "followers"}
+            <div class="users-list">
+              {#if loadingFollowers}
+                <div class="loading-state">
+                  <Loader2 size={48} class="spinner" />
+                  <p>Cargando seguidores...</p>
+                </div>
+              {:else if followersList.length === 0}
+                <div class="empty-state">
+                  <Users size={48} />
+                  <p>Aún no tiene seguidores</p>
+                </div>
+              {:else}
+                {#each followersList as user (user.id)}
+                  <div
+                    class="user-card"
+                    onclick={() => {
+                      dispatch("userClick", { userId: user.id });
+                    }}
+                    role="button"
+                    tabindex="0"
+                    onkeydown={(e) =>
+                      e.key === "Enter" &&
+                      dispatch("userClick", { userId: user.id })}
+                  >
+                    <img
+                      src={user.avatarUrl ||
+                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`}
+                      alt={user.displayName || user.username}
+                      class="user-avatar"
+                    />
+                    <div class="user-info">
+                      <span class="user-name"
+                        >{user.displayName || user.username}</span
+                      >
+                      <span class="user-username">@{user.username}</span>
+                    </div>
+                    {#if user.verified}
+                      <span class="verified-badge-inline">✓</span>
+                    {/if}
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          {:else if activeTab === "following"}
+            <div class="users-list">
+              {#if loadingFollowing}
+                <div class="loading-state">
+                  <Loader2 size={48} class="spinner" />
+                  <p>Cargando siguiendo...</p>
+                </div>
+              {:else if followingList.length === 0}
+                <div class="empty-state">
+                  <UserPlus size={48} />
+                  <p>Aún no sigue a nadie</p>
+                </div>
+              {:else}
+                {#each followingList as user (user.id)}
+                  <div
+                    class="user-card"
+                    onclick={() => {
+                      dispatch("userClick", { userId: user.id });
+                    }}
+                    role="button"
+                    tabindex="0"
+                    onkeydown={(e) =>
+                      e.key === "Enter" &&
+                      dispatch("userClick", { userId: user.id })}
+                  >
+                    <img
+                      src={user.avatarUrl ||
+                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`}
+                      alt={user.displayName || user.username}
+                      class="user-avatar"
+                    />
+                    <div class="user-info">
+                      <span class="user-name"
+                        >{user.displayName || user.username}</span
+                      >
+                      <span class="user-username">@{user.username}</span>
+                    </div>
+                    {#if user.verified}
+                      <span class="verified-badge-inline">✓</span>
+                    {/if}
+
+                    {#if $currentUser && (Number($currentUser.userId) === userData.id || Number(($currentUser as any).id) === userData.id)}
+                      <button
+                        class="unfollow-list-btn"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          handleUnfollowUser(user.id);
+                        }}
+                      >
+                        Dejar de seguir
+                      </button>
+                    {/if}
+                  </div>
                 {/each}
               {/if}
             </div>
@@ -791,20 +1189,6 @@
     </div>
   </div>
 {/if}
-
-<!-- Comments Modal -->
-<CommentsModal
-  bind:isOpen={isCommentsModalOpen}
-  pollId={commentsPollId}
-  pollTitle={commentsPollTitle}
-/>
-
-<!-- Share Modal -->
-<ShareModal
-  bind:isOpen={isShareModalOpen}
-  pollHashId={sharePollHashId}
-  pollTitle={sharePollTitle}
-/>
 
 <style>
   .modal-overlay {
@@ -831,10 +1215,11 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: #181a20;
+    background: #000000;
     z-index: 1000001;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
 
   @media (min-width: 768px) {
@@ -842,9 +1227,9 @@
       left: 0;
       right: auto;
       width: 100%;
-      max-width: 700px;
-      border-radius: 0 1.25rem 0 0;
-      box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+      max-width: 500px;
+      border-radius: 0 20px 0 0;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
     }
   }
 
@@ -859,7 +1244,7 @@
     flex-shrink: 0;
     position: sticky;
     top: 0;
-    background: #181a20;
+    background: #000000;
     z-index: 10;
   }
 
@@ -892,10 +1277,13 @@
   .modal-content {
     flex: 1;
     overflow-y: auto;
-    padding: 0 20px 20px;
+    padding: 0;
     touch-action: pan-y;
+    overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    /* Eliminamos flex para que sticky funcione mejor */
+    position: relative;
   }
 
   .modal-content::-webkit-scrollbar {
@@ -956,18 +1344,12 @@
     position: relative;
   }
 
-  .profile-banner {
-    width: 100%;
-    height: 120px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  }
-
   .profile-top {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    padding: 0 1.5rem;
-    margin-top: -40px;
+    padding: 1rem 1.5rem 0;
+    margin-top: 0;
   }
 
   .profile-avatar {
@@ -1046,7 +1428,7 @@
   }
 
   .profile-info {
-    padding: 16px 1.5rem 0;
+    padding: 16px 20px 0;
   }
 
   .profile-info h3 {
@@ -1105,62 +1487,221 @@
     font-size: 14px;
   }
 
-  .stats-row {
+  /* Profile Tabs - Fixed & Elegant */
+  .profile-tabs {
     display: flex;
-    gap: 20px;
-    padding: 20px 1.5rem;
+    gap: 12px;
+    padding: 0 20px;
+    background: #000000;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .stat-item {
-    display: flex;
-    flex-direction: column;
+    position: sticky;
+    top: -1.5px; /* Solapamiento forzado para eliminar el 'filo' */
+    margin-top: -1px; /* Tirar un pelín hacia arriba */
+    z-index: 100;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    height: 72px;
     align-items: center;
-    gap: 4px;
+    /* Asegurar que se vean */
+    visibility: visible;
+    opacity: 1;
   }
 
-  .stat-value {
-    font-size: 18px;
-    font-weight: 700;
-    color: white;
+  .profile-tabs::-webkit-scrollbar {
+    display: none;
   }
 
-  .stat-label {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  /* Tabs */
-  .tabs-container {
+  .tab-pill {
     display: flex;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    flex-shrink: 0;
+    height: 44px; /* Botones más grandes y cómodos */
   }
 
-  .tab-btn {
-    flex: 1;
+  .tab-pill:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .tab-pill.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: white;
+    /* Brillo sutil en lugar de azul eléctrico */
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+  }
+
+  .tab-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 16px;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 15px;
+    color: inherit;
+    opacity: 0.8;
+  }
+
+  .tab-pill.active .tab-icon {
+    opacity: 1;
+    color: #ffffff;
+  }
+
+  .tab-num {
+    font-weight: 700;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tab-name {
+    font-size: 11px;
     font-weight: 600;
-    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: 4px;
+    color: rgba(255, 255, 255, 0.9);
+    animation: fadeInSlide 0.3s ease-out forwards;
+  }
+
+  @keyframes fadeInSlide {
+    from {
+      opacity: 0;
+      transform: translateX(-5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .tab-content {
+    background: #000000;
+    min-height: 100%;
+  }
+
+  /* User Cards List */
+  .users-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 20px 20px;
+  }
+
+  .tab-content {
+    padding: 0;
+  }
+
+  .polls-list,
+  .saved-list {
+    padding: 12px 20px 20px;
+  }
+
+  .unfollow-list-btn {
+    margin-left: auto;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    font-weight: 600;
     transition: all 0.2s;
   }
 
-  .tab-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.9);
+  .unfollow-list-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
   }
 
-  .tab-btn.active {
-    color: #60a5fa;
-    border-bottom-color: #3b82f6;
+  .verified-badge-inline {
+    width: 16px;
+    height: 16px;
+    background: #3b82f6;
+    color: white;
+    font-size: 10px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: -4px;
+    margin-right: 8px;
+  }
+
+  .user-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    width: 100%;
+  }
+
+  .user-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .user-card:active {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+  }
+
+  .user-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .user-name {
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .user-username {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+  }
+
+  .verified-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: #3b82f6;
+    border-radius: 50%;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    flex-shrink: 0;
   }
 
   /* Tab Content */
@@ -1185,34 +1726,16 @@
   }
 
   /* Polls List - usar PostCard */
-  .polls-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .polls-list :global(.post-card) {
-    width: 100%;
-  }
-
-  /* Votes List - usar PostCard */
-  .votes-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .votes-list :global(.post-card) {
-    width: 100%;
-  }
-
-  /* Saved List - usar PostCard */
+  .polls-list,
+  .votes-list,
   .saved-list {
     display: flex;
     flex-direction: column;
     gap: 16px;
   }
 
+  .polls-list :global(.post-card),
+  .votes-list :global(.post-card),
   .saved-list :global(.post-card) {
     width: 100%;
   }
@@ -1223,5 +1746,128 @@
     font-size: 13px;
     color: rgba(255, 255, 255, 0.4);
     max-width: 250px;
+  }
+
+  /* Ajustar profile-top al no haber banner */
+  .profile-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    padding-top: 1rem;
+  }
+
+  .profile-avatar {
+    position: relative;
+    margin-top: 0;
+  }
+
+  .profile-avatar img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #000;
+    background: #1e293b;
+  }
+
+  /* Estilos para el menú de ajustes */
+  .divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 20px 0;
+  }
+
+  .menu-section {
+    margin-bottom: 20px;
+  }
+
+  .menu-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 12px 0;
+  }
+
+  .menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    margin-bottom: 6px;
+  }
+
+  .menu-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .menu-item span:first-of-type {
+    flex: 1;
+  }
+
+  .menu-value {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+  }
+
+  .toggle-switch {
+    width: 44px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    position: relative;
+    transition: all 0.3s;
+  }
+
+  .toggle-switch.active {
+    background: #3b82f6;
+  }
+
+  .toggle-thumb {
+    width: 18px;
+    height: 18px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: all 0.3s;
+  }
+
+  .toggle-switch.active .toggle-thumb {
+    left: 23px;
+  }
+
+  .logout-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(239, 68, 68, 0.15);
+    border: none;
+    border-radius: 16px;
+    color: #ef4444;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .logout-btn:hover {
+    background: rgba(239, 68, 68, 0.25);
+    transform: scale(1.02);
   }
 </style>

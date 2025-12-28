@@ -472,26 +472,85 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     const [polls, total] = await Promise.all([pollsQuery, countQuery]);
 
-    // Fetch Friend Votes (if authenticated and following people)
+    // Fetch Friend Votes & Unseen Reels Status
     let friendVotes: any[] = [];
-    if (currentUserId && followingIds.size > 0 && polls.length > 0) {
-      const pollIds = polls.map(p => p.id);
+    const authorStats: Record<number, { active: number; viewed: number }> = {};
+    const authorIds = [...new Set(polls.map(p => p.userId))];
 
-      friendVotes = await prisma.vote.findMany({
-        where: {
-          pollId: { in: pollIds },
-          userId: { in: Array.from(followingIds) }
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              avatarUrl: true
+    if (currentUserId && polls.length > 0) {
+      // 1. Friend Votes
+      if (followingIds.size > 0) {
+        const pollIds = polls.map(p => p.id);
+        friendVotes = await prisma.vote.findMany({
+          where: {
+            pollId: { in: pollIds },
+            userId: { in: Array.from(followingIds) }
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                avatarUrl: true
+              }
             }
+          },
+          take: 500
+        });
+      }
+
+      // 2. Unseen Reels Logic (Green Border)
+      // Get active poll counts for these authors
+      const activePollsCounts = await prisma.poll.groupBy({
+        by: ['userId'],
+        where: {
+          userId: { in: authorIds },
+          status: 'active',
+          // Optional: closedAt is null or future
+          OR: [
+            { closedAt: null },
+            { closedAt: { gt: new Date() } }
+          ]
+        },
+        _count: { id: true }
+      });
+
+      // Get viewed active polls counts by current user for these authors
+      // Complex query: Count interactions where user=me, interaction=view, and poll.author IN authors and poll.status=active
+      // Prisma groupBy on relations is tricky. Let's do it via findMany pollInteractions joined with Poll
+      const viewedPolls = await prisma.pollInteraction.findMany({
+        where: {
+          userId: currentUserId,
+          interactionType: 'view',
+          poll: {
+            userId: { in: authorIds },
+            status: 'active',
+            OR: [
+              { closedAt: null },
+              { closedAt: { gt: new Date() } }
+            ]
           }
         },
-        take: 500 // Limit total friend votes to avoid massive response
+        select: {
+          poll: {
+            select: { userId: true }
+          }
+        }
+      });
+
+      // Aggregate viewed counts in memory
+      const viewedCounts: Record<number, number> = {};
+      viewedPolls.forEach(v => {
+        const authId = v.poll.userId;
+        viewedCounts[authId] = (viewedCounts[authId] || 0) + 1;
+      });
+
+      // Populate map
+      activePollsCounts.forEach(bg => {
+        authorStats[bg.userId] = {
+          active: bg._count.id,
+          viewed: viewedCounts[bg.userId] || 0
+        };
       });
     }
 
@@ -513,6 +572,20 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         }
       }
 
+      const stats = authorStats[poll.userId] || { active: 0, viewed: 0 };
+      const hasUnseenReels = stats.active > stats.viewed;
+
+      // Ensure `user` object is fully populated for frontend (PostUser interface)
+      const userObj = poll.user ? {
+        id: poll.user.id,
+        username: poll.user.username,
+        displayName: poll.user.displayName,
+        avatarUrl: poll.user.avatarUrl,
+        verified: poll.user.verified,
+        hashId: encodeUserId(poll.user.id),
+        hasUnseenReels
+      } : null;
+
       return {
         ...poll,
         hashId: encodePollId(poll.id),
@@ -522,10 +595,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         isBookmarked: bookmarkedPollIds.has(poll.id),
         isReposted: repostedPollIds.has(poll.id),
         hasCommented: commentedPollIds.has(poll.id),
-        user: poll.user ? {
-          ...poll.user,
-          hashId: encodeUserId(poll.user.id),
-        } : null,
+        user: userObj,
         options: pollOptions.map((option: any) => {
           // Find friend votes for this option
           const voters = friendVotes.filter(v => v.pollId === poll.id && v.optionId === option.id);

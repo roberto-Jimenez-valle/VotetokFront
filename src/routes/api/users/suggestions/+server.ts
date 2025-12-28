@@ -22,7 +22,7 @@ export const GET: RequestHandler = async ({ url }) => {
         _count: {
           select: {
             polls: true,
-            followers: true,
+            following: true, // Inverted naming in Prisma - this gives followers count
           },
         },
       },
@@ -42,7 +42,7 @@ export const GET: RequestHandler = async ({ url }) => {
         bio: user.bio || 'Usuario de voutop',
         verified: user.verified,
         pollsCount: user._count.polls,
-        followersCount: user._count.followers,
+        followersCount: user._count.following, // Inverted naming in Prisma
       })),
     });
   } catch (error) {

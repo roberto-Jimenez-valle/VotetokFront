@@ -41,6 +41,7 @@
     let hoveredTimeIdx = $state<number | null>(null);
     let activePieIdx = $state<number | null>(null);
     let hoveredBarIdx = $state<number | null>(null);
+    let pieSubView = $state<"donut" | "radar" | "polar">("donut");
 
     // Derived stats from current post data
     const optionStats = $derived.by(() => {
@@ -529,90 +530,353 @@
                                 {/if}
                             </div>
                         {:else if chartView === "pie"}
-                            <div
-                                class="relative w-60 h-60 flex items-center justify-center"
-                            >
-                                <svg
-                                    viewBox="0 0 100 100"
-                                    class="w-full h-full -rotate-90"
+                            <div class="w-full flex flex-col items-center">
+                                <!-- Sub-View Selector -->
+                                <div
+                                    class="flex bg-black/40 p-1 rounded-full border border-white/10 mb-6 relative"
                                 >
-                                    <circle
-                                        cx="50"
-                                        cy="50"
-                                        r="44"
-                                        fill="transparent"
-                                        stroke="rgba(255,255,255,0.05)"
-                                        stroke-width="8"
-                                    />
-                                    {#each optionStats as opt, idx}
-                                        {@const color =
-                                            opt.colorFrom || "#6366f1"}
-                                        {@const prevP = optionStats
-                                            .slice(0, idx)
-                                            .reduce(
-                                                (s, o) => s + o.percentage,
-                                                0,
-                                            )}
-                                        {@const circumference =
-                                            2 * Math.PI * 40}
-                                        {@const dashLength =
-                                            (opt.percentage / 100) *
-                                            circumference}
-                                        {@const dashOffset =
-                                            (prevP / 100) * circumference}
-                                        <circle
-                                            cx="50"
-                                            cy="50"
-                                            r="40"
-                                            fill="transparent"
-                                            stroke={color}
-                                            stroke-width={activePieIdx === idx
-                                                ? 10
-                                                : 8}
-                                            stroke-dasharray="{dashLength} {circumference}"
-                                            stroke-dashoffset="-{dashOffset *
-                                                1.01}"
-                                            class="transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer opacity-70 hover:opacity-100"
-                                            onmouseenter={() =>
-                                                (activePieIdx = idx)}
-                                            onmouseleave={() =>
-                                                (activePieIdx = null)}
-                                        />
+                                    <div
+                                        class="absolute inset-y-1 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-all duration-300"
+                                        style="left: {pieSubView === 'donut'
+                                            ? '4px'
+                                            : pieSubView === 'radar'
+                                              ? 'calc(33.33% + 2px)'
+                                              : 'calc(66.66% + 0px)'}; width: calc(33.33% - 4px);"
+                                    ></div>
+                                    {#each [{ id: "donut", label: "Donut" }, { id: "radar", label: "Radar" }, { id: "polar", label: "Polar" }] as view}
+                                        <button
+                                            onclick={() =>
+                                                (pieSubView = view.id as any)}
+                                            class="relative z-10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors duration-300 w-20 text-center {pieSubView ===
+                                            view.id
+                                                ? 'text-white'
+                                                : 'text-zinc-500 hover:text-zinc-300'}"
+                                        >
+                                            {view.label}
+                                        </button>
                                     {/each}
-                                </svg>
+                                </div>
 
                                 <div
-                                    class="absolute flex flex-col items-center justify-center text-center pointer-events-none"
+                                    class="relative w-64 h-64 flex items-center justify-center"
                                 >
-                                    {#if activePieIdx !== null}
+                                    {#if pieSubView === "donut"}
+                                        <!-- Existing Donut Logic -->
+                                        <svg
+                                            viewBox="0 0 100 100"
+                                            class="w-full h-full -rotate-90"
+                                        >
+                                            <circle
+                                                cx="50"
+                                                cy="50"
+                                                r="44"
+                                                fill="transparent"
+                                                stroke="rgba(255,255,255,0.05)"
+                                                stroke-width="8"
+                                            />
+                                            {#each optionStats as opt, idx}
+                                                {@const color =
+                                                    opt.colorFrom || "#6366f1"}
+                                                {@const prevP = optionStats
+                                                    .slice(0, idx)
+                                                    .reduce(
+                                                        (s, o) =>
+                                                            s + o.percentage,
+                                                        0,
+                                                    )}
+                                                {@const circumference =
+                                                    2 * Math.PI * 40}
+                                                {@const dashLength =
+                                                    (opt.percentage / 100) *
+                                                    circumference}
+                                                {@const dashOffset =
+                                                    (prevP / 100) *
+                                                    circumference}
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    r="40"
+                                                    fill="transparent"
+                                                    stroke={color}
+                                                    stroke-width={activePieIdx ===
+                                                    idx
+                                                        ? 10
+                                                        : 8}
+                                                    stroke-dasharray="{dashLength} {circumference}"
+                                                    stroke-dashoffset="-{dashOffset *
+                                                        1.01}"
+                                                    class="transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer opacity-70 hover:opacity-100"
+                                                    onmouseenter={() =>
+                                                        (activePieIdx = idx)}
+                                                    onmouseleave={() =>
+                                                        (activePieIdx = null)}
+                                                />
+                                            {/each}
+                                        </svg>
                                         <div
-                                            transition:scale={{ duration: 200 }}
-                                            class="flex flex-col items-center"
+                                            class="absolute flex flex-col items-center justify-center text-center pointer-events-none"
                                         >
-                                            <span
-                                                class="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1"
-                                            >
-                                                {optionStats[
-                                                    activePieIdx
-                                                ].title.slice(0, 12)}
-                                            </span>
-                                            <span
-                                                class="text-3xl font-bold text-white tracking-tighter tabular-nums leading-none"
-                                            >
-                                                {optionStats[activePieIdx]
-                                                    .percentage}%
-                                            </span>
+                                            {#if activePieIdx !== null}
+                                                <div
+                                                    transition:scale={{
+                                                        duration: 200,
+                                                    }}
+                                                    class="flex flex-col items-center"
+                                                >
+                                                    <span
+                                                        class="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1"
+                                                    >
+                                                        {optionStats[
+                                                            activePieIdx
+                                                        ].title.slice(0, 12)}
+                                                    </span>
+                                                    <span
+                                                        class="text-3xl font-bold text-white tracking-tighter tabular-nums leading-none"
+                                                    >
+                                                        {optionStats[
+                                                            activePieIdx
+                                                        ].percentage}%
+                                                    </span>
+                                                </div>
+                                            {:else}
+                                                <span
+                                                    class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1"
+                                                    >Total</span
+                                                >
+                                                <span
+                                                    class="text-4xl font-bold text-white tracking-tighter leading-none tabular-nums"
+                                                >
+                                                    {post.totalVotes}
+                                                </span>
+                                            {/if}
                                         </div>
-                                    {:else}
-                                        <span
-                                            class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1"
-                                            >Total</span
+                                    {:else if pieSubView === "radar"}
+                                        <!-- Radar Chart -->
+                                        {@const numVars =
+                                            optionStats.length || 3}
+                                        {@const angleStep =
+                                            (Math.PI * 2) / numVars}
+                                        {@const maxVal = Math.max(
+                                            ...optionStats.map((o) => o.votes),
+                                            1,
+                                        )}
+                                        {@const points = optionStats.map(
+                                            (opt, i) => {
+                                                const angle =
+                                                    i * angleStep - Math.PI / 2;
+                                                const val =
+                                                    (opt.votes / maxVal) * 40; // max radius 40
+                                                return {
+                                                    x:
+                                                        50 +
+                                                        Math.cos(angle) * val,
+                                                    y:
+                                                        50 +
+                                                        Math.sin(angle) * val,
+                                                    title: opt.title,
+                                                    votes: opt.votes,
+                                                };
+                                            },
+                                        )}
+                                        {@const polyPoints = points
+                                            .map((p) => `${p.x},${p.y}`)
+                                            .join(" ")}
+
+                                        <svg
+                                            viewBox="0 0 100 100"
+                                            class="w-full h-full"
                                         >
-                                        <span
-                                            class="text-4xl font-bold text-white tracking-tighter leading-none tabular-nums"
+                                            <!-- Web/Grid -->
+                                            {#each [10, 20, 30, 40] as r}
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    {r}
+                                                    fill="none"
+                                                    stroke="rgba(255,255,255,0.05)"
+                                                    stroke-width="0.5"
+                                                />
+                                            {/each}
+                                            {#each optionStats as _, i}
+                                                {@const angle =
+                                                    i * angleStep - Math.PI / 2}
+                                                <line
+                                                    x1="50"
+                                                    y1="50"
+                                                    x2={50 +
+                                                        Math.cos(angle) * 40}
+                                                    y2={50 +
+                                                        Math.sin(angle) * 40}
+                                                    stroke="rgba(255,255,255,0.05)"
+                                                    stroke-width="0.5"
+                                                />
+                                            {/each}
+
+                                            <!-- Data Polygon -->
+                                            <polygon
+                                                points={polyPoints}
+                                                fill="rgba(99, 102, 241, 0.2)"
+                                                stroke="#6366f1"
+                                                stroke-width="1.5"
+                                                class="transition-all duration-500"
+                                            />
+
+                                            <!-- Dots -->
+                                            {#each points as p, i}
+                                                <circle
+                                                    cx={p.x}
+                                                    cy={p.y}
+                                                    r={activePieIdx === i
+                                                        ? 3
+                                                        : 1.5}
+                                                    fill={optionStats[i]
+                                                        .colorFrom || "#6366f1"}
+                                                    stroke="white"
+                                                    stroke-width="0.5"
+                                                    class="cursor-pointer transition-all duration-300"
+                                                    onmouseenter={() =>
+                                                        (activePieIdx = i)}
+                                                    onmouseleave={() =>
+                                                        (activePieIdx = null)}
+                                                />
+                                            {/each}
+                                        </svg>
+
+                                        <!-- Radar Tooltip (Center) -->
+                                        <div
+                                            class="absolute inset-0 flex items-center justify-center pointer-events-none"
                                         >
-                                            {post.totalVotes}
-                                        </span>
+                                            {#if activePieIdx !== null}
+                                                <div
+                                                    transition:scale={{
+                                                        duration: 200,
+                                                    }}
+                                                    class="bg-black/80 backdrop-blur px-3 py-1.5 rounded-lg border border-white/10 text-center"
+                                                >
+                                                    <div
+                                                        class="text-[8px] font-bold text-zinc-400 uppercase tracking-widest"
+                                                    >
+                                                        {optionStats[
+                                                            activePieIdx
+                                                        ].title}
+                                                    </div>
+                                                    <div
+                                                        class="text-sm font-bold text-white tabular-nums"
+                                                    >
+                                                        {optionStats[
+                                                            activePieIdx
+                                                        ].votes} votos
+                                                    </div>
+                                                </div>
+                                            {/if}
+                                        </div>
+                                    {:else if pieSubView === "polar"}
+                                        <!-- Polar Area Chart -->
+                                        {@const numSlices =
+                                            optionStats.length || 1}
+                                        {@const sliceAngle = 360 / numSlices}
+                                        {@const maxPVal = Math.max(
+                                            ...optionStats.map((o) => o.votes),
+                                            1,
+                                        )}
+
+                                        <svg
+                                            viewBox="0 0 100 100"
+                                            class="w-full h-full -rotate-90"
+                                        >
+                                            <!-- Grid Circles -->
+                                            {#each [10, 20, 30, 40] as r}
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    {r}
+                                                    fill="none"
+                                                    stroke="rgba(255,255,255,0.03)"
+                                                    stroke-width="0.5"
+                                                />
+                                            {/each}
+
+                                            {#each optionStats as opt, i}
+                                                {@const startA = i * sliceAngle}
+                                                {@const endA =
+                                                    (i + 1) * sliceAngle}
+                                                {@const radius =
+                                                    (opt.votes / maxPVal) * 45}
+                                                <!-- max radius 45 -->
+
+                                                <!-- Helper to create arc path -->
+                                                {@const x1 =
+                                                    50 +
+                                                    radius *
+                                                        Math.cos(
+                                                            (Math.PI * startA) /
+                                                                180,
+                                                        )}
+                                                {@const y1 =
+                                                    50 +
+                                                    radius *
+                                                        Math.sin(
+                                                            (Math.PI * startA) /
+                                                                180,
+                                                        )}
+                                                {@const x2 =
+                                                    50 +
+                                                    radius *
+                                                        Math.cos(
+                                                            (Math.PI * endA) /
+                                                                180,
+                                                        )}
+                                                {@const y2 =
+                                                    50 +
+                                                    radius *
+                                                        Math.sin(
+                                                            (Math.PI * endA) /
+                                                                180,
+                                                        )}
+
+                                                <path
+                                                    d="M 50 50 L {x1} {y1} A {radius} {radius} 0 0 1 {x2} {y2} Z"
+                                                    fill={opt.colorFrom ||
+                                                        "#6366f1"}
+                                                    stroke="rgba(255,255,255,0.1)"
+                                                    stroke-width="0.5"
+                                                    class="transition-all duration-500 cursor-pointer opacity-70 hover:opacity-90"
+                                                    onmouseenter={() =>
+                                                        (activePieIdx = i)}
+                                                    onmouseleave={() =>
+                                                        (activePieIdx = null)}
+                                                />
+                                            {/each}
+                                        </svg>
+
+                                        <!-- Polar Tooltip (Center) -->
+                                        <div
+                                            class="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                        >
+                                            {#if activePieIdx !== null}
+                                                <div
+                                                    transition:scale={{
+                                                        duration: 200,
+                                                    }}
+                                                    class="bg-black/80 backdrop-blur px-3 py-1.5 rounded-lg border border-white/10 text-center z-10"
+                                                >
+                                                    <div
+                                                        class="text-[8px] font-bold text-zinc-400 uppercase tracking-widest"
+                                                    >
+                                                        {optionStats[
+                                                            activePieIdx
+                                                        ].title}
+                                                    </div>
+                                                    <div
+                                                        class="text-sm font-bold text-white tabular-nums"
+                                                    >
+                                                        {optionStats[
+                                                            activePieIdx
+                                                        ].votes} votos
+                                                    </div>
+                                                </div>
+                                            {/if}
+                                        </div>
                                     {/if}
                                 </div>
                             </div>

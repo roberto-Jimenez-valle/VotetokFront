@@ -26,6 +26,7 @@ export interface PostUser {
   username?: string;
   displayName?: string;
   avatarUrl?: string;
+  hasUnseenReels?: boolean;
 }
 
 export interface Post {

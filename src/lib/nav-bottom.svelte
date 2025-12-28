@@ -3,7 +3,7 @@
 	import { goto } from "$app/navigation";
 	import SearchModal from "$lib/SearchModal.svelte";
 	import NotificationsModal from "$lib/NotificationsModal.svelte";
-	import ProfileModal from "$lib/ProfileModal.svelte";
+	import UserProfileModal from "$lib/UserProfileModal.svelte";
 	import AuthModal from "$lib/AuthModal.svelte";
 	import { currentUser } from "$lib/stores";
 
@@ -20,6 +20,7 @@
 	let searchModalOpen = $state(false);
 	let notificationsModalOpen = $state(false);
 	let profileModalOpen = $state(false);
+	let selectedProfileId = $state<number | null>(null);
 	let authModalOpen = $state(false);
 
 	// Colores aleatorios para el borde y las ondas
@@ -108,6 +109,12 @@
 		searchModalOpen = false;
 		notificationsModalOpen = false;
 		authModalOpen = false;
+
+		// Set user ID for the modal
+		if ($currentUser) {
+			selectedProfileId = $currentUser.userId || ($currentUser as any).id;
+		}
+
 		profileModalOpen = true;
 		// Cerrar modal de crear encuesta si está abierta
 		if (modalOpen) {
@@ -254,11 +261,17 @@
 	bind:isOpen={searchModalOpen}
 	on:openPollInGlobe={handleOpenPollInGlobe}
 />
-<NotificationsModal 
-	bind:isOpen={notificationsModalOpen} 
+<NotificationsModal
+	bind:isOpen={notificationsModalOpen}
 	on:notificationClick={handleNotificationClick}
 />
-<ProfileModal bind:isOpen={profileModalOpen} />
+<UserProfileModal
+	bind:isOpen={profileModalOpen}
+	bind:userId={selectedProfileId}
+	on:pollClick={(e) => {
+		dispatch("openPollInGlobe", { poll: { id: e.detail.pollId } });
+	}}
+/>
 <AuthModal bind:isOpen={authModalOpen} />
 
 <style>

@@ -10,6 +10,7 @@
     ViewMode,
   } from "./types";
   import { generateFriends } from "./helpers";
+  import { transformApiPollToPost } from "./pollUtils";
   import PostCard from "./PostCard.svelte";
   import TopTabs from "$lib/TopTabs.svelte";
   import Countdown from "$lib/ui/Countdown.svelte";
@@ -165,9 +166,8 @@
 
     const handlePopState = (e: PopStateEvent) => {
       if (currentView === "reels") {
-        currentView = "feed";
-        // Prevent default back behavior if we just want to switch views
-        // But usually, we want to let it happen if we pushed state
+        // Restore feed using the proper exit/restore logic
+        switchToReels("");
       }
     };
     window.addEventListener("popstate", handlePopState);
@@ -178,7 +178,64 @@
     };
   });
 
-  // Profile modal states
+  async function handleUnfollowUser(post: Post) {
+    if (!$currentUser || !post.userId) return;
+
+    // Optimistic: update all posts from this user to not following
+    const userId = post.userId;
+    posts = posts.map((p) => {
+      if (p.userId === userId) {
+        return { ...p, isFollowing: false, isPending: false };
+      }
+      return p;
+    });
+
+    try {
+      const res = await apiCall(`/api/users/${userId}/follow`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        console.error("Error unfollowing");
+      }
+    } catch (e) {
+      console.error("Error unfollowing:", e);
+    }
+  }
+
+  function handleNotInterested(post: Post) {
+    // Just hide it locally for now
+    posts = posts.filter((p) => p.id !== post.id);
+  }
+
+  async function registerView(pollId: string) {
+    if (!pollId) return;
+    try {
+      await apiCall(`/api/polls/${pollId}/view`, { method: "POST" });
+
+      // Update friend stories statuses if the author is in the list
+      const post = posts.find((p) => p.id === pollId);
+      if (post && post.userId) {
+        const authorIdStr = String(post.userId);
+        if (friendStories.some((f) => f.id === authorIdStr)) {
+          loadFriendStories();
+        }
+      }
+    } catch (e) {
+      console.error("Error registering view:", e);
+    }
+  }
+
+  let viewTimer: any;
+  $effect(() => {
+    if (currentView === "reels" && posts[currentReelIndex]) {
+      const post = posts[currentReelIndex];
+      clearTimeout(viewTimer);
+      viewTimer = setTimeout(() => {
+        registerView(post.id);
+      }, 1000);
+    }
+    return () => clearTimeout(viewTimer);
+  });
   let isProfileModalOpen = $state(false);
   let selectedProfileUserId = $state<number | null>(null);
 
@@ -490,6 +547,7 @@
       question: apiPoll.title || "Sin título",
       collabMode: apiPoll.collabMode, // Añadido
       collaborators: apiPoll.collaborators, // Añadido
+      user: apiPoll.user, // Añadido incluyendo hasUnseenReels
       userId: apiPoll.user?.id || apiPoll.userId, // Añadido para verificar permisos
       isFollowing: apiPoll.isFollowing, // Añadido
       isPending: apiPoll.isPending, // Añadido
@@ -1293,11 +1351,53 @@
   let targetReelPostId: string | null = $state(null);
   let currentReelIndex = $state(0); // Track current reel for lazy loading
 
-  function switchToReels(postId: string) {
+  // State for preserving feed when switching to user specific reels
+  let feedPostsCache: Post[] = $state([]);
+  let isUserReelsMode = $state(false);
+  let feedScrollPosition = $state(0);
+
+  function switchToReels(postId: string, contextPolls?: Post[]) {
     if (!postId) {
+      if (isUserReelsMode) {
+        // Restore feed
+        if (feedPostsCache.length > 0) {
+          posts = feedPostsCache;
+        }
+        isUserReelsMode = false;
+        feedPostsCache = [];
+      }
       currentView = "feed";
+
+      // Restore scroll position
+      setTimeout(() => {
+        if (feedContainer) {
+          feedContainer.scrollTop = feedScrollPosition;
+        }
+      }, 0);
+
+      if (typeof history !== "undefined") {
+        // Verify if we should back or just replace logic?
+        // If we pushed state, back button naturally handles popstate.
+        // But clear logic is good.
+      }
       return;
     }
+
+    // Entering Reels Mode
+    // Save scroll position before switching (if we are in feed)
+    if (currentView === "feed" && feedContainer) {
+      feedScrollPosition = feedContainer.scrollTop;
+    }
+
+    if (contextPolls && contextPolls.length > 0) {
+      if (!isUserReelsMode) {
+        // First time entering user mode, cache current feed
+        feedPostsCache = [...posts];
+      }
+      posts = contextPolls;
+      isUserReelsMode = true;
+    }
+
     targetReelPostId = postId;
 
     // Find the index and set it before switching view for immediate rendering
@@ -1832,15 +1932,17 @@
                     >
                       <!-- Avatar with VouTop gradient ring -->
                       <div
-                        class="w-16 h-16 rounded-full p-[2px]"
+                        class="w-16 h-16 rounded-full p-[2px] transition-all"
                         style="background: {friend.hasNewPoll
                           ? 'linear-gradient(135deg, #9ec264, #7ba347, #9ec264)'
-                          : '#475569'}"
+                          : 'transparent'}"
                       >
                         <img
                           src={friend.avatar}
                           alt={friend.name}
-                          class="w-full h-full rounded-full object-cover border-2 border-black"
+                          class="w-full h-full rounded-full object-cover border-2 {friend.hasNewPoll
+                            ? 'border-black'
+                            : 'border-slate-700'}"
                         />
                       </div>
                       <!-- Name -->
@@ -2327,6 +2429,7 @@
       on:closeCreatePoll={handleCloseCreatePoll}
       on:openBottomSheet={goHome}
       on:notificationClick={handleNotificationClick}
+      on:openPollInGlobe={(e) => switchToReels(e.detail.poll.id)}
     />
   {/if}
 
@@ -2342,8 +2445,31 @@
     bind:isOpen={isProfileModalOpen}
     bind:userId={selectedProfileUserId}
     on:pollClick={(e) => {
-      const { pollId } = e.detail;
-      switchToReels(pollId);
+      const { pollId, polls } = e.detail;
+      switchToReels(pollId, polls);
+    }}
+    on:statsClick={(e) => handleStatsClick(e.detail.post)}
+    on:comment={(e) => handleComment(e.detail.post)}
+    on:share={(e) => handleShare(e.detail.post)}
+    on:repost={(e) => handleRepost(e.detail.post)}
+    on:followChange={(e) => {
+      const { userId, isFollowing, isPending } = e.detail;
+      if (!userId) return;
+      posts = posts.map((p) => {
+        if (p.userId === userId || p.user?.id === userId) {
+          return { ...p, isFollowing, isPending };
+        }
+        return p;
+      });
+      // Also update cache if exists
+      if (feedPostsCache.length > 0) {
+        feedPostsCache = feedPostsCache.map((p) => {
+          if (p.userId === userId || p.user?.id === userId) {
+            return { ...p, isFollowing, isPending };
+          }
+          return p;
+        });
+      }
     }}
   />
 
@@ -2379,6 +2505,19 @@
       onAdminReset={() => {
         console.log("[VotingFeed] onAdminReset prop triggered");
         if (optionsModalPost) handleAdminReset(optionsModalPost);
+      }}
+      onUnfollow={() => {
+        if (optionsModalPost) {
+          // We can reuse the same logic we use in PostCard or a dedicated function
+          // For now, let's call a new handler handleUnfollowUser
+          handleUnfollowUser(optionsModalPost);
+        }
+      }}
+      onNotInterested={() => {
+        if (optionsModalPost) {
+          // Maybe hide the post locally?
+          posts = posts.filter((p) => p.id !== optionsModalPost?.id);
+        }
       }}
     />
   {/if}

@@ -43,6 +43,79 @@
     // Datos de la lista de control con detalles extendidos
     const checklistGroups: ChecklistGroup[] = [
         {
+            title: "📝 Prioridad Inmediata (User Feedback)",
+            icon: Zap,
+            color: "text-pink-500",
+            items: [
+                {
+                    label: "Navegación 'Mi Perfil' unificada",
+                    status: "done",
+                    detail: "El botón de perfil del menú principal ahora abre el mismo modal completo (UserProfileModal) que al pulsar en el avatar de un usuario, mostrando estadísticas y reels.",
+                },
+                {
+                    label: "Más gráficos en estadísticas",
+                    status: "done",
+                    detail: "Añadidos gráficos de Barras, Radar y Polar al modal de estadísticas, además del Donut original.",
+                },
+                {
+                    label: "Priorizar Reels al pulsar Avatar",
+                    status: "done",
+                    detail: "Al abrir un reel desde el perfil, se muestran solo las encuestas de ese usuario. Al salir del modo reels, se restaura el feed general.",
+                },
+                {
+                    label: "Indicador de Reels Vistos (Borde Verde)",
+                    status: "done",
+                    detail: "Marcar en BD los reels vistos. Si se han visto todos los de un usuario, quitar el borde verde de su avatar (estilo Instagram).",
+                    action: "Crear endpoint de 'view', actualizar modelo PollInteraction, lógica en frontend para llamar al endpoint y actualizar UI.",
+                },
+                {
+                    label: "Refinar Estadísticas en Globo 3D",
+                    status: "missing",
+                    detail: "Mejorar la visualización y funcionalidad de las estadísticas en el globo terráqueo.",
+                },
+                {
+                    label: "Corregir Menú de Opciones (3 puntos)",
+                    status: "done",
+                    critical: true,
+                    detail: "Menú funcional con opciones de Reportar, Dejar de Seguir, No me interesa y Copiar enlace, todo conectado al backend y UI.",
+                    action: "Revisar eventos click y dispatch en PostOptionsModal y PostCard.",
+                },
+                {
+                    label: "Embed de Encuesta (Iframe)",
+                    status: "missing",
+                    detail: "Generar código iframe para poder incrustar la encuesta en otros sitios webs.",
+                },
+                {
+                    label: "Mejorar Compartir Encuesta",
+                    status: "missing",
+                    detail: "Revisar y arreglar la funcionalidad de compartir encuesta (link, redes sociales).",
+                },
+                {
+                    label: "Organizar Iconos Tab en Perfil",
+                    status: "done",
+                    detail: "Pestañas de Encuestas, Votaciones y Guardadas organizadas con iconos y contadores.",
+                },
+                {
+                    label: "Simplificar Botón Seguir",
+                    status: "done",
+                    detail: "El botón 'Seguir' solo aparece si no sigues al usuario. Si ya lo sigues o está pendiente, se oculta para limpiar la interfaz.",
+                },
+                {
+                    label: "Bug Votación Swipe",
+                    status: "missing",
+                    critical: true,
+                    detail: "La encuesta tipo swipe no guarda correctamente la votación o no recupera bien el estado de lo que votaste al recargar.",
+                },
+                {
+                    label: "Cambiar ID de usuario por hash",
+                    status: "missing",
+                    critical: true,
+                    detail: "Al igual que con las encuestas, debemos ocultar el ID numérico secuencial del usuario en las URLs y respuestas de la API usando un hash único.",
+                    action: "Implementar hashing de IDs en los modelos de Usuario, actualizar transformadores de API y corregir rutas que dependan del ID numérico.",
+                },
+            ],
+        },
+        {
             title: "🔐 Autenticación y Seguridad",
             icon: Shield,
             color: "text-blue-500",
