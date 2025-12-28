@@ -1,0 +1,16 @@
+# VoTok - robots.txt
+# https://voutop.com
+
+User-agent: *
+Allow: /
+
+# Permitir acceso a recursos estáticos
+Allow: /static/
+
+# Bloquear rutas de API y admin
+Disallow: /api/
+Disallow: /admin/
+Disallow: /production-checklist
+
+# Sitemap
+Sitemap: https://voutop.com/sitemap.xml
