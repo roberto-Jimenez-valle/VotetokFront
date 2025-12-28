@@ -2434,6 +2434,7 @@
       on:comment={(e) => handleComment(e.detail.post)}
       on:share={(e) => handleShare(e.detail.post)}
       on:repost={(e) => handleRepost(e.detail.post)}
+      on:openOptions={(e) => handleOpenOptions(e.detail.post)}
       on:followChange={(e) => {
         const { userId, isFollowing, isPending } = e.detail;
         if (!userId) return;
@@ -2520,6 +2521,13 @@
           return p;
         });
       }
+    }}
+    onOpenOptions={(detail) => {
+      console.log(
+        "[VotingFeed] Received openOptions from profile:",
+        detail.post?.id,
+      );
+      handleOpenOptions(detail.post);
     }}
   />
 

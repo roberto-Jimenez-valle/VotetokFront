@@ -362,7 +362,7 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 100000;
+    z-index: 2147483646;
     backdrop-filter: blur(4px);
   }
 
@@ -376,7 +376,7 @@
     padding: 24px;
     max-height: 85vh;
     overflow-y: auto;
-    z-index: 100001;
+    z-index: 2147483647;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 0, 0, 0.2) transparent;

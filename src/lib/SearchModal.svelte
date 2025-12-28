@@ -817,6 +817,7 @@
   onShare={(detail) => dispatch("share", detail)}
   onRepost={(detail) => dispatch("repost", detail)}
   onFollowChange={(detail) => dispatch("followChange", detail)}
+  onOpenOptions={(detail) => dispatch("openOptions", detail)}
 />
 
 <style>

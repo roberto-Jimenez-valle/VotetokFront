@@ -63,6 +63,7 @@
       isFollowing: boolean;
       isPending: boolean;
     }) => void;
+    onOpenOptions?: (data: { post: Post }) => void;
   }
 
   let {
@@ -75,6 +76,7 @@
     onPollClick,
     onUserClick,
     onFollowChange,
+    onOpenOptions,
   }: Props = $props();
 
   // Estados
@@ -489,6 +491,10 @@
   function handleStatsClick(post: Post) {
     console.log("[UserProfileModal] Stats click for poll:", post.id);
     onStatsClick?.({ post });
+  }
+
+  function handleOpenOptions(post: Post) {
+    onOpenOptions?.({ post });
   }
 
   function handleAvatarClick(post: Post) {
@@ -995,6 +1001,7 @@
                     onRepost={handleRepost}
                     onAvatarClick={handleAvatarClick}
                     onStatsClick={handleStatsClick}
+                    onOpenOptions={handleOpenOptions}
                   />
                 {/each}
               {/if}
@@ -1035,6 +1042,7 @@
                     onRepost={handleRepost}
                     onAvatarClick={handleAvatarClick}
                     onStatsClick={handleStatsClick}
+                    onOpenOptions={handleOpenOptions}
                   />
                 {/each}
               {/if}
@@ -1079,6 +1087,7 @@
                     onRepost={handleRepost}
                     onAvatarClick={handleAvatarClick}
                     onStatsClick={handleStatsClick}
+                    onOpenOptions={handleOpenOptions}
                   />
                 {/each}
               {/if}

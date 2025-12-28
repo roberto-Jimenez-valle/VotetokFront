@@ -221,9 +221,6 @@
 
 	<!-- Banner de Cookies GDPR -->
 	<CookieBanner />
-
-	<!-- Global Auth Modal -->
-	<AuthModal bind:isOpen={$loginModalOpen} />
 {/if}
 
 <!-- FULLSCREEN IFRAME OVERLAY (renderizado desde layout para evitar problemas de z-index) -->
@@ -301,6 +298,9 @@
 	</div>
 {/if}
 
+<!-- Global Auth Modal -->
+<AuthModal bind:isOpen={$loginModalOpen} />
+
 <style>
 	/* Estilos generales del layout */
 
@@ -313,7 +313,7 @@
 		width: 100vw;
 		height: 100vh;
 		height: 100dvh;
-		z-index: 99999999999;
+		z-index: 2147483640;
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;

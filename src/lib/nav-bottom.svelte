@@ -265,6 +265,7 @@
 	on:share={(e) => dispatch("share", e.detail)}
 	on:repost={(e) => dispatch("repost", e.detail)}
 	on:followChange={(e) => dispatch("followChange", e.detail)}
+	on:openOptions={(e) => dispatch("openOptions", e.detail)}
 />
 <NotificationsModal
 	bind:isOpen={notificationsModalOpen}
@@ -274,6 +275,7 @@
 	on:share={(e) => dispatch("share", e.detail)}
 	on:repost={(e) => dispatch("repost", e.detail)}
 	on:followChange={(e) => dispatch("followChange", e.detail)}
+	on:openOptions={(e) => dispatch("openOptions", e.detail)}
 />
 <UserProfileModal
 	bind:isOpen={profileModalOpen}
@@ -286,6 +288,7 @@
 	onShare={(detail) => dispatch("share", detail)}
 	onRepost={(detail) => dispatch("repost", detail)}
 	onFollowChange={(detail) => dispatch("followChange", detail)}
+	onOpenOptions={(detail) => dispatch("openOptions", detail)}
 />
 <AuthModal bind:isOpen={authModalOpen} />
 
