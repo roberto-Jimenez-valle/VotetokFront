@@ -85,7 +85,7 @@ model Poll {
   user           User              @relation("PollCreator", fields: [userId], references: [id], onDelete: Cascade)
   history        VoteHistory[]
   votes          Vote[]
-  reports        Report[]
+  reports        Report[] @relation("PollReports")
 
   @@index([userId])
   @@index([category])
@@ -194,6 +194,7 @@ model Comment {
   replies         Comment[] @relation("CommentReplies")
   poll            Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports         Report[] @relation("CommentReports")
 
   @@index([pollId])
   @@index([userId])
@@ -475,6 +476,7 @@ model ChecklistItem {
 model Report {
   id          Int       @id @default(autoincrement())
   pollId      Int       @map("poll_id")
+  commentId   Int?      @map("comment_id") 
   userId      Int       @map("user_id")
   reason      String    // spam, inappropriate, misleading, hate, other
   notes       String?   // Notas adicionales del usuario
@@ -485,12 +487,14 @@ model Report {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   
-  poll        Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  poll        Poll      @relation("PollReports", fields: [pollId], references: [id], onDelete: Cascade)
+  comment     Comment?  @relation("CommentReports", fields: [commentId], references: [id], onDelete: Cascade)
   user        User      @relation("ReportCreator", fields: [userId], references: [id], onDelete: Cascade)
   reviewer    User?     @relation("ReportReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
   
-  @@unique([pollId, userId]) // Un usuario solo puede reportar una encuesta una vez
+  @@unique([pollId, userId, commentId]) // Un usuario solo puede reportar la misma cosa una vez
   @@index([pollId])
+  @@index([commentId])
   @@index([userId])
   @@index([status])
   @@index([createdAt])

@@ -479,8 +479,7 @@
                                 {/if}
                                 {#if report.poll}
                                     <a
-                                        href="/poll/{report.poll.hashId}"
-                                        target="_blank"
+                                        href="/?poll={report.poll.hashId}"
                                         class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
                                         title="Ver encuesta"
                                     >

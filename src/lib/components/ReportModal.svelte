@@ -13,10 +13,11 @@
     interface Props {
         isOpen: boolean;
         postId: string;
+        commentId?: number | string | null;
         onClose: () => void;
     }
 
-    let { isOpen, postId, onClose }: Props = $props();
+    let { isOpen, postId, commentId = null, onClose }: Props = $props();
 
     let step = $state(1); // 1: Select Reason, 2: Comments (Optional), 3: Success
     let reason = $state("");
@@ -73,9 +74,17 @@
 
         isSubmitting = true;
         try {
-            const res = await apiCall(`/api/polls/${postId}/report`, {
+            const endpoint = commentId
+                ? `/api/comments/${commentId}/report`
+                : `/api/polls/${postId}/report`;
+
+            const res = await apiCall(endpoint, {
                 method: "POST",
-                body: JSON.stringify({ reason, notes }),
+                body: JSON.stringify({
+                    reason,
+                    notes,
+                    pollId: postId, // Incluimos pollId siempre para facilitar el trackeo
+                }),
             });
 
             if (res.ok) {
@@ -85,7 +94,7 @@
                 alert(error.message || "Error al enviar el reporte");
             }
         } catch (err) {
-            console.error("Error reporting poll:", err);
+            console.error("Error reporting content:", err);
             alert("Error de conexión");
         } finally {
             isSubmitting = false;

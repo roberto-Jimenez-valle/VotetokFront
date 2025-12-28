@@ -1,10 +1,20 @@
 <script lang="ts">
-  import { fade, fly } from 'svelte/transition';
-  import { X, Send, Heart, MessageCircle, MoreHorizontal, Trash2, Loader2 } from 'lucide-svelte';
-  import { currentUser } from '$lib/stores/auth';
-  import { apiGet, apiPost, apiDelete } from '$lib/api/client';
-  import AuthModal from '$lib/AuthModal.svelte';
-  
+  import { fade, fly } from "svelte/transition";
+  import {
+    X,
+    Send,
+    Heart,
+    MessageCircle,
+    MoreHorizontal,
+    Trash2,
+    Loader2,
+    AlertTriangle,
+  } from "lucide-svelte";
+  import { currentUser } from "$lib/stores/auth";
+  import { apiGet, apiPost, apiDelete } from "$lib/api/client";
+  import AuthModal from "$lib/AuthModal.svelte";
+  import ReportModal from "$lib/components/ReportModal.svelte";
+
   interface Comment {
     id: number;
     content: string;
@@ -20,21 +30,21 @@
     replies?: Comment[];
     parentCommentId?: number;
   }
-  
+
   // Props
-  let { 
+  let {
     isOpen = $bindable(false),
     pollId,
-    pollTitle = ''
+    pollTitle = "",
   }: {
     isOpen: boolean;
     pollId: number | string;
     pollTitle?: string;
   } = $props();
-  
+
   // State
   let comments = $state<Comment[]>([]);
-  let newComment = $state('');
+  let newComment = $state("");
   let replyingTo = $state<Comment | null>(null);
   let loading = $state(false);
   let submitting = $state(false);
@@ -46,57 +56,86 @@
   let mentionResults = $state<any[]>([]);
   let mentionIndex = $state(0);
   let mentionStart = 0;
-  
+
   // Auth modal
   let showAuthModal = $state(false);
-  
+
   // Swipe to close
   let touchStartY = 0;
   let currentTranslateY = $state(0);
   let isDragging = $state(false);
   let scrollContainer = $state<HTMLElement | null>(null);
-  
-  const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23374151"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%236b7280"/%3E%3C/svg%3E';
-  
+
+  const DEFAULT_AVATAR =
+    'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23374151"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%236b7280"/%3E%3C/svg%3E';
+
+  // Report modal
+  let isReportModalOpen = $state(false);
+  let reportCommentId = $state<number | null>(null);
+  let reportPollId = $state<number | string>("");
+  let longPressTimer: any;
+
+  function handleLongPress(comment: Comment) {
+    if (!$currentUser) {
+      showAuthModal = true;
+      return;
+    }
+    // No reportarse a uno mismo
+    const currentId = ($currentUser as any).userId || ($currentUser as any).id;
+    if (currentId === comment.user.id) return;
+
+    reportCommentId = comment.id;
+    reportPollId = pollId;
+    isReportModalOpen = true;
+  }
+
+  function startLongPress(comment: Comment) {
+    longPressTimer = setTimeout(() => handleLongPress(comment), 700);
+  }
+
+  function stopLongPress() {
+    clearTimeout(longPressTimer);
+  }
+
   // Load comments when modal opens
   $effect(() => {
     if (isOpen && pollId) {
       loadComments();
     }
   });
-  
+
   async function loadComments() {
     loading = true;
     error = null;
-    
+
     try {
       const response = await apiGet(`/api/polls/${pollId}/comments`);
       comments = response.data || [];
     } catch (err: any) {
-      error = err.message || 'Error al cargar comentarios';
-      console.error('Error loading comments:', err);
+      error = err.message || "Error al cargar comentarios";
+      console.error("Error loading comments:", err);
     } finally {
       loading = false;
     }
   }
-  
+
   async function submitComment() {
     if (!newComment.trim() || !$currentUser) return;
-    
+
     submitting = true;
-    
+
     try {
       const payload = {
         content: newComment.trim(),
         parentCommentId: replyingTo?.id || null,
-        userId: ($currentUser as any).userId || ($currentUser as any).id
+        userId: ($currentUser as any).userId || ($currentUser as any).id,
       };
-      
+
       const response = await apiPost(`/api/polls/${pollId}/comments`, payload);
-      
+
       if (replyingTo) {
         // Add reply to parent comment
-        const parentIndex = comments.findIndex(c => c.id === replyingTo!.id);
+        const parentIndex = comments.findIndex((c) => c.id === replyingTo!.id);
         if (parentIndex !== -1) {
           if (!comments[parentIndex].replies) {
             comments[parentIndex].replies = [];
@@ -107,49 +146,49 @@
         // Add new top-level comment
         comments = [response.data, ...comments];
       }
-      
-      newComment = '';
+
+      newComment = "";
       replyingTo = null;
     } catch (err: any) {
-      console.error('Error posting comment:', err);
-      error = err.message || 'Error al publicar comentario';
+      console.error("Error posting comment:", err);
+      error = err.message || "Error al publicar comentario";
     } finally {
       submitting = false;
     }
   }
-  
+
   async function deleteComment(commentId: number) {
     try {
       await apiDelete(`/api/polls/${pollId}/comments/${commentId}`);
-      
+
       // Remove from list
-      comments = comments.filter(c => c.id !== commentId);
-      
+      comments = comments.filter((c) => c.id !== commentId);
+
       // Also remove from replies
-      comments = comments.map(c => ({
+      comments = comments.map((c) => ({
         ...c,
-        replies: c.replies?.filter(r => r.id !== commentId)
+        replies: c.replies?.filter((r) => r.id !== commentId),
       }));
     } catch (err: any) {
-      console.error('Error deleting comment:', err);
+      console.error("Error deleting comment:", err);
     }
   }
-  
+
   function startReply(comment: Comment) {
     replyingTo = comment;
     setTimeout(() => inputRef?.focus(), 100);
   }
-  
+
   function cancelReply() {
     replyingTo = null;
   }
-  
+
   function close() {
     isOpen = false;
     replyingTo = null;
-    newComment = '';
+    newComment = "";
   }
-  
+
   function getRelativeTime(dateString: string): string {
     const date = new Date(dateString);
     const now = new Date();
@@ -157,23 +196,23 @@
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
-    
-    if (diffMins < 1) return 'ahora';
+
+    if (diffMins < 1) return "ahora";
     if (diffMins < 60) return `${diffMins}m`;
     if (diffHours < 24) return `${diffHours}h`;
     if (diffDays < 7) return `${diffDays}d`;
-    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   }
-  
+
   // Touch handlers for swipe to close
   function handleTouchStart(e: TouchEvent) {
     touchStartY = e.touches[0].clientY;
     isDragging = true;
   }
-  
+
   function handleTouchMove(e: TouchEvent) {
     if (!isDragging) return;
-    
+
     // Only allow drag if we are at the top of the scroll container
     if (scrollContainer && scrollContainer.scrollTop > 0) return;
 
@@ -182,7 +221,7 @@
       currentTranslateY = deltaY;
     }
   }
-  
+
   function handleTouchEnd() {
     isDragging = false;
     if (currentTranslateY > 150) {
@@ -190,32 +229,33 @@
     }
     currentTranslateY = 0;
   }
-  
+
   function handleKeydown(e: KeyboardEvent) {
     if (showMentions && mentionResults.length > 0) {
-      if (e.key === 'ArrowUp') {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
-        mentionIndex = (mentionIndex - 1 + mentionResults.length) % mentionResults.length;
+        mentionIndex =
+          (mentionIndex - 1 + mentionResults.length) % mentionResults.length;
         return;
       }
-      if (e.key === 'ArrowDown') {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         mentionIndex = (mentionIndex + 1) % mentionResults.length;
         return;
       }
-      if (e.key === 'Enter' || e.key === 'Tab') {
+      if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
         selectMention(mentionResults[mentionIndex]);
         return;
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         showMentions = false;
         return;
       }
     }
 
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submitComment();
     }
@@ -225,26 +265,26 @@
     const target = e.target as HTMLTextAreaElement;
     const val = target.value;
     const cursorPos = target.selectionStart;
-    
+
     // Detect @ mention
     const textBefore = val.slice(0, cursorPos);
-    const lastAt = textBefore.lastIndexOf('@');
-    
+    const lastAt = textBefore.lastIndexOf("@");
+
     if (lastAt !== -1) {
       // Check if start of line or preceded by space/newline
-      const charBeforeAt = lastAt > 0 ? textBefore[lastAt - 1] : ' ';
+      const charBeforeAt = lastAt > 0 ? textBefore[lastAt - 1] : " ";
       if (/[\s\n]/.test(charBeforeAt)) {
         const query = textBefore.slice(lastAt + 1);
         // Search if no spaces in query (username)
         if (!/\s/.test(query)) {
           mentionStart = lastAt;
-          
+
           if (query.length > 0) {
             await searchMentions(query);
             if (mentionResults.length > 0) {
-                showMentions = true;
+              showMentions = true;
             } else {
-                showMentions = false;
+              showMentions = false;
             }
           } else {
             showMentions = false;
@@ -253,35 +293,37 @@
         }
       }
     }
-    
+
     showMentions = false;
   }
 
   async function searchMentions(query: string) {
     try {
-      const res = await apiGet(`/api/users/search-mentions?q=${encodeURIComponent(query)}&limit=5`);
+      const res = await apiGet(
+        `/api/users/search-mentions?q=${encodeURIComponent(query)}&limit=5`,
+      );
       mentionResults = res.users || [];
       mentionIndex = 0;
       showMentions = mentionResults.length > 0;
     } catch (e) {
-      console.error('Error searching mentions:', e);
+      console.error("Error searching mentions:", e);
       showMentions = false;
     }
   }
 
   function selectMention(user: any) {
     if (!inputRef) return;
-    
+
     const val = inputRef.value;
     const before = val.slice(0, mentionStart);
     const after = val.slice(inputRef.selectionStart);
-    
+
     const insertion = `@${user.username} `;
     newComment = before + insertion + after;
-    
+
     showMentions = false;
     mentionResults = [];
-    
+
     // Focus back and move cursor
     setTimeout(() => {
       if (inputRef) {
@@ -295,21 +337,21 @@
 
 {#if isOpen}
   <!-- Overlay -->
-  <div 
+  <div
     class="comments-overlay"
     role="button"
     tabindex="-1"
     aria-label="Cerrar comentarios"
     onclick={close}
-    onkeydown={(e) => e.key === 'Escape' && close()}
+    onkeydown={(e) => e.key === "Escape" && close()}
     transition:fade={{ duration: 200 }}
   ></div>
-  
+
   <!-- Modal -->
-  <div 
+  <div
     class="comments-modal"
     style="transform: translateY({currentTranslateY}px)"
-    transition:fly={{ y: '100%', duration: 300 }}
+    transition:fly={{ y: "100%", duration: 300 }}
     ontouchstart={handleTouchStart}
     ontouchmove={handleTouchMove}
     ontouchend={handleTouchEnd}
@@ -318,15 +360,20 @@
     <div class="modal-handle">
       <div class="handle-bar"></div>
     </div>
-    
+
     <!-- Header -->
     <div class="modal-header">
       <h3 class="modal-title">Comentarios</h3>
-      <button class="close-btn" onclick={close} type="button" aria-label="Cerrar">
+      <button
+        class="close-btn"
+        onclick={close}
+        type="button"
+        aria-label="Cerrar"
+      >
         <X size={20} />
       </button>
     </div>
-    
+
     <!-- Comments List -->
     <div class="comments-list" bind:this={scrollContainer}>
       {#if loading}
@@ -347,9 +394,18 @@
         </div>
       {:else}
         {#each comments as comment (comment.id)}
-          <div class="comment-item">
-            <img 
-              class="comment-avatar" 
+          <div
+            class="comment-item"
+            role="article"
+            onmousedown={() => startLongPress(comment)}
+            onmouseup={stopLongPress}
+            onmouseleave={stopLongPress}
+            ontouchstart={() => startLongPress(comment)}
+            ontouchend={stopLongPress}
+            ontouchcancel={stopLongPress}
+          >
+            <img
+              class="comment-avatar"
               src={comment.user.avatarUrl || DEFAULT_AVATAR}
               alt={comment.user.displayName}
               loading="lazy"
@@ -359,54 +415,89 @@
                 <span class="comment-author">
                   {comment.user.displayName}
                   {#if comment.user.verified}
-                    <svg class="verified-badge" viewBox="0 0 24 24" width="14" height="14">
-                      <path fill="#3b82f6" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    <svg
+                      class="verified-badge"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                    >
+                      <path
+                        fill="#3b82f6"
+                        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
+                      />
                     </svg>
                   {/if}
                 </span>
-                <span class="comment-time">{getRelativeTime(comment.createdAt)}</span>
+                <span class="comment-time"
+                  >{getRelativeTime(comment.createdAt)}</span
+                >
               </div>
               <p class="comment-text">{comment.content}</p>
               <div class="comment-actions">
                 <button class="action-btn" type="button">
                   <Heart size={14} />
-                  <span>{comment.likesCount || ''}</span>
+                  <span>{comment.likesCount || ""}</span>
                 </button>
-                <button class="action-btn" type="button" onclick={() => startReply(comment)}>
+                <button
+                  class="action-btn"
+                  type="button"
+                  onclick={() => startReply(comment)}
+                >
                   <MessageCircle size={14} />
                   <span>Responder</span>
                 </button>
                 {#if $currentUser?.userId === comment.user.id}
-                  <button class="action-btn delete" type="button" onclick={() => deleteComment(comment.id)}>
+                  <button
+                    class="action-btn delete"
+                    type="button"
+                    onclick={() => deleteComment(comment.id)}
+                  >
                     <Trash2 size={14} />
                   </button>
                 {/if}
               </div>
-              
+
               <!-- Replies -->
               {#if comment.replies && comment.replies.length > 0}
                 <div class="replies-container">
                   {#each comment.replies as reply (reply.id)}
-                    <div class="comment-item reply">
-                      <img 
-                        class="comment-avatar small" 
+                    <div
+                      class="comment-item reply"
+                      role="article"
+                      onmousedown={() => startLongPress(reply)}
+                      onmouseup={stopLongPress}
+                      onmouseleave={stopLongPress}
+                      ontouchstart={() => startLongPress(reply)}
+                      ontouchend={stopLongPress}
+                      ontouchcancel={stopLongPress}
+                    >
+                      <img
+                        class="comment-avatar small"
                         src={reply.user.avatarUrl || DEFAULT_AVATAR}
                         alt={reply.user.displayName}
                         loading="lazy"
                       />
                       <div class="comment-content">
                         <div class="comment-header">
-                          <span class="comment-author">{reply.user.displayName}</span>
-                          <span class="comment-time">{getRelativeTime(reply.createdAt)}</span>
+                          <span class="comment-author"
+                            >{reply.user.displayName}</span
+                          >
+                          <span class="comment-time"
+                            >{getRelativeTime(reply.createdAt)}</span
+                          >
                         </div>
                         <p class="comment-text">{reply.content}</p>
                         <div class="comment-actions">
                           <button class="action-btn" type="button">
                             <Heart size={12} />
-                            <span>{reply.likesCount || ''}</span>
+                            <span>{reply.likesCount || ""}</span>
                           </button>
                           {#if $currentUser?.userId === reply.user.id}
-                            <button class="action-btn delete" type="button" onclick={() => deleteComment(reply.id)}>
+                            <button
+                              class="action-btn delete"
+                              type="button"
+                              onclick={() => deleteComment(reply.id)}
+                            >
                               <Trash2 size={12} />
                             </button>
                           {/if}
@@ -421,20 +512,20 @@
         {/each}
       {/if}
     </div>
-    
+
     <!-- Input Area -->
     <div class="input-area">
       {#if showMentions && mentionResults.length > 0}
         <div class="mentions-list" transition:fade={{ duration: 100 }}>
           {#each mentionResults as user, i}
-            <button 
+            <button
               class="mention-item {i === mentionIndex ? 'selected' : ''}"
               onclick={() => selectMention(user)}
-              onmouseenter={() => mentionIndex = i}
+              onmouseenter={() => (mentionIndex = i)}
               type="button"
             >
-              <img 
-                src={user.avatarUrl || DEFAULT_AVATAR} 
+              <img
+                src={user.avatarUrl || DEFAULT_AVATAR}
                 alt={user.username}
                 class="mention-avatar"
               />
@@ -443,8 +534,16 @@
                 <span class="mention-name">{user.displayName}</span>
               </div>
               {#if user.verified}
-                <svg class="verified-badge" viewBox="0 0 24 24" width="14" height="14">
-                  <path fill="#3b82f6" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                <svg
+                  class="verified-badge"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                >
+                  <path
+                    fill="#3b82f6"
+                    d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
+                  />
                 </svg>
               {/if}
             </button>
@@ -454,17 +553,19 @@
 
       {#if replyingTo}
         <div class="replying-to">
-          <span>Respondiendo a <strong>@{replyingTo.user.username}</strong></span>
+          <span
+            >Respondiendo a <strong>@{replyingTo.user.username}</strong></span
+          >
           <button onclick={cancelReply} type="button">
             <X size={14} />
           </button>
         </div>
       {/if}
-      
+
       {#if $currentUser}
         <div class="input-row">
-          <img 
-            class="input-avatar" 
+          <img
+            class="input-avatar"
             src={$currentUser.avatarUrl || DEFAULT_AVATAR}
             alt="Tu avatar"
           />
@@ -472,11 +573,13 @@
             bind:this={inputRef}
             bind:value={newComment}
             oninput={handleInput}
-            placeholder={replyingTo ? 'Escribe tu respuesta...' : 'Añade un comentario...'}
+            placeholder={replyingTo
+              ? "Escribe tu respuesta..."
+              : "Añade un comentario..."}
             rows="1"
             onkeydown={handleKeydown}
           ></textarea>
-          <button 
+          <button
             class="send-btn"
             onclick={submitComment}
             disabled={!newComment.trim() || submitting}
@@ -491,9 +594,9 @@
         </div>
       {:else}
         <div class="input-row login-row">
-          <button 
+          <button
             class="login-btn"
-            onclick={() => showAuthModal = true}
+            onclick={() => (showAuthModal = true)}
             type="button"
           >
             Inicia sesión para comentar
@@ -502,9 +605,20 @@
       {/if}
     </div>
   </div>
-  
+
   <!-- Auth Modal -->
   <AuthModal bind:isOpen={showAuthModal} />
+
+  <!-- Report Modal -->
+  <ReportModal
+    isOpen={isReportModalOpen}
+    postId={String(reportPollId)}
+    commentId={reportCommentId}
+    onClose={() => {
+      isReportModalOpen = false;
+      reportCommentId = null;
+    }}
+  />
 {/if}
 
 <style>
@@ -515,7 +629,7 @@
     z-index: 9999998;
     backdrop-filter: blur(4px);
   }
-  
+
   .comments-modal {
     position: fixed;
     bottom: 0;
@@ -530,20 +644,20 @@
     flex-direction: column;
     overflow: hidden;
   }
-  
+
   .modal-handle {
     padding: 12px;
     display: flex;
     justify-content: center;
   }
-  
+
   .handle-bar {
     width: 40px;
     height: 4px;
     background: rgba(255, 255, 255, 0.3);
     border-radius: 2px;
   }
-  
+
   .modal-header {
     display: flex;
     align-items: center;
@@ -551,14 +665,14 @@
     padding: 0 16px 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .modal-title {
     font-size: 16px;
     font-weight: 600;
     color: white;
     margin: 0;
   }
-  
+
   .close-btn {
     background: none;
     border: none;
@@ -571,12 +685,12 @@
     border-radius: 50%;
     transition: all 0.2s;
   }
-  
+
   .close-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: white;
   }
-  
+
   .comments-list {
     flex: 1;
     overflow-y: auto;
@@ -600,7 +714,7 @@
     background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
   }
-  
+
   .loading-state,
   .error-state,
   .empty-state {
@@ -613,12 +727,12 @@
     text-align: center;
     gap: 12px;
   }
-  
+
   .empty-state span {
     font-size: 14px;
     color: rgba(255, 255, 255, 0.3);
   }
-  
+
   .error-state button {
     margin-top: 8px;
     padding: 8px 16px;
@@ -628,18 +742,18 @@
     color: white;
     cursor: pointer;
   }
-  
+
   .comment-item {
     display: flex;
     gap: 12px;
     margin-bottom: 16px;
   }
-  
+
   .comment-item.reply {
     margin-left: 0;
     margin-bottom: 12px;
   }
-  
+
   .comment-avatar {
     width: 36px;
     height: 36px;
@@ -647,24 +761,24 @@
     object-fit: cover;
     flex-shrink: 0;
   }
-  
+
   .comment-avatar.small {
     width: 28px;
     height: 28px;
   }
-  
+
   .comment-content {
     flex: 1;
     min-width: 0;
   }
-  
+
   .comment-header {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 4px;
   }
-  
+
   .comment-author {
     font-size: 14px;
     font-weight: 600;
@@ -673,16 +787,16 @@
     align-items: center;
     gap: 4px;
   }
-  
+
   .verified-badge {
     flex-shrink: 0;
   }
-  
+
   .comment-time {
     font-size: 12px;
     color: rgba(255, 255, 255, 0.4);
   }
-  
+
   .comment-text {
     font-size: 14px;
     color: rgba(255, 255, 255, 0.9);
@@ -690,13 +804,13 @@
     line-height: 1.4;
     word-wrap: break-word;
   }
-  
+
   .comment-actions {
     display: flex;
     align-items: center;
     gap: 16px;
   }
-  
+
   .action-btn {
     display: flex;
     align-items: center;
@@ -709,21 +823,21 @@
     padding: 4px 0;
     transition: color 0.2s;
   }
-  
+
   .action-btn:hover {
     color: rgba(255, 255, 255, 0.8);
   }
-  
+
   .action-btn.delete:hover {
     color: #ef4444;
   }
-  
+
   .replies-container {
     margin-top: 12px;
     padding-left: 12px;
     border-left: 2px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .input-area {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding: 12px 16px;
@@ -732,7 +846,7 @@
     flex-shrink: 0;
     position: relative;
   }
-  
+
   .mentions-list {
     position: absolute;
     bottom: 100%;
@@ -749,7 +863,7 @@
     display: flex;
     flex-direction: column;
   }
-  
+
   .mention-item {
     display: flex;
     align-items: center;
@@ -764,35 +878,36 @@
     transition: background 0.1s;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
-  
+
   .mention-item:last-child {
     border-bottom: none;
   }
-  
-  .mention-item:hover, .mention-item.selected {
+
+  .mention-item:hover,
+  .mention-item.selected {
     background: rgba(59, 130, 246, 0.15);
   }
-  
+
   .mention-avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
     object-fit: cover;
   }
-  
+
   .mention-info {
     display: flex;
     flex-direction: column;
     flex: 1;
     min-width: 0;
   }
-  
+
   .mention-username {
     font-size: 13px;
     font-weight: 600;
     color: white;
   }
-  
+
   .mention-name {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.5);
@@ -800,7 +915,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  
+
   .replying-to {
     display: flex;
     align-items: center;
@@ -812,11 +927,11 @@
     font-size: 13px;
     color: rgba(255, 255, 255, 0.7);
   }
-  
+
   .replying-to strong {
     color: #3b82f6;
   }
-  
+
   .replying-to button {
     background: none;
     border: none;
@@ -825,13 +940,13 @@
     padding: 2px;
     display: flex;
   }
-  
+
   .input-row {
     display: flex;
     align-items: flex-end;
     gap: 12px;
   }
-  
+
   .input-avatar {
     width: 32px;
     height: 32px;
@@ -839,7 +954,7 @@
     object-fit: cover;
     flex-shrink: 0;
   }
-  
+
   .input-row textarea {
     flex: 1;
     background: rgba(255, 255, 255, 0.1);
@@ -853,15 +968,15 @@
     max-height: 100px;
     font-family: inherit;
   }
-  
+
   .input-row textarea::placeholder {
     color: rgba(255, 255, 255, 0.4);
   }
-  
+
   .input-row textarea:focus {
     border-color: rgba(59, 130, 246, 0.5);
   }
-  
+
   .send-btn {
     background: #3b82f6;
     border: none;
@@ -876,21 +991,21 @@
     transition: all 0.2s;
     flex-shrink: 0;
   }
-  
+
   .send-btn:hover:not(:disabled) {
     background: #2563eb;
     transform: scale(1.05);
   }
-  
+
   .send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
-  
+
   .login-row {
     justify-content: center;
   }
-  
+
   .login-btn {
     flex: 1;
     padding: 14px 24px;
@@ -903,25 +1018,29 @@
     cursor: pointer;
     transition: all 0.2s ease;
   }
-  
+
   .login-btn:hover {
     transform: scale(1.02);
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
   }
-  
+
   .login-btn:active {
     transform: scale(0.98);
   }
-  
+
   :global(.animate-spin) {
     animation: spin 1s linear infinite;
   }
-  
+
   @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
-  
+
   @media (min-width: 640px) {
     .comments-modal {
       width: 100%;
@@ -932,7 +1051,7 @@
       border-radius: 20px 20px 0 0;
     }
   }
-  
+
   @media (min-width: 1024px) {
     .comments-modal {
       max-width: 900px;

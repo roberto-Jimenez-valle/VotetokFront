@@ -26,7 +26,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         }
 
         const [reports, total] = await Promise.all([
-            prisma.report.findMany({
+            (prisma.report as any).findMany({
                 where,
                 include: {
                     poll: {
@@ -54,6 +54,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
                             avatarUrl: true
                         }
                     },
+                    comment: {
+                        include: {
+                            user: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    displayName: true
+                                }
+                            }
+                        }
+                    },
                     reviewer: {
                         select: {
                             id: true,
@@ -66,7 +77,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
                 take: limit,
                 skip: offset
             }),
-            prisma.report.count({ where })
+            (prisma.report as any).count({ where })
         ]);
 
         // Agrupar reportes por encuesta para ver conteo total
@@ -75,7 +86,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             reportsByPoll[r.pollId] = (reportsByPoll[r.pollId] || 0) + 1;
         }
 
-        const formattedReports = reports.map(report => ({
+        const formattedReports = (reports as any[]).map(report => ({
             id: report.id,
             reason: report.reason,
             notes: report.notes,
@@ -98,6 +109,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
                     avatarUrl: report.poll.user.avatarUrl
                 } : null,
                 totalReports: reportsByPoll[report.pollId] || 1
+            } : null,
+            comment: (report as any).comment ? {
+                id: (report as any).comment.id,
+                content: (report as any).comment.content,
+                author: (report as any).comment.user ? {
+                    id: (report as any).comment.user.id,
+                    username: (report as any).comment.user.username,
+                    displayName: (report as any).comment.user.displayName
+                } : null
             } : null,
             reporter: report.user ? {
                 id: report.user.id,
