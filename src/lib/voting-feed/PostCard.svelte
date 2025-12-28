@@ -362,8 +362,10 @@
     post.type === "swipe" &&
       (swipeIndices[post.id] || 0) >= post.options.length,
   );
+  // For swipe: show results if swiping is complete OR if user already voted (loaded from API)
   const shouldShowResults = $derived(
-    (post.type === "swipe" ? isSwipeComplete : hasVoted) || isClosed,
+    (post.type === "swipe" ? isSwipeComplete || hasVoted : hasVoted) ||
+      isClosed,
   );
   const rankingDraft = $derived(rankingDrafts[post.id] || []);
   const isRankingComplete = $derived(
