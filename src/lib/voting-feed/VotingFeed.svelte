@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { page as pageStore } from "$app/stores";
   import { Crown, X, Check, Loader2, Clock } from "lucide-svelte";
   import type {
     Post,
@@ -810,6 +811,7 @@
     fetchUserVotes();
     loadFriendStories(); // Runs after posts are loaded for fallback
     fetchTrendingPosts();
+    handleUrlParams(); // Procesar enlaces directos (reportes, compartidos)
   });
 
   // Track previous values to detect real changes
@@ -841,6 +843,15 @@
       prevFilter = currentFilter;
       prevLimit = currentLimit;
       fetchTrendingPosts();
+    }
+  });
+
+  // Reaccionar a cambios en la URL (Deep linking)
+  $effect(() => {
+    // Dependemos del search de la página para disparar la lógica
+    const search = $pageStore.url.search;
+    if (search.includes("poll=")) {
+      handleUrlParams();
     }
   });
 
@@ -1548,6 +1559,34 @@
     ) {
       selectedProfileUserId = Number(userId);
       isProfileModalOpen = true;
+    }
+  }
+
+  /**
+   * Manejar parámetros de URL al cargar (Deep linking)
+   * Ejemplo: /?poll=HASHID&comment=ID
+   */
+  async function handleUrlParams() {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const pollId = params.get("poll");
+    const commentId = params.get("comment");
+
+    if (pollId) {
+      console.log("[VotingFeed] Procesando enlace permanente:", {
+        pollId,
+        commentId,
+      });
+      // Reutilizar la lógica de notificaciones
+      await handleNotificationClick(
+        new CustomEvent("url_navigation", {
+          detail: {
+            pollId: pollId,
+            commentId: commentId,
+            type: commentId ? "comment" : "poll",
+          },
+        }) as any,
+      );
     }
   }
 

@@ -50,6 +50,15 @@
             displayName: string;
             avatarUrl: string;
         } | null;
+        comment: {
+            id: number;
+            content: string;
+            author: {
+                id: number;
+                username: string;
+                displayName: string;
+            } | null;
+        } | null;
         reviewer: {
             id: number;
             username: string;
@@ -479,9 +488,14 @@
                                 {/if}
                                 {#if report.poll}
                                     <a
-                                        href="/?poll={report.poll.hashId}"
+                                        href="/?poll={report.poll
+                                            .hashId}{report.comment
+                                            ? `&comment=${report.comment.id}`
+                                            : ''}"
                                         class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                                        title="Ver encuesta"
+                                        title="Ver {report.comment
+                                            ? 'comentario'
+                                            : 'encuesta'}"
                                     >
                                         <ExternalLink size={18} />
                                     </a>
