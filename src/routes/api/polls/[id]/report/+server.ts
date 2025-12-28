@@ -1,7 +1,7 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 import { parsePollIdInternal } from '$lib/server/hashids';
-import { sendReportNotification } from '$lib/server/email';
+import { sendReportNotification } from '$lib/server/telegram';
 
 const REPORT_THRESHOLD_HIDE = 5;
 
@@ -56,9 +56,8 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       await prisma.poll.update({ where: { id: pollId }, data: { isHidden: true } });
     }
 
-    // Enviar email en segundo plano (no bloquea la respuesta)
-    console.log('[Report API] 📧 Iniciando envío de email...');
-    console.log('[Report API] Datos:', { pollId, pollTitle: poll.title, reason, reportCount });
+    // Enviar notificación a Telegram (no bloquea la respuesta)
+    console.log('[Report API] 📱 Enviando notificación a Telegram...');
 
     sendReportNotification({
       pollId,
@@ -69,8 +68,8 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       notes: notes || undefined,
       reportCount
     })
-      .then(result => console.log('[Report API] ✅ Email result:', result))
-      .catch(e => console.error('[Report API] ❌ Error email:', e));
+      .then(result => console.log('[Report API] ✅ Telegram:', result ? 'enviado' : 'no enviado'))
+      .catch(e => console.error('[Report API] ❌ Error Telegram:', e));
 
     return json({ success: true, reportCount });
   } catch (err: any) {
