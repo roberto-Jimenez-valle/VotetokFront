@@ -57,6 +57,9 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
     }
 
     // Enviar email en segundo plano (no bloquea la respuesta)
+    console.log('[Report API] 📧 Iniciando envío de email...');
+    console.log('[Report API] Datos:', { pollId, pollTitle: poll.title, reason, reportCount });
+
     sendReportNotification({
       pollId,
       pollTitle: poll.title,
@@ -65,7 +68,9 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       reason,
       notes: notes || undefined,
       reportCount
-    }).catch(e => console.error('[Report API] Error email:', e));
+    })
+      .then(result => console.log('[Report API] ✅ Email result:', result))
+      .catch(e => console.error('[Report API] ❌ Error email:', e));
 
     return json({ success: true, reportCount });
   } catch (err: any) {
