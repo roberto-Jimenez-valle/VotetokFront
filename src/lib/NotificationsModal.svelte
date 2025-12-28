@@ -201,13 +201,13 @@
     }
 
     console.log("Abrir notificación:", notification.id);
-    dispatch("notificationClick", { 
+    dispatch("notificationClick", {
       notificationId: notification.id,
       pollId: notification.pollId,
       userId: notification.user?.id,
       type: notification.type,
       commentId: notification.commentId,
-      pollTitle: notification.poll
+      pollTitle: notification.poll,
     });
     isOpen = false;
   }
@@ -399,6 +399,11 @@
   <UserProfileModal
     bind:isOpen={isProfileModalOpen}
     bind:userId={selectedUserId}
+    onStatsClick={(detail) => dispatch("statsClick", detail)}
+    onComment={(detail) => dispatch("comment", detail)}
+    onShare={(detail) => dispatch("share", detail)}
+    onRepost={(detail) => dispatch("repost", detail)}
+    onFollowChange={(detail) => dispatch("followChange", detail)}
   />
 {/if}
 

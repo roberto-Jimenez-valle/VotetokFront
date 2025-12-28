@@ -5,7 +5,7 @@
 	import NotificationsModal from "$lib/NotificationsModal.svelte";
 	import UserProfileModal from "$lib/UserProfileModal.svelte";
 	import AuthModal from "$lib/AuthModal.svelte";
-	import { currentUser } from "$lib/stores";
+	import { currentUser } from "$lib/stores/auth";
 
 	interface Props {
 		hidden?: boolean;
@@ -260,17 +260,32 @@
 <SearchModal
 	bind:isOpen={searchModalOpen}
 	on:openPollInGlobe={handleOpenPollInGlobe}
+	on:statsClick={(e) => dispatch("statsClick", e.detail)}
+	on:comment={(e) => dispatch("comment", e.detail)}
+	on:share={(e) => dispatch("share", e.detail)}
+	on:repost={(e) => dispatch("repost", e.detail)}
+	on:followChange={(e) => dispatch("followChange", e.detail)}
 />
 <NotificationsModal
 	bind:isOpen={notificationsModalOpen}
 	on:notificationClick={handleNotificationClick}
+	on:statsClick={(e) => dispatch("statsClick", e.detail)}
+	on:comment={(e) => dispatch("comment", e.detail)}
+	on:share={(e) => dispatch("share", e.detail)}
+	on:repost={(e) => dispatch("repost", e.detail)}
+	on:followChange={(e) => dispatch("followChange", e.detail)}
 />
 <UserProfileModal
 	bind:isOpen={profileModalOpen}
 	bind:userId={selectedProfileId}
-	on:pollClick={(e) => {
-		dispatch("openPollInGlobe", { poll: { id: e.detail.pollId } });
+	onPollClick={(detail) => {
+		dispatch("openPollInGlobe", { poll: { id: detail.pollId } });
 	}}
+	onStatsClick={(detail) => dispatch("statsClick", detail)}
+	onComment={(detail) => dispatch("comment", detail)}
+	onShare={(detail) => dispatch("share", detail)}
+	onRepost={(detail) => dispatch("repost", detail)}
+	onFollowChange={(detail) => dispatch("followChange", detail)}
 />
 <AuthModal bind:isOpen={authModalOpen} />
 

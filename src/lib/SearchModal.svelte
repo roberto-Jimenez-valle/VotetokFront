@@ -12,7 +12,8 @@
   import { createEventDispatcher, onMount } from "svelte";
   import { apiCall } from "$lib/api/client";
   import { formatNumber } from "$lib/utils/pollHelpers";
-  import { currentUser } from "$lib/stores";
+  import { currentUser } from "$lib/stores/auth";
+  import type { Post } from "$lib/voting-feed/types";
   import AuthModal from "$lib/AuthModal.svelte";
   import UserProfileModal from "$lib/UserProfileModal.svelte";
 
@@ -349,11 +350,13 @@
     }
   }
 
-  function handlePollClickFromProfile(event: CustomEvent) {
-    const { pollId } = event.detail;
-    // Cerrar modal de perfil y abrir encuesta en el globo
+  function handlePollClickFromProfile(detail: {
+    pollId: string;
+    polls: Post[];
+  }) {
+    const { pollId } = detail;
+    selectSearchResult("poll", { id: pollId });
     isProfileModalOpen = false;
-    // Aquí podrías disparar evento para abrir la encuesta
     dispatch("openPollById", { pollId });
   }
 
@@ -808,7 +811,12 @@
 <UserProfileModal
   bind:isOpen={isProfileModalOpen}
   bind:userId={selectedProfileUserId}
-  on:pollClick={handlePollClickFromProfile}
+  onPollClick={handlePollClickFromProfile}
+  onStatsClick={(detail) => dispatch("statsClick", detail)}
+  onComment={(detail) => dispatch("comment", detail)}
+  onShare={(detail) => dispatch("share", detail)}
+  onRepost={(detail) => dispatch("repost", detail)}
+  onFollowChange={(detail) => dispatch("followChange", detail)}
 />
 
 <style>

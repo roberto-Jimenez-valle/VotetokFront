@@ -2430,6 +2430,20 @@
       on:openBottomSheet={goHome}
       on:notificationClick={handleNotificationClick}
       on:openPollInGlobe={(e) => switchToReels(e.detail.poll.id)}
+      on:statsClick={(e) => handleStatsClick(e.detail.post)}
+      on:comment={(e) => handleComment(e.detail.post)}
+      on:share={(e) => handleShare(e.detail.post)}
+      on:repost={(e) => handleRepost(e.detail.post)}
+      on:followChange={(e) => {
+        const { userId, isFollowing, isPending } = e.detail;
+        if (!userId) return;
+        posts = posts.map((p) => {
+          if (p.userId === userId || p.user?.id === userId) {
+            return { ...p, isFollowing, isPending };
+          }
+          return p;
+        });
+      }}
     />
   {/if}
 
@@ -2444,16 +2458,52 @@
   <UserProfileModal
     bind:isOpen={isProfileModalOpen}
     bind:userId={selectedProfileUserId}
-    on:pollClick={(e) => {
-      const { pollId, polls } = e.detail;
+    onPollClick={(detail) => {
+      console.log(
+        "[VotingFeed] Received pollClick from profile:",
+        detail.pollId,
+      );
+      const { pollId, polls } = detail;
       switchToReels(pollId, polls);
     }}
-    on:statsClick={(e) => handleStatsClick(e.detail.post)}
-    on:comment={(e) => handleComment(e.detail.post)}
-    on:share={(e) => handleShare(e.detail.post)}
-    on:repost={(e) => handleRepost(e.detail.post)}
-    on:followChange={(e) => {
-      const { userId, isFollowing, isPending } = e.detail;
+    onStatsClick={(detail) => {
+      console.log(
+        "[VotingFeed] Received statsClick from profile:",
+        detail.post?.id,
+      );
+      handleStatsClick(detail.post);
+    }}
+    onComment={(detail) => {
+      console.log(
+        "[VotingFeed] Received comment from profile:",
+        detail.post?.id,
+      );
+      handleComment(detail.post);
+    }}
+    onShare={(detail) => {
+      console.log("[VotingFeed] Received share from profile:", detail.post?.id);
+      handleShare(detail.post);
+    }}
+    onRepost={(detail) => {
+      console.log(
+        "[VotingFeed] Received repost from profile:",
+        detail.post?.id,
+      );
+      handleRepost(detail.post);
+    }}
+    onUserClick={(detail) => {
+      console.log(
+        "[VotingFeed] Received userClick from profile:",
+        detail.userId,
+      );
+      selectedProfileUserId = detail.userId;
+    }}
+    onFollowChange={(detail) => {
+      console.log(
+        "[VotingFeed] Received followChange from profile:",
+        detail.userId,
+      );
+      const { userId, isFollowing, isPending } = detail;
       if (!userId) return;
       posts = posts.map((p) => {
         if (p.userId === userId || p.user?.id === userId) {

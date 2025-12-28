@@ -1353,18 +1353,19 @@
     >
       <div class="flex items-center gap-3">
         <button
-          onclick={() => hasVoted && onStatsClick?.(post)}
-          disabled={!hasVoted}
-          class="flex items-center gap-[0.4rem] bg-slate-900/50 px-[0.7rem] py-[0.3rem] rounded-full border text-[0.75rem] font-bold transition-all {hasVoted
+          onclick={() => (hasVoted || isSelf) && onStatsClick?.(post)}
+          disabled={!(hasVoted || isSelf)}
+          class="flex items-center gap-[0.4rem] bg-slate-900/50 px-[0.7rem] py-[0.3rem] rounded-full border text-[0.75rem] font-bold transition-all {hasVoted ||
+          isSelf
             ? 'text-slate-300 border-white/10 hover:bg-slate-800/70 hover:border-white/20 cursor-pointer active:scale-95'
             : 'text-slate-500 border-white/5 cursor-not-allowed'}"
-          title={hasVoted
+          title={hasVoted || isSelf
             ? "Ver estadísticas"
             : "Vota para ver las estadísticas"}
         >
           <BarChart2
             size="0.75rem"
-            class={hasVoted ? config.color : "text-slate-500"}
+            class={hasVoted || isSelf ? config.color : "text-slate-500"}
           />
           <span>{post.totalVotes.toLocaleString()}</span>
         </button>

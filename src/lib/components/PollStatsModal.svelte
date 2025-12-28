@@ -197,7 +197,7 @@
 {#if isOpen && post}
     <!-- Backdrop -->
     <div
-        class="fixed inset-0 z-[60] bg-black/90 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4"
+        class="fixed inset-0 z-[2000000] bg-black/90 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4"
         transition:fade={{ duration: 300 }}
         onclick={(e) => e.target === e.currentTarget && onClose()}
         onkeydown={(e) => e.key === "Escape" && onClose()}

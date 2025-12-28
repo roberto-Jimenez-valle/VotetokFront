@@ -49,14 +49,33 @@
     ArrowLeft,
   } from "lucide-svelte";
 
-  const dispatch = createEventDispatcher();
-
   interface Props {
     isOpen?: boolean;
     userId?: number | null;
+    onComment?: (data: { post: Post }) => void;
+    onShare?: (data: { post: Post }) => void;
+    onRepost?: (data: { post: Post }) => void;
+    onStatsClick?: (data: { post: Post }) => void;
+    onPollClick?: (data: { pollId: string; polls: Post[] }) => void;
+    onUserClick?: (data: { userId: number }) => void;
+    onFollowChange?: (data: {
+      userId: number;
+      isFollowing: boolean;
+      isPending: boolean;
+    }) => void;
   }
 
-  let { isOpen = $bindable(false), userId = $bindable(null) }: Props = $props();
+  let {
+    isOpen = $bindable(false),
+    userId = $bindable(null),
+    onComment,
+    onShare,
+    onRepost,
+    onStatsClick,
+    onPollClick,
+    onUserClick,
+    onFollowChange,
+  }: Props = $props();
 
   // Estados
   let loading = $state(false);
@@ -447,16 +466,16 @@
       contextPolls = transformedSavedPolls;
     }
 
-    dispatch("pollClick", { pollId: postId, polls: contextPolls });
+    onPollClick?.({ pollId: postId, polls: contextPolls });
     closeModal();
   }
 
   function handleComment(post: Post) {
-    dispatch("comment", { post });
+    onComment?.({ post });
   }
 
   function handleShare(post: Post) {
-    dispatch("share", { post });
+    onShare?.({ post });
   }
 
   function handleRepost(post: Post) {
@@ -464,12 +483,12 @@
       loginModalOpen.set(true);
       return;
     }
-    dispatch("repost", { post });
+    onRepost?.({ post });
   }
 
   function handleStatsClick(post: Post) {
     console.log("[UserProfileModal] Stats click for poll:", post.id);
-    dispatch("statsClick", { post });
+    onStatsClick?.({ post });
   }
 
   function handleAvatarClick(post: Post) {
@@ -496,7 +515,7 @@
         });
         if (res.ok) {
           isPending = false;
-          dispatch("followChange", {
+          onFollowChange?.({
             userId,
             isFollowing: false,
             isPending: false,
@@ -509,7 +528,7 @@
         });
         if (res.ok) {
           isFollowing = false;
-          dispatch("followChange", {
+          onFollowChange?.({
             userId,
             isFollowing: false,
             isPending: false,
@@ -531,7 +550,7 @@
             if (data.status === "pending") {
               isPending = true;
               isFollowing = false;
-              dispatch("followChange", {
+              onFollowChange?.({
                 userId,
                 isFollowing: false,
                 isPending: true,
@@ -539,7 +558,7 @@
             } else {
               isFollowing = true;
               isPending = false;
-              dispatch("followChange", {
+              onFollowChange?.({
                 userId,
                 isFollowing: true,
                 isPending: false,
@@ -557,7 +576,7 @@
                 );
                 isFollowing = true;
                 isPending = false;
-                dispatch("followChange", {
+                onFollowChange?.({
                   userId,
                   isFollowing: true,
                   isPending: false,
@@ -576,7 +595,7 @@
             );
             isFollowing = true;
             isPending = false;
-            dispatch("followChange", {
+            onFollowChange?.({
               userId,
               isFollowing: true,
               isPending: false,
@@ -1081,13 +1100,12 @@
                   <div
                     class="user-card"
                     onclick={() => {
-                      dispatch("userClick", { userId: user.id });
+                      onUserClick?.({ userId: user.id });
                     }}
                     role="button"
                     tabindex="0"
                     onkeydown={(e) =>
-                      e.key === "Enter" &&
-                      dispatch("userClick", { userId: user.id })}
+                      e.key === "Enter" && onUserClick?.({ userId: user.id })}
                   >
                     <img
                       src={user.avatarUrl ||
@@ -1125,13 +1143,12 @@
                   <div
                     class="user-card"
                     onclick={() => {
-                      dispatch("userClick", { userId: user.id });
+                      onUserClick?.({ userId: user.id });
                     }}
                     role="button"
                     tabindex="0"
                     onkeydown={(e) =>
-                      e.key === "Enter" &&
-                      dispatch("userClick", { userId: user.id })}
+                      e.key === "Enter" && onUserClick?.({ userId: user.id })}
                   >
                     <img
                       src={user.avatarUrl ||
