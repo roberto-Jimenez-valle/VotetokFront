@@ -10,11 +10,20 @@ import { env } from '$env/dynamic/private';
  * Obtener transporter configurado
  */
 function getTransporter() {
+  const user = env.EMAIL_USER || process?.env?.EMAIL_USER || 'voutop.oficial@gmail.com';
+  const pass = env.EMAIL_PASS || process?.env?.EMAIL_PASS;
+
+  if (!pass) {
+    console.warn('[Email] ⚠️ No se detectó EMAIL_PASS. El envío de correos fallará.');
+  } else {
+    console.log('[Email] 📧 Configurando transportador para:', user);
+  }
+
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: env.EMAIL_USER || 'voutop.oficial@gmail.com',
-      pass: env.EMAIL_PASS || '' // App password de Gmail
+      user,
+      pass: pass || ''
     }
   });
 }
@@ -122,9 +131,10 @@ export async function sendReportNotification(data: {
 
   try {
     // Si no hay credenciales de email configuradas, solo loguear
-    if (!env.EMAIL_PASS) {
-      console.log('[Email] ⚠️ EMAIL_PASS no configurado en .env. Email no enviado.');
-      console.log('[Email] Detalles del reporte que no se pudo enviar:', { pollId, pollTitle, reason, reportCount });
+    const pass = env.EMAIL_PASS || process?.env?.EMAIL_PASS;
+    if (!pass) {
+      console.log('[Email] ⚠️ EMAIL_PASS no configurado en Railway/env. Email no enviado.');
+      console.log('[Email] Detalles del reporte omitido:', { pollId, pollTitle, reason, reportCount });
       return { sent: false, reason: 'No email credentials configured' };
     }
 

@@ -78,20 +78,38 @@
                 ? `/api/comments/${commentId}/report`
                 : `/api/polls/${postId}/report`;
 
+            console.log(`[ReportModal] Submitting to: ${endpoint}`, {
+                reason,
+                notes,
+                postId,
+                commentId,
+            });
+
             const res = await apiCall(endpoint, {
                 method: "POST",
                 body: JSON.stringify({
                     reason,
                     notes,
-                    pollId: postId, // Incluimos pollId siempre para facilitar el trackeo
+                    pollId: postId,
                 }),
             });
+
+            console.log(`[ReportModal] Response status: ${res.status}`);
 
             if (res.ok) {
                 step = 3;
             } else {
-                const error = await res.json();
-                alert(error.message || "Error al enviar el reporte");
+                let errorMsg = "Error al enviar el reporte";
+                try {
+                    const error = await res.json();
+                    errorMsg = error.message || errorMsg;
+                } catch (e) {
+                    console.error(
+                        "[ReportModal] Failed to parse error JSON:",
+                        e,
+                    );
+                }
+                alert(`Error (${res.status}): ${errorMsg}`);
             }
         } catch (err) {
             console.error("Error reporting content:", err);

@@ -6,10 +6,13 @@ const REPORT_THRESHOLD_HIDE = 5; // Ocultar automáticamente tras 5 reportes
 
 export const POST: RequestHandler = async ({ params, locals, request }) => {
     try {
-        const commentId = parseInt(params.id || '');
+        const rawId = params.id || '';
+        const commentId = parseInt(rawId);
+        console.log(`[Comment Report API] 📥 POST request received for id: "${rawId}" (parsed: ${commentId})`);
 
         if (isNaN(commentId)) {
-            throw error(400, 'ID de comentario inválido');
+            console.error(`[Comment Report API] ❌ Invalid numeric ID: "${rawId}"`);
+            return json({ success: false, message: 'ID de comentario inválido (debe ser numérico)' }, { status: 400 });
         }
 
         const userId = locals.user?.userId;

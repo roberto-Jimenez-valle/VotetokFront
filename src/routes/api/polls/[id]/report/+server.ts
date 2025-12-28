@@ -11,15 +11,16 @@ const REPORT_THRESHOLD_HIDE = 5; // Ocultar automáticamente tras 5 reportes
  */
 export const POST: RequestHandler = async ({ params, locals, request }) => {
   try {
-    const pollId = parsePollIdInternal(params.id || '');
-    console.log(`[Report API] Request for poll ${params.id} -> parsed ID: ${pollId}`);
+    const rawId = params.id || '';
+    const pollId = parsePollIdInternal(rawId);
+    console.log(`[Report API] 🔍 POST request for ${rawId} -> parsed ID: ${pollId}`);
 
     if (!pollId) {
-      throw error(400, 'ID de encuesta inválido');
+      console.error(`[Report API] ❌ Invalid poll ID: ${rawId}`);
+      return json({ success: false, message: 'ID de encuesta inválido' }, { status: 400 });
     }
 
     const userId = locals.user?.userId;
-    console.log(`[Report API] User ID: ${userId}`);
     if (!userId) {
       throw error(401, 'Debes iniciar sesión para reportar');
     }
@@ -32,7 +33,7 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       reason = body.reason || 'other';
       notes = body.notes || null;
     } catch {
-      // Sin body, usar valores por defecto
+      // Sin body
     }
 
     // Validar razón
@@ -41,7 +42,7 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       reason = 'other';
     }
 
-    // Verificar que la encuesta existe y obtener info
+    // Verificar que la encuesta existe
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       select: {
@@ -58,18 +59,15 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       throw error(404, 'Encuesta no encontrada');
     }
 
-    // No permitir reportar tu propia encuesta
     if (poll.userId === Number(userId)) {
       throw error(400, 'No puedes reportar tu propia encuesta');
     }
 
-    // Obtener info del usuario que reporta
     const reporter = await prisma.user.findUnique({
       where: { id: Number(userId) },
-      select: { username: true, email: true }
+      select: { username: true }
     });
 
-    // Verificar si ya reportó - usar findFirst ya que la clave única cambió
     const existingReport = await (prisma.report as any).findFirst({
       where: {
         pollId,
@@ -82,7 +80,7 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       return json({ success: true, message: 'Ya has reportado esta encuesta' });
     }
 
-    // Crear el reporte en el nuevo modelo
+    // Crear el reporte
     await (prisma.report as any).create({
       data: {
         pollId,
@@ -93,7 +91,7 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       }
     });
 
-    // También crear interacción para mantener compatibilidad
+    // Mantener compatibilidad con historial antiguo
     await prisma.pollInteraction.upsert({
       where: {
         pollId_userId_interactionType: {
@@ -107,15 +105,13 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
         userId: Number(userId),
         interactionType: 'report'
       },
-      update: {} // No actualizar nada si ya existe
+      update: {}
     });
 
-    // Contar reportes totales
-    const reportCount = await prisma.report.count({
+    const reportCount = await (prisma.report as any).count({
       where: { pollId }
     });
 
-    // Auto-ocultar si supera el umbral
     let wasHidden = false;
     if (reportCount >= REPORT_THRESHOLD_HIDE) {
       await prisma.poll.update({
@@ -123,10 +119,9 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
         data: { isHidden: true }
       });
       wasHidden = true;
-      console.log(`[Report] 🚫 Encuesta ${pollId} ocultada automáticamente (${reportCount} reportes)`);
     }
 
-    // Enviar notificación por email al admin
+    // Enviar notificación
     await sendReportNotification({
       pollId,
       pollTitle: poll.title,
@@ -146,7 +141,7 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       wasHidden
     });
   } catch (err: any) {
-    console.error('[Report] Error:', err);
+    console.error('[Report API] Error:', err);
     if (err.status) throw err;
     throw error(500, `Error al reportar: ${err.message}`);
   }
