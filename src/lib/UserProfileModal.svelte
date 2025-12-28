@@ -31,7 +31,7 @@
   import CommentsModal from "$lib/components/CommentsModal.svelte";
   import ShareModal from "$lib/components/ShareModal.svelte";
   import { apiCall, apiDelete } from "$lib/api/client";
-  import { currentUser } from "$lib/stores";
+  import { currentUser } from "$lib/stores/auth";
   import { logout } from "$lib/stores/auth";
   import { loginModalOpen } from "$lib/stores/globalState";
   import {
@@ -471,25 +471,6 @@
     console.log("[UserProfileModal] Stats click for poll:", post.id);
     dispatch("statsClick", { post });
   }
-
-  // Sincronizar estado de seguimiento en todas las encuestas del modal
-  $effect(() => {
-    if (userPolls.length > 0) {
-      userPolls = userPolls.map((p) => ({ ...p, isFollowing, isPending }));
-    }
-  });
-
-  $effect(() => {
-    if (userVotes.length > 0) {
-      userVotes = userVotes.map((p) => ({ ...p, isFollowing, isPending }));
-    }
-  });
-
-  $effect(() => {
-    if (savedPolls.length > 0) {
-      savedPolls = savedPolls.map((p) => ({ ...p, isFollowing, isPending }));
-    }
-  });
 
   function handleAvatarClick(post: Post) {
     // Already in profile modal, could switch to that user's profile
