@@ -8,7 +8,7 @@
         CheckCircle2,
         MessageSquare,
     } from "lucide-svelte";
-    import { apiCall } from "$lib/api/client";
+    import { apiCall, handleApiError } from "$lib/api/client";
 
     interface Props {
         isOpen: boolean;
@@ -95,7 +95,7 @@
             }
         } catch (err) {
             console.error("Error reporting content:", err);
-            alert("Error de conexión");
+            alert(handleApiError(err));
         } finally {
             isSubmitting = false;
         }

@@ -12,12 +12,14 @@ const REPORT_THRESHOLD_HIDE = 5; // Ocultar automáticamente tras 5 reportes
 export const POST: RequestHandler = async ({ params, locals, request }) => {
   try {
     const pollId = parsePollIdInternal(params.id || '');
+    console.log(`[Report API] Request for poll ${params.id} -> parsed ID: ${pollId}`);
 
     if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
 
     const userId = locals.user?.userId;
+    console.log(`[Report API] User ID: ${userId}`);
     if (!userId) {
       throw error(401, 'Debes iniciar sesión para reportar');
     }
@@ -67,13 +69,12 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       select: { username: true, email: true }
     });
 
-    // Verificar si ya reportó - usar nuevo modelo Report
-    const existingReport = await prisma.report.findUnique({
+    // Verificar si ya reportó - usar findFirst ya que la clave única cambió
+    const existingReport = await (prisma.report as any).findFirst({
       where: {
-        pollId_userId: {
-          pollId,
-          userId: Number(userId)
-        }
+        pollId,
+        userId: Number(userId),
+        commentId: null
       }
     });
 
@@ -82,12 +83,13 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
     }
 
     // Crear el reporte en el nuevo modelo
-    await prisma.report.create({
+    await (prisma.report as any).create({
       data: {
         pollId,
         userId: Number(userId),
         reason,
-        notes
+        notes,
+        commentId: null
       }
     });
 

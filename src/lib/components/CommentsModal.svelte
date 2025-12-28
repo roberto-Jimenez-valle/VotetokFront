@@ -69,24 +69,48 @@
   const DEFAULT_AVATAR =
     'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23374151"/%3E%3Cpath d="M20 20a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0 2c-5.33 0-16 2.67-16 8v4h32v-4c0-5.33-10.67-8-16-8z" fill="%236b7280"/%3E%3C/svg%3E';
 
+  // Comment options
+  let isCommentOptionsOpen = $state(false);
+  let selectedCommentForOptions = $state<Comment | null>(null);
+  let longPressTimer: any;
+
   // Report modal
   let isReportModalOpen = $state(false);
   let reportCommentId = $state<number | null>(null);
   let reportPollId = $state<number | string>("");
-  let longPressTimer: any;
 
   function handleLongPress(comment: Comment) {
     if (!$currentUser) {
       showAuthModal = true;
       return;
     }
-    // No reportarse a uno mismo
+    // No opciones para uno mismo (o quizás sí, para borrar, pero el usuario pidió denunciar/bloquear)
+    // El usuario pidió específicamente reporte/bloqueo tipo Insta
     const currentId = ($currentUser as any).userId || ($currentUser as any).id;
     if (currentId === comment.user.id) return;
 
-    reportCommentId = comment.id;
+    selectedCommentForOptions = comment;
+    isCommentOptionsOpen = true;
+  }
+
+  function openReportFromOptions() {
+    if (!selectedCommentForOptions) return;
+    reportCommentId = selectedCommentForOptions.id;
     reportPollId = pollId;
+    isCommentOptionsOpen = false;
     isReportModalOpen = true;
+  }
+
+  async function handleBlockUser() {
+    if (!selectedCommentForOptions) return;
+    // Por ahora simulamos el bloqueo o mostramos un mensaje
+    // ya que no hay endpoint de bloqueo implementado aún
+    alert(
+      `Has bloqueado a @${selectedCommentForOptions.user.username}. No verás más sus comentarios.`,
+    );
+    isCommentOptionsOpen = false;
+    // Opcional: recargar comentarios para filtrar el bloqueado
+    // loadComments();
   }
 
   function startLongPress(comment: Comment) {
@@ -609,6 +633,41 @@
   <!-- Auth Modal -->
   <AuthModal bind:isOpen={showAuthModal} />
 
+  <!-- Comment Options Menu (Insta Style) -->
+  {#if isCommentOptionsOpen}
+    <div
+      class="options-overlay"
+      onclick={() => (isCommentOptionsOpen = false)}
+      transition:fade={{ duration: 150 }}
+      role="presentation"
+    >
+      <div
+        class="options-menu"
+        transition:fly={{ y: 50, duration: 250 }}
+        onclick={(e) => e.stopPropagation()}
+        role="presentation"
+      >
+        <div class="options-header">
+          <div class="handle"></div>
+        </div>
+        <button class="option-btn danger" onclick={openReportFromOptions}>
+          <AlertTriangle size={18} />
+          <span>Denunciar</span>
+        </button>
+        <button class="option-btn danger" onclick={handleBlockUser}>
+          <X size={18} />
+          <span>Bloquear usuario</span>
+        </button>
+        <button
+          class="option-btn cancel"
+          onclick={() => (isCommentOptionsOpen = false)}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  {/if}
+
   <!-- Report Modal -->
   <ReportModal
     isOpen={isReportModalOpen}
@@ -1055,6 +1114,81 @@
   @media (min-width: 1024px) {
     .comments-modal {
       max-width: 900px;
+    }
+  }
+
+  /* Options Menu Styles */
+  .options-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 10000000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .options-menu {
+    width: 100%;
+    max-width: 400px;
+    background: #1f1f1f;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 0 32px 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .options-header {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 16px;
+  }
+
+  .handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
+
+  .option-btn {
+    width: 100%;
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .option-btn:active {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .option-btn.danger {
+    color: #ef4444;
+  }
+
+  .option-btn.cancel {
+    justify-content: center;
+    border-bottom: none;
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  @media (min-width: 640px) {
+    .options-menu {
+      border-radius: 20px;
+      margin-bottom: 24px;
     }
   }
 </style>
