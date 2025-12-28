@@ -1,0 +1,14 @@
+# Nixpacks configuration for Railway
+# Ensures devDependencies are installed for build
+
+[phases.setup]
+nixPkgs = ['nodejs_20']
+
+[phases.install]
+cmds = ['npm ci --include=dev']
+
+[phases.build]
+cmds = ['npx prisma generate', 'npm run build']
+
+[start]
+cmd = 'npm run start'
