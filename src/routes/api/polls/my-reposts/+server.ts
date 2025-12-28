@@ -8,24 +8,24 @@ import { prisma } from '$lib/server/prisma';
 export const GET: RequestHandler = async ({ url, locals }) => {
   try {
     const pollIdsParam = url.searchParams.get('pollIds');
-    
+
     if (!pollIdsParam) {
       return json({ data: {} });
     }
-    
+
     const pollIds = pollIdsParam.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
-    
+
     if (pollIds.length === 0) {
       return json({ data: {} });
     }
-    
+
     // Obtener userId del contexto de sesión
-    const userId = locals.user?.userId || locals.user?.id || null;
-    
+    const userId = locals.user?.userId || null;
+
     if (!userId) {
       return json({ data: {} });
     }
-    
+
     // Buscar reposts del usuario para las encuestas especificadas
     const reposts = await prisma.pollInteraction.findMany({
       where: {
@@ -37,13 +37,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         pollId: true
       }
     });
-    
+
     // Transformar a Record<pollId, boolean>
     const userReposts: Record<string, boolean> = {};
     for (const repost of reposts) {
       userReposts[repost.pollId.toString()] = true;
     }
-    
+
     return json({ data: userReposts });
   } catch (error) {
     console.error('[API my-reposts] Error:', error);

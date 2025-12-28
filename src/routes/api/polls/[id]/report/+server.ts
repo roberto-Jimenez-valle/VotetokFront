@@ -3,20 +3,15 @@ import { prisma } from '$lib/server/prisma';
 import { parsePollIdInternal } from '$lib/server/hashids';
 import { sendReportNotification } from '$lib/server/email';
 
-const REPORT_THRESHOLD_HIDE = 5; // Ocultar automáticamente tras 5 reportes
+const REPORT_THRESHOLD_HIDE = 5;
 
-/**
- * POST /api/polls/[id]/report
- * Reportar una encuesta
- */
 export const POST: RequestHandler = async ({ params, locals, request }) => {
   try {
     const rawId = params.id || '';
     const pollId = parsePollIdInternal(rawId);
-    console.log(`[Report API] 🔍 POST request for ${rawId} -> parsed ID: ${pollId}`);
+    console.log(`[Report API] 🔍 Reporte de ENCUESTA iniciado para: ${rawId} (ID: ${pollId})`);
 
     if (!pollId) {
-      console.error(`[Report API] ❌ Invalid poll ID: ${rawId}`);
       return json({ success: false, message: 'ID de encuesta inválido' }, { status: 400 });
     }
 
@@ -25,124 +20,50 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
       throw error(401, 'Debes iniciar sesión para reportar');
     }
 
-    // Obtener razón y notas del reporte
-    let reason = 'other';
-    let notes = null;
-    try {
-      const body = await request.json();
-      reason = body.reason || 'other';
-      notes = body.notes || null;
-    } catch {
-      // Sin body
-    }
+    const body = await request.json().catch(() => ({}));
+    const reason = body.reason || 'other';
+    const notes = body.notes || null;
 
-    // Validar razón
-    const validReasons = ['spam', 'inappropriate', 'misleading', 'hate', 'harassment', 'violence', 'other'];
-    if (!validReasons.includes(reason)) {
-      reason = 'other';
-    }
-
-    // Verificar que la encuesta existe
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
-      select: {
-        id: true,
-        userId: true,
-        title: true,
-        user: {
-          select: { username: true }
-        }
-      }
+      select: { id: true, userId: true, title: true, user: { select: { username: true } } }
     });
 
-    if (!poll) {
-      throw error(404, 'Encuesta no encontrada');
-    }
-
-    if (poll.userId === Number(userId)) {
-      throw error(400, 'No puedes reportar tu propia encuesta');
-    }
-
-    const reporter = await prisma.user.findUnique({
-      where: { id: Number(userId) },
-      select: { username: true }
-    });
+    if (!poll) throw error(404, 'Encuesta no encontrada');
+    if (poll.userId === Number(userId)) throw error(400, 'No puedes reportar tu propia encuesta');
 
     const existingReport = await (prisma.report as any).findFirst({
-      where: {
-        pollId,
-        userId: Number(userId),
-        commentId: null
-      }
+      where: { pollId, userId: Number(userId), commentId: null }
     });
 
     if (existingReport) {
       return json({ success: true, message: 'Ya has reportado esta encuesta' });
     }
 
-    // Crear el reporte
     await (prisma.report as any).create({
-      data: {
-        pollId,
-        userId: Number(userId),
-        reason,
-        notes,
-        commentId: null
-      }
+      data: { pollId, userId: Number(userId), reason, notes, commentId: null }
     });
 
-    // Mantener compatibilidad con historial antiguo
-    await prisma.pollInteraction.upsert({
-      where: {
-        pollId_userId_interactionType: {
-          pollId,
-          userId: Number(userId),
-          interactionType: 'report'
-        }
-      },
-      create: {
-        pollId,
-        userId: Number(userId),
-        interactionType: 'report'
-      },
-      update: {}
-    });
+    const reportCount = await (prisma.report as any).count({ where: { pollId } });
 
-    const reportCount = await (prisma.report as any).count({
-      where: { pollId }
-    });
-
-    let wasHidden = false;
     if (reportCount >= REPORT_THRESHOLD_HIDE) {
-      await prisma.poll.update({
-        where: { id: pollId },
-        data: { isHidden: true }
-      });
-      wasHidden = true;
+      await prisma.poll.update({ where: { id: pollId }, data: { isHidden: true } });
     }
 
-    // Enviar notificación
-    await sendReportNotification({
+    // Enviar email en segundo plano (no bloquea la respuesta)
+    sendReportNotification({
       pollId,
       pollTitle: poll.title,
       pollAuthor: poll.user?.username || 'Desconocido',
-      reporterUsername: reporter?.username || 'Anónimo',
+      reporterUsername: locals.user?.username || 'Anónimo',
       reason,
       notes: notes || undefined,
       reportCount
-    });
+    }).catch(e => console.error('[Report API] Error email:', e));
 
-    return json({
-      success: true,
-      message: wasHidden
-        ? 'Gracias por tu reporte. La encuesta ha sido ocultada para revisión.'
-        : 'Gracias por tu reporte. Lo revisaremos pronto.',
-      reportCount,
-      wasHidden
-    });
+    return json({ success: true, reportCount });
   } catch (err: any) {
     console.error('[Report API] Error:', err);
-    if (err.status) throw err;
-    throw error(500, `Error al reportar: ${err.message}`);
+    throw error(err.status || 500, err.message || 'Error interno');
   }
 };

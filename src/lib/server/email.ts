@@ -24,7 +24,11 @@ function getTransporter() {
     auth: {
       user,
       pass: pass || ''
-    }
+    },
+    // Prevenir esperas infinitas
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000
   });
 }
 

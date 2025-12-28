@@ -3,7 +3,7 @@ import { prisma } from '$lib/server/prisma';
 import { parsePollIdInternal } from '$lib/server/hashids';
 
 export const GET: RequestHandler = async ({ params }) => {
-  const pollId = parsePollIdInternal(params.id);
+  const pollId = parsePollIdInternal(params.id || '');
 
   // Verificar que la encuesta existe
   if (!pollId) {
@@ -45,7 +45,7 @@ export const GET: RequestHandler = async ({ params }) => {
   const subdivisions = await prisma.subdivision.findMany({
     where: {
       id: {
-        in: votesBySubdivision.map(v => v.subdivisionId)
+        in: votesBySubdivision.map(v => v.subdivisionId).filter((id): id is number => id !== null)
       }
     },
     select: {
@@ -69,12 +69,13 @@ export const GET: RequestHandler = async ({ params }) => {
   const votesBySubdivisionMap: Record<string, { name: string, level: number, count: number }> = {};
 
   for (const vote of votesBySubdivision) {
+    if (vote.subdivisionId === null) continue;
     const sub = subdivisionMap.get(vote.subdivisionId);
     if (sub) {
       // Extraer código país
       const countryIso = sub.subdivisionId.split('.')[0];
       votesByCountryMap[countryIso] = (votesByCountryMap[countryIso] || 0) + vote._count;
-      
+
       // Guardar también por subdivisión
       votesBySubdivisionMap[sub.subdivisionId] = {
         name: sub.name,

@@ -8,27 +8,27 @@ import { parsePollIdInternal } from '$lib/server/hashids';
  */
 export const POST: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
-    const userId = locals.user?.userId || locals.user?.id;
+
+    const userId = locals.user?.userId;
     if (!userId) {
       throw error(401, 'Debes iniciar sesión');
     }
-    
+
     // Verificar que la encuesta existe
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       select: { id: true }
     });
-    
+
     if (!poll) {
       throw error(404, 'Encuesta no encontrada');
     }
-    
+
     // Verificar si ya está oculta
     const existingHide = await prisma.pollInteraction.findUnique({
       where: {
@@ -39,11 +39,11 @@ export const POST: RequestHandler = async ({ params, locals }) => {
         }
       }
     });
-    
+
     if (existingHide) {
       return json({ success: true, message: 'Ya oculta' });
     }
-    
+
     // Crear el registro de ocultar
     await prisma.pollInteraction.create({
       data: {
@@ -52,7 +52,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
         interactionType: 'hide'
       }
     });
-    
+
     return json({ success: true, message: 'Encuesta ocultada' });
   } catch (err: any) {
     console.error('[Hide] Error:', err);
@@ -67,17 +67,17 @@ export const POST: RequestHandler = async ({ params, locals }) => {
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
-    const userId = locals.user?.userId || locals.user?.id;
+
+    const userId = locals.user?.userId;
     if (!userId) {
       throw error(401, 'Debes iniciar sesión');
     }
-    
+
     const existingHide = await prisma.pollInteraction.findUnique({
       where: {
         pollId_userId_interactionType: {
@@ -87,13 +87,13 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
         }
       }
     });
-    
+
     if (existingHide) {
       await prisma.pollInteraction.delete({
         where: { id: existingHide.id }
       });
     }
-    
+
     return json({ success: true, message: 'Encuesta visible de nuevo' });
   } catch (err: any) {
     console.error('[Hide DELETE] Error:', err);

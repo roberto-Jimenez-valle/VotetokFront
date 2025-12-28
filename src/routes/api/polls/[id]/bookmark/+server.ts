@@ -14,7 +14,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
       throw error(400, 'ID de encuesta inválido');
     }
 
-    const userId = locals.user?.userId || (locals.user as any)?.id;
+    const userId = locals.user?.userId;
     if (!userId) {
       throw error(401, 'Debes iniciar sesión para guardar');
     }
@@ -78,7 +78,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
       throw error(400, 'ID de encuesta inválido');
     }
 
-    const userId = locals.user?.userId || (locals.user as any)?.id;
+    const userId = locals.user?.userId;
     if (!userId) {
       throw error(401, 'Debes iniciar sesión');
     }
@@ -125,7 +125,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
       throw error(400, 'ID de encuesta inválido');
     }
 
-    const userId = locals.user?.userId || (locals.user as any)?.id;
+    const userId = locals.user?.userId;
 
     const bookmarkCount = await prisma.pollInteraction.count({
       where: { pollId, interactionType: 'bookmark' }

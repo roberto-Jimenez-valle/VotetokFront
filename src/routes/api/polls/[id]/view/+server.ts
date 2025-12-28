@@ -8,28 +8,28 @@ import { parsePollIdInternal } from '$lib/server/hashids';
  */
 export const POST: RequestHandler = async ({ params, locals, getClientAddress }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
+
     // Verificar que la encuesta existe
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       select: { id: true }
     });
-    
+
     if (!poll) {
       throw error(404, 'Encuesta no encontrada');
     }
-    
-    const userId = locals.user?.userId || locals.user?.id;
+
+    const userId = locals.user?.userId;
     const ip = getClientAddress();
-    
+
     // Evitar duplicados: buscar view existente
     let existingView = null;
-    
+
     if (userId) {
       // Usuario autenticado: buscar por userId
       existingView = await prisma.pollInteraction.findUnique({
@@ -54,7 +54,7 @@ export const POST: RequestHandler = async ({ params, locals, getClientAddress })
         }
       });
     }
-    
+
     if (!existingView) {
       // Crear la visualización
       await prisma.pollInteraction.create({
@@ -66,12 +66,12 @@ export const POST: RequestHandler = async ({ params, locals, getClientAddress })
         }
       });
     }
-    
+
     // Obtener conteo actualizado
     const viewCount = await prisma.pollInteraction.count({
       where: { pollId, interactionType: 'view' }
     });
-    
+
     return json({ success: true, viewCount });
   } catch (err: any) {
     console.error('[View] Error:', err);
@@ -86,16 +86,16 @@ export const POST: RequestHandler = async ({ params, locals, getClientAddress })
  */
 export const GET: RequestHandler = async ({ params }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
+
     const viewCount = await prisma.pollInteraction.count({
       where: { pollId, interactionType: 'view' }
     });
-    
+
     return json({ viewCount });
   } catch (err: any) {
     console.error('[View GET] Error:', err);
