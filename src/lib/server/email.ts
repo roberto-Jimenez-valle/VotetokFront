@@ -4,19 +4,37 @@
  */
 
 import nodemailer from 'nodemailer';
-import { env } from '$env/dynamic/private';
+
+// Intentar importar env de SvelteKit, pero usar process.env como fallback
+let svelteEnv: Record<string, string | undefined> = {};
+try {
+  // @ts-ignore - dynamic import
+  const envModule = await import('$env/dynamic/private');
+  svelteEnv = envModule.env || {};
+} catch (e) {
+  console.log('[Email] No se pudo cargar $env/dynamic/private, usando process.env');
+}
+
+/**
+ * Obtener variable de entorno de cualquier fuente
+ */
+function getEnvVar(name: string): string | undefined {
+  return svelteEnv[name] || process.env[name];
+}
 
 /**
  * Obtener transporter configurado
  */
 function getTransporter() {
-  const user = env.EMAIL_USER || process?.env?.EMAIL_USER || 'voutop.oficial@gmail.com';
-  const pass = env.EMAIL_PASS || process?.env?.EMAIL_PASS;
+  const user = getEnvVar('EMAIL_USER') || 'voutop.oficial@gmail.com';
+  const pass = getEnvVar('EMAIL_PASS');
+
+  console.log('[Email] 🔧 Configurando transporter:');
+  console.log('[Email] - USER:', user);
+  console.log('[Email] - PASS configurado:', !!pass, pass ? `(${pass.length} chars)` : '');
 
   if (!pass) {
     console.warn('[Email] ⚠️ No se detectó EMAIL_PASS. El envío de correos fallará.');
-  } else {
-    console.log('[Email] 📧 Configurando transportador para:', user);
   }
 
   return nodemailer.createTransport({
@@ -26,9 +44,9 @@ function getTransporter() {
       pass: pass || ''
     },
     // Prevenir esperas infinitas
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 10000
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
   });
 }
 
@@ -117,7 +135,7 @@ export async function sendReportNotification(data: {
         ` : ''}
         
         <div style="text-align: center; margin-top: 24px;">
-          <a href="${env.PUBLIC_URL || 'http://localhost:5173'}/admin/reports" 
+          <a href="${getEnvVar('PUBLIC_URL') || 'https://voutop.com'}/admin/reports" 
              style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
             Ver Panel de Reportes
           </a>
@@ -135,8 +153,8 @@ export async function sendReportNotification(data: {
 
   try {
     // Si no hay credenciales de email configuradas, solo loguear
-    const pass = env.EMAIL_PASS || process?.env?.EMAIL_PASS;
-    const user = env.EMAIL_USER || process?.env?.EMAIL_USER || 'voutop.oficial@gmail.com';
+    const pass = getEnvVar('EMAIL_PASS');
+    const user = getEnvVar('EMAIL_USER') || 'voutop.oficial@gmail.com';
 
     console.log('[Email] 🔍 DIAGNÓSTICO DE ENVÍO:');
     console.log('[Email] - EMAIL_USER configurado:', !!user, user ? `(${user.substring(0, 5)}...)` : '');
