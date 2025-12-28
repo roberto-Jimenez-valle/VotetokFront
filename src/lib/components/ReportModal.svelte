@@ -23,6 +23,7 @@
     let reason = $state("");
     let notes = $state("");
     let isSubmitting = $state(false);
+    let alreadyReported = $state(false); // Para mostrar mensaje diferente si ya reportó
 
     const reasons = [
         {
@@ -97,6 +98,15 @@
             console.log(`[ReportModal] Response status: ${res.status}`);
 
             if (res.ok) {
+                // Parsear respuesta para detectar si ya había reportado
+                try {
+                    const data = await res.json();
+                    if (data.message?.includes("Ya has reportado")) {
+                        alreadyReported = true;
+                    }
+                } catch (e) {
+                    // Si falla el parse, no pasa nada
+                }
                 step = 3;
             } else {
                 let errorMsg = "Error al enviar el reporte";
@@ -123,6 +133,7 @@
         step = 1;
         reason = "";
         notes = "";
+        alreadyReported = false;
         onClose();
     }
 </script>
@@ -305,16 +316,30 @@
                             <CheckCircle2 size={42} strokeWidth={2.5} />
                         </div>
                         <div class="space-y-2">
-                            <h4 class="text-xl font-black text-white">
-                                ¡Gracias por avisarnos!
-                            </h4>
-                            <p
-                                class="text-sm text-slate-400 max-w-[240px] mx-auto leading-relaxed"
-                            >
-                                Hemos recibido tu reporte. Lo revisaremos lo
-                                antes posible para ver si incumple nuestras
-                                normas.
-                            </p>
+                            {#if alreadyReported}
+                                <h4 class="text-xl font-black text-white">
+                                    Ya tenemos tu reporte
+                                </h4>
+                                <p
+                                    class="text-sm text-slate-400 max-w-[260px] mx-auto leading-relaxed"
+                                >
+                                    Ya habías reportado este contenido
+                                    anteriormente. Nuestro equipo lo está
+                                    revisando. ¡Gracias por ayudarnos a mantener
+                                    la comunidad segura!
+                                </p>
+                            {:else}
+                                <h4 class="text-xl font-black text-white">
+                                    ¡Gracias por avisarnos!
+                                </h4>
+                                <p
+                                    class="text-sm text-slate-400 max-w-[240px] mx-auto leading-relaxed"
+                                >
+                                    Hemos recibido tu reporte. Lo revisaremos lo
+                                    antes posible para ver si incumple nuestras
+                                    normas.
+                                </p>
+                            {/if}
                         </div>
                         <button
                             onclick={handleClose}
