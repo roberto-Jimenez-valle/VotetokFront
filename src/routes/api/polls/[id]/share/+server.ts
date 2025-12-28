@@ -9,8 +9,8 @@ import { parsePollIdInternal } from '$lib/server/hashids';
  */
 export const POST: RequestHandler = async ({ params, locals, getClientAddress }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       return json({ error: 'ID de encuesta inválido' }, { status: 400 });
     }
@@ -26,8 +26,8 @@ export const POST: RequestHandler = async ({ params, locals, getClientAddress })
     }
 
     // Obtener userId si está autenticado
-    const userId = locals?.user?.id || null;
-    
+    const userId = locals?.user?.userId || null;
+
     // Obtener IP para tracking anónimo
     let ipAddress: string | null = null;
     try {
@@ -102,8 +102,8 @@ export const POST: RequestHandler = async ({ params, locals, getClientAddress })
  */
 export const GET: RequestHandler = async ({ params }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       return json({ error: 'ID de encuesta inválido' }, { status: 400 });
     }

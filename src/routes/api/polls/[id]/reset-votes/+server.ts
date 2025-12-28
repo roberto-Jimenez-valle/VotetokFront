@@ -5,7 +5,7 @@ import { parsePollIdInternal } from '$lib/server/hashids';
 export const DELETE: RequestHandler = async ({ params, locals }) => {
     if (!params.id) throw error(400, "ID Required");
 
-    const pollId = parsePollIdInternal(params.id);
+    const pollId = parsePollIdInternal(params.id || '');
     if (!pollId) {
         throw error(400, 'Invalid poll ID');
     }
