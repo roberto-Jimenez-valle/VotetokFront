@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import {
         CheckCircle,
         Circle,
@@ -10,461 +11,304 @@
         Globe,
         ChevronDown,
         ChevronUp,
-        ArrowLeft,
+        Plus,
+        Trash2,
+        Edit3,
+        Save,
+        X,
+        RefreshCw,
+        Database,
     } from "lucide-svelte";
-    import { fly } from "svelte/transition";
+    import { fly, fade } from "svelte/transition";
     import type { ComponentType } from "svelte";
 
     // Type definition for checklist items
     interface ChecklistItem {
+        id?: number;
         label: string;
         status: "done" | "partial" | "missing";
         detail: string;
         note?: string;
         critical?: boolean;
         action?: string;
+        displayOrder?: number;
+        groupId?: number;
     }
 
     interface ChecklistGroup {
+        id?: number;
         title: string;
-        icon: ComponentType;
+        icon: string;
         color: string;
         items: ChecklistItem[];
+        displayOrder?: number;
     }
 
-    // Estado de expansión de cada item
+    // Icon mapping
+    const iconMap: Record<string, ComponentType> = {
+        Zap,
+        Shield,
+        Smartphone,
+        Globe,
+        Users,
+    };
+
+    function getIcon(iconName: string): ComponentType {
+        return iconMap[iconName] || Zap;
+    }
+
+    // State
+    let checklistGroups = $state<ChecklistGroup[]>([]);
     let expandedItems = $state<Record<string, boolean>>({});
+    let isLoading = $state(true);
+    let error = $state<string | null>(null);
+    let isSeeding = $state(false);
+    let seedMessage = $state<string | null>(null);
+
+    // Add new item state
+    let showAddItem = $state<Record<number, boolean>>({});
+    let newItemLabel = $state<Record<number, string>>({});
+    let newItemDetail = $state<Record<number, string>>({});
+    let newItemCritical = $state<Record<number, boolean>>({});
+
+    // Add new group state
+    let showAddGroup = $state(false);
+    let newGroupTitle = $state("");
+    let newGroupColor = $state("text-gray-500");
+
+    // Edit item state
+    let editingItemId = $state<number | null>(null);
+    let editItemData = $state<Partial<ChecklistItem>>({});
+
+    async function loadChecklist() {
+        isLoading = true;
+        error = null;
+        try {
+            const res = await fetch("/api/checklist");
+            const data = await res.json();
+            if (data.success) {
+                checklistGroups = data.data || [];
+            } else {
+                error = data.error || "Error loading checklist";
+            }
+        } catch (e) {
+            error = "Error de conexión";
+            console.error(e);
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    async function seedDatabase() {
+        isSeeding = true;
+        seedMessage = null;
+        try {
+            const res = await fetch("/api/checklist/seed", { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+                seedMessage = `✅ ${data.message}. Grupos: ${data.groupsCreated}, Items: ${data.itemsCreated}`;
+                await loadChecklist();
+            } else {
+                seedMessage = `❌ ${data.error}`;
+            }
+        } catch (e) {
+            seedMessage = "❌ Error de conexión";
+        } finally {
+            isSeeding = false;
+        }
+    }
+
+    async function addItem(groupId: number) {
+        const label = newItemLabel[groupId]?.trim();
+        const detail = newItemDetail[groupId]?.trim();
+        if (!label) return;
+
+        try {
+            const res = await fetch("/api/checklist", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    type: "item",
+                    data: {
+                        groupId,
+                        label,
+                        detail: detail || null,
+                        status: "missing",
+                        critical: newItemCritical[groupId] || false,
+                    },
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Add to local state
+                const group = checklistGroups.find((g) => g.id === groupId);
+                if (group) {
+                    group.items = [
+                        ...group.items,
+                        {
+                            ...data.data,
+                            status: data.data.status as
+                                | "done"
+                                | "partial"
+                                | "missing",
+                        },
+                    ];
+                }
+                // Reset form
+                newItemLabel[groupId] = "";
+                newItemDetail[groupId] = "";
+                newItemCritical[groupId] = false;
+                showAddItem[groupId] = false;
+            }
+        } catch (e) {
+            console.error("Error adding item:", e);
+        }
+    }
+
+    async function addGroup() {
+        if (!newGroupTitle.trim()) return;
+
+        try {
+            const res = await fetch("/api/checklist", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    type: "group",
+                    data: {
+                        title: newGroupTitle.trim(),
+                        icon: "Zap",
+                        color: newGroupColor,
+                    },
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                checklistGroups = [
+                    ...checklistGroups,
+                    { ...data.data, items: [] },
+                ];
+                newGroupTitle = "";
+                showAddGroup = false;
+            }
+        } catch (e) {
+            console.error("Error adding group:", e);
+        }
+    }
+
+    async function updateItemStatus(
+        itemId: number,
+        groupId: number,
+        newStatus: "done" | "partial" | "missing",
+    ) {
+        try {
+            const res = await fetch(`/api/checklist/${itemId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    type: "item",
+                    data: { status: newStatus },
+                }),
+            });
+            if (res.ok) {
+                // Update local state
+                const group = checklistGroups.find((g) => g.id === groupId);
+                if (group) {
+                    group.items = group.items.map((item) =>
+                        item.id === itemId
+                            ? { ...item, status: newStatus }
+                            : item,
+                    );
+                    checklistGroups = [...checklistGroups]; // Trigger reactivity
+                }
+            }
+        } catch (e) {
+            console.error("Error updating status:", e);
+        }
+    }
+
+    async function deleteItem(itemId: number, groupId: number) {
+        if (!confirm("¿Eliminar esta tarea?")) return;
+
+        try {
+            const res = await fetch(`/api/checklist/${itemId}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "item" }),
+            });
+            if (res.ok) {
+                const group = checklistGroups.find((g) => g.id === groupId);
+                if (group) {
+                    group.items = group.items.filter(
+                        (item) => item.id !== itemId,
+                    );
+                    checklistGroups = [...checklistGroups];
+                }
+            }
+        } catch (e) {
+            console.error("Error deleting item:", e);
+        }
+    }
 
     function toggleItem(groupIndex: number, itemIndex: number) {
         const key = `${groupIndex}-${itemIndex}`;
         expandedItems[key] = !expandedItems[key];
     }
 
-    // Datos de la lista de control con detalles extendidos
-    const checklistGroups: ChecklistGroup[] = [
-        {
-            title: "📝 Prioridad Inmediata (User Feedback)",
-            icon: Zap,
-            color: "text-pink-500",
-            items: [
-                {
-                    label: "Navegación 'Mi Perfil' unificada",
-                    status: "done",
-                    detail: "El botón de perfil del menú principal ahora abre el mismo modal completo (UserProfileModal) que al pulsar en el avatar de un usuario, mostrando estadísticas y reels.",
-                },
-                {
-                    label: "Más gráficos en estadísticas",
-                    status: "done",
-                    detail: "Añadidos gráficos de Barras, Radar y Polar al modal de estadísticas, además del Donut original.",
-                },
-                {
-                    label: "Priorizar Reels al pulsar Avatar",
-                    status: "done",
-                    detail: "Al abrir un reel desde el perfil, se muestran solo las encuestas de ese usuario. Al salir del modo reels, se restaura el feed general.",
-                },
-                {
-                    label: "Indicador de Reels Vistos (Borde Verde)",
-                    status: "done",
-                    detail: "Marcar en BD los reels vistos. Si se han visto todos los de un usuario, quitar el borde verde de su avatar (estilo Instagram).",
-                    action: "Crear endpoint de 'view', actualizar modelo PollInteraction, lógica en frontend para llamar al endpoint y actualizar UI.",
-                },
-                {
-                    label: "Refinar Estadísticas en Globo 3D",
-                    status: "missing",
-                    detail: "Mejorar la visualización y funcionalidad de las estadísticas en el globo terráqueo.",
-                },
-                {
-                    label: "Corregir Menú de Opciones (3 puntos)",
-                    status: "done",
-                    critical: true,
-                    detail: "Menú funcional con opciones de Reportar, Dejar de Seguir, No me interesa y Copiar enlace, todo conectado al backend y UI.",
-                    action: "Revisar eventos click y dispatch en PostOptionsModal y PostCard.",
-                },
-                {
-                    label: "Embed de Encuesta (Iframe)",
-                    status: "missing",
-                    detail: "Generar código iframe para poder incrustar la encuesta en otros sitios webs.",
-                },
-                {
-                    label: "Mejorar Compartir Encuesta",
-                    status: "missing",
-                    detail: "Revisar y arreglar la funcionalidad de compartir encuesta (link, redes sociales).",
-                },
-                {
-                    label: "Organizar Iconos Tab en Perfil",
-                    status: "done",
-                    detail: "Pestañas de Encuestas, Votaciones y Guardadas organizadas con iconos y contadores.",
-                },
-                {
-                    label: "Simplificar Botón Seguir",
-                    status: "done",
-                    detail: "El botón 'Seguir' solo aparece si no sigues al usuario. Si ya lo sigues o está pendiente, se oculta para limpiar la interfaz.",
-                },
-                {
-                    label: "Bug Votación Swipe",
-                    status: "missing",
-                    critical: true,
-                    detail: "La encuesta tipo swipe no guarda correctamente la votación o no recupera bien el estado de lo que votaste al recargar.",
-                },
-                {
-                    label: "Cambiar ID de usuario por hash",
-                    status: "missing",
-                    critical: true,
-                    detail: "Al igual que con las encuestas, debemos ocultar el ID numérico secuencial del usuario en las URLs y respuestas de la API usando un hash único.",
-                    action: "Implementar hashing de IDs en los modelos de Usuario, actualizar transformadores de API y corregir rutas que dependan del ID numérico.",
-                },
-            ],
-        },
-        {
-            title: "🔐 Autenticación y Seguridad",
-            icon: Shield,
-            color: "text-blue-500",
-            items: [
-                {
-                    label: "Login con Google (OAuth)",
-                    status: "done",
-                    detail: "El login con Google está completamente implementado. El AuthModal abre un popup de OAuth, el backend procesa el callback y crea/actualiza usuarios automáticamente. Ver GOOGLE_OAUTH_SETUP.md para la configuración.",
-                },
-                {
-                    label: "Persistencia JWT (LocalStorage)",
-                    status: "done",
-                    detail: "Cuando el usuario inicia sesión, guardamos un 'token' en el navegador para que no tenga que volver a loguearse cada vez que abre la app.",
-                },
-                {
-                    label: "Modales de Feedback",
-                    status: "done",
-                    detail: "Cuando hay un error o algo sale bien, aparecen mensajes visuales (toasts) informando al usuario.",
-                },
-                {
-                    label: "Lógica de Refresh Token",
-                    status: "done",
-                    detail: "Sistema completo implementado: endpoint /api/auth/refresh, auto-refresh proactivo antes de expiración, y fetchWithAuth() que reintenta automáticamente en errores 401.",
-                },
-                {
-                    label: "Rutas Protegidas (Middleware)",
-                    status: "done",
-                    detail: "Middleware completo implementado en hooks.server.ts: App Signature, JWT extraction, Rate Limiting, Security Headers. Helpers en auth.ts: requireAuth(), requireRole(), requireOwnership() para protección granular de endpoints.",
-                },
-                {
-                    label: "Página de Mantenimiento (Under Construction)",
-                    status: "done",
-                    detail: "Diseño profesional 'dark mode' con logo oficial, animaciones orbitales y acceso mediante código secreto (5 clicks) para proteger el acceso durante el desarrollo.",
-                },
-            ],
-        },
-        {
-            title: "📱 Experiencia de Feed (Core)",
-            icon: Smartphone,
-            color: "text-indigo-400",
-            items: [
-                {
-                    label: "Scroll Virtual (Rendimiento)",
-                    status: "done",
-                    detail: "El feed carga solo las encuestas visibles para no saturar la memoria del móvil.",
-                },
-                {
-                    label: "Vista Reels (Inmersiva)",
-                    status: "done",
-                    detail: "Puedes ver encuestas a pantalla completa estilo TikTok/Instagram Reels.",
-                },
-                {
-                    label: "Renderizado de Encuestas (Todos los tipos)",
-                    status: "done",
-                    detail: "Se muestran correctamente todos los tipos: estándar, quiz, ranking (tierlist) y swipe.",
-                },
-                {
-                    label: "Gestos de Swipe",
-                    status: "done",
-                    detail: "Puedes deslizar hacia arriba/abajo para navegar y hacia los lados en ciertos tipos de encuesta.",
-                },
-                {
-                    label: "Rastreo de 'Vistos'",
-                    status: "missing",
-                    note: "Evitar ver la misma encuesta dos veces",
-                    detail: "Cada vez que refrescas el feed, pueden aparecer las mismas encuestas que ya viste. Sería mucho mejor recordar cuáles ya viste y mostrarte solo contenido nuevo.",
-                    action: "Guardar en la base de datos o en el dispositivo las encuestas que el usuario ya ha visto.",
-                },
-                {
-                    label: "Skeleton Loaders",
-                    status: "done",
-                    detail: "Componente Skeleton.svelte creado con variantes: text, card, poll, avatar, image, button. Integrado en VotingFeed para la carga inicial y placeholders de avatares.",
-                },
-                {
-                    label: "Optimización de Imágenes (CDN)",
-                    status: "missing",
-                    note: "Usa URLs crudas sin caché/resize",
-                    detail: "Las imágenes de las encuestas se cargan en su tamaño original, lo que puede ser muy lento en móviles. Lo ideal es usar un servicio que las comprima y redimensione automáticamente.",
-                    action: "Integrar un servicio como Cloudinary o imgix para servir imágenes optimizadas.",
-                },
-                {
-                    label: "Pull-to-Refresh",
-                    status: "done",
-                    detail: "Implementado en VotingFeed: arrastra hacia abajo cuando estés arriba del todo para refrescar. Indicador visual con flecha que se invierte al alcanzar el umbral y spinner durante la carga.",
-                },
-            ],
-        },
-        {
-            title: "⚡ Mecánicas de Encuestas",
-            icon: Zap,
-            color: "text-amber-400",
-            items: [
-                {
-                    label: "Actualización de Votos (Real-time)",
-                    status: "done",
-                    detail: "Cuando votas, los porcentajes se actualizan inmediatamente sin recargar la página.",
-                },
-                {
-                    label: "Guardado de Borradores",
-                    status: "done",
-                    detail: "Si empiezas a crear una encuesta y cierras, la app recuerda lo que escribiste para que puedas continuar después.",
-                },
-                {
-                    label: "UI Optimista (Feedback instantáneo)",
-                    status: "done",
-                    detail: "Cuando votas, la app muestra el cambio inmediatamente sin esperar confirmación del servidor, haciendo la experiencia más fluida.",
-                },
-                {
-                    label: "Cuenta Atrás (Expiración)",
-                    status: "done",
-                    detail: "Cuando la cuenta atrás llega a cero, la encuesta se cierra automáticamente y muestra los resultados sin necesidad de recargar la página.",
-                },
-                {
-                    label: "Feedback Visual Trivial (Quiz)",
-                    status: "done",
-                    detail: "Implementado sistema completo: Confetti/Cara Triste animados. Feedback limpio mediante bordes de color (Verde=Correcta / Rojo=Fallo) y opacidad reducida en opciones irrelevantes.",
-                },
-                {
-                    label: "Protección de Voto y Acciones (Auth)",
-                    status: "done",
-                    detail: "Integración profunda del AuthModal. Si un usuario anónimo intenta votar o seguir, se abre automáticamente el popup de login sin perder el contexto.",
-                },
-                {
-                    label: "Menú de Opciones de Encuesta",
-                    status: "done",
-                    detail: "Implementado PostOptionsModal activado desde el icono de 3 puntos. Incluye acciones contextuales: Reportar, Copiar Enlace, Dejar de Seguir y Borrar (si eres autor).",
-                },
-                {
-                    label: "Reportar Contenido",
-                    status: "done",
-                    critical: true,
-                    detail: "Botón de 'Reportar' accesible desde el menú de opciones de cada encuesta. Interfaz lista y conectada al flujo de usuario.",
-                },
-                {
-                    label: "Editar Encuesta (Typos/Duración)",
-                    status: "missing",
-                    detail: "Si te equivocas escribiendo o quieres cambiar la duración, no puedes. Una vez publicada, la encuesta es inmutable.",
-                    action: "Permitir editar texto si aún no hay votos, y siempre permitir extender la duración.",
-                },
-                {
-                    label: "Ajustes de Visibilidad",
-                    status: "done",
-                    detail: "Selector de visibilidad añadido al crear encuesta: Público, Solo seguidores, o Solo amigos mutuos. Campo visibility en la BD y UI completa.",
-                },
-            ],
-        },
-        {
-            title: "🌍 Social y Engagement",
-            icon: Globe,
-            color: "text-emerald-400",
-            items: [
-                {
-                    label: "Sistema de Seguir (API)",
-                    status: "done",
-                    detail: "Sistema completo conectado backend y frontend. Botón 'Seguir' funcional con estados optimistas y soporte para cuentas privadas (solicitudes pendientes vs. aprobadas).",
-                },
-                {
-                    label: "Navegación en Avatar",
-                    status: "done",
-                    critical: true,
-                    detail: "Implementado. Al pulsar en el avatar se abre el modal de perfil del usuario.",
-                },
-                {
-                    label: "Buscador Global (Usuarios/Tags)",
-                    status: "partial",
-                    critical: true,
-                    note: "UI existe, funcionalidad básica",
-                    detail: "El buscador tiene la interfaz lista pero la búsqueda de usuarios puede no mostrar resultados correctos y los hashtags no funcionan.",
-                    action: "Revisar que el backend devuelva resultados correctos y añadir soporte de hashtags.",
-                },
-                {
-                    label: "Actividad/Notificaciones",
-                    status: "done",
-                    detail: "Implementación completa. Backend registra eventos (Follow, Vote, Comment, Mention). Modal muestra notificaciones reales con filtros, avatares, tiempos relativos ('hace 5 min') y navegación al contenido.",
-                },
-                {
-                    label: "Sistema de Menciones (@usuario)",
-                    status: "done",
-                    detail: "Implementado autocompletado de @menciones en comentarios con filtrado de privacidad (solo públicos o amigos mutuos) y notificaciones automáticas al usuario mencionado.",
-                },
-                {
-                    label: "Mensajes Directos (DM)",
-                    status: "partial",
-                    detail: "Backend (Modelos, API básica) y conteo de no leídos implementado. Falta UI completa para listar conversaciones y chat.",
-                    action: "Crear pantalla de conversaciones y chat individual.",
-                },
-                {
-                    label: "Compartir en Apps Externas",
-                    status: "partial",
-                    note: "Modal existe, falta Native Share",
-                    detail: "Hay un modal de compartir con Twitter, WhatsApp, etc. pero no usa el menú nativo del móvil que aparece al compartir en otras apps.",
-                    action: "Integrar la Web Share API para que en móviles aparezca el menú nativo de compartir.",
-                },
-                {
-                    label: "Comentarios Anidados",
-                    status: "done",
-                    detail: "Implementado sistema de respuestas (Reply) con indentación visual, agrupación correcta en la UI y soporte para menciones.",
-                },
-            ],
-        },
-        {
-            title: "👤 Identidad y Ajustes",
-            icon: Users,
-            color: "text-purple-400",
-            items: [
-                {
-                    label: "Perfil de Usuario (Lectura)",
-                    status: "done",
-                    detail: "Puedes ver el perfil de otros usuarios con sus encuestas y estadísticas.",
-                },
-                {
-                    label: "Historial de Votos",
-                    status: "done",
-                    detail: "En el perfil se muestran las encuestas en las que has participado.",
-                },
-                {
-                    label: "Editar Perfil (Bio/Avatar)",
-                    status: "missing",
-                    detail: "No hay forma de cambiar tu foto, tu nombre o escribir una biografía. Estás atrapado con lo que Google te asignó.",
-                    action: "Crear una pantalla de 'Editar Perfil' con formulario para cambiar estos datos.",
-                },
-                {
-                    label: "Selector de Tema (Oscuro/Claro)",
-                    status: "partial",
-                    note: "Componente existe pero no está conectado",
-                    detail: "Hay un componente de cambio de tema pero no está visible ni accesible para el usuario en la configuración.",
-                    action: "Añadir acceso al selector de tema en la pantalla de ajustes.",
-                },
-                {
-                    label: "Borrar Cuenta (GDPR)",
-                    status: "done",
-                    detail: "Implementado endpoint /api/user/delete-account que elimina todos los datos del usuario de forma segura, anonimizando votos pero eliminando contenido creado.",
-                },
-                {
-                    label: "Lista de Bloqueados",
-                    status: "missing",
-                    detail: "Si bloqueas a alguien (si esa función existiera), no hay forma de ver o gestionar a quién has bloqueado.",
-                    action: "Crear pantalla de gestión de usuarios bloqueados.",
-                },
-            ],
-        },
-        {
-            title: "⚖️ Legal & GDPR",
-            icon: Shield,
-            color: "text-green-500",
-            items: [
-                {
-                    label: "Página Legal Completa (/legal)",
-                    status: "done",
-                    detail: "Página con pestañas para Aviso Legal, Política de Privacidad, Términos y Condiciones, y Política de Cookies. Textos finales en español adaptados a legislación española y europea.",
-                },
-                {
-                    label: "Banner de Cookies (GDPR)",
-                    status: "done",
-                    detail: "CookieBanner.svelte implementado: aparece en primera visita, permite aceptar todas, solo esenciales, o personalizar. Guarda preferencias en localStorage y servidor si está logueado.",
-                },
-                {
-                    label: "Verificación de Edad (+16)",
-                    status: "done",
-                    detail: "AgeVerificationModal.svelte: requiere confirmar ser mayor de 16 años antes de interactuar. Checkboxes integrados en AuthModal durante el registro.",
-                },
-                {
-                    label: "Consentimiento de Términos",
-                    status: "done",
-                    detail: "Durante el login, el usuario debe aceptar Términos de Uso y Política de Privacidad. Checkboxes obligatorios en AuthModal antes de continuar con Google OAuth.",
-                },
-                {
-                    label: "API de Consentimiento",
-                    status: "done",
-                    detail: "Endpoint /api/user/consent (GET/POST) para obtener y guardar consentimiento del usuario. Modelo UserConsent en Prisma con versionado de documentos.",
-                },
-                {
-                    label: "Modelo UserConsent (BD)",
-                    status: "done",
-                    detail: "Tabla en PostgreSQL que almacena: isOver16, termsAccepted, privacyAccepted, cookiesEssential/Analytics/Advertising, versiones de documentos, IP y timestamps.",
-                },
-            ],
-        },
-        {
-            title: "🛡️ Seguridad Anti-Bot",
-            icon: Shield,
-            color: "text-red-500",
-            items: [
-                {
-                    label: "Rate Limiting Estricto",
-                    status: "done",
-                    detail: "Sistema de rate limiting por minuto: 5 votos/min, 3 comentarios/min, 1 encuesta/min, 10 follows/min. Diferenciado por rol (user/premium/admin). Respuesta 429 sin detalles.",
-                },
-                {
-                    label: "Verificación Server-Side",
-                    status: "done",
-                    detail: "userGuard.ts: cada acción verifica token válido, usuario +16, cuenta no baneada. guardUserAction() y guardUserRead() para protección granular de endpoints.",
-                },
-                {
-                    label: "Sistema Honeypot",
-                    status: "done",
-                    detail: "honeypot.ts: campos ocultos en formularios que bots rellenan pero humanos ignoran. Si detectado, respuesta de éxito falso sin procesar acción.",
-                },
-                {
-                    label: "Detector de Comportamiento",
-                    status: "done",
-                    detail: "behaviorDetector.ts: analiza patrones sospechosos (votación rápida, comentarios repetitivos, user agents de bots). Acumula puntos de sospecha automáticamente.",
-                },
-                {
-                    label: "Sistema Shadowban",
-                    status: "done",
-                    detail: "Usuarios sospechosos son shadowbanned: sus acciones parecen funcionar pero no tienen efecto real. El bot cree que ganó mientras sus datos no contaminan métricas.",
-                },
-                {
-                    label: "Campos de Seguridad en User",
-                    status: "done",
-                    detail: "Modelo User extendido con: isBanned, banReason, bannedAt, isShadowbanned, isSuspect, suspectScore, lastActiveAt. Auto-shadowban al superar umbral de sospecha.",
-                },
-                {
-                    label: "Helper secureAction()",
-                    status: "done",
-                    detail: "Función unificada para proteger endpoints: verifica honeypot, usuario, comportamiento, y devuelve respuesta apropiada (shadowban o acción real). Uso simple en cualquier endpoint.",
-                },
-                {
-                    label: "CAPTCHA Invisible",
-                    status: "missing",
-                    note: "Preparado para Cloudflare Turnstile",
-                    detail: "Infraestructura lista pero falta integrar Cloudflare Turnstile en puntos críticos: crear cuenta, crear encuesta, picos de spam.",
-                    action: "Registrar en Cloudflare, obtener keys, integrar en frontend y validar en backend.",
-                },
-            ],
-        },
-    ];
+    function cycleStatus(
+        item: ChecklistItem,
+        groupId: number,
+    ): "done" | "partial" | "missing" {
+        const cycle: Record<string, "done" | "partial" | "missing"> = {
+            missing: "partial",
+            partial: "done",
+            done: "missing",
+        };
+        return cycle[item.status] || "missing";
+    }
 
-    // Calculate stats
-    let totalItems = 0;
-    let completedItems = 0;
-
-    checklistGroups.forEach((group) => {
-        group.items.forEach((item) => {
-            totalItems++;
-            if (item.status === "done") completedItems++;
-            if (item.status === "partial") completedItems += 0.5;
-        });
+    onMount(() => {
+        loadChecklist();
     });
 
-    const progress = Math.round((completedItems / totalItems) * 100);
+    // Calculate stats
+    const stats = $derived.by(() => {
+        let totalItems = 0;
+        let completedItems = 0;
 
-    const readinessColor =
-        progress > 80
-            ? "text-emerald-400"
-            : progress > 50
-              ? "text-amber-400"
-              : "text-red-400";
+        checklistGroups.forEach((group) => {
+            group.items.forEach((item) => {
+                totalItems++;
+                if (item.status === "done") completedItems++;
+                if (item.status === "partial") completedItems += 0.5;
+            });
+        });
+
+        const progress =
+            totalItems > 0
+                ? Math.round((completedItems / totalItems) * 100)
+                : 0;
+
+        const readinessColor =
+            progress > 80
+                ? "text-emerald-400"
+                : progress > 50
+                  ? "text-amber-400"
+                  : "text-red-400";
+
+        return { totalItems, completedItems, progress, readinessColor };
+    });
+
+    // Color options for groups
+    const colorOptions = [
+        { value: "text-pink-500", label: "Rosa" },
+        { value: "text-blue-500", label: "Azul" },
+        { value: "text-indigo-400", label: "Índigo" },
+        { value: "text-amber-400", label: "Ámbar" },
+        { value: "text-emerald-400", label: "Verde" },
+        { value: "text-purple-400", label: "Púrpura" },
+        { value: "text-red-500", label: "Rojo" },
+        { value: "text-green-500", label: "Verde Claro" },
+    ];
 </script>
 
 <div
@@ -487,7 +331,11 @@
                     >
                     <span
                         class="px-2 py-1 rounded bg-slate-800 text-slate-400 text-xs font-mono"
-                        >v0.9.5</span
+                        >v1.0.0</span
+                    >
+                    <span
+                        class="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-widest border border-emerald-500/30"
+                        >DB Connected</span
                     >
                 </div>
                 <h1
@@ -499,212 +347,450 @@
                     >
                 </h1>
                 <p class="text-lg text-slate-400 max-w-2xl">
-                    Pulsa en cualquier ítem para ver qué hay que hacer y cómo
-                    proceder.
+                    Pulsa en cualquier ítem para ver detalles. Haz clic en el
+                    icono de estado para cambiar el progreso.
                 </p>
             </div>
         </header>
 
-        <!-- Progress Overview -->
-        <section
-            class="bg-slate-900/50 rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row items-center gap-6"
-        >
-            <div
-                class="relative w-28 h-28 flex items-center justify-center shrink-0"
+        <!-- Admin Actions -->
+        <div class="flex flex-wrap gap-3">
+            <button
+                onclick={loadChecklist}
+                disabled={isLoading}
+                class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
-                <svg class="w-full h-full transform -rotate-90">
-                    <circle
-                        cx="56"
-                        cy="56"
-                        r="48"
-                        stroke="currentColor"
-                        stroke-width="10"
-                        fill="transparent"
-                        class="text-slate-800"
-                    />
-                    <circle
-                        cx="56"
-                        cy="56"
-                        r="48"
-                        stroke="currentColor"
-                        stroke-width="10"
-                        fill="transparent"
-                        class={readinessColor}
-                        stroke-dasharray="301.6"
-                        stroke-dashoffset={301.6 - (301.6 * progress) / 100}
-                        stroke-linecap="round"
-                    />
-                </svg>
-                <span class="absolute text-2xl font-black {readinessColor}"
-                    >{progress}%</span
-                >
+                <RefreshCw size={16} class={isLoading ? "animate-spin" : ""} />
+                Recargar
+            </button>
+
+            <button
+                onclick={seedDatabase}
+                disabled={isSeeding || checklistGroups.length > 0}
+                class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                title={checklistGroups.length > 0
+                    ? "Ya hay datos en la base de datos"
+                    : "Cargar datos iniciales"}
+            >
+                <Database size={16} class={isSeeding ? "animate-pulse" : ""} />
+                {isSeeding ? "Cargando..." : "Inicializar BD"}
+            </button>
+
+            <button
+                onclick={() => (showAddGroup = !showAddGroup)}
+                class="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors"
+            >
+                <Plus size={16} />
+                Nuevo Grupo
+            </button>
+        </div>
+
+        {#if seedMessage}
+            <div
+                class="p-4 rounded-lg {seedMessage.startsWith('✅')
+                    ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300'
+                    : 'bg-red-500/20 border border-red-500/30 text-red-300'}"
+                transition:fade
+            >
+                {seedMessage}
             </div>
-            <div class="text-center md:text-left">
-                <h2 class="text-xl font-bold text-white mb-1">
-                    Progreso Global
-                </h2>
-                <p class="text-slate-400 text-sm">
-                    <span class="text-emerald-400 font-bold"
-                        >{Math.floor(completedItems)}</span
+        {/if}
+
+        <!-- Add Group Form -->
+        {#if showAddGroup}
+            <div
+                class="bg-slate-900/50 rounded-xl p-4 border border-white/10 space-y-4"
+                transition:fly={{ y: -10, duration: 200 }}
+            >
+                <h3 class="font-bold text-white">Crear Nuevo Grupo</h3>
+                <div class="flex flex-col md:flex-row gap-3">
+                    <input
+                        bind:value={newGroupTitle}
+                        placeholder="Título del grupo (ej: 🚀 Nueva Sección)"
+                        class="flex-1 bg-slate-800 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <select
+                        bind:value={newGroupColor}
+                        class="bg-slate-800 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                    de <span class="text-white font-bold">{totalItems}</span>
-                    ítems completados.
-                    {#if progress < 50}
-                        Aún queda bastante trabajo por hacer.
-                    {:else if progress < 80}
-                        Buen avance, pero hay puntos críticos pendientes.
-                    {:else}
-                        ¡Casi listos para producción!
-                    {/if}
+                        {#each colorOptions as opt}
+                            <option value={opt.value}>{opt.label}</option>
+                        {/each}
+                    </select>
+                    <button
+                        onclick={addGroup}
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-medium transition-colors"
+                    >
+                        Crear
+                    </button>
+                    <button
+                        onclick={() => (showAddGroup = false)}
+                        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        {/if}
+
+        <!-- Progress Overview -->
+        {#if !isLoading && checklistGroups.length > 0}
+            <section
+                class="bg-slate-900/50 rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row items-center gap-6"
+            >
+                <div
+                    class="relative w-28 h-28 flex items-center justify-center shrink-0"
+                >
+                    <svg class="w-full h-full transform -rotate-90">
+                        <circle
+                            cx="56"
+                            cy="56"
+                            r="48"
+                            stroke="currentColor"
+                            stroke-width="10"
+                            fill="transparent"
+                            class="text-slate-800"
+                        />
+                        <circle
+                            cx="56"
+                            cy="56"
+                            r="48"
+                            stroke="currentColor"
+                            stroke-width="10"
+                            fill="transparent"
+                            class={stats.readinessColor}
+                            stroke-dasharray="301.6"
+                            stroke-dashoffset={301.6 -
+                                (301.6 * stats.progress) / 100}
+                            stroke-linecap="round"
+                        />
+                    </svg>
+                    <span
+                        class="absolute text-2xl font-black {stats.readinessColor}"
+                        >{stats.progress}%</span
+                    >
+                </div>
+                <div class="text-center md:text-left">
+                    <h2 class="text-xl font-bold text-white mb-1">
+                        Progreso Global
+                    </h2>
+                    <p class="text-slate-400 text-sm">
+                        <span class="text-emerald-400 font-bold"
+                            >{Math.floor(stats.completedItems)}</span
+                        >
+                        de
+                        <span class="text-white font-bold"
+                            >{stats.totalItems}</span
+                        >
+                        ítems completados.
+                        {#if stats.progress < 50}
+                            Aún queda bastante trabajo por hacer.
+                        {:else if stats.progress < 80}
+                            Buen avance, pero hay puntos críticos pendientes.
+                        {:else}
+                            ¡Casi listos para producción!
+                        {/if}
+                    </p>
+                </div>
+            </section>
+        {/if}
+
+        <!-- Loading State -->
+        {#if isLoading}
+            <div class="flex items-center justify-center py-20">
+                <RefreshCw size={32} class="animate-spin text-indigo-400" />
+                <span class="ml-3 text-slate-400">Cargando checklist...</span>
+            </div>
+        {:else if error}
+            <div
+                class="bg-red-500/20 border border-red-500/30 rounded-xl p-6 text-center"
+            >
+                <p class="text-red-300">{error}</p>
+                <button
+                    onclick={loadChecklist}
+                    class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium"
+                >
+                    Reintentar
+                </button>
+            </div>
+        {:else if checklistGroups.length === 0}
+            <div
+                class="bg-slate-900/50 border border-white/10 rounded-xl p-10 text-center"
+            >
+                <Database size={48} class="mx-auto text-slate-600 mb-4" />
+                <h3 class="text-xl font-bold text-white mb-2">
+                    Base de datos vacía
+                </h3>
+                <p class="text-slate-400 mb-6">
+                    No hay tareas en la base de datos. Haz clic en "Inicializar
+                    BD" para cargar las tareas predefinidas o crea grupos
+                    manualmente.
                 </p>
             </div>
-        </section>
-
-        <!-- Detailed Checklist -->
-        <div class="space-y-6">
-            {#each checklistGroups as group, groupIndex}
-                <section
-                    class="bg-slate-900/30 rounded-2xl border border-white/5 overflow-hidden"
-                >
-                    <header
-                        class="p-5 bg-white/5 border-b border-white/5 flex items-center gap-3"
+        {:else}
+            <!-- Detailed Checklist -->
+            <div class="space-y-6">
+                {#each checklistGroups as group, groupIndex (group.id)}
+                    {@const GroupIcon = getIcon(group.icon)}
+                    <section
+                        class="bg-slate-900/30 rounded-2xl border border-white/5 overflow-hidden"
                     >
-                        <div
-                            class="p-2 rounded-lg bg-slate-950 border border-white/10 {group.color}"
+                        <header
+                            class="p-5 bg-white/5 border-b border-white/5 flex items-center gap-3"
                         >
-                            <svelte:component this={group.icon} size={20} />
-                        </div>
-                        <h3 class="font-bold text-lg text-white">
-                            {group.title}
-                        </h3>
-                    </header>
-                    <div class="divide-y divide-white/5">
-                        {#each group.items as item, itemIndex}
-                            {@const isExpanded =
-                                expandedItems[`${groupIndex}-${itemIndex}`]}
                             <div
-                                class="transition-colors {item.status !== 'done'
-                                    ? 'hover:bg-white/5'
-                                    : ''}"
+                                class="p-2 rounded-lg bg-slate-950 border border-white/10 {group.color}"
                             >
-                                <button
-                                    class="w-full flex items-start gap-3 p-4 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                                    onclick={() =>
-                                        toggleItem(groupIndex, itemIndex)}
-                                    disabled={item.status === "done" &&
-                                        !item.detail}
+                                <svelte:component this={GroupIcon} size={20} />
+                            </div>
+                            <h3 class="font-bold text-lg text-white flex-1">
+                                {group.title}
+                            </h3>
+                            <span class="text-xs text-slate-500">
+                                {group.items.filter((i) => i.status === "done")
+                                    .length}/{group.items.length}
+                            </span>
+                        </header>
+                        <div class="divide-y divide-white/5">
+                            {#each group.items as item, itemIndex (item.id)}
+                                {@const isExpanded =
+                                    expandedItems[`${groupIndex}-${itemIndex}`]}
+                                <div
+                                    class="transition-colors {item.status !==
+                                    'done'
+                                        ? 'hover:bg-white/5'
+                                        : ''}"
                                 >
-                                    <div class="mt-0.5 shrink-0">
-                                        {#if item.status === "done"}
-                                            <CheckCircle
-                                                class="text-emerald-500"
-                                                size={20}
-                                            />
-                                        {:else if item.status === "partial"}
-                                            <AlertCircle
-                                                class="text-amber-500"
-                                                size={20}
-                                            />
-                                        {:else}
-                                            <Circle
-                                                class="text-slate-600"
-                                                size={20}
-                                            />
-                                        {/if}
-                                    </div>
-                                    <div class="flex-1">
-                                        <div
-                                            class="flex items-center justify-between gap-2"
-                                        >
-                                            <span
-                                                class="text-sm font-medium {item.status ===
-                                                'done'
-                                                    ? 'text-white/50 line-through'
-                                                    : 'text-slate-200'}"
-                                            >
-                                                {item.label}
-                                            </span>
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                {#if item.critical}
-                                                    <span
-                                                        class="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] font-bold uppercase rounded"
-                                                        >Crítico</span
-                                                    >
-                                                {/if}
-                                                {#if item.detail && item.status !== "done"}
-                                                    {#if isExpanded}
-                                                        <ChevronUp
-                                                            size={16}
-                                                            class="text-slate-500"
-                                                        />
-                                                    {:else}
-                                                        <ChevronDown
-                                                            size={16}
-                                                            class="text-slate-500"
-                                                        />
-                                                    {/if}
-                                                {/if}
-                                            </div>
-                                        </div>
-                                        {#if item.note && !isExpanded}
-                                            <p
-                                                class="text-xs text-slate-500 mt-1"
-                                            >
-                                                {item.note}
-                                            </p>
-                                        {/if}
-                                    </div>
-                                </button>
-
-                                <!-- Expanded Detail -->
-                                {#if isExpanded && item.detail}
                                     <div
-                                        class="px-4 pb-4 ml-8 border-l-2 border-indigo-500/30 space-y-3"
+                                        class="w-full flex items-start gap-3 p-4 text-left"
+                                    >
+                                        <!-- Status Icon (clickable to cycle) -->
+                                        <button
+                                            class="mt-0.5 shrink-0 hover:scale-110 transition-transform"
+                                            title="Click para cambiar estado"
+                                            onclick={() => {
+                                                if (item.id && group.id) {
+                                                    const newStatus =
+                                                        cycleStatus(
+                                                            item,
+                                                            group.id,
+                                                        );
+                                                    updateItemStatus(
+                                                        item.id,
+                                                        group.id,
+                                                        newStatus,
+                                                    );
+                                                }
+                                            }}
+                                        >
+                                            {#if item.status === "done"}
+                                                <CheckCircle
+                                                    class="text-emerald-500"
+                                                    size={20}
+                                                />
+                                            {:else if item.status === "partial"}
+                                                <AlertCircle
+                                                    class="text-amber-500"
+                                                    size={20}
+                                                />
+                                            {:else}
+                                                <Circle
+                                                    class="text-slate-600"
+                                                    size={20}
+                                                />
+                                            {/if}
+                                        </button>
+
+                                        <!-- Content (clickable to expand) -->
+                                        <button
+                                            class="flex-1 text-left"
+                                            onclick={() =>
+                                                toggleItem(
+                                                    groupIndex,
+                                                    itemIndex,
+                                                )}
+                                        >
+                                            <div
+                                                class="flex items-center justify-between gap-2"
+                                            >
+                                                <span
+                                                    class="text-sm font-medium {item.status ===
+                                                    'done'
+                                                        ? 'text-white/50 line-through'
+                                                        : 'text-slate-200'}"
+                                                >
+                                                    {item.label}
+                                                </span>
+                                                <div
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    {#if item.critical}
+                                                        <span
+                                                            class="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] font-bold uppercase rounded"
+                                                            >Crítico</span
+                                                        >
+                                                    {/if}
+                                                    {#if item.detail && item.status !== "done"}
+                                                        {#if isExpanded}
+                                                            <ChevronUp
+                                                                size={16}
+                                                                class="text-slate-500"
+                                                            />
+                                                        {:else}
+                                                            <ChevronDown
+                                                                size={16}
+                                                                class="text-slate-500"
+                                                            />
+                                                        {/if}
+                                                    {/if}
+                                                </div>
+                                            </div>
+                                            {#if item.note && !isExpanded}
+                                                <p
+                                                    class="text-xs text-slate-500 mt-1"
+                                                >
+                                                    {item.note}
+                                                </p>
+                                            {/if}
+                                        </button>
+
+                                        <!-- Delete button -->
+                                        <button
+                                            class="text-slate-600 hover:text-red-400 transition-colors p-1"
+                                            title="Eliminar"
+                                            onclick={() =>
+                                                item.id &&
+                                                group.id &&
+                                                deleteItem(item.id, group.id)}
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+
+                                    <!-- Expanded Detail -->
+                                    {#if isExpanded && item.detail}
+                                        <div
+                                            class="px-4 pb-4 ml-8 border-l-2 border-indigo-500/30 space-y-3"
+                                            transition:fly={{
+                                                y: -10,
+                                                duration: 200,
+                                            }}
+                                        >
+                                            <div
+                                                class="bg-slate-800/50 rounded-lg p-4"
+                                            >
+                                                <h4
+                                                    class="text-sm font-bold text-white mb-2"
+                                                >
+                                                    ¿Qué significa esto?
+                                                </h4>
+                                                <p
+                                                    class="text-sm text-slate-300 leading-relaxed"
+                                                >
+                                                    {item.detail}
+                                                </p>
+                                            </div>
+                                            {#if item.action}
+                                                <div
+                                                    class="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4"
+                                                >
+                                                    <h4
+                                                        class="text-sm font-bold text-indigo-300 mb-2"
+                                                    >
+                                                        📋 Cómo proceder:
+                                                    </h4>
+                                                    <p
+                                                        class="text-sm text-indigo-200/80 leading-relaxed"
+                                                    >
+                                                        {item.action}
+                                                    </p>
+                                                </div>
+                                            {/if}
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/each}
+
+                            <!-- Add Item Button/Form -->
+                            <div class="p-4">
+                                {#if showAddItem[group.id || 0]}
+                                    <div
+                                        class="space-y-3 bg-slate-800/30 rounded-lg p-4"
                                         transition:fly={{
                                             y: -10,
                                             duration: 200,
                                         }}
                                     >
-                                        <div
-                                            class="bg-slate-800/50 rounded-lg p-4"
-                                        >
-                                            <h4
-                                                class="text-sm font-bold text-white mb-2"
+                                        <input
+                                            bind:value={
+                                                newItemLabel[group.id || 0]
+                                            }
+                                            placeholder="Nombre de la tarea"
+                                            class="w-full bg-slate-800 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                        <textarea
+                                            bind:value={
+                                                newItemDetail[group.id || 0]
+                                            }
+                                            placeholder="Descripción detallada (opcional)"
+                                            rows="2"
+                                            class="w-full bg-slate-800 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                        ></textarea>
+                                        <div class="flex items-center gap-4">
+                                            <label
+                                                class="flex items-center gap-2 text-sm text-slate-400"
                                             >
-                                                ¿Qué significa esto?
-                                            </h4>
-                                            <p
-                                                class="text-sm text-slate-300 leading-relaxed"
-                                            >
-                                                {item.detail}
-                                            </p>
+                                                <input
+                                                    type="checkbox"
+                                                    bind:checked={
+                                                        newItemCritical[
+                                                            group.id || 0
+                                                        ]
+                                                    }
+                                                    class="rounded bg-slate-700 border-slate-600"
+                                                />
+                                                Marcar como crítico
+                                            </label>
                                         </div>
-                                        {#if item.action}
-                                            <div
-                                                class="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4"
+                                        <div class="flex gap-2">
+                                            <button
+                                                onclick={() =>
+                                                    group.id &&
+                                                    addItem(group.id)}
+                                                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors"
                                             >
-                                                <h4
-                                                    class="text-sm font-bold text-indigo-300 mb-2"
-                                                >
-                                                    📋 Cómo proceder:
-                                                </h4>
-                                                <p
-                                                    class="text-sm text-indigo-200/80 leading-relaxed"
-                                                >
-                                                    {item.action}
-                                                </p>
-                                            </div>
-                                        {/if}
+                                                Agregar
+                                            </button>
+                                            <button
+                                                onclick={() => {
+                                                    if (group.id)
+                                                        showAddItem[group.id] =
+                                                            false;
+                                                }}
+                                                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
                                     </div>
+                                {:else}
+                                    <button
+                                        onclick={() => {
+                                            if (group.id)
+                                                showAddItem[group.id] = true;
+                                        }}
+                                        class="flex items-center gap-2 text-sm text-slate-500 hover:text-emerald-400 transition-colors"
+                                    >
+                                        <Plus size={16} />
+                                        Agregar tarea a este grupo
+                                    </button>
                                 {/if}
                             </div>
-                        {/each}
-                    </div>
-                </section>
-            {/each}
-        </div>
+                        </div>
+                    </section>
+                {/each}
+            </div>
+        {/if}
 
         <footer class="mt-10 text-center text-slate-600 text-sm">
             <p>

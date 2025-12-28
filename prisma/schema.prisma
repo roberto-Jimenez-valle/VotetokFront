@@ -423,3 +423,43 @@ model UserConsent {
   @@index([userId])
   @@map("user_consents")
 }
+
+// ============================================
+// CHECKLIST DE PRODUCCIÓN
+// ============================================
+
+model ChecklistGroup {
+  id          Int             @id @default(autoincrement())
+  title       String
+  icon        String          @default("Zap")
+  color       String          @default("text-gray-500")
+  displayOrder Int            @default(0) @map("display_order")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  
+  items       ChecklistItem[]
+  
+  @@index([displayOrder])
+  @@map("checklist_groups")
+}
+
+model ChecklistItem {
+  id          Int             @id @default(autoincrement())
+  groupId     Int             @map("group_id")
+  label       String
+  status      String          @default("missing") // done, partial, missing
+  detail      String?
+  note        String?
+  action      String?
+  critical    Boolean         @default(false)
+  displayOrder Int            @default(0) @map("display_order")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  
+  group       ChecklistGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@index([groupId])
+  @@index([status])
+  @@index([displayOrder])
+  @@map("checklist_items")
+}
