@@ -455,6 +455,19 @@
                 <span class="comment-time"
                   >{getRelativeTime(comment.createdAt)}</span
                 >
+                {#if $currentUser && $currentUser.userId !== comment.user.id}
+                  <button
+                    class="comment-options-btn"
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      handleLongPress(comment);
+                    }}
+                    aria-label="Opciones del comentario"
+                  >
+                    <MoreHorizontal size={16} />
+                  </button>
+                {/if}
               </div>
               <p class="comment-text">{comment.content}</p>
               <div class="comment-actions">
@@ -509,6 +522,19 @@
                           <span class="comment-time"
                             >{getRelativeTime(reply.createdAt)}</span
                           >
+                          {#if $currentUser && $currentUser.userId !== reply.user.id}
+                            <button
+                              class="comment-options-btn"
+                              type="button"
+                              onclick={(e) => {
+                                e.stopPropagation();
+                                handleLongPress(reply);
+                              }}
+                              aria-label="Opciones del comentario"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          {/if}
                         </div>
                         <p class="comment-text">{reply.content}</p>
                         <div class="comment-actions">
@@ -854,6 +880,25 @@
   .comment-time {
     font-size: 12px;
     color: rgba(255, 255, 255, 0.4);
+  }
+
+  .comment-options-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    margin-left: auto;
+    transition: all 0.2s;
+  }
+
+  .comment-options-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .comment-text {

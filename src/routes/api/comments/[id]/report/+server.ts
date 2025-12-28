@@ -1,6 +1,6 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { sendReportNotification } from '$lib/server/email';
+import { sendReportNotification } from '$lib/server/telegram';
 
 export const POST: RequestHandler = async ({ params, locals, request }) => {
     try {
