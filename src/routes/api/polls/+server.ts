@@ -387,6 +387,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     const where = {
       status: 'active',
+      isHidden: false, // Excluir encuestas ocultas por reportes
       ...(!userId && { isRell: false }),
       ...(category && { category }),
       ...(userId && { userId: Number(userId) }),

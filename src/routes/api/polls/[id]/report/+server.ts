@@ -1,6 +1,9 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 import { parsePollIdInternal } from '$lib/server/hashids';
+import { sendReportNotification } from '$lib/server/email';
+
+const REPORT_THRESHOLD_HIDE = 5; // Ocultar automáticamente tras 5 reportes
 
 /**
  * POST /api/polls/[id]/report
@@ -8,80 +11,137 @@ import { parsePollIdInternal } from '$lib/server/hashids';
  */
 export const POST: RequestHandler = async ({ params, locals, request }) => {
   try {
-    const pollId = parsePollIdInternal(params.id);
-    
+    const pollId = parsePollIdInternal(params.id || '');
+
     if (!pollId) {
       throw error(400, 'ID de encuesta inválido');
     }
-    
-    const userId = locals.user?.userId || locals.user?.id;
+
+    const userId = locals.user?.userId;
     if (!userId) {
       throw error(401, 'Debes iniciar sesión para reportar');
     }
-    
-    // Obtener razón del reporte (opcional)
+
+    // Obtener razón y notas del reporte
     let reason = 'other';
+    let notes = null;
     try {
       const body = await request.json();
       reason = body.reason || 'other';
+      notes = body.notes || null;
     } catch {
-      // Sin body, usar razón por defecto
+      // Sin body, usar valores por defecto
     }
-    
-    // Verificar que la encuesta existe
+
+    // Validar razón
+    const validReasons = ['spam', 'inappropriate', 'misleading', 'hate', 'harassment', 'violence', 'other'];
+    if (!validReasons.includes(reason)) {
+      reason = 'other';
+    }
+
+    // Verificar que la encuesta existe y obtener info
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
-      select: { id: true, userId: true }
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        user: {
+          select: { username: true }
+        }
+      }
     });
-    
+
     if (!poll) {
       throw error(404, 'Encuesta no encontrada');
     }
-    
+
     // No permitir reportar tu propia encuesta
     if (poll.userId === Number(userId)) {
       throw error(400, 'No puedes reportar tu propia encuesta');
     }
-    
-    // Verificar si ya reportó
-    const existingReport = await prisma.pollInteraction.findUnique({
+
+    // Obtener info del usuario que reporta
+    const reporter = await prisma.user.findUnique({
+      where: { id: Number(userId) },
+      select: { username: true, email: true }
+    });
+
+    // Verificar si ya reportó - usar nuevo modelo Report
+    const existingReport = await prisma.report.findUnique({
+      where: {
+        pollId_userId: {
+          pollId,
+          userId: Number(userId)
+        }
+      }
+    });
+
+    if (existingReport) {
+      return json({ success: true, message: 'Ya has reportado esta encuesta' });
+    }
+
+    // Crear el reporte en el nuevo modelo
+    await prisma.report.create({
+      data: {
+        pollId,
+        userId: Number(userId),
+        reason,
+        notes
+      }
+    });
+
+    // También crear interacción para mantener compatibilidad
+    await prisma.pollInteraction.upsert({
       where: {
         pollId_userId_interactionType: {
           pollId,
           userId: Number(userId),
           interactionType: 'report'
         }
-      }
-    });
-    
-    if (existingReport) {
-      return json({ success: true, message: 'Ya has reportado esta encuesta' });
-    }
-    
-    // Crear el reporte
-    await prisma.pollInteraction.create({
-      data: {
+      },
+      create: {
         pollId,
         userId: Number(userId),
         interactionType: 'report'
-      }
+      },
+      update: {} // No actualizar nada si ya existe
     });
-    
+
     // Contar reportes totales
-    const reportCount = await prisma.pollInteraction.count({
-      where: { pollId, interactionType: 'report' }
+    const reportCount = await prisma.report.count({
+      where: { pollId }
     });
-    
-    // Si hay muchos reportes, podríamos marcar la encuesta para revisión
-    // Por ahora solo logueamos
-    if (reportCount >= 5) {
-      console.log(`[Report] ⚠️ Encuesta ${pollId} tiene ${reportCount} reportes - revisar`);
+
+    // Auto-ocultar si supera el umbral
+    let wasHidden = false;
+    if (reportCount >= REPORT_THRESHOLD_HIDE) {
+      await prisma.poll.update({
+        where: { id: pollId },
+        data: { isHidden: true }
+      });
+      wasHidden = true;
+      console.log(`[Report] 🚫 Encuesta ${pollId} ocultada automáticamente (${reportCount} reportes)`);
     }
-    
-    return json({ 
-      success: true, 
-      message: 'Gracias por tu reporte. Lo revisaremos pronto.',
-      reportCount 
+
+    // Enviar notificación por email al admin
+    await sendReportNotification({
+      pollId,
+      pollTitle: poll.title,
+      pollAuthor: poll.user?.username || 'Desconocido',
+      reporterUsername: reporter?.username || 'Anónimo',
+      reason,
+      notes: notes || undefined,
+      reportCount
+    });
+
+    return json({
+      success: true,
+      message: wasHidden
+        ? 'Gracias por tu reporte. La encuesta ha sido ocultada para revisión.'
+        : 'Gracias por tu reporte. Lo revisaremos pronto.',
+      reportCount,
+      wasHidden
     });
   } catch (err: any) {
     console.error('[Report] Error:', err);

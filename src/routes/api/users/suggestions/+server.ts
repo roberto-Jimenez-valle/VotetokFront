@@ -11,6 +11,7 @@ export const GET: RequestHandler = async ({ url }) => {
       where: {
         ...(excludeUserId && { id: { not: excludeUserId } }),
         role: { not: 'banned' },
+        email: { not: 'voutop.oficial@gmail.com' }, // Hide admin from suggestions
       },
       select: {
         id: true,

@@ -22,6 +22,7 @@
   import PostOptionsModal from "$lib/components/PostOptionsModal.svelte";
   import StatsFullscreenModal from "$lib/components/StatsFullscreenModal.svelte";
   import PollStatsModal from "$lib/components/PollStatsModal.svelte";
+  import ReportModal from "$lib/components/ReportModal.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Select from "$lib/ui/Select.svelte";
   import Skeleton from "$lib/ui/Skeleton.svelte";
@@ -266,6 +267,10 @@
   let isStatsModalOpen = $state(false);
   let statsModalPost = $state<Post | null>(null);
   let isStatsBottomModalOpen = $state(false);
+
+  // Report Modal State
+  let isReportModalOpen = $state(false);
+  let reportPollId = $state("");
 
   // TopTabs state
   let activeTab = $state<"Para ti" | "Tendencias" | "Amigos" | "Live">(
@@ -2592,7 +2597,12 @@
       isOpen={isOptionsModalOpen}
       post={optionsModalPost}
       onClose={() => (isOptionsModalOpen = false)}
-      onReport={() => alert("Reporte enviado")}
+      onReport={() => {
+        if (optionsModalPost) {
+          reportPollId = optionsModalPost.id;
+          isReportModalOpen = true;
+        }
+      }}
       onDelete={() => {
         console.log("[VotingFeed] onDelete prop triggered");
         if (optionsModalPost) handleDeletePost(optionsModalPost, false);
@@ -2630,6 +2640,12 @@
     isDangerous={confirmConfig.isDangerous}
     onConfirm={confirmConfig.onConfirm}
     onCancel={() => (isConfirmOpen = false)}
+  />
+
+  <ReportModal
+    isOpen={isReportModalOpen}
+    postId={reportPollId}
+    onClose={() => (isReportModalOpen = false)}
   />
 
   <StatsFullscreenModal

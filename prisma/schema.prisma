@@ -48,6 +48,8 @@ model User {
   conversationParticipations ConversationParticipant[]
   sentMessages    Message[]
   consent         UserConsent?
+  reportsCreated  Report[]            @relation("ReportCreator")
+  reportsReviewed Report[]            @relation("ReportReviewer")
 
   @@index([username])
   @@index([countryIso3])
@@ -72,6 +74,7 @@ model Poll {
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
   closedAt       DateTime?         @map("closed_at")
+  isHidden       Boolean           @default(false) @map("is_hidden") // Auto-ocultar por reportes
   comments       Comment[]
   hashtags       PollHashtag[]
   interactions   PollInteraction[]
@@ -82,6 +85,7 @@ model Poll {
   user           User              @relation("PollCreator", fields: [userId], references: [id], onDelete: Cascade)
   history        VoteHistory[]
   votes          Vote[]
+  reports        Report[]
 
   @@index([userId])
   @@index([category])
@@ -462,4 +466,33 @@ model ChecklistItem {
   @@index([status])
   @@index([displayOrder])
   @@map("checklist_items")
+}
+
+// ============================================
+// SISTEMA DE REPORTES
+// ============================================
+
+model Report {
+  id          Int       @id @default(autoincrement())
+  pollId      Int       @map("poll_id")
+  userId      Int       @map("user_id")
+  reason      String    // spam, inappropriate, misleading, hate, other
+  notes       String?   // Notas adicionales del usuario
+  status      String    @default("pending") // pending, reviewed, dismissed, actioned
+  reviewedBy  Int?      @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  reviewNotes String?   @map("review_notes")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  poll        Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user        User      @relation("ReportCreator", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer    User?     @relation("ReportReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  
+  @@unique([pollId, userId]) // Un usuario solo puede reportar una encuesta una vez
+  @@index([pollId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("reports")
 }

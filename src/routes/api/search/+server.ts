@@ -8,7 +8,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const filter = url.searchParams.get('filter') || 'all';
 		const limit = parseInt(url.searchParams.get('limit') || '20', 10);
 		const user = locals.user;
-		
+
 		// Subfiltros
 		const sort = url.searchParams.get('sort') || 'all'; // all, trending, o recent
 		const userType = url.searchParams.get('userType') || 'all'; // all, trending, followers, o following
@@ -26,15 +26,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 		// Buscar encuestas
 		if (filter === 'all' || filter === 'polls') {
-			const whereClause = query.trim() 
+			const whereClause = query.trim()
 				? {
-						status: 'active' as const,
-						OR: [
-							{ title: { contains: query } },
-							{ description: { contains: query } },
-							{ category: { contains: query } }
-						]
-					}
+					status: 'active' as const,
+					OR: [
+						{ title: { contains: query } },
+						{ description: { contains: query } },
+						{ category: { contains: query } }
+					]
+				}
 				: { status: 'active' as const };
 
 			// Ordenamiento según subfiltro
@@ -100,14 +100,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		if (filter === 'all' || filter === 'users') {
 			let whereClauseUsers: any = query.trim()
 				? {
-						OR: [
-							{ username: { contains: query } },
-							{ displayName: { contains: query } },
-							{ bio: { contains: query } }
-						]
-					}
-				: {};
-			
+					OR: [
+						{ username: { contains: query } },
+						{ displayName: { contains: query } },
+						{ bio: { contains: query } }
+					],
+					email: { not: 'voutop.oficial@gmail.com' } // Hide admin from searches
+				}
+				: { email: { not: 'voutop.oficial@gmail.com' } }; // Hide admin from searches
+
 			// Filtrar según el tipo de usuario
 			if (userType === 'followers' && user?.userId) {
 				// Solo seguidores del usuario actual
@@ -191,14 +192,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		if (filter === 'all' || filter === 'places') {
 			let whereClausePlaces: any = query.trim()
 				? {
-						OR: [
-							{ name: { contains: query, mode: 'insensitive' } },
-							{ nameLocal: { contains: query, mode: 'insensitive' } },
-							{ nameVariant: { contains: query, mode: 'insensitive' } }
-						]
-					}
+					OR: [
+						{ name: { contains: query, mode: 'insensitive' } },
+						{ nameLocal: { contains: query, mode: 'insensitive' } },
+						{ nameVariant: { contains: query, mode: 'insensitive' } }
+					]
+				}
 				: {};
-			
+
 			// Filtrar por nivel geográfico
 			if (placeType === 'country') {
 				whereClausePlaces.level = 1; // Solo países
@@ -253,18 +254,18 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			// Esto encuentra TODAS las subdivisiones con votos que empiezan con cada prefijo
 			const subdivisionsWithVotesResult = allPrefixes.length > 0
 				? await prisma.subdivision.findMany({
-						where: {
-							OR: allPrefixes.map(prefix => ({
-								subdivisionId: { startsWith: prefix },
-								votes: { some: {} }
-							}))
-						},
-						select: {
-							subdivisionId: true
-						}
-					})
+					where: {
+						OR: allPrefixes.map(prefix => ({
+							subdivisionId: { startsWith: prefix },
+							votes: { some: {} }
+						}))
+					},
+					select: {
+						subdivisionId: true
+					}
+				})
 				: [];
-			
+
 			// Crear un Set de prefijos que tienen al menos una subdivisión con votos
 			const prefixesWithVotesSet = new Set<string>();
 			for (const subdiv of subdivisionsWithVotesResult) {
@@ -293,20 +294,20 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			// Obtener nombres de padres si existen
 			const parents = parentIds.length > 0
 				? await prisma.subdivision.findMany({
-						where: {
-							subdivisionId: { in: [...new Set(parentIds)] }
-						},
-						select: {
-							subdivisionId: true,
-							name: true,
-							nameLocal: true,
-							_count: {
-								select: {
-									votes: true
-								}
+					where: {
+						subdivisionId: { in: [...new Set(parentIds)] }
+					},
+					select: {
+						subdivisionId: true,
+						name: true,
+						nameLocal: true,
+						_count: {
+							select: {
+								votes: true
 							}
 						}
-					})
+					}
+				})
 				: [];
 
 			const parentMap = new Map(parents.map(p => [p.subdivisionId, p]));

@@ -38,6 +38,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         countryIso3: true,
         createdAt: true,
         isPrivate: true,
+        email: true, // Need this to check for admin account
         // Contadores
         _count: {
           select: {
@@ -56,6 +57,15 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
     if (!user) {
       console.error('[API /users/[id]] User not found:', userId);
+      return json(
+        { success: false, error: 'Usuario no encontrado' },
+        { status: 404 }
+      );
+    }
+
+    // Hide voutop.oficial profile from other users
+    const currentUserEmail = locals.user?.email;
+    if (user.email === 'voutop.oficial@gmail.com' && currentUserEmail !== 'voutop.oficial@gmail.com') {
       return json(
         { success: false, error: 'Usuario no encontrado' },
         { status: 404 }
