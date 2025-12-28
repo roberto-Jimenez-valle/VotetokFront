@@ -4,16 +4,20 @@
  */
 
 import nodemailer from 'nodemailer';
+import { env } from '$env/dynamic/private';
 
-// Configura el transporter de nodemailer
-// Para producción, usar variables de entorno
-const transporter = nodemailer.createTransport({
+/**
+ * Obtener transporter configurado
+ */
+function getTransporter() {
+  return nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.EMAIL_USER || 'voutop.oficial@gmail.com',
-        pass: process.env.EMAIL_PASS || '' // App password de Gmail
+      user: env.EMAIL_USER || 'voutop.oficial@gmail.com',
+      pass: env.EMAIL_PASS || '' // App password de Gmail
     }
-});
+  });
+}
 
 const ADMIN_EMAIL = 'voutop.oficial@gmail.com';
 
@@ -21,31 +25,31 @@ const ADMIN_EMAIL = 'voutop.oficial@gmail.com';
  * Enviar email de notificación de reporte
  */
 export async function sendReportNotification(data: {
-    pollId: number;
-    pollTitle: string;
-    pollAuthor: string;
-    reporterUsername: string;
-    reason: string;
-    notes?: string;
-    reportCount: number;
+  pollId: number;
+  pollTitle: string;
+  pollAuthor: string;
+  reporterUsername: string;
+  reason: string;
+  notes?: string;
+  reportCount: number;
 }) {
-    const { pollId, pollTitle, pollAuthor, reporterUsername, reason, notes, reportCount } = data;
+  const { pollId, pollTitle, pollAuthor, reporterUsername, reason, notes, reportCount } = data;
 
-    const reasonLabels: Record<string, string> = {
-        spam: 'Spam o publicidad',
-        inappropriate: 'Contenido inapropiado',
-        misleading: 'Información falsa/engañosa',
-        hate: 'Discurso de odio',
-        harassment: 'Acoso',
-        violence: 'Violencia',
-        other: 'Otro motivo'
-    };
+  const reasonLabels: Record<string, string> = {
+    spam: 'Spam o publicidad',
+    inappropriate: 'Contenido inapropiado',
+    misleading: 'Información falsa/engañosa',
+    hate: 'Discurso de odio',
+    harassment: 'Acoso',
+    violence: 'Violencia',
+    other: 'Otro motivo'
+  };
 
-    const subject = reportCount >= 5
-        ? `⚠️ URGENTE: Encuesta con ${reportCount} reportes requiere revisión`
-        : `🚨 Nuevo reporte de encuesta - ${pollTitle}`;
+  const subject = reportCount >= 5
+    ? `⚠️ URGENTE: Encuesta con ${reportCount} reportes requiere revisión`
+    : `🚨 Nuevo reporte de encuesta - ${pollTitle}`;
 
-    const html = `
+  const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px; border-radius: 12px 12px 0 0;">
         <h1 style="color: white; margin: 0; font-size: 24px;">
@@ -100,7 +104,7 @@ export async function sendReportNotification(data: {
         ` : ''}
         
         <div style="text-align: center; margin-top: 24px;">
-          <a href="${process.env.PUBLIC_URL || 'http://localhost:5173'}/admin/reports" 
+          <a href="${env.PUBLIC_URL || 'http://localhost:5173'}/admin/reports" 
              style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
             Ver Panel de Reportes
           </a>
@@ -116,36 +120,37 @@ export async function sendReportNotification(data: {
     </div>
   `;
 
-    try {
-        // Si no hay credenciales de email configuradas, solo loguear
-        if (!process.env.EMAIL_PASS) {
-            console.log('[Email] ⚠️ EMAIL_PASS no configurado. Email no enviado.');
-            console.log('[Email] Detalles del reporte:', { pollId, pollTitle, reason, reportCount });
-            return { sent: false, reason: 'No email credentials configured' };
-        }
-
-        await transporter.sendMail({
-            from: `"VoTok Moderación" <${process.env.EMAIL_USER || 'voutop.oficial@gmail.com'}>`,
-            to: ADMIN_EMAIL,
-            subject,
-            html
-        });
-
-        console.log(`[Email] ✅ Notificación de reporte enviada a ${ADMIN_EMAIL}`);
-        return { sent: true };
-    } catch (error) {
-        console.error('[Email] Error enviando notificación:', error);
-        return { sent: false, error };
+  try {
+    // Si no hay credenciales de email configuradas, solo loguear
+    if (!env.EMAIL_PASS) {
+      console.log('[Email] ⚠️ EMAIL_PASS no configurado en .env. Email no enviado.');
+      console.log('[Email] Detalles del reporte que no se pudo enviar:', { pollId, pollTitle, reason, reportCount });
+      return { sent: false, reason: 'No email credentials configured' };
     }
+
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from: `"VoTok Moderación" <${env.EMAIL_USER || 'voutop.oficial@gmail.com'}>`,
+      to: ADMIN_EMAIL,
+      subject,
+      html
+    });
+
+    console.log(`[Email] ✅ Notificación de reporte enviada a ${ADMIN_EMAIL}`);
+    return { sent: true };
+  } catch (error) {
+    console.error('[Email] Error enviando notificación:', error);
+    return { sent: false, error };
+  }
 }
 
 /**
  * Enviar email de confirmación al usuario que reportó
  */
 export async function sendReportConfirmation(data: {
-    userEmail: string;
-    pollTitle: string;
+  userEmail: string;
+  pollTitle: string;
 }) {
-    // Por ahora solo logueamos, implementar cuando se tenga el email del usuario
-    console.log(`[Email] Confirmación de reporte para ${data.userEmail}: ${data.pollTitle}`);
+  // Por ahora solo logueamos, implementar cuando se tenga el email del usuario
+  console.log(`[Email] Confirmación de reporte para ${data.userEmail}: ${data.pollTitle}`);
 }
