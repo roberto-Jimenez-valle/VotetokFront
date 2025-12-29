@@ -195,68 +195,157 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
           <title>Redirigiendo a la App...</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
+            :root {
+              --primary: #6366f1;
+              --success: #22c55e;
+              --bg: #000000;
+              --card-bg: rgba(255, 255, 255, 0.02);
+              --text: #ffffff;
+            }
             body { 
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
               display: flex; 
-              flex-direction: column; 
               align-items: center; 
               justify-content: center; 
-              height: 100vh; 
+              min-height: 100vh; 
               margin: 0;
-              background: #000; 
-              color: #fff; 
-              text-align: center; 
-              padding: 20px; 
+              background: var(--bg); 
+              color: var(--text); 
+              overflow: hidden;
             }
-            .logo { 
-              font-size: 24px; 
-              font-weight: 800; 
-              margin-bottom: 30px; 
-              background: linear-gradient(to right, #4CAF50, #8BC34A);
-              -webkit-background-clip: text;
-              -webkit-text-fill-color: transparent;
+            .bg-particles {
+              position: fixed; inset: 0; z-index: 0; pointer-events: none;
             }
-            .loader { 
-              border: 3px solid rgba(255,255,255,0.1); 
-              border-radius: 50%; 
-              border-top: 3px solid #4CAF50; 
-              width: 50px; 
-              height: 50px; 
-              animation: spin 1s linear infinite; 
-              margin-bottom: 30px; 
+            .particle {
+              position: absolute; width: 4px; height: 4px; background: rgba(99, 102, 241, 0.4);
+              border-radius: 50%; bottom: -10px; animation: float-up 6s ease-in-out infinite;
             }
-            h2 { font-size: 20px; margin-bottom: 10px; }
-            p { color: #aaa; margin-bottom: 30px; font-size: 14px; line-height: 1.5; }
-            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            .btn { 
-              padding: 14px 28px; 
-              background: #fff; 
-              color: #000; 
-              text-decoration: none; 
-              border-radius: 12px; 
-              font-weight: bold; 
-              font-size: 15px;
-              transition: transform 0.2s;
+            @keyframes float-up {
+              0% { transform: translateY(0); opacity: 0; }
+              50% { opacity: 1; }
+              100% { transform: translateY(-100vh); opacity: 0; }
             }
-            .btn:active { transform: scale(0.95); }
-            #timer { font-weight: bold; color: #fff; }
+            .callback-card {
+              position: relative; z-index: 10;
+              background: var(--card-bg);
+              backdrop-filter: blur(20px);
+              -webkit-backdrop-filter: blur(20px);
+              border: 1px solid rgba(255, 255, 255, 0.06);
+              border-radius: 24px;
+              padding: 40px;
+              text-align: center;
+              width: 90%; max-width: 380px;
+              box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+              animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            @keyframes slide-up {
+              from { transform: translateY(20px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+            .user-avatar-container {
+              position: relative; width: 80px; height: 80px; margin: 0 auto 20px;
+            }
+            .user-avatar {
+              width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+              border: 3px solid rgba(99, 102, 241, 0.5);
+              box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3);
+            }
+            .check-badge {
+              position: absolute; bottom: -2px; right: -2px;
+              width: 26px; height: 26px;
+              background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+              border-radius: 50%;
+              display: flex; align-items: center; justify-content: center;
+              border: 2px solid #000;
+            }
+            h2 {
+              font-size: 22px; font-weight: 700; margin: 0 0 10px;
+              background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+              -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            }
+            p { font-size: 14px; color: rgba(255,255,255,0.6); margin: 0 0 24px; line-height: 1.5; }
+            .countdown-ring {
+              position: relative; width: 48px; height: 48px; margin: 0 auto 12px;
+            }
+            .countdown-circle {
+              fill: none; stroke: var(--success); stroke-width: 3;
+              stroke-dasharray: 126; stroke-dashoffset: 0;
+              transition: stroke-dashoffset 1s linear;
+              transform: rotate(-90deg); transform-origin: center;
+            }
+            .countdown-bg {
+              fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 3;
+            }
+            .countdown-val {
+              position: absolute; inset: 0; display: flex;
+              align-items: center; justify-content: center;
+              font-weight: bold; font-size: 16px;
+            }
+            .manual-btn {
+              display: inline-block; margin-top: 20px;
+              padding: 12px 24px;
+              background: rgba(255,255,255,0.1);
+              border: 1px solid rgba(255,255,255,0.2);
+              border-radius: 12px; color: white;
+              text-decoration: none; font-size: 13px; font-weight: 500;
+              transition: all 0.2s;
+            }
+            .manual-btn:hover { background: rgba(255,255,255,0.15); }
+            footer {
+              margin-top: 30px; padding-top: 20px;
+              border-top: 1px solid rgba(255,255,255,0.08);
+              font-size: 12px; color: rgba(255,255,255,0.3);
+            }
           </style>
         </head>
         <body>
-          <div class="logo">VouTop</div>
-          <div class="loader"></div>
-          <h2>¡Bienvenido, ${user.username}!</h2>
-          <p>Login exitoso.<br>Volviendo a la app en <span id="timer">3</span> segundos...</p>
+          <div class="bg-particles">
+            <div class="particle" style="left: 10%; animation-duration: 4s;"></div>
+            <div class="particle" style="left: 30%; animation-duration: 6s; animation-delay: 1s;"></div>
+            <div class="particle" style="left: 70%; animation-duration: 5s; animation-delay: 2s;"></div>
+            <div class="particle" style="left: 90%; animation-duration: 7s;"></div>
+          </div>
           
-          <a href="${finalRedirectUrl}" class="btn">Abrir App ahora</a>
+          <div class="callback-card">
+            <div class="user-avatar-container">
+              <img src="${user.avatarUrl || 'https://voutop.com/logo-circle.png'}" class="user-avatar" alt="Avatar">
+              <div class="check-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
+            </div>
+
+            <h2>¡Bienvenido, ${user.displayName || user.username}!</h2>
+            <p>Has iniciado sesión correctamente.<br>Volviendo a la app...</p>
+
+            <div class="countdown-ring">
+              <svg width="48" height="48">
+                <circle class="countdown-bg" cx="24" cy="24" r="20"></circle>
+                <circle class="countdown-circle" id="progress" cx="24" cy="24" r="20"></circle>
+              </svg>
+              <div class="countdown-val" id="timer">3</div>
+            </div>
+            
+            <a href="${finalRedirectUrl}" class="manual-btn">Abrir App ahora</a>
+
+            <footer>
+              Powered by <strong>VouTop</strong>
+            </footer>
+          </div>
 
           <script>
             let count = 3;
             const timerEl = document.getElementById('timer');
+            const progressEl = document.getElementById('progress');
+            const totalLength = 126; // 2 * PI * r (20) ≈ 125.66
             
             const interval = setInterval(() => {
               count--;
               if (timerEl) timerEl.textContent = count;
+              
+              if (progressEl) {
+                const offset = totalLength - ((3 - count) / 3) * totalLength;
+                progressEl.style.strokeDashoffset = offset;
+              }
               
               if (count <= 0) {
                 clearInterval(interval);
@@ -264,8 +353,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
               }
             }, 1000);
 
-            // Intentar redirigir inmediatamente también por si acaso el navegador lo permite
-            // setTimeout(() => { window.location.href = "${finalRedirectUrl}"; }, 100);
+            // Backup redirect immediately
+            setTimeout(() => {
+                // window.location.href = "${finalRedirectUrl}";
+            }, 500);
           </script>
         </body>
         </html>
