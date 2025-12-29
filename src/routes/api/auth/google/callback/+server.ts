@@ -349,11 +349,21 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
             </footer>
           </div>
 
-          <script>
+            // Construir Intent URL para Android (fuerza apertura de app más agresivamente)
+            // intent://auth-callback?param=val#Intent;scheme=voutop;package=com.votetok.app;end
+            const intentUrl = finalRedirectUrl.replace('voutop://', 'intent://') + '#Intent;scheme=voutop;package=com.votetok.app;end';
+            
+            // Detectar si es Android
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const targetUrl = isAndroid ? intentUrl : finalRedirectUrl;
+
             let count = 3;
             const timerEl = document.getElementById('timer');
             const progressEl = document.getElementById('progress');
-            const totalLength = 126; // 2 * PI * r (20) ≈ 125.66
+            const totalLength = 126;
+            
+            // Actualizar el enlace del botón principal
+            document.querySelector('.manual-btn.primary').href = targetUrl;
             
             const interval = setInterval(() => {
               count--;
@@ -366,16 +376,23 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
               
               if (count <= 0) {
                 clearInterval(interval);
-                window.location.href = "${finalRedirectUrl}";
+                window.location.href = targetUrl;
               }
             }, 1000);
+
+            // Backup redirect immediately for Intent
+            if (isAndroid) {
+                setTimeout(() => {
+                    window.location.href = targetUrl;
+                }, 500);
+            }
           </script>
         </body>
         </html>
       `;
 
       return new Response(html, {
-        headers: { 'Content-Type': 'text/html' }
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
       });
     }
 
