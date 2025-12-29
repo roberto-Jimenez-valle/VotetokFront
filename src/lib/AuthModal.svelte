@@ -150,6 +150,11 @@
     }
   }
 
+  // Importar Capacitor
+  import { Capacitor } from "@capacitor/core";
+
+  // ... (existing imports/code) ...
+
   function handleGoogleLogin() {
     // Verificar consentimiento primero
     if (!canProceed()) {
@@ -174,16 +179,32 @@
     // Abrir popup con el endpoint de auth (que redirigirá al callback)
     const popupUrl = "/api/auth/google?popup=1";
 
-    // Detectar si es móvil o Capacitor para usar redirección en lugar de popup
-    const isMobile =
+    // Detectar si es App Nativa (Capacitor) o solo móvil web
+    const isNative = Capacitor.isNativePlatform();
+
+    if (isNative) {
+      console.log(
+        "[AuthModal] 📱 App Nativa detectada, abriendo navegador del sistema...",
+      );
+      const targetUrl = new URL("/api/auth/google", "https://voutop.com");
+
+      // USAR CUSTOM SCHEME para asegurar que vuelve a la app
+      targetUrl.searchParams.set("redirect", "voutop://auth-callback");
+
+      // Abrir en navegador del sistema para cumplir políticas de Google
+      window.open(targetUrl.toString(), "_system");
+      return;
+    }
+
+    // Detectar si es móvil web (navegador normal en móvil, no app)
+    const isMobileWeb =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
         navigator.userAgent,
       ) || window.innerWidth < 768;
 
-    // En móviles, usar redirección directa para evitar problemas con popups y WebViews
-    if (isMobile) {
-      console.log("[AuthModal] 📱 Modo móvil detectado, redirigiendo...");
-      // Usar redirección estándar (sin ?popup=1 para que maneje el callback correctamente)
+    // En móviles web, usar redirección directa
+    if (isMobileWeb) {
+      console.log("[AuthModal] 📱 Web Móvil detectada, redirigiendo...");
       window.location.href =
         "/api/auth/google?redirect=" +
         encodeURIComponent(window.location.pathname);

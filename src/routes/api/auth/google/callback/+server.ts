@@ -24,10 +24,16 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   const code = url.searchParams.get('code')
   const error_param = url.searchParams.get('error')
   const state = url.searchParams.get('state')
-  
-  // Detectar si viene de un popup
-  const isPopup = state === 'popup=1'
-  const baseRedirect = isPopup ? '/auth/callback' : '/'
+
+  // Parsear el estado
+  const stateParams = new URLSearchParams(state || '');
+  const isPopup = stateParams.get('popup') === '1';
+  let baseRedirect = stateParams.get('redirect') || '/';
+
+  // Si es popup, forzar callback de popup
+  if (isPopup) {
+    baseRedirect = '/auth/callback';
+  }
 
   // Si el usuario canceló o hubo error
   if (error_param) {
@@ -99,12 +105,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     if (!user) {
       // Crear nuevo usuario
       console.log('[Google Callback] Creando nuevo usuario...')
-      
+
       // Generar username único basado en el email
       const baseUsername = googleUser.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')
       let username = baseUsername
       let counter = 1
-      
+
       // Verificar que el username no exista
       while (await prisma.user.findUnique({ where: { username } })) {
         username = `${baseUsername}${counter}`
@@ -121,7 +127,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
           role: 'user',
         },
       })
-      
+
       console.log('[Google Callback] Usuario creado:', user.username)
     } else {
       // Actualizar avatar y nombre si cambió
@@ -177,15 +183,51 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       role: user.role || 'user',
     }))
 
-    throw redirect(303, `${baseRedirect}?auth=success&user=${userData}&token=${jwtAccessToken}`)
+    // URL final de redirección
+    const finalRedirectUrl = `${baseRedirect}?auth=success&user=${userData}&token=${jwtAccessToken}`;
+
+    // Si es un esquema personalizado (App), usar una página intermedia para asegurar la redirección
+    if (baseRedirect.startsWith('voutop://')) {
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Redirigiendo a la App...</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff; text-align: center; padding: 20px; }
+            .loader { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid #fff; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            .btn { margin-top: 20px; padding: 12px 24px; background: #fff; color: #000; text-decoration: none; border-radius: 8px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="loader"></div>
+          <p>Volviendo a VouTop...</p>
+          <a href="${finalRedirectUrl}" class="btn">Abrir App</a>
+          <script>
+            setTimeout(() => {
+              window.location.href = "${finalRedirectUrl}";
+            }, 100);
+          </script>
+        </body>
+        </html>
+      `;
+
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html' }
+      });
+    }
+
+    throw redirect(303, finalRedirectUrl)
 
   } catch (err: any) {
     console.error('[Google Callback] Error:', err)
-    
+
     if (err.status) {
       throw err
     }
-    
+
     throw redirect(303, `${baseRedirect}?error=google_auth_error`)
   }
 }

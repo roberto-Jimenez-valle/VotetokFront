@@ -7,7 +7,11 @@ const config: CapacitorConfig = {
     server: {
         url: 'https://voutop.com', // ← Apuntar a producción
         androidScheme: 'https',
-        cleartext: false
+        cleartext: false,
+        allowNavigation: [
+            'voutop.com',
+            '*.voutop.com'
+        ]
     }
 };
 
