@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { X, Download } from 'lucide-svelte';
+  import { onMount } from "svelte";
+  import { X, Download } from "lucide-svelte";
+  import { Capacitor } from "@capacitor/core";
 
   let showBanner = $state(false);
   let deferredPrompt: any = null;
@@ -8,16 +9,23 @@
   let isStandalone = $state(false);
 
   onMount(() => {
+    // Si estamos en la App Nativa (Capacitor), no mostrar nunca el banner
+    if (Capacitor.isNativePlatform()) {
+      return;
+    }
+
     // Detectar si ya está instalada
-    isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                   (window.navigator as any).standalone === true;
+    isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true;
 
     // Detectar iOS
-    isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
 
     // Verificar si el usuario ya rechazó el banner
-    const dismissed = localStorage.getItem('voutop-install-banner-dismissed');
-    
+    const dismissed = localStorage.getItem("voutop-install-banner-dismissed");
+
     if (!isStandalone && !dismissed) {
       // En iOS mostrar banner después de 3 segundos (no hay beforeinstallprompt)
       if (isIOS) {
@@ -26,7 +34,7 @@
         }, 3000);
       } else {
         // En otros navegadores, esperar el evento beforeinstallprompt
-        window.addEventListener('beforeinstallprompt', (e) => {
+        window.addEventListener("beforeinstallprompt", (e) => {
           e.preventDefault();
           deferredPrompt = e;
           showBanner = true;
@@ -52,7 +60,7 @@
     const { outcome } = await deferredPrompt.userChoice;
     console.log(`[InstallPWA] User response: ${outcome}`);
 
-    if (outcome === 'accepted') {
+    if (outcome === "accepted") {
       showBanner = false;
     }
 
@@ -64,7 +72,10 @@
     // Guardar que el usuario rechazó el banner (expires en 7 días)
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + 7);
-    localStorage.setItem('voutop-install-banner-dismissed', expiryDate.toISOString());
+    localStorage.setItem(
+      "voutop-install-banner-dismissed",
+      expiryDate.toISOString(),
+    );
   }
 </script>
 
@@ -77,15 +88,22 @@
       <div class="install-text">
         <h3>Instala Voutop</h3>
         {#if isIOS}
-          <p>Toca <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display: inline; vertical-align: text-bottom;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> y luego "Añadir a pantalla de inicio"</p>
+          <p>
+            Toca <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              style="display: inline; vertical-align: text-bottom;"
+              ><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" /></svg
+            > y luego "Añadir a pantalla de inicio"
+          </p>
         {:else}
           <p>Acceso rápido desde tu pantalla de inicio</p>
         {/if}
       </div>
       {#if !isIOS}
-        <button class="install-btn" onclick={handleInstall}>
-          Instalar
-        </button>
+        <button class="install-btn" onclick={handleInstall}> Instalar </button>
       {/if}
       <button class="close-btn" onclick={dismissBanner} aria-label="Cerrar">
         <X size={18} />
