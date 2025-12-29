@@ -173,6 +173,24 @@
 
     // Abrir popup con el endpoint de auth (que redirigirá al callback)
     const popupUrl = "/api/auth/google?popup=1";
+
+    // Detectar si es móvil o Capacitor para usar redirección en lugar de popup
+    const isMobile =
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent,
+      ) || window.innerWidth < 768;
+
+    // En móviles, usar redirección directa para evitar problemas con popups y WebViews
+    if (isMobile) {
+      console.log("[AuthModal] 📱 Modo móvil detectado, redirigiendo...");
+      // Usar redirección estándar (sin ?popup=1 para que maneje el callback correctamente)
+      window.location.href =
+        "/api/auth/google?redirect=" +
+        encodeURIComponent(window.location.pathname);
+      return;
+    }
+
+    // En desktop, usar popup
     authPopup = window.open(
       popupUrl,
       "GoogleAuth",

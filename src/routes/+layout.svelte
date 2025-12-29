@@ -24,6 +24,7 @@
 	let hasAccess = $state(false);
 
 	function handlePaletteChange(event: CustomEvent) {
+		if (typeof window === "undefined") return;
 		const palette = event.detail;
 		// Disparar evento global para que GlobeGL lo escuche
 		window.dispatchEvent(
@@ -32,6 +33,7 @@
 	}
 
 	function handleThemeChange(event: CustomEvent) {
+		if (typeof window === "undefined") return;
 		const { mode } = event.detail;
 		// Disparar evento global si es necesario
 		window.dispatchEvent(
@@ -43,6 +45,7 @@
 	let isFullscreen = $state(false);
 
 	function toggleFullscreen() {
+		if (typeof document === "undefined") return;
 		if (!document.fullscreenElement) {
 			document.documentElement
 				.requestFullscreen()
@@ -70,14 +73,10 @@
 			window.location.hostname === "localhost" ||
 			window.location.hostname === "127.0.0.1"; */
 
-		// hasAccess = access === "granted" || isLocalNetwork;
 		hasAccess = access === "granted";
 
 		// Si no tiene acceso, no continuar con el resto de la inicialización
 		if (!hasAccess) {
-			console.log(
-				"🔒 Acceso restringido - mostrando página en construcción",
-			);
 			return;
 		}
 
@@ -214,7 +213,9 @@
 		on:themechange={handleThemeChange}
 	/> -->
 
-	{@render children()}
+	<main class="w-full min-h-screen pt-[env(safe-area-inset-top)]">
+		{@render children()}
+	</main>
 
 	<!-- Banner de instalación PWA -->
 	<InstallPWABanner />
