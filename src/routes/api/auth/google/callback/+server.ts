@@ -195,20 +195,77 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
           <title>Redirigiendo a la App...</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff; text-align: center; padding: 20px; }
-            .loader { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid #fff; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+              display: flex; 
+              flex-direction: column; 
+              align-items: center; 
+              justify-content: center; 
+              height: 100vh; 
+              margin: 0;
+              background: #000; 
+              color: #fff; 
+              text-align: center; 
+              padding: 20px; 
+            }
+            .logo { 
+              font-size: 24px; 
+              font-weight: 800; 
+              margin-bottom: 30px; 
+              background: linear-gradient(to right, #4CAF50, #8BC34A);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+            }
+            .loader { 
+              border: 3px solid rgba(255,255,255,0.1); 
+              border-radius: 50%; 
+              border-top: 3px solid #4CAF50; 
+              width: 50px; 
+              height: 50px; 
+              animation: spin 1s linear infinite; 
+              margin-bottom: 30px; 
+            }
+            h2 { font-size: 20px; margin-bottom: 10px; }
+            p { color: #aaa; margin-bottom: 30px; font-size: 14px; line-height: 1.5; }
             @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            .btn { margin-top: 20px; padding: 12px 24px; background: #fff; color: #000; text-decoration: none; border-radius: 8px; font-weight: bold; }
+            .btn { 
+              padding: 14px 28px; 
+              background: #fff; 
+              color: #000; 
+              text-decoration: none; 
+              border-radius: 12px; 
+              font-weight: bold; 
+              font-size: 15px;
+              transition: transform 0.2s;
+            }
+            .btn:active { transform: scale(0.95); }
+            #timer { font-weight: bold; color: #fff; }
           </style>
         </head>
         <body>
+          <div class="logo">VouTop</div>
           <div class="loader"></div>
-          <p>Volviendo a VouTop...</p>
-          <a href="${finalRedirectUrl}" class="btn">Abrir App</a>
+          <h2>¡Bienvenido, ${user.username}!</h2>
+          <p>Login exitoso.<br>Volviendo a la app en <span id="timer">3</span> segundos...</p>
+          
+          <a href="${finalRedirectUrl}" class="btn">Abrir App ahora</a>
+
           <script>
-            setTimeout(() => {
-              window.location.href = "${finalRedirectUrl}";
-            }, 100);
+            let count = 3;
+            const timerEl = document.getElementById('timer');
+            
+            const interval = setInterval(() => {
+              count--;
+              if (timerEl) timerEl.textContent = count;
+              
+              if (count <= 0) {
+                clearInterval(interval);
+                window.location.href = "${finalRedirectUrl}";
+              }
+            }, 1000);
+
+            // Intentar redirigir inmediatamente también por si acaso el navegador lo permite
+            // setTimeout(() => { window.location.href = "${finalRedirectUrl}"; }, 100);
           </script>
         </body>
         </html>

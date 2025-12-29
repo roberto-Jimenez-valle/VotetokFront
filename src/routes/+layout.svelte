@@ -1,5 +1,6 @@
 <script lang="ts">
 	import "../app.css";
+	import { App } from "@capacitor/app";
 	import { onMount } from "svelte";
 	import { fade, fly, scale } from "svelte/transition";
 	import { cubicOut, quintOut, backOut } from "svelte/easing";
@@ -196,9 +197,63 @@
 		// Inicializar handler para cerrar fullscreen con botón atrás
 		const cleanupFullscreenHistory = initFullscreenIframeHistoryHandler();
 
+		// 📱 Escuchar Deep Links (cuando la app se abre desde voutop://)
+		const appListener = App.addListener("appUrlOpen", (data) => {
+			console.log("[DeepLink] URL recibida:", data.url);
+
+			// Normalizar URL (si viene como voutop://auth-callback?...)
+			// Reemplazar esquema personalizado por algo parseable si es necesario,
+			// pero URL() lo maneja bien si es estándar.
+			try {
+				// Crear objeto URL. Si es 'voutop://', funciona igual.
+				// Si falla en algunos entornos, reemplazar 'voutop://' por 'https://voutop.com/'
+				const urlStr = data.url.replace(
+					"voutop://",
+					"https://voutop.com/",
+				);
+				const urlObj = new URL(urlStr);
+				const urlParams = urlObj.searchParams;
+
+				const authSuccess = urlParams.get("auth");
+				const tokenFromUrl = urlParams.get("token");
+				const userFromUrl = urlParams.get("user");
+
+				if (authSuccess === "success" && tokenFromUrl && userFromUrl) {
+					console.log("[DeepLink] Procesando login...");
+					const userData = JSON.parse(
+						decodeURIComponent(userFromUrl),
+					);
+
+					setAuth(tokenFromUrl, userData);
+					setCurrentUser({
+						id: userData.userId,
+						username: userData.username,
+						displayName: userData.displayName,
+						email: userData.email,
+						avatarUrl: userData.avatarUrl,
+						verified: userData.verified || false,
+						countryIso3: userData.countryIso3,
+						subdivisionId: userData.subdivisionId,
+						role: userData.role,
+					});
+
+					console.log(
+						"✅ [DeepLink] Login completado para:",
+						userData.username,
+					);
+
+					// Cerrar modal de login si está abierto
+					loginModalOpen.set(false);
+				}
+			} catch (e) {
+				console.error("[DeepLink] Error procesando URL:", e);
+			}
+		});
+
 		return () => {
 			document.removeEventListener("touchstart", preventZoom);
 			cleanupFullscreenHistory?.();
+			appListener.then((handle) => handle.remove());
 		};
 	});
 </script>
