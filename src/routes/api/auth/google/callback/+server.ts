@@ -349,8 +349,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
             </footer>
           </div>
 
+          <script>
             // Construir Intent URL para Android (fuerza apertura de app más agresivamente)
             // intent://auth-callback?param=val#Intent;scheme=voutop;package=com.votetok.app;end
+            const finalRedirectUrl = "${finalRedirectUrl}";
             const intentUrl = finalRedirectUrl.replace('voutop://', 'intent://') + '#Intent;scheme=voutop;package=com.votetok.app;end';
             
             // Detectar si es Android
