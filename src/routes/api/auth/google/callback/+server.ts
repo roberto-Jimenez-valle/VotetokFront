@@ -281,18 +281,33 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
               align-items: center; justify-content: center;
               font-weight: bold; font-size: 16px;
             }
-            .manual-btn {
-              display: inline-block; margin-top: 20px;
-              padding: 12px 24px;
-              background: rgba(255,255,255,0.1);
-              border: 1px solid rgba(255,255,255,0.2);
-              border-radius: 12px; color: white;
-              text-decoration: none; font-size: 13px; font-weight: 500;
-              transition: all 0.2s;
+            .buttons {
+              display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center; margin-top: 20px;
             }
-            .manual-btn:hover { background: rgba(255,255,255,0.15); }
+            .manual-btn {
+              display: inline-block; width: 100%; max-width: 200px;
+              padding: 12px 0;
+              border-radius: 12px; color: white;
+              text-decoration: none; font-size: 14px; font-weight: 600;
+              transition: all 0.2s; cursor: pointer;
+            }
+            .manual-btn.primary {
+              background: rgba(99, 102, 241, 0.2);
+              border: 1px solid rgba(99, 102, 241, 0.4);
+              box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+            }
+            .manual-btn.primary:hover { background: rgba(99, 102, 241, 0.3); transform: translateY(-2px); }
+            
+            .manual-btn.secondary {
+              background: transparent;
+              border: 1px solid rgba(255,255,255,0.1);
+              color: rgba(255,255,255,0.7);
+              font-weight: 500;
+            }
+            .manual-btn.secondary:hover { background: rgba(255,255,255,0.05); color: white; }
+            
             footer {
-              margin-top: 30px; padding-top: 20px;
+              margin-top: 24px; padding-top: 20px;
               border-top: 1px solid rgba(255,255,255,0.08);
               font-size: 12px; color: rgba(255,255,255,0.3);
             }
@@ -324,8 +339,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
               </svg>
               <div class="countdown-val" id="timer">3</div>
             </div>
-            
-            <a href="${finalRedirectUrl}" class="manual-btn">Abrir App ahora</a>
+            <div class="buttons">
+              <a href="${finalRedirectUrl}" class="manual-btn primary">Abrir App</a>
+              <a href="${finalRedirectUrl.replace('voutop://auth-callback', 'https://voutop.com/')}" class="manual-btn secondary">Continuar en Web</a>
+            </div>
 
             <footer>
               Powered by <strong>VouTop</strong>
@@ -352,11 +369,6 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
                 window.location.href = "${finalRedirectUrl}";
               }
             }, 1000);
-
-            // Backup redirect immediately
-            setTimeout(() => {
-                // window.location.href = "${finalRedirectUrl}";
-            }, 500);
           </script>
         </body>
         </html>
