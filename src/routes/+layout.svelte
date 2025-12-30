@@ -263,22 +263,41 @@
 			await processDeepLink(data.url);
 		});
 
-		// 3. (iOS Fix) Escuchar cuando la app vuelve al primer plano
-		// A veces en iOS el evento appUrlOpen se pierde si la app estaba suspendida.
-		// Al volver, getLaunchUrl podría tener la URL pendiente.
+		// 3. (iOS Fix) Escuchar cuando la app vuelve al primer plano con REINTENTOS
+		// iOS a veces tarda en entregar la AppLaunchUrl. Probamos varias veces.
 		const appStateListener = App.addListener(
 			"appStateChange",
 			async ({ isActive }) => {
 				if (isActive) {
 					console.log(
-						"[AppState] App active, checking launch url...",
+						"[AppState] App active, checking launch url with retries...",
 					);
-					const launchUrl = await App.getLaunchUrl();
-					if (launchUrl && launchUrl.url) {
-						// Verificar si es una URL de auth reciente para no reprocesar antiguas
-						// (Podríamos añadir timestamp o limpiar URL, pero processDeepLink es idempotente en setAuth)
-						await processDeepLink(launchUrl.url);
-					}
+
+					const checkUrl = async () => {
+						const launchUrl = await App.getLaunchUrl();
+						if (launchUrl && launchUrl.url) {
+							console.log(
+								"[AppState] URL encontrada:",
+								launchUrl.url,
+							);
+							await processDeepLink(launchUrl.url);
+							return true;
+						}
+						return false;
+					};
+
+					// Intento 1: Inmediato
+					if (await checkUrl()) return;
+
+					// Intento 2: 500ms después
+					setTimeout(async () => {
+						if (await checkUrl()) return;
+
+						// Intento 3: 1.5s después (para dispositivos lentos)
+						setTimeout(async () => {
+							await checkUrl();
+						}, 1000);
+					}, 500);
 				}
 			},
 		);
