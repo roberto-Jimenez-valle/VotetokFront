@@ -198,20 +198,13 @@
 		// Inicializar handler para cerrar fullscreen con botón atrás
 		const cleanupFullscreenHistory = initFullscreenIframeHistoryHandler();
 
-		// 📱 Escuchar Deep Links (cuando la app se abre desde voutop://)
-		const appListener = App.addListener("appUrlOpen", async (data) => {
-			console.log("[DeepLink] URL recibida:", data.url);
+		// 📱 Lógica unificada para procesar Deep Links
+		const processDeepLink = async (url: string) => {
+			console.log("[DeepLink] Procesando URL:", url);
 
-			// Normalizar URL (si viene como voutop://auth-callback?...)
-			// Reemplazar esquema personalizado por algo parseable si es necesario,
-			// pero URL() lo maneja bien si es estándar.
 			try {
-				// Crear objeto URL. Si es 'voutop://', funciona igual.
-				// Si falla en algunos entornos, reemplazar 'voutop://' por 'https://voutop.com/'
-				const urlStr = data.url.replace(
-					"voutop://",
-					"https://voutop.com/",
-				);
+				// Normalizar URL (si viene como voutop://auth-callback?...)
+				const urlStr = url.replace("voutop://", "https://voutop.com/");
 				const urlObj = new URL(urlStr);
 				const urlParams = urlObj.searchParams;
 
@@ -220,9 +213,9 @@
 				const userFromUrl = urlParams.get("user");
 
 				if (authSuccess === "success" && tokenFromUrl && userFromUrl) {
-					console.log("[DeepLink] Procesando login...");
+					console.log("[DeepLink] Login exitoso detectado");
 
-					// Cerrar navegador in-app (importante para Android)
+					// Cerrar navegador in-app siempre (Android/iOS)
 					try {
 						await Browser.close();
 					} catch (e) {
@@ -247,16 +240,27 @@
 					});
 
 					console.log(
-						"✅ [DeepLink] Login completado para:",
+						"✅ [DeepLink] Sesión iniciada para:",
 						userData.username,
 					);
-
-					// Cerrar modal de login si está abierto
 					loginModalOpen.set(false);
 				}
 			} catch (e) {
-				console.error("[DeepLink] Error procesando URL:", e);
+				console.error("[DeepLink] Error al procesar:", e);
 			}
+		};
+
+		// 1. Verificar si la app se abrió con una URL (Cold Start - CRÍTICO iOS)
+		App.getLaunchUrl().then((launchUrl) => {
+			if (launchUrl && launchUrl.url) {
+				console.log("[LaunchUrl] App iniciada con URL:", launchUrl.url);
+				processDeepLink(launchUrl.url);
+			}
+		});
+
+		// 2. Escuchar Deep Links en caliente (Background -> Foreground)
+		const appListener = App.addListener("appUrlOpen", async (data) => {
+			await processDeepLink(data.url);
 		});
 
 		return () => {
