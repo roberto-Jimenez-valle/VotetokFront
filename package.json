@@ -31,7 +31,12 @@
     "db:add-teletransporte": "npx tsx scripts/add-teletransporte-votes.ts",
     "cleanup": "node scripts/auto-cleanup.mjs",
     "api:docs": "start http://localhost:5173/api-docs",
-    "api:spec": "type src\\lib\\openapi\\spec.yaml"
+    "api:spec": "type src\\lib\\openapi\\spec.yaml",
+    "mobile:sync": "npx cap sync",
+    "mobile:android": "npx cap open android",
+    "mobile:ios": "npx cap open ios",
+    "mobile:build:android": "npm run build && npx cap sync android && cd android && .\\gradlew assembleRelease",
+    "mobile:build:ios": "npm run build && npx cap sync ios"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -73,6 +78,7 @@
   "dependencies": {
     "@capacitor/android": "^8.0.0",
     "@capacitor/app": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
     "@prisma/client": "^6.16.3",
     "@turf/boolean-point-in-polygon": "^7.2.0",
     "@turf/helpers": "^7.2.0",
