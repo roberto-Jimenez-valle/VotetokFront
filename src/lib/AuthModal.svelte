@@ -156,7 +156,7 @@
 
   // ... (existing imports/code) ...
 
-  function handleGoogleLogin() {
+  async function handleGoogleLogin() {
     // Verificar consentimiento primero
     if (!canProceed()) {
       showConsentError = true;
@@ -194,10 +194,10 @@
 
       // Abrir en Browser nativo (mejor UX que _system)
       try {
-        await Browser.open({ 
+        await Browser.open({
           url: targetUrl.toString(),
-          windowName: '_self', // Intenta abrir en la misma ventana si es posible
-          presentationStyle: 'popover' // En iOS se ve mejor como modal
+          windowName: "_self", // Intenta abrir en la misma ventana si es posible
+          presentationStyle: "popover", // En iOS se ve mejor como modal
         });
       } catch (err) {
         // Fallback si falla el plugin
@@ -207,6 +207,13 @@
       return;
     }
 
+    // En web (móvil y desktop), usar siempre Popup para evitar recargar la página.
+    // Google bloquea iframes, así que popup/nueva pestaña es la única forma de mantener el estado de la app.
+
+    // Detectar si es móvil para ajustar tamaño del popup si fuera necesario (opcional)
+    // Pero window.open funciona bien abriendo una nueva pestaña en móviles.
+
+    /* COMENTADO: Redirección antigua (causaba recarga)
     // Detectar si es móvil web (navegador normal en móvil, no app)
     const isMobileWeb =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -221,8 +228,9 @@
         encodeURIComponent(window.location.pathname);
       return;
     }
+    */
 
-    // En desktop, usar popup
+    // Usar popup en TODOS los entornos web (Desktop y Móvil)
     authPopup = window.open(
       popupUrl,
       "GoogleAuth",
