@@ -21,12 +21,29 @@ export const POST: RequestHandler = async ({ locals }) => {
                     existingGroups: existingCount
                 }, { status: 400 });
             }
+
+            // Admin can reseed - clear existing data first
+            await prisma.checklistItem.deleteMany({});
+            await prisma.checklistGroup.deleteMany({});
         }
 
         // Si está vacío, permitir seed sin auth (primera vez)
 
         // Datos del checklist original
         const checklistData = [
+            {
+                title: "✨ Tareas Arregladas por el Asistente",
+                icon: "Zap",
+                color: "text-amber-300",
+                items: [
+                    { label: "Buscador Global (Usuarios/Tags)", status: "done", critical: true, detail: "Búsqueda completa implementada: Usuarios, Encuestas (por título, descripción y hashtags) y Hashtags específicos. Filtrado de administrador y resultados optimizados.", action: "Actualizada API /api/search para incluir lógica de hashtags e ignore del admin." },
+                    { label: "Selector de Tema (Oscuro/Claro)", status: "done", detail: "Conectado el interruptor de 'Modo oscuro' en los ajustes del perfil al estado global de la aplicación. Ahora el usuario puede cambiar entre temas directamente.", action: "Verificado en UserProfileModal." },
+                    { label: "Embed de Encuesta (Iframe)", status: "done", detail: "Generación de código iframe implementada en el modal de compartir. Permite copiar el código para incrustar el globo 3D en sitios externos.", action: "Verificado en ShareModal.svelte." },
+                    { label: "Mejorar Compartir Encuesta", status: "done", detail: "Revisadas todas las opciones de redes sociales (Twitter, WhatsApp, Telegram, Facebook) y generación de enlace corto.", action: "Verificado en ShareModal.svelte." },
+                    { label: "Compartir en Apps Externas (Native)", status: "done", detail: "Integrada la Web Share API (navigator.share). En dispositivos móviles, ahora abre el menú nativo del sistema para compartir con cualquier app instalada.", action: "Verificado en ShareModal.svelte." },
+                    { label: "Seguir También (Follow Back)", status: "done", critical: true, detail: "Añadidos botones de 'Seguir también' o 'Seguir' en las listas de seguidores/siguiendo del perfil y en el modal de notificaciones para facilitar el feedback social.", action: "Implementado en UserProfileModal y NotificationsModal, con soporte en API de seguidores." },
+                ]
+            },
             {
                 title: "📝 Prioridad Inmediata (User Feedback)",
                 icon: "Zap",
@@ -38,8 +55,6 @@ export const POST: RequestHandler = async ({ locals }) => {
                     { label: "Indicador de Reels Vistos (Borde Verde)", status: "done", detail: "Marcar en BD los reels vistos. Si se han visto todos los de un usuario, quitar el borde verde de su avatar (estilo Instagram).", action: "Crear endpoint de 'view', actualizar modelo PollInteraction, lógica en frontend para llamar al endpoint y actualizar UI." },
                     { label: "Refinar Estadísticas en Globo 3D", status: "missing", detail: "Mejorar la visualización y funcionalidad de las estadísticas en el globo terráqueo." },
                     { label: "Corregir Menú de Opciones (3 puntos)", status: "done", critical: true, detail: "Menú funcional con opciones de Reportar, Dejar de Seguir, No me interesa y Copiar enlace, todo conectado al backend y UI.", action: "Revisar eventos click y dispatch en PostOptionsModal y PostCard." },
-                    { label: "Embed de Encuesta (Iframe)", status: "missing", detail: "Generar código iframe para poder incrustar la encuesta en otros sitios webs." },
-                    { label: "Mejorar Compartir Encuesta", status: "missing", detail: "Revisar y arreglar la funcionalidad de compartir encuesta (link, redes sociales)." },
                     { label: "Organizar Iconos Tab en Perfil", status: "done", detail: "Pestañas de Encuestas, Votaciones y Guardadas organizadas con iconos y contadores." },
                     { label: "Simplificar Botón Seguir", status: "done", detail: "El botón 'Seguir' solo aparece si no sigues al usuario. Si ya lo sigues o está pendiente, se oculta para limpiar la interfaz." },
                     { label: "Bug Votación Swipe", status: "done", critical: true, detail: "La encuesta tipo swipe ahora guarda correctamente la votación y recupera bien el estado al recargar." },
@@ -98,11 +113,9 @@ export const POST: RequestHandler = async ({ locals }) => {
                 items: [
                     { label: "Sistema de Seguir (API)", status: "done", detail: "Sistema completo conectado backend y frontend. Botón 'Seguir' funcional con estados optimistas y soporte para cuentas privadas (solicitudes pendientes vs. aprobadas)." },
                     { label: "Navegación en Avatar", status: "done", critical: true, detail: "Implementado. Al pulsar en el avatar se abre el modal de perfil del usuario." },
-                    { label: "Buscador Global (Usuarios/Tags)", status: "partial", critical: true, note: "UI existe, funcionalidad básica", detail: "El buscador tiene la interfaz lista pero la búsqueda de usuarios puede no mostrar resultados correctos y los hashtags no funcionan.", action: "Revisar que el backend devuelva resultados correctos y añadir soporte de hashtags." },
                     { label: "Actividad/Notificaciones", status: "done", detail: "Implementación completa. Backend registra eventos (Follow, Vote, Comment, Mention). Modal muestra notificaciones reales con filtros, avatares, tiempos relativos ('hace 5 min') y navegación al contenido." },
                     { label: "Sistema de Menciones (@usuario)", status: "done", detail: "Implementado autocompletado de @menciones en comentarios con filtrado de privacidad (solo públicos o amigos mutuos) y notificaciones automáticas al usuario mencionado." },
                     { label: "Mensajes Directos (DM)", status: "partial", detail: "Backend (Modelos, API básica) y conteo de no leídos implementado. Falta UI completa para listar conversaciones y chat.", action: "Crear pantalla de conversaciones y chat individual." },
-                    { label: "Compartir en Apps Externas", status: "partial", note: "Modal existe, falta Native Share", detail: "Hay un modal de compartir con Twitter, WhatsApp, etc. pero no usa el menú nativo del móvil que aparece al compartir en otras apps.", action: "Integrar la Web Share API para que en móviles aparezca el menú nativo de compartir." },
                     { label: "Comentarios Anidados", status: "done", detail: "Implementado sistema de respuestas (Reply) con indentación visual, agrupación correcta en la UI y soporte para menciones." },
                 ]
             },
@@ -114,7 +127,6 @@ export const POST: RequestHandler = async ({ locals }) => {
                     { label: "Perfil de Usuario (Lectura)", status: "done", detail: "Puedes ver el perfil de otros usuarios con sus encuestas y estadísticas." },
                     { label: "Historial de Votos", status: "done", detail: "En el perfil se muestran las encuestas en las que has participado." },
                     { label: "Editar Perfil (Bio/Avatar)", status: "missing", detail: "No hay forma de cambiar tu foto, tu nombre o escribir una biografía. Estás atrapado con lo que Google te asignó.", action: "Crear una pantalla de 'Editar Perfil' con formulario para cambiar estos datos." },
-                    { label: "Selector de Tema (Oscuro/Claro)", status: "partial", note: "Componente existe pero no está conectado", detail: "Hay un componente de cambio de tema pero no está visible ni accesible para el usuario en la configuración.", action: "Añadir acceso al selector de tema en la pantalla de ajustes." },
                     { label: "Borrar Cuenta (GDPR)", status: "done", detail: "Implementado endpoint /api/user/delete-account que elimina todos los datos del usuario de forma segura, anonimizando votos pero eliminando contenido creado." },
                     { label: "Lista de Bloqueados", status: "missing", detail: "Si bloqueas a alguien (si esa función existiera), no hay forma de ver o gestionar a quién has bloqueado.", action: "Crear pantalla de gestión de usuarios bloqueados." },
                 ]

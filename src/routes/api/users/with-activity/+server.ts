@@ -110,14 +110,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       .sort((a, b) => b.totalActivity - a.totalActivity)
       .slice(0, limit);
 
+    const authorIds = users.map(u => u.id);
+
     // 5. Calcular hasNewPoll (green border) para usuario actual
     if (currentUserId && users.length > 0) {
-      const authorIds = users.map(u => u.id);
-      const authorStats: Record<number, { active: number; viewed: number }> = {};
+      // ... (existing code up to activePollsCounts)
 
-      // 5a. Active Polls Count (considering expiration)
-      const activePollsCounts = await prisma.poll.groupBy({
-        by: ['userId'],
+      // Modified: Get Active Poll IDs for debugging
+      const activePolls = await prisma.poll.findMany({
         where: {
           userId: { in: authorIds },
           status: 'active',
@@ -127,53 +127,44 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             { closedAt: { gt: new Date() } }
           ]
         },
-        _count: { id: true }
+        select: { id: true, userId: true }
       });
 
-      // 5b. Viewed Polls Count
-      const viewedPolls = await prisma.pollInteraction.findMany({
+      // Group active polls by user
+      const activeMap: Record<number, number[]> = {};
+      activePolls.forEach(p => {
+        if (!activeMap[p.userId]) activeMap[p.userId] = [];
+        activeMap[p.userId].push(p.id);
+      });
+
+      // Get viewed interactions
+      const viewedInteractions = await prisma.pollInteraction.findMany({
         where: {
           userId: Number(currentUserId),
           interactionType: 'view',
           poll: {
             userId: { in: authorIds },
             status: 'active',
-            isRell: true,
-            OR: [
-              { closedAt: null },
-              { closedAt: { gt: new Date() } }
-            ]
+            isRell: true
+            // removed date check here to see if we viewed expired ones? NO, consistent with active check
           }
         },
-        select: {
-          poll: { select: { userId: true } }
-        }
+        select: { pollId: true, poll: { select: { userId: true } } }
       });
 
-      const viewedCounts: Record<number, number> = {};
-      viewedPolls.forEach(v => {
-        const authId = v.poll.userId;
-        viewedCounts[authId] = (viewedCounts[authId] || 0) + 1;
-      });
-
-      activePollsCounts.forEach(bg => {
-        authorStats[bg.userId] = {
-          active: bg._count.id,
-          viewed: viewedCounts[bg.userId] || 0
-        };
+      const viewedMap: Record<number, number[]> = {};
+      viewedInteractions.forEach(v => {
+        const uId = v.poll.userId;
+        if (!viewedMap[uId]) viewedMap[uId] = [];
+        viewedMap[uId].push(v.pollId);
       });
 
       users = users.map(u => {
-        let hasNewPoll = false;
-        const stats = authorStats[u.id];
-        if (stats) {
-          hasNewPoll = stats.active > stats.viewed;
-        }
+        const activeIds = activeMap[u.id] || [];
+        const viewedIds = viewedMap[u.id] || [];
+        const hasNewPoll = activeIds.length > viewedIds.length;
         return { ...u, hasNewPoll };
       });
-    } else {
-      // Not logged in, defaults
-      users = users.map(u => ({ ...u, hasNewPoll: u.rellsCount > 0 }));
     }
 
     /* console.log('[API with-activity] Usuarios encontrados:', users.length);

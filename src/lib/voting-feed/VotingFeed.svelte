@@ -435,7 +435,7 @@
             avatar:
               user.avatarUrl ||
               `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`,
-            hasNewPoll: true,
+            hasNewPoll: false,
             pollCount: user._count?.polls || 1,
           }));
           return;
@@ -1484,14 +1484,21 @@
   }
 
   async function handleNotificationClick(event: CustomEvent) {
-    const { pollId, userId, type, commentId } = event.detail;
+    const { pollId, userId, type, commentId, openReels } = event.detail;
 
     console.log("[VotingFeed] Handling notification click:", {
       pollId,
       userId,
       type,
       commentId,
+      openReels,
     });
+
+    // Caso 0: Click en avatar con reels pendientes o flag explícito
+    if (openReels && userId) {
+      await handleFriendStoryClick(String(userId));
+      return;
+    }
 
     // Caso 1: Navegación a Encuesta / Comentario
     if (pollId) {
@@ -1555,7 +1562,10 @@
     // Caso 2: Navegación a Perfil de Usuario (Follows)
     if (
       userId &&
-      (type === "new_follower" || type === "follow_request" || !pollId)
+      (type === "new_follower" ||
+        type === "follow_request" ||
+        type === "avatar_click" ||
+        !pollId)
     ) {
       selectedProfileUserId = Number(userId);
       isProfileModalOpen = true;
@@ -1668,10 +1678,16 @@
     }
   }
 
-  function handleAvatarClick(post: Post) {
+  async function handleAvatarClick(post: Post) {
     if (post.userId) {
-      selectedProfileUserId = post.userId;
-      isProfileModalOpen = true;
+      // Si tiene reels sin ver y NO estamos ya en modo reels, vamos a las historias (Instagram style)
+      if (post.user?.hasUnseenReels && currentView !== "reels") {
+        await handleFriendStoryClick(String(post.userId));
+      } else {
+        // En cualquier otro caso (sin reels nuevos o si ya estamos viéndolos), vamos al perfil
+        selectedProfileUserId = Number(post.userId);
+        isProfileModalOpen = true;
+      }
     }
   }
 

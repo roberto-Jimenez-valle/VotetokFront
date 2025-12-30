@@ -58,11 +58,10 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 			});
 
 			// 2. Crear notificación
-			const actorName = user.username || 'Un usuario';
 			const notifType = isPrivate ? 'FOLLOW_REQUEST' : 'NEW_FOLLOWER';
 			const message = isPrivate
-				? `${actorName} quiere seguirte.`
-				: `${actorName} ha empezado a seguirte.`;
+				? `quiere seguirte.`
+				: `ha empezado a seguirte.`;
 
 			await createNotification({
 				userId: targetUserId,

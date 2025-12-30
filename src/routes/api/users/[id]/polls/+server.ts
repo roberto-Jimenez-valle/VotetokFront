@@ -130,6 +130,42 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
       commentedPollIds = new Set(comments.map(c => c.pollId));
     }
 
+    // Obtener estadísticas de reels vistos para el usuario del perfil
+    let hasUnseenReels = false;
+    if (currentUserId) {
+      // Active non-expired reels
+      const activeCount = await prisma.poll.count({
+        where: {
+          userId: profileUserId,
+          status: 'active',
+          isRell: true,
+          OR: [
+            { closedAt: null },
+            { closedAt: { gt: new Date() } }
+          ]
+        }
+      });
+
+      if (activeCount > 0) {
+        const viewedCount = await prisma.pollInteraction.count({
+          where: {
+            userId: Number(currentUserId),
+            interactionType: 'view',
+            poll: {
+              userId: profileUserId,
+              status: 'active',
+              isRell: true,
+              OR: [
+                { closedAt: null },
+                { closedAt: { gt: new Date() } }
+              ]
+            }
+          }
+        });
+        hasUnseenReels = activeCount > viewedCount;
+      }
+    }
+
     // Formatear respuesta igual que /api/polls
     const formattedPolls = polls.map(poll => {
       const userObj = poll.user ? {
@@ -139,6 +175,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
         avatarUrl: poll.user.avatarUrl,
         verified: poll.user.verified,
         hashId: encodeUserId(poll.user.id),
+        hasUnseenReels
       } : null;
 
       return {

@@ -17,10 +17,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const results: {
 			polls: any[];
 			users: any[];
+			hashtags: any[];
 			places: any[];
 		} = {
 			polls: [],
 			users: [],
+			hashtags: [],
 			places: []
 		};
 
@@ -30,9 +32,18 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				? {
 					status: 'active' as const,
 					OR: [
-						{ title: { contains: query } },
-						{ description: { contains: query } },
-						{ category: { contains: query } }
+						{ title: { contains: query, mode: 'insensitive' as const } },
+						{ description: { contains: query, mode: 'insensitive' as const } },
+						{ category: { contains: query, mode: 'insensitive' as const } },
+						{
+							hashtags: {
+								some: {
+									hashtag: {
+										tag: { contains: query.replace('#', ''), mode: 'insensitive' as const }
+									}
+								}
+							}
+						}
 					]
 				}
 				: { status: 'active' as const };
@@ -186,6 +197,37 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				followersCount: user._count.followers,
 				isFollowing: followingIds.includes(user.id)
 			}));
+		}
+
+		// Buscar hashtags
+		if (filter === 'all' || filter === 'hashtags' || query.startsWith('#')) {
+			const tagQuery = query.replace('#', '').trim();
+			if (tagQuery) {
+				const hashtags = await prisma.hashtag.findMany({
+					where: {
+						tag: { contains: tagQuery, mode: 'insensitive' }
+					},
+					select: {
+						id: true,
+						tag: true,
+						usageCount: true,
+						_count: {
+							select: {
+								userFollows: true
+							}
+						}
+					},
+					orderBy: { usageCount: 'desc' },
+					take: limit
+				});
+
+				results.hashtags = hashtags.map(h => ({
+					id: h.id,
+					tag: h.tag,
+					usageCount: h.usageCount,
+					followersCount: h._count.userFollows
+				}));
+			}
 		}
 
 		// Buscar lugares (subdivisiones)

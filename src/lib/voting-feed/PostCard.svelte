@@ -731,13 +731,20 @@
             tabindex="0"
             onkeydown={(e) => e.key === "Enter" && onAvatarClick?.(post)}
           >
+            <!-- Conditional Green Ring based on hasUnseenReels -->
             <div
-              class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-[#9ec264] to-[#7ba347] shadow-lg group-hover:shadow-[#9ec264]/20 transition-all"
+              class="w-10 h-10 rounded-full p-[2px] transition-all {post.user
+                ?.hasUnseenReels
+                ? 'bg-gradient-to-br from-[#9ec264] to-[#7ba347] shadow-lg group-hover:shadow-[#9ec264]/20'
+                : 'bg-transparent'}"
             >
               <img
                 src={post.avatar}
                 alt={post.author}
-                class="w-full h-full rounded-full bg-slate-800 object-cover border-2 border-slate-900"
+                class="w-full h-full rounded-full bg-slate-800 object-cover border-2 {post
+                  .user?.hasUnseenReels
+                  ? 'border-slate-900'
+                  : 'border-white/10'}"
               />
             </div>
           </div>

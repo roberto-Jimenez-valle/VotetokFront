@@ -93,9 +93,73 @@ export const GET: RequestHandler = async ({ locals, url }) => {
             if (['NEW_FOLLOWER', 'FOLLOW_REQUEST'].includes(c.type)) counts.follows += count;
         });
 
+        // Process notifications with follow status
+        const processedNotifications = await Promise.all(notifications.map(async n => {
+            if (!n.actor) return n;
+
+            let isFollowing = false;
+            let isPending = false;
+
+            // 1. Check follow status
+            const rel = await prisma.userFollower.findFirst({
+                where: {
+                    followerId: user.userId,
+                    followingId: n.actor.id
+                }
+            });
+
+            if (rel) {
+                if (rel.status === 'accepted') isFollowing = true;
+                else if (rel.status === 'pending') isPending = true;
+            }
+
+            // 2. Unseen Reels Logic
+            let hasUnseenReels = false;
+            const activeCount = await prisma.poll.count({
+                where: {
+                    userId: n.actor.id,
+                    status: 'active',
+                    isRell: true, // ONLY REELS
+                    OR: [
+                        { closedAt: null },
+                        { closedAt: { gt: new Date() } }
+                    ]
+                }
+            });
+
+            if (activeCount > 0) {
+                const viewedCount = await prisma.pollInteraction.count({
+                    where: {
+                        userId: user.userId,
+                        interactionType: 'view',
+                        poll: {
+                            userId: n.actor.id,
+                            status: 'active',
+                            isRell: true, // ONLY REELS
+                            OR: [
+                                { closedAt: null },
+                                { closedAt: { gt: new Date() } }
+                            ]
+                        }
+                    }
+                });
+                hasUnseenReels = activeCount > viewedCount;
+            }
+
+            return {
+                ...n,
+                actor: {
+                    ...n.actor,
+                    isFollowing,
+                    isPending,
+                    hasUnseenReels
+                }
+            };
+        }));
+
         return json({
             success: true,
-            data: notifications,
+            data: processedNotifications,
             counts, // Return the calculated counts
             pagination: {
                 page,

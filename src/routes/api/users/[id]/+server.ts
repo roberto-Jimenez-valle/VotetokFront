@@ -75,8 +75,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     // Determine follow status - query separately for reliability
     let isFollowing = false;
     let isPending = false;
+    let hasUnseenReels = false;
 
     if (currentUserId) {
+      // 1. Follow relation
       const followRelation = await prisma.userFollower.findFirst({
         where: {
           followerId: Number(currentUserId),
@@ -93,16 +95,44 @@ export const GET: RequestHandler = async ({ params, locals }) => {
           isPending = true;
         }
       }
+
+      // 2. Unseen Reels Logic (Green Border)
+      // Get count of active polls by THIS user
+      const activePollsCount = await prisma.poll.count({
+        where: {
+          userId: userId,
+          status: 'active',
+          isRell: true, // ONLY REELS
+          OR: [
+            { closedAt: null },
+            { closedAt: { gt: new Date() } }
+          ]
+        }
+      });
+
+      if (activePollsCount > 0) {
+        // Get count of viewed polls by current user for THIS author
+        const viewedPollsCount = await prisma.pollInteraction.count({
+          where: {
+            userId: currentUserId,
+            interactionType: 'view',
+            poll: {
+              userId: userId,
+              status: 'active',
+              isRell: true, // ONLY REELS
+              OR: [
+                { closedAt: null },
+                { closedAt: { gt: new Date() } }
+              ]
+            }
+          }
+        });
+
+        hasUnseenReels = activePollsCount > viewedPollsCount;
+      }
     }
 
-    console.log('[API /users/[id]] Follow status - isFollowing:', isFollowing, 'isPending:', isPending);
-
-    console.log('[API /users/[id]] User found:', {
-      id: user.id,
-      username: user.username,
-      polls: user._count.polls,
-      votes: user._count.votes
-    });
+    console.log('[API /users/[id]] Found status:', { isFollowing, isPending, hasUnseenReels });
 
     return json({
       success: true,
@@ -117,6 +147,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         createdAt: user.createdAt,
         isFollowing,
         isPending,
+        hasUnseenReels,
         stats: {
           pollsCount: user._count.polls,
           votesCount: user._count.votes,

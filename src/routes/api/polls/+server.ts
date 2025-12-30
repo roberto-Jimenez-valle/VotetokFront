@@ -507,7 +507,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         where: {
           userId: { in: authorIds },
           status: 'active',
-          // Optional: closedAt is null or future
+          isRell: true, // ONLY COUNT REELS
           OR: [
             { closedAt: null },
             { closedAt: { gt: new Date() } }
@@ -517,8 +517,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       });
 
       // Get viewed active polls counts by current user for these authors
-      // Complex query: Count interactions where user=me, interaction=view, and poll.author IN authors and poll.status=active
-      // Prisma groupBy on relations is tricky. Let's do it via findMany pollInteractions joined with Poll
       const viewedPolls = await prisma.pollInteraction.findMany({
         where: {
           userId: currentUserId,
@@ -526,6 +524,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
           poll: {
             userId: { in: authorIds },
             status: 'active',
+            isRell: true, // ONLY COUNT REELS
             OR: [
               { closedAt: null },
               { closedAt: { gt: new Date() } }

@@ -96,6 +96,8 @@
               name: n.actor?.displayName || n.actor?.username || "Sistema",
               avatar: n.actor?.avatarUrl || null,
               id: n.actor?.id,
+              isFollowing: n.actor?.isFollowing || false,
+              isPending: n.actor?.isPending || false,
             },
             message: n.message || "Nueva notificación",
             poll: meta.pollTitle || meta.title,
@@ -200,24 +202,72 @@
       notificationCounts.update((c) => ({ ...c, all: Math.max(0, c.all - 1) }));
     }
 
-    console.log("Abrir notificación:", notification.id);
-    dispatch("notificationClick", {
-      notificationId: notification.id,
-      pollId: notification.pollId,
-      userId: notification.user?.id,
-      type: notification.type,
-      commentId: notification.commentId,
-      pollTitle: notification.poll,
-    });
     isOpen = false;
   }
 
-  function handleAvatarClick(userId: number, event: Event) {
-    if (!userId) return;
+  async function toggleFollowInNotifications(notification: any, event: Event) {
     event.stopPropagation();
-    selectedUserId = userId;
-    isProfileModalOpen = true;
-    // Cerrar el modal de notificaciones cuando se abre el perfil
+    if (!notification.actor?.id || loading) return;
+
+    // Optimistic update
+    const prevFollowing = notification.actor.isFollowing;
+    const prevPending = notification.actor.isPending;
+
+    const updateLocalNotif = (
+      uid: number,
+      following: boolean,
+      pending: boolean,
+    ) => {
+      notifications = notifications.map((n) =>
+        n.actor?.id === uid
+          ? {
+              ...n,
+              actor: { ...n.actor, isFollowing: following, isPending: pending },
+            }
+          : n,
+      );
+    };
+
+    try {
+      if (notification.actor.isFollowing || notification.actor.isPending) {
+        // Unfollow
+        updateLocalNotif(notification.actor.id, false, false);
+        const res = await fetch(`/api/users/${notification.actor.id}/follow`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error();
+      } else {
+        // Follow
+        updateLocalNotif(notification.actor.id, false, true);
+        const res = await fetch(`/api/users/${notification.actor.id}/follow`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          updateLocalNotif(
+            notification.actor.id,
+            data.status !== "pending",
+            data.status === "pending",
+          );
+        } else {
+          throw new Error();
+        }
+      }
+    } catch (e) {
+      updateLocalNotif(notification.actor.id, prevFollowing, prevPending);
+    }
+  }
+
+  function handleAvatarClick(notificationId: string, event: Event) {
+    event.stopPropagation();
+    const notification = notifications.find((n) => n.id === notificationId);
+    if (notification && notification.actor?.id) {
+      dispatch("notificationClick", {
+        userId: Number(notification.actor.id),
+        openReels: notification.actor.hasUnseenReels,
+        type: "avatar_click",
+      });
+    }
     isOpen = false;
   }
 </script>
@@ -326,24 +376,25 @@
       <div class="notifications-list" bind:this={scrollContainer}>
         {#each notifications as notification (notification.id)}
           <div class="notification-item" class:unread={!notification.read}>
-            <div
+            <button
               class="notification-avatar"
+              class:has-unseen={notification.actor?.hasUnseenReels}
               onclick={(e) => handleAvatarClick(notification.id, e)}
-              role="button"
-              tabindex="0"
-              aria-label="Ver perfil de {notification.user.name}"
+              aria-label="Ver perfil de {notification.actor?.displayName ||
+                notification.actor?.username}"
               onkeydown={(e) =>
                 e.key === "Enter" && handleAvatarClick(notification.id, e)}
             >
               <img
-                src={shouldRetryImage(notification.user.avatar)
-                  ? notification.user.avatar
+                src={shouldRetryImage(notification.actor?.avatarUrl)
+                  ? notification.actor.avatarUrl
                   : "/default-avatar.svg"}
-                alt={notification.user.name}
+                alt={notification.actor?.displayName ||
+                  notification.actor?.username}
                 onerror={(e: Event) => {
-                  if (e.target) {
+                  if (e.target && notification.actor?.avatarUrl) {
                     (e.target as HTMLImageElement).src = "/default-avatar.svg";
-                    markImageFailed(notification.user.avatar);
+                    markImageFailed(notification.actor.avatarUrl);
                   }
                 }}
               />
@@ -359,7 +410,7 @@
                   <Icon size={14} />
                 {/if}
               </div>
-            </div>
+            </button>
 
             <div
               class="notification-content"
@@ -370,7 +421,10 @@
                 e.key === "Enter" && handleNotificationClick(notification)}
             >
               <div class="notification-text">
-                <strong>{notification.user.name}</strong>
+                <strong
+                  >{notification.actor?.displayName ||
+                    notification.actor?.username}</strong
+                >
                 {notification.message}
                 {#if notification.poll}
                   <span class="notification-poll">{notification.poll}</span>
@@ -378,6 +432,23 @@
               </div>
               <div class="notification-time">{notification.time}</div>
             </div>
+
+            {#if (notification.type === "new_follower" || notification.type === "follow_request") && notification.actor?.id}
+              <button
+                class="notif-follow-btn"
+                class:following={notification.actor.isFollowing}
+                class:pending={notification.actor.isPending}
+                onclick={(e) => toggleFollowInNotifications(notification, e)}
+              >
+                {#if notification.actor.isFollowing}
+                  Siguiendo
+                {:else if notification.actor.isPending}
+                  Solicitado
+                {:else}
+                  Seguir
+                {/if}
+              </button>
+            {/if}
 
             {#if !notification.read}
               <div class="unread-dot"></div>
@@ -655,6 +726,15 @@
     padding: 0;
     cursor: pointer;
     transition: transform 0.2s;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .notification-avatar.has-unseen {
+    padding: 2px;
+    background: linear-gradient(135deg, #9ec264, #7ba347, #9ec264);
   }
 
   .notification-avatar:hover {
@@ -666,6 +746,10 @@
     height: 44px;
     border-radius: 50%;
     object-fit: cover;
+  }
+
+  .notification-avatar.has-unseen img {
+    border: 2px solid #16181e;
   }
 
   .notification-icon {
@@ -704,13 +788,17 @@
   .notification-content {
     flex: 1;
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
   }
 
   .notification-text {
     color: rgba(255, 255, 255, 0.9);
     font-size: 14px;
     line-height: 1.5;
-    margin-bottom: 4px;
+    word-break: break-word;
   }
 
   .notification-text strong {
@@ -728,13 +816,46 @@
     font-size: 12px;
   }
 
+  .notif-follow-btn {
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    align-self: center;
+    margin-left: 8px;
+  }
+
+  .notif-follow-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: scale(1.05);
+  }
+
+  .notif-follow-btn.following {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .notif-follow-btn.pending {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: rgba(234, 179, 8, 0.3);
+    color: #facc15;
+  }
+
   .unread-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: #3b82f6;
     flex-shrink: 0;
-    margin-top: 6px;
+    margin-top: 18px;
+    margin-left: 8px;
   }
 
   .empty-state {

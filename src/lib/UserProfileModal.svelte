@@ -48,6 +48,7 @@
     LogOut,
     ArrowLeft,
   } from "lucide-svelte";
+  import { themeState } from "$lib/stores/globalState";
 
   interface Props {
     isOpen?: boolean;
@@ -670,6 +671,67 @@
     return num.toString();
   }
 
+  async function handleToggleFollowInList(
+    user: any,
+    listType: "followers" | "following",
+  ) {
+    if (!$currentUser || followLoading) return;
+
+    // Optimistic update
+    const prevFollowing = user.isFollowing;
+    const prevPending = user.isPending;
+
+    const updateLocalList = (
+      uid: number,
+      following: boolean,
+      pending: boolean,
+    ) => {
+      if (listType === "followers") {
+        followersList = followersList.map((u) =>
+          u.id === uid
+            ? { ...u, isFollowing: following, isPending: pending }
+            : u,
+        );
+      } else {
+        followingList = followingList.map((u) =>
+          u.id === uid
+            ? { ...u, isFollowing: following, isPending: pending }
+            : u,
+        );
+      }
+    };
+
+    try {
+      if (user.isFollowing || user.isPending) {
+        // Unfollow
+        updateLocalList(user.id, false, false);
+        const res = await apiCall(`/api/users/${user.id}/follow`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error();
+      } else {
+        // Follow
+        updateLocalList(user.id, false, true); // Assume pending first if private, or just show optimistic
+        const res = await apiCall(`/api/users/${user.id}/follow`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          updateLocalList(
+            user.id,
+            data.status !== "pending",
+            data.status === "pending",
+          );
+        } else {
+          throw new Error();
+        }
+      }
+    } catch (err) {
+      // Revert on error
+      updateLocalList(user.id, prevFollowing, prevPending);
+    }
+  }
+
   function handleLogout() {
     console.log("[UserProfileModal] 🚪 Cerrando sesión...");
     logout();
@@ -771,10 +833,14 @@
           <div class="menu-section">
             <h4 class="menu-title">Apariencia</h4>
 
-            <button class="menu-item" onclick={() => console.log("Tema")}>
+            <button
+              class="menu-item"
+              onclick={() =>
+                themeState.update((s) => ({ ...s, isDark: !s.isDark }))}
+            >
               <Moon size={20} />
               <span>Modo oscuro</span>
-              <div class="toggle-switch active">
+              <div class="toggle-switch" class:active={$themeState.isDark}>
                 <div class="toggle-thumb"></div>
               </div>
             </button>
@@ -852,7 +918,25 @@
         <div class="profile-header">
           <!-- Avatar y botón de seguir (Banner eliminado) -->
           <div class="profile-top">
-            <div class="profile-avatar">
+            <div
+              class="profile-avatar"
+              class:has-unseen={userData.hasUnseenReels}
+              onclick={() => {
+                if (
+                  userData.hasUnseenReels &&
+                  transformedUserPolls.length > 0
+                ) {
+                  switchToReels(transformedUserPolls[0].id);
+                }
+              }}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) =>
+                e.key === "Enter" &&
+                userData.hasUnseenReels &&
+                transformedUserPolls.length > 0 &&
+                switchToReels(transformedUserPolls[0].id)}
+            >
               <img
                 src={userData.avatarUrl && shouldRetryImage(userData.avatarUrl)
                   ? userData.avatarUrl
@@ -1149,13 +1233,36 @@
                       class="user-avatar"
                     />
                     <div class="user-info">
-                      <span class="user-name"
-                        >{user.displayName || user.username}</span
-                      >
+                      <div class="user-name-row">
+                        <span class="user-name"
+                          >{user.displayName || user.username}</span
+                        >
+                        {#if user.verified}
+                          <span class="verified-badge-inline">✓</span>
+                        {/if}
+                      </div>
                       <span class="user-username">@{user.username}</span>
                     </div>
-                    {#if user.verified}
-                      <span class="verified-badge-inline">✓</span>
+
+                    <!-- Follow back button -->
+                    {#if $currentUser && Number($currentUser.userId) !== user.id && Number(($currentUser as any).id) !== user.id}
+                      <button
+                        class="list-follow-btn"
+                        class:following={user.isFollowing}
+                        class:pending={user.isPending}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          handleToggleFollowInList(user, "followers");
+                        }}
+                      >
+                        {#if user.isFollowing}
+                          Siguiendo
+                        {:else if user.isPending}
+                          Solicitado
+                        {:else}
+                          Seguir
+                        {/if}
+                      </button>
                     {/if}
                   </div>
                 {/each}
@@ -1192,24 +1299,34 @@
                       class="user-avatar"
                     />
                     <div class="user-info">
-                      <span class="user-name"
-                        >{user.displayName || user.username}</span
-                      >
+                      <div class="user-name-row">
+                        <span class="user-name"
+                          >{user.displayName || user.username}</span
+                        >
+                        {#if user.verified}
+                          <span class="verified-badge-inline">✓</span>
+                        {/if}
+                      </div>
                       <span class="user-username">@{user.username}</span>
                     </div>
-                    {#if user.verified}
-                      <span class="verified-badge-inline">✓</span>
-                    {/if}
 
-                    {#if $currentUser && (Number($currentUser.userId) === userData.id || Number(($currentUser as any).id) === userData.id)}
+                    {#if $currentUser && Number($currentUser.userId) !== user.id && Number(($currentUser as any).id) !== user.id}
                       <button
-                        class="unfollow-list-btn"
+                        class="list-follow-btn"
+                        class:following={user.isFollowing}
+                        class:pending={user.isPending}
                         onclick={(e) => {
                           e.stopPropagation();
-                          handleUnfollowUser(user.id);
+                          handleToggleFollowInList(user, "following");
                         }}
                       >
-                        Dejar de seguir
+                        {#if user.isFollowing}
+                          Siguiendo
+                        {:else if user.isPending}
+                          Solicitado
+                        {:else}
+                          Seguir
+                        {/if}
                       </button>
                     {/if}
                   </div>
@@ -1387,6 +1504,19 @@
 
   .profile-avatar {
     position: relative;
+    padding: 3px;
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .profile-avatar.has-unseen {
+    background: linear-gradient(135deg, #9ec264, #7ba347, #9ec264);
+    cursor: pointer;
+  }
+
+  .profile-avatar.has-unseen:active {
+    transform: scale(0.95);
+    background: linear-gradient(135deg, #7ba347, #9ec264, #7ba347);
   }
 
   .profile-avatar img {
@@ -1394,7 +1524,8 @@
     height: 100px;
     border-radius: 50%;
     object-fit: cover;
-    border: 4px solid #181a20;
+    border: 3px solid #181a20;
+    display: block;
   }
 
   .verified-badge {
@@ -1618,24 +1749,6 @@
     padding: 12px 20px 20px;
   }
 
-  .unfollow-list-btn {
-    margin-left: auto;
-    padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 12px;
-    font-weight: 600;
-    transition: all 0.2s;
-  }
-
-  .unfollow-list-btn:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: #ef4444;
-  }
-
   .verified-badge-inline {
     width: 16px;
     height: 16px;
@@ -1684,8 +1797,14 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
     min-width: 0;
+  }
+
+  .user-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .user-name {
@@ -1700,6 +1819,36 @@
   .user-username {
     color: rgba(255, 255, 255, 0.5);
     font-size: 13px;
+  }
+
+  .list-follow-btn {
+    padding: 6px 14px;
+    border-radius: 12px;
+    border: 1.5px solid #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .list-follow-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: scale(1.05);
+  }
+
+  .list-follow-btn.following {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .list-follow-btn.pending {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: rgba(234, 179, 8, 0.3);
+    color: #facc15;
   }
 
   .verified-badge {

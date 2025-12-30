@@ -80,6 +80,143 @@
     let editingItemId = $state<number | null>(null);
     let editItemData = $state<Partial<ChecklistItem>>({});
 
+    // ============================================
+    // CAMBIOS DEL ASISTENTE (Hardcoded)
+    // ============================================
+    interface AIChange {
+        id: string;
+        label: string;
+        detail: string;
+        files: string[];
+        date: string;
+        status: "pending" | "validated" | "issue";
+        issueNote?: string;
+    }
+
+    // Cambios implementados por el asistente - ACTUALIZAR ESTA LISTA
+    const aiChangesData: Omit<AIChange, "status" | "issueNote">[] = [
+        {
+            id: "follow-btn-lists",
+            label: 'Botones "Seguir" en listas de Seguidores/Siguiendo',
+            detail: 'Añadidos botones interactivos de "Seguir", "Siguiendo" y "Solicitado" en las pestañas de seguidores y siguiendo del perfil de usuario. Permite seguir/dejar de seguir directamente desde la lista.',
+            files: [
+                "src/lib/UserProfileModal.svelte",
+                "src/routes/api/users/[id]/followers/+server.ts",
+                "src/routes/api/users/[id]/following/+server.ts",
+            ],
+            date: "2024-12-30",
+        },
+        {
+            id: "follow-btn-notifs",
+            label: 'Botón "Seguir" en notificaciones de follow',
+            detail: 'Añadido botón de "Seguir también" en las notificaciones de tipo "ha empezado a seguirte". Permite devolver el follow sin entrar al perfil.',
+            files: [
+                "src/lib/NotificationsModal.svelte",
+                "src/routes/api/notifications/+server.ts",
+            ],
+            date: "2024-12-30",
+        },
+        {
+            id: "fix-double-name",
+            label: "Corrección nombre duplicado en notificaciones",
+            detail: 'Solucionado el bug donde aparecía "Roberto Jiménez Valle robertojimenezvalle ha empezado a seguirte". Ahora el mensaje es limpio.',
+            files: ["src/routes/api/users/[id]/follow/+server.ts"],
+            date: "2024-12-30",
+        },
+        {
+            id: "theme-toggle",
+            label: "Selector de tema conectado",
+            detail: 'El interruptor de "Modo oscuro" en los ajustes del perfil ahora está conectado al estado global. Cambiarlo afecta a toda la app.',
+            files: ["src/lib/UserProfileModal.svelte"],
+            date: "2024-12-30",
+        },
+        {
+            id: "search-hashtags",
+            label: "Búsqueda de hashtags mejorada",
+            detail: "La API de búsqueda ahora permite buscar por hashtags. Las encuestas se filtran por tags y hay una sección específica de hashtags en resultados.",
+            files: ["src/routes/api/search/+server.ts"],
+            date: "2024-12-30",
+        },
+    ];
+
+    // Estado de validación guardado en localStorage
+    let aiChangesStatus = $state<
+        Record<
+            string,
+            { status: "pending" | "validated" | "issue"; issueNote?: string }
+        >
+    >({});
+
+    // Cargar estado desde localStorage
+    function loadAIChangesStatus() {
+        if (typeof localStorage !== "undefined") {
+            const saved = localStorage.getItem("ai-changes-status");
+            if (saved) {
+                try {
+                    aiChangesStatus = JSON.parse(saved);
+                } catch (e) {
+                    aiChangesStatus = {};
+                }
+            }
+        }
+    }
+
+    // Guardar estado en localStorage
+    function saveAIChangesStatus() {
+        if (typeof localStorage !== "undefined") {
+            localStorage.setItem(
+                "ai-changes-status",
+                JSON.stringify(aiChangesStatus),
+            );
+        }
+    }
+
+    function setAIChangeStatus(
+        id: string,
+        status: "pending" | "validated" | "issue",
+        issueNote?: string,
+    ) {
+        aiChangesStatus[id] = { status, issueNote };
+        aiChangesStatus = { ...aiChangesStatus }; // Trigger reactivity
+        saveAIChangesStatus();
+    }
+
+    // Derived: AI changes with their status
+    let aiChanges = $derived(
+        aiChangesData.map((change) => ({
+            ...change,
+            status: aiChangesStatus[change.id]?.status || "pending",
+            issueNote: aiChangesStatus[change.id]?.issueNote,
+        })),
+    );
+
+    let aiChangesExpanded = $state<Record<string, boolean>>({});
+    let aiIssueNoteInput = $state<Record<string, string>>({});
+    let isSyncingAI = $state(false);
+    let syncAIMessage = $state<string | null>(null);
+
+    async function syncAIChanges() {
+        isSyncingAI = true;
+        syncAIMessage = null;
+        try {
+            const res = await fetch("/api/checklist/sync-ai", {
+                method: "POST",
+            });
+            const data = await res.json();
+            if (data.success) {
+                syncAIMessage = data.message;
+                // Recargar el checklist para ver los nuevos items
+                await loadChecklist();
+            } else {
+                syncAIMessage = `❌ ${data.error}`;
+            }
+        } catch (e) {
+            syncAIMessage = "❌ Error de conexión";
+        } finally {
+            isSyncingAI = false;
+        }
+    }
+
     async function loadChecklist() {
         isLoading = true;
         error = null;
@@ -365,15 +502,37 @@
             </button>
 
             <button
-                onclick={seedDatabase}
-                disabled={isSeeding || checklistGroups.length > 0}
-                class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                onclick={() => {
+                    if (checklistGroups.length > 0) {
+                        if (
+                            confirm(
+                                "¿Estás seguro de que quieres REINICIALIZAR el checklist? Esto reemplazará todos los items con los datos predefinidos.",
+                            )
+                        ) {
+                            // First delete existing data, then seed
+                            fetch("/api/checklist/clear", { method: "DELETE" })
+                                .then(() => seedDatabase())
+                                .catch(() => seedDatabase());
+                        }
+                    } else {
+                        seedDatabase();
+                    }
+                }}
+                disabled={isSeeding}
+                class="flex items-center gap-2 px-4 py-2 {checklistGroups.length >
+                0
+                    ? 'bg-amber-600 hover:bg-amber-500'
+                    : 'bg-indigo-600 hover:bg-indigo-500'} rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 title={checklistGroups.length > 0
-                    ? "Ya hay datos en la base de datos"
+                    ? "Reinicializar con datos actualizados"
                     : "Cargar datos iniciales"}
             >
                 <Database size={16} class={isSeeding ? "animate-pulse" : ""} />
-                {isSeeding ? "Cargando..." : "Inicializar BD"}
+                {isSeeding
+                    ? "Cargando..."
+                    : checklistGroups.length > 0
+                      ? "Reinicializar BD"
+                      : "Inicializar BD"}
             </button>
 
             <button
@@ -382,6 +541,16 @@
             >
                 <Plus size={16} />
                 Nuevo Grupo
+            </button>
+
+            <button
+                onclick={syncAIChanges}
+                disabled={isSyncingAI}
+                class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                title="Añadir cambios del asistente sin borrar items existentes"
+            >
+                <Zap size={16} class={isSyncingAI ? "animate-pulse" : ""} />
+                {isSyncingAI ? "Sincronizando..." : "Sincronizar Cambios IA"}
             </button>
         </div>
 
@@ -393,6 +562,17 @@
                 transition:fade
             >
                 {seedMessage}
+            </div>
+        {/if}
+
+        {#if syncAIMessage}
+            <div
+                class="p-4 rounded-lg {syncAIMessage.startsWith('✅')
+                    ? 'bg-purple-500/20 border border-purple-500/30 text-purple-300'
+                    : 'bg-red-500/20 border border-red-500/30 text-red-300'}"
+                transition:fade
+            >
+                {syncAIMessage}
             </div>
         {/if}
 

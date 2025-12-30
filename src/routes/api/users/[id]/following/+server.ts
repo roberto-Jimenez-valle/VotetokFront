@@ -7,7 +7,7 @@ import { encodeUserId } from '$lib/server/hashids';
  * GET /api/users/[id]/following
  * Obtiene la lista de usuarios que sigue un usuario
  */
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
     try {
         const userId = parseInt(params.id);
         const limit = parseInt(url.searchParams.get('limit') || '50');
@@ -45,16 +45,40 @@ export const GET: RequestHandler = async ({ params, url }) => {
             skip: offset
         });
 
+        // Get current user to check if we follow these people
+        const currentUser = locals.user;
+        const currentUserId = currentUser?.userId || (currentUser as any)?.id;
+
         // Formatear la respuesta
-        const formattedFollowing = following.map(f => ({
-            id: f.following.id,
-            hashId: encodeUserId(f.following.id),
-            username: f.following.username,
-            displayName: f.following.displayName,
-            avatarUrl: f.following.avatarUrl,
-            verified: f.following.verified,
-            bio: f.following.bio,
-            followedAt: f.createdAt
+        const formattedFollowing = await Promise.all(following.map(async f => {
+            let isFollowing = false;
+            let isPending = false;
+
+            if (currentUserId && currentUserId !== f.following.id) {
+                const rel = await prisma.userFollower.findFirst({
+                    where: {
+                        followerId: Number(currentUserId),
+                        followingId: f.following.id
+                    }
+                });
+                if (rel) {
+                    if (rel.status === 'accepted') isFollowing = true;
+                    else if (rel.status === 'pending') isPending = true;
+                }
+            }
+
+            return {
+                id: f.following.id,
+                hashId: encodeUserId(f.following.id),
+                username: f.following.username,
+                displayName: f.following.displayName,
+                avatarUrl: f.following.avatarUrl,
+                verified: f.following.verified,
+                bio: f.following.bio,
+                followedAt: f.createdAt,
+                isFollowing,
+                isPending
+            };
         }));
 
         return json({
