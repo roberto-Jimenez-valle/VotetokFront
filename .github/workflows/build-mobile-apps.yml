@@ -129,19 +129,17 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
       
-      - name: Export IPA
+      - name: Create App bundle from Archive
         working-directory: ./ios/App
         run: |
-          xcodebuild -exportArchive \
-            -archivePath $PWD/build/App.xcarchive \
-            -exportPath $PWD/build \
-            -exportOptionsPlist $PWD/exportOptions.plist
+          mkdir -p $PWD/build/output
+          cp -R $PWD/build/App.xcarchive/Products/Applications/App.app $PWD/build/output/
       
-      - name: Upload iOS IPA
+      - name: Upload iOS App Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ios-ipa
-          path: ios/App/build/*.ipa
+          name: ios-app
+          path: ios/App/build/output/App.app
           retention-days: 30
 
   create-release:
@@ -158,11 +156,11 @@ jobs:
           name: android-apk
           path: ./artifacts/android
       
-      - name: Download iOS IPA
+      - name: Download iOS App
         if: needs.build-ios.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: ios-ipa
+          name: ios-app
           path: ./artifacts/ios
       
       - name: Create Release
@@ -174,10 +172,10 @@ jobs:
             Automated build from commit ${{ github.sha }}
             
             ## Downloads
-            ${{ needs.build-android.result == 'success' && '- Android APK' || '' }}
-            ${{ needs.build-ios.result == 'success' && '- iOS IPA' || '' }}
+            ${{ needs.build-android.result == 'success' && '- Android APK (ready to install)' || '' }}
+            ${{ needs.build-ios.result == 'success' && '- iOS App Bundle (requires Xcode to install)' || '' }}
           draft: false
           prerelease: false
           files: |
             ./artifacts/android/*.apk
-            ./artifacts/ios/*.ipa
+            ./artifacts/ios/**
