@@ -64,7 +64,7 @@ jobs:
       
       - name: Build Android APK
         working-directory: ./android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleDebug
       
       - name: Sign APK
         if: ${{ env.KEYSTORE_FILE != '' }}

@@ -152,6 +152,7 @@
 
   // Importar Capacitor
   import { Capacitor } from "@capacitor/core";
+  import { Browser } from "@capacitor/browser";
 
   // ... (existing imports/code) ...
 
@@ -184,15 +185,25 @@
 
     if (isNative) {
       console.log(
-        "[AuthModal] 📱 App Nativa detectada, abriendo navegador del sistema...",
+        "[AuthModal] 📱 App Nativa detectada, abriendo Browser in-app...",
       );
       const targetUrl = new URL("/api/auth/google", "https://voutop.com");
 
       // USAR CUSTOM SCHEME para asegurar que vuelve a la app
       targetUrl.searchParams.set("redirect", "voutop://auth-callback");
 
-      // Abrir en navegador del sistema para cumplir políticas de Google
-      window.open(targetUrl.toString(), "_system");
+      // Abrir en Browser nativo (mejor UX que _system)
+      try {
+        await Browser.open({ 
+          url: targetUrl.toString(),
+          windowName: '_self', // Intenta abrir en la misma ventana si es posible
+          presentationStyle: 'popover' // En iOS se ve mejor como modal
+        });
+      } catch (err) {
+        // Fallback si falla el plugin
+        console.error("[AuthModal] Error abriendo Browser plugin:", err);
+        window.open(targetUrl.toString(), "_system");
+      }
       return;
     }
 
