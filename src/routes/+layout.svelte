@@ -1,6 +1,7 @@
 <script lang="ts">
 	import "../app.css";
 	import { App } from "@capacitor/app";
+	import { Browser } from "@capacitor/browser";
 	import { onMount } from "svelte";
 	import { fade, fly, scale } from "svelte/transition";
 	import { cubicOut, quintOut, backOut } from "svelte/easing";
@@ -198,7 +199,7 @@
 		const cleanupFullscreenHistory = initFullscreenIframeHistoryHandler();
 
 		// 📱 Escuchar Deep Links (cuando la app se abre desde voutop://)
-		const appListener = App.addListener("appUrlOpen", (data) => {
+		const appListener = App.addListener("appUrlOpen", async (data) => {
 			console.log("[DeepLink] URL recibida:", data.url);
 
 			// Normalizar URL (si viene como voutop://auth-callback?...)
@@ -220,6 +221,14 @@
 
 				if (authSuccess === "success" && tokenFromUrl && userFromUrl) {
 					console.log("[DeepLink] Procesando login...");
+
+					// Cerrar navegador in-app (importante para Android)
+					try {
+						await Browser.close();
+					} catch (e) {
+						/* Ignorar */
+					}
+
 					const userData = JSON.parse(
 						decodeURIComponent(userFromUrl),
 					);

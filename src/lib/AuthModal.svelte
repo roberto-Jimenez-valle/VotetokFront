@@ -2,7 +2,7 @@
   import { fade, fly } from "svelte/transition";
   import { X, Loader2, CheckCircle2, AlertTriangle } from "lucide-svelte";
   import { createEventDispatcher, onMount, onDestroy } from "svelte";
-  import { setAuth } from "$lib/stores/auth";
+  import { setAuth, currentUser } from "$lib/stores/auth";
   import { browser } from "$app/environment";
 
   interface AuthEventDetail {
@@ -128,6 +128,15 @@
       if (authPopup && !authPopup.closed) {
         authPopup.close();
       }
+    }
+  });
+
+  // Auto-cerrar modal si detectamos login exitoso en el store
+  $effect(() => {
+    if (isOpen && $currentUser) {
+      console.log("[AuthModal] User detectado en store, cerrando modal");
+      isLoading = false;
+      isOpen = false;
     }
   });
 
