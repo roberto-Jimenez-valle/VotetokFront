@@ -22,6 +22,9 @@ on:
       - 'src/**'
       - 'capacitor.config.ts'
 
+permissions:
+  contents: write
+
 jobs:
   build-android:
     if: ${{ github.event.inputs.build_android == 'true' || github.event_name == 'push' }}
