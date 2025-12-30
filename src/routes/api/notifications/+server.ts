@@ -119,7 +119,6 @@ export const GET: RequestHandler = async ({ locals, url }) => {
                 where: {
                     userId: n.actor.id,
                     status: 'active',
-                    isRell: true, // ONLY REELS
                     OR: [
                         { closedAt: null },
                         { closedAt: { gt: new Date() } }
@@ -135,7 +134,6 @@ export const GET: RequestHandler = async ({ locals, url }) => {
                         poll: {
                             userId: n.actor.id,
                             status: 'active',
-                            isRell: true, // ONLY REELS
                             OR: [
                                 { closedAt: null },
                                 { closedAt: { gt: new Date() } }

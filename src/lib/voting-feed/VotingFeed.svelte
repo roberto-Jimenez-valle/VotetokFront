@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { get } from "svelte/store";
   import { page as pageStore } from "$app/stores";
   import { Crown, X, Check, Loader2, Clock } from "lucide-svelte";
   import type {
@@ -1478,6 +1479,40 @@
     if (newPoll) {
       const transformedPoll = transformApiPoll(newPoll);
       posts = [transformedPoll, ...posts];
+
+      // Optimistic Update for Story Bar (Green Border)
+      const userData = get(currentUser);
+      if (userData) {
+        const userId = String(userData.userId ?? userData.id);
+
+        // Find existing story
+        const existingStory = friendStories.find((s) => s.id === userId);
+        let story;
+
+        if (existingStory) {
+          // Clone existing story to avoid proxy mutation issues
+          story = { ...existingStory };
+          // Remove from list (will add back at start)
+          friendStories = friendStories.filter((s) => s.id !== userId);
+        } else {
+          // Create new story entry (Self)
+          story = {
+            id: userId,
+            name: userData.displayName || userData.username || "Tú",
+            avatar:
+              userData.avatarUrl ||
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+            hasNewPoll: true,
+            pollCount: 0,
+          };
+        }
+
+        // Update status and move to front
+        story.hasNewPoll = true;
+        story.pollCount = (story.pollCount || 0) + 1;
+        friendStories = [story, ...friendStories];
+        console.log("[VotingFeed] Optimistic story update (New Poll) for self");
+      }
     }
 
     isCreatePollModalOpen = false;
@@ -1644,12 +1679,43 @@
     });
 
     try {
-      const res = await apiCall(`/api/polls/${post.id}/repost`, {
+      await apiCall(`/api/polls/${post.id}/repost`, {
         method: "POST",
       });
-      // apiCall throws on error, so this block might be redundant if using try/catch properly around apiCall
-      // but let's keep it consistent with previous code style which seemed to expect apiCall to return response
-      // Wait, apiCall throws if !response.ok. So we only reach here if ok.
+
+      // Optimistic Update for Story Bar (Green Border)
+      const userData = get(currentUser);
+      if (userData) {
+        const userId = String(userData.userId ?? userData.id);
+
+        // Find existing story
+        const existingStory = friendStories.find((s) => s.id === userId);
+        let story;
+
+        if (existingStory) {
+          // Clone existing story
+          story = { ...existingStory };
+          // Remove from list
+          friendStories = friendStories.filter((s) => s.id !== userId);
+        } else {
+          // Create new story entry
+          story = {
+            id: userId,
+            name: userData.displayName || userData.username || "Tú",
+            avatar:
+              userData.avatarUrl ||
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+            hasNewPoll: true,
+            pollCount: 0,
+          };
+        }
+
+        // Update status and move to front
+        story.hasNewPoll = true;
+        story.pollCount = (story.pollCount || 0) + 1;
+        friendStories = [story, ...friendStories];
+        console.log("[VotingFeed] Optimistic story update (Repost) for self");
+      }
     } catch (e: any) {
       console.error("Error reposting:", e);
 
@@ -1694,6 +1760,11 @@
   async function handleFriendStoryClick(friendId: string) {
     if (!friendId) return;
 
+    // Optimistic Update: Mark as viewed immediately for instant capability
+    friendStories = friendStories.map((f) =>
+      f.id === friendId ? { ...f, hasNewPoll: false } : f,
+    );
+
     // Load that user's polls and switch to reels
     isLoading = true;
     try {
@@ -1709,21 +1780,15 @@
           posts = userPolls;
           currentView = "reels";
 
-          // Mark this user's hasNewPoll as false (they've been viewed)
-          friendStories = friendStories.map((f) =>
-            f.id === friendId ? { ...f, hasNewPoll: false } : f,
-          );
-
           // Register views in the database for all Rels (fire and forget)
           // This persists the viewed state so they won't show green border on reload
           userPolls.forEach((poll: Post) => {
-            if (poll.isRell) {
-              apiCall(`/api/polls/${poll.id}/view`, { method: "POST" }).catch(
-                () => {
-                  // Silently ignore errors - view tracking is not critical
-                },
-              );
-            }
+            // Register view for ALL content in the story to ensure notification clears
+            apiCall(`/api/polls/${poll.id}/view`, { method: "POST" }).catch(
+              () => {
+                // Silently ignore errors - view tracking is not critical
+              },
+            );
           });
 
           // We are now in a "user mode". goHome needs to handle this.

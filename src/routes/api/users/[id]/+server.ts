@@ -98,11 +98,13 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
       // 2. Unseen Reels Logic (Green Border)
       // Get count of active polls by THIS user
+      // 2. Unseen Reels Logic (Green Border)
+      // Get count of active polls by THIS user
+      // User requirement: ALL polls (standard, retweets, reels) count as "Reels" for the green border
       const activePollsCount = await prisma.poll.count({
         where: {
           userId: userId,
           status: 'active',
-          isRell: true, // ONLY REELS
           OR: [
             { closedAt: null },
             { closedAt: { gt: new Date() } }
@@ -119,7 +121,6 @@ export const GET: RequestHandler = async ({ params, locals }) => {
             poll: {
               userId: userId,
               status: 'active',
-              isRell: true, // ONLY REELS
               OR: [
                 { closedAt: null },
                 { closedAt: { gt: new Date() } }

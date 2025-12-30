@@ -133,12 +133,12 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
     // Obtener estadísticas de reels vistos para el usuario del perfil
     let hasUnseenReels = false;
     if (currentUserId) {
-      // Active non-expired reels
+      // Active non-expired reels (Note: counting all active polls)
       const activeCount = await prisma.poll.count({
         where: {
           userId: profileUserId,
           status: 'active',
-          isRell: true,
+          // removing isRell: true
           OR: [
             { closedAt: null },
             { closedAt: { gt: new Date() } }
@@ -154,7 +154,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
             poll: {
               userId: profileUserId,
               status: 'active',
-              isRell: true,
+              // removing isRell: true
               OR: [
                 { closedAt: null },
                 { closedAt: { gt: new Date() } }

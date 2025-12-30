@@ -11,12 +11,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') ?? '8')));
     const currentUserId = locals.user?.userId;
 
-    // 1. Obtener usuarios que tienen rells
+    // 1. Obtener usuarios que tienen actividad (encuestas)
+    // Note: Counting ALL active polls, not just reels
     const usersWithRells = await prisma.user.findMany({
       where: {
         polls: {
           some: {
-            isRell: true,
+            // isRell: true, // REMOVED
             status: 'active',
             OR: [
               { closedAt: null },
@@ -35,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
           select: {
             polls: {
               where: {
-                isRell: true,
+                // isRell: true, // REMOVED
                 status: 'active',
                 OR: [
                   { closedAt: null },
@@ -48,6 +49,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       },
       take: limit
     });
+
+    // ... (skipping unchanged saves query)
 
     // 2. Obtener usuarios que tienen saves
     const usersWithSaves = await prisma.user.findMany({
@@ -116,12 +119,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     if (currentUserId && users.length > 0) {
       // ... (existing code up to activePollsCounts)
 
-      // Modified: Get Active Poll IDs for debugging
-      const activePolls = await prisma.poll.findMany({
+      // 5. Calculate hasNewPoll (green border) for current user
+      // Logic: Unseen = (Active Authored + Active Reposted) - Viewed
+
+      // A. Get all active authored poll IDs for these users
+      const authoredPolls = await prisma.poll.findMany({
         where: {
           userId: { in: authorIds },
           status: 'active',
-          isRell: true,
           OR: [
             { closedAt: null },
             { closedAt: { gt: new Date() } }
@@ -130,41 +135,73 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         select: { id: true, userId: true }
       });
 
-      // Group active polls by user
-      const activeMap: Record<number, number[]> = {};
-      activePolls.forEach(p => {
-        if (!activeMap[p.userId]) activeMap[p.userId] = [];
-        activeMap[p.userId].push(p.id);
-      });
-
-      // Get viewed interactions
-      const viewedInteractions = await prisma.pollInteraction.findMany({
+      // B. Get all active reposted poll IDs for these users
+      const repostedInteractions = await prisma.pollInteraction.findMany({
         where: {
-          userId: Number(currentUserId),
-          interactionType: 'view',
+          userId: { in: authorIds },
+          interactionType: 'repost',
           poll: {
-            userId: { in: authorIds },
             status: 'active',
-            isRell: true
-            // removed date check here to see if we viewed expired ones? NO, consistent with active check
+            OR: [
+              { closedAt: null },
+              { closedAt: { gt: new Date() } }
+            ]
           }
         },
-        select: { pollId: true, poll: { select: { userId: true } } }
+        select: { pollId: true, userId: true } // userId here is the retweeter
       });
 
-      const viewedMap: Record<number, number[]> = {};
-      viewedInteractions.forEach(v => {
-        const uId = v.poll.userId;
-        if (!viewedMap[uId]) viewedMap[uId] = [];
-        viewedMap[uId].push(v.pollId);
+      // Map: UserID -> Set of PollIDs (Content to see)
+      const userContentMap = new Map<number, Set<number>>();
+
+      // Add authored
+      authoredPolls.forEach(p => {
+        if (!userContentMap.has(p.userId)) userContentMap.set(p.userId, new Set());
+        userContentMap.get(p.userId)?.add(p.id);
       });
 
-      users = users.map(u => {
-        const activeIds = activeMap[u.id] || [];
-        const viewedIds = viewedMap[u.id] || [];
-        const hasNewPoll = activeIds.length > viewedIds.length;
-        return { ...u, hasNewPoll };
+      // Add reposted
+      repostedInteractions.forEach(r => {
+        if (r.userId !== null) { // Should not be null for reposts
+          if (!userContentMap.has(r.userId)) userContentMap.set(r.userId, new Set());
+          userContentMap.get(r.userId)?.add(r.pollId);
+        }
       });
+
+      // C. Get all views by CURRENT user for any of these polls
+      // We need to check against ALL content IDs we found
+      const allContentIds = new Set<number>();
+      userContentMap.forEach(set => set.forEach(id => allContentIds.add(id)));
+
+      if (allContentIds.size > 0) {
+        const viewedPolls = await prisma.pollInteraction.findMany({
+          where: {
+            userId: Number(currentUserId),
+            interactionType: 'view',
+            pollId: { in: Array.from(allContentIds) }
+          },
+          select: { pollId: true }
+        });
+
+        const viewedPollIds = new Set(viewedPolls.map(v => v.pollId));
+
+        users = users.map(u => {
+          const content = userContentMap.get(u.id) || new Set();
+          let hasNewPoll = false;
+
+          // If any content ID is NOT in viewedPollIds, then it's new
+          for (const contentId of content) {
+            if (!viewedPollIds.has(contentId)) {
+              hasNewPoll = true;
+              break;
+            }
+          }
+
+          return { ...u, hasNewPoll };
+        });
+      } else {
+        users = users.map(u => ({ ...u, hasNewPoll: false }));
+      }
     }
 
     /* console.log('[API with-activity] Usuarios encontrados:', users.length);
