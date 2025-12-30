@@ -132,17 +132,18 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
       
-      - name: Create App bundle from Archive
+      - name: Create Unsigned IPA
         working-directory: ./ios/App
         run: |
-          mkdir -p $PWD/build/output
-          cp -R $PWD/build/App.xcarchive/Products/Applications/App.app $PWD/build/output/
+          mkdir -p Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -r App.ipa Payload
       
-      - name: Upload iOS App Bundle
+      - name: Upload iOS IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ios-app
-          path: ios/App/build/output/App.app
+          name: ios-ipa
+          path: ios/App/App.ipa
           retention-days: 30
 
   create-release:
@@ -159,11 +160,11 @@ jobs:
           name: android-apk
           path: ./artifacts/android
       
-      - name: Download iOS App
+      - name: Download iOS IPA
         if: needs.build-ios.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: ios-app
+          name: ios-ipa
           path: ./artifacts/ios
       
       - name: Create Release
@@ -176,9 +177,9 @@ jobs:
             
             ## Downloads
             ${{ needs.build-android.result == 'success' && '- Android APK (ready to install)' || '' }}
-            ${{ needs.build-ios.result == 'success' && '- iOS App Bundle (requires Xcode to install)' || '' }}
+            ${{ needs.build-ios.result == 'success' && '- iOS IPA (unsigned)' || '' }}
           draft: false
           prerelease: false
           files: |
             ./artifacts/android/*.apk
-            ./artifacts/ios/**
+            ./artifacts/ios/*.ipa
