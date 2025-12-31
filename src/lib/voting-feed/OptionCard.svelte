@@ -3,6 +3,7 @@
     Check,
     X,
     Minimize2,
+    Maximize2,
     Sparkles,
     Palette,
     Image as ImageIcon,
@@ -634,7 +635,11 @@
             }}
             class="p-2.5 bg-black/20 hover:bg-black/40 rounded-full text-white backdrop-blur-md border border-white/10 transition-colors"
           >
-            <Minimize2 size={18} />
+            {#if isReels}
+              <Minimize2 size={18} />
+            {:else}
+              <Maximize2 size={18} />
+            {/if}
           </button>
         </div>
 

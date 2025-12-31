@@ -67,6 +67,7 @@
   // User Reels Mode - tracks when viewing a specific user's content
   let isUserReelsMode = $state(false);
   let feedPostsCache = $state<Post[]>([]);
+  let seenInSession = new Set<string>();
 
   // User Reels Queue (Instagram Stories style) - navigate between users
   let userReelsQueue = $state<string[]>([]); // Queue of user IDs with reels
@@ -377,7 +378,41 @@
     hasNewPoll: boolean;
     pollCount: number;
   }
-  let friendStories = $state<FriendStory[]>([]);
+  // Derived Stories: Strictly generate from loaded posts (< 24h old)
+  // This guarantees NO GHOSTS (old users) in the bar.
+  let friendStories = $derived.by(() => {
+    const uniqueUsers = new Map();
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+
+    // Ensure posts have timestamp
+    posts.forEach((post) => {
+      const uId =
+        post.userId !== undefined
+          ? String(post.userId)
+          : post.user?.id
+            ? String(post.user.id)
+            : null;
+      // Time check
+      const pTime = post.timestamp || 0;
+      const isRecent = now - pTime < ONE_DAY;
+
+      if (isRecent && uId && !uniqueUsers.has(uId)) {
+        uniqueUsers.set(uId, {
+          id: uId,
+          name:
+            post.user?.displayName ||
+            post.user?.username ||
+            post.author ||
+            "Usuario",
+          avatar: post.user?.avatarUrl || post.avatar,
+          hasNewPoll: true,
+          pollCount: 1,
+        });
+      }
+    });
+    return Array.from(uniqueUsers.values()).slice(0, 20);
+  });
   let selectedFriendId = $state<string | null>(null);
 
   let sortedFriendStories = $derived.by(() => {
@@ -413,8 +448,52 @@
     return stories;
   });
 
+  // Filter feed posts to exclude RECENT content from users with active stories (deduplication)
+  let filteredFeedPosts = $derived.by(() => {
+    if (currentView === "feed") {
+      if (friendStories.length > 0) {
+        // Robust ID collection using visual list
+        const storyUserIds = new Set(
+          sortedFriendStories.map((f) => String(f.id).trim()),
+        );
+
+        if (storyUserIds.size > 0) {
+          const now = Date.now();
+          const ONE_DAY = 24 * 60 * 60 * 1000;
+
+          const filtered = posts.filter((p) => {
+            const uId =
+              p.userId !== undefined
+                ? String(p.userId)
+                : p.user?.id
+                  ? String(p.user.id)
+                  : "";
+            const isStoryUser = storyUserIds.has(uId.trim());
+
+            if (isStoryUser) {
+              // Logic: If user is in Story Bar, their Recent posts (<24h) are likely duplications of what's in the Reel.
+              // We hide Recent posts, but ALLOW Older posts (>24h) in the feed.
+              const isRecent = p.timestamp ? now - p.timestamp < ONE_DAY : true;
+              return !isRecent;
+            }
+            return true;
+          });
+
+          // If filter results in empty feed (e.g. only recent posts exist), show content anyway (Fallback)
+          if (filtered.length === 0 && posts.length > 0) {
+            return posts;
+          }
+          return filtered;
+        }
+      }
+    }
+    return posts;
+  });
+
   // Load friends with recent activity
-  async function loadFriendStories() {
+  const loadFriendStories = async () => {};
+  /*
+  async function loadFriendStories_DISABLED() {
     try {
       // Try with-activity first
       let response = await apiCall("/api/users/with-activity?limit=20");
@@ -464,20 +543,42 @@
       // Last fallback: Extract users from loaded posts
       if (posts.length > 0) {
         const uniqueUsers = new Map<string, FriendStory>();
+        const now = Date.now();
+        const ONE_DAY = 24 * 60 * 60 * 1000;
+
         posts.forEach((post) => {
-          if (!uniqueUsers.has(post.author)) {
-            uniqueUsers.set(post.author, {
-              id: post.id,
-              name: post.author,
-              avatar: post.avatar,
-              hasNewPoll: true,
+          // Fix: Use correct User ID, not Post ID
+          const uId =
+            post.userId !== undefined
+              ? String(post.userId)
+              : post.user?.id
+                ? String(post.user.id)
+                : null;
+
+          // Filter by time: Only add to story bar if post is < 24h old
+          // This prevents users with old content from appearing in the stories bar
+          const pTime =
+            post.timestamp ||
+            (post.createdAt ? new Date(post.createdAt).getTime() : 0);
+          const isRecent = now - pTime < ONE_DAY;
+
+          if (isRecent && uId && !uniqueUsers.has(uId)) {
+            uniqueUsers.set(uId, {
+              id: uId,
+              name:
+                post.user?.displayName ||
+                post.user?.username ||
+                post.author ||
+                "Usuario",
+              avatar: post.user?.avatarUrl || post.avatar,
+              hasNewPoll: true, // Assume active if in feed & recent
               pollCount: 1,
             });
           }
         });
         friendStories = Array.from(uniqueUsers.values()).slice(0, 20);
         console.log(
-          "[VotingFeed] Friend stories from posts:",
+          "[VotingFeed] Friend stories from posts (Fallback):",
           friendStories.length,
         );
       }
@@ -485,6 +586,7 @@
       console.error("Error loading friend stories:", err);
     }
   }
+  */
 
   // Get time period label
   function getTimePeriodLabel(filter: string): string {
@@ -569,6 +671,8 @@
 
     return {
       id: apiPoll.hashId || String(apiPoll.id),
+      internalId:
+        Math.random().toString(36).substring(2) + Date.now().toString(36),
       numericId: apiPoll.id,
       // Map backend 'ranking' to frontend 'tierlist' to ensure OptionCard renders correctly
       type:
@@ -578,6 +682,9 @@
         apiPoll.user?.avatarUrl ||
         `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiPoll.userId}`,
       time: getTimeAgo(apiPoll.createdAt),
+      timestamp: apiPoll.createdAt
+        ? new Date(apiPoll.createdAt).getTime()
+        : Date.now(),
       question: apiPoll.title || "Sin título",
       collabMode: apiPoll.collabMode, // Añadido
       collaborators: apiPoll.collaborators, // Añadido
@@ -616,6 +723,8 @@
 
         return {
           id: opt.hashId || String(opt.id),
+          internalId:
+            Math.random().toString(36).substring(2) + Date.now().toString(36),
           numericId: opt.id,
           title:
             opt.optionLabel ||
@@ -717,22 +826,41 @@
           const newPosts = apiPolls.map(transformApiPoll);
 
           if (loadMore) {
-            // Deduplicate - filter out polls that already exist
-            const existingIds = new Set(posts.map((p) => p.id));
-            const uniqueNewPosts = newPosts.filter(
-              (p) => !existingIds.has(p.id),
-            );
+            // Logic for Infinite Loop: If back at page 1 with posts, we are looping
+            const isLooping = currentPage === 1 && posts.length > 0;
 
-            // If no unique polls, stop loading
-            if (uniqueNewPosts.length === 0) {
-              hasMore = false;
-              console.log(`[VotingFeed] No new unique polls, stopping`);
+            // Deduplicate only if NOT looping (allow duplicates for infinite scroll)
+            let postsToAdd = newPosts;
+            if (!isLooping) {
+              const existingIds = new Set(posts.map((p) => p.id));
+              postsToAdd = newPosts.filter((p) => !existingIds.has(p.id));
+            }
+
+            if (postsToAdd.length === 0) {
+              // If API returned nothing, it means we reached end of DB
+              if (apiPolls.length === 0) {
+                if (currentPage === 1) {
+                  hasMore = false;
+                  return;
+                }
+                console.log("[VotingFeed] End of feed, looping...");
+                page = 0; // Reset pagination
+                hasMore = true;
+                // Recursive fetch to load page 1 immediately
+                await fetchPolls(true, true);
+              } else {
+                hasMore = false;
+                console.log(
+                  `[VotingFeed] No new unique polls (overlap), stopping`,
+                );
+              }
             } else {
-              posts = [...posts, ...uniqueNewPosts];
+              posts = [...posts, ...postsToAdd];
               page = currentPage;
-              hasMore = newPosts.length >= LIMIT;
+              // If we got items, assume there might be more, especially if looping
+              hasMore = true;
               console.log(
-                `[VotingFeed] Page ${currentPage}: ${uniqueNewPosts.length} new polls added`,
+                `[VotingFeed] Added ${postsToAdd.length} polls (Loop: ${isLooping})`,
               );
             }
           } else {
@@ -1801,6 +1929,10 @@
           // Cache the current feed before overwriting with user polls
           if (!isUserReelsMode && posts.length > 0) {
             feedPostsCache = [...posts];
+            if (feedContainer) {
+              feedScrollPosition = feedContainer.scrollTop;
+            }
+            seenInSession.clear(); // Start fresh tracking for this session
           }
 
           // Set up the user reels queue
@@ -1812,6 +1944,8 @@
 
           isUserReelsMode = true;
           posts = userPolls;
+          // Track viewed polls to filter them from home feed later
+          userPolls.forEach((p: Post) => seenInSession.add(p.id));
           currentReelIndex = 0; // Reset to first reel
           currentView = "reels";
 
@@ -1887,6 +2021,7 @@
 
           // Replace posts with new user's content
           posts = userPolls;
+          userPolls.forEach((p: Post) => seenInSession.add(p.id)); // Track for filtering
           currentReelIndex = 0;
 
           // Scroll to top
@@ -1958,6 +2093,7 @@
 
           // Replace posts with new user's content
           posts = userPolls;
+          userPolls.forEach((p: Post) => seenInSession.add(p.id)); // Track for filtering
 
           // Start at the LAST reel when coming from "below" (previous user)
           currentReelIndex = posts.length - 1;
@@ -1998,7 +2134,15 @@
 
     // If we were in user reels mode, restore the cached feed
     if (isUserReelsMode && feedPostsCache.length > 0) {
-      posts = feedPostsCache;
+      // Filter out polls seen in reels session to keep feed fresh
+      posts = feedPostsCache.filter((p) => !seenInSession.has(p.id));
+
+      // If user watched everything in their feed, fetch more
+      if (posts.length < 3) {
+        fetchPolls(true); // Fetch more (append) or just fetchPolls() for fresh?
+        // If we append, we keep the few remaining. If posts is empty, fetchPolls handles it.
+        if (posts.length === 0) fetchPolls();
+      }
       feedPostsCache = [];
       isUserReelsMode = false;
     } else {
@@ -2006,11 +2150,22 @@
       fetchPolls();
     }
 
-    // Scroll to top
-    const feedContainer = document.querySelector(".overflow-y-auto");
-    if (feedContainer) {
-      feedContainer.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    // Scroll restoration
+    tick().then(() => {
+      // Prefer binded element, fallback to querySelector
+      const container =
+        feedContainer || document.querySelector(".overflow-y-auto");
+
+      if (container) {
+        if (feedScrollPosition > 0) {
+          container.scrollTop = feedScrollPosition;
+          feedScrollPosition = 0;
+        } else {
+          // Default to top if no saved position
+          container.scrollTop = 0;
+        }
+      }
+    });
   }
 
   // Delete Handler (Admin or Author)
@@ -2324,7 +2479,7 @@
                     </button>
                   {/each}
 
-                  {#if sortedFriendStories.length === 0}
+                  {#if sortedFriendStories.length === 0 && isLoading}
                     <!-- Placeholder avatars when loading -->
                     {#each Array(6) as _}
                       <div
@@ -2657,7 +2812,7 @@
 
           <!-- Full Posts -->
           <div class="pt-4">
-            {#each posts as post (post.id)}
+            {#each filteredFeedPosts as post (post.internalId || post.id)}
               <PostCard
                 {post}
                 {userVotes}

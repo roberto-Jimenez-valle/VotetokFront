@@ -31,6 +31,8 @@ export interface PostUser {
 
 export interface Post {
   id: string;
+  internalId?: string; // For frontend unique keying (loops)
+  timestamp?: number; // For filtering recent story posts
   hashId?: string;
   numericId?: number;
   type: PostType;
