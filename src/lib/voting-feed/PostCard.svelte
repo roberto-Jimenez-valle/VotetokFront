@@ -1360,7 +1360,7 @@
         ? ''
         : 'pb-0'} flex items-center justify-between {isReels ? 'px-6' : 'px-4'}"
       style={isReels
-        ? "padding-bottom: calc(1rem + env(safe-area-inset-bottom));"
+        ? "padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));"
         : ""}
     >
       <div class="flex items-center gap-3">
