@@ -70,6 +70,9 @@
     onAvatarClick?: (post: Post) => void;
     onOpenOptions?: (post: Post) => void;
     onStatsClick?: (post: Post) => void;
+    // Story Progress Props
+    storyIndex?: number;
+    storyCount?: number;
   }
 
   let {
@@ -95,6 +98,8 @@
     onAvatarClick,
     onOpenOptions,
     onStatsClick,
+    storyIndex,
+    storyCount,
   }: Props = $props();
 
   import { currentUser } from "$lib/stores/auth";
@@ -712,8 +717,30 @@
     {:else}
       {@const Icon = getIconComponent(config.icon)}
       <div
-        class="px-5 pt-12 z-20 relative pb-2 bg-gradient-to-b from-black/60 via-black/30 to-transparent"
+        class="px-5 pt-8 z-20 relative pb-2 bg-gradient-to-b from-black/60 via-black/30 to-transparent"
       >
+        <!-- Story Progress Bars (User Reels Mode) -->
+        {#if storyCount && storyCount > 1}
+          <div
+            class="absolute top-0 left-0 right-0 px-2 mt-[env(safe-area-inset-top,0)] pt-2 flex gap-1 z-30 pointer-events-none"
+          >
+            {#each Array(storyCount) as _, i}
+              <div
+                class="h-[2px] flex-1 bg-white/30 rounded-full overflow-hidden"
+              >
+                <div
+                  class="h-full bg-white transition-all duration-300"
+                  style="width: {i < (storyIndex || 0)
+                    ? '100%'
+                    : i === (storyIndex || 0)
+                      ? '100%'
+                      : '0%'}"
+                ></div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
         <div class="flex gap-3">
           <!-- Back Button (Reels Only) -->
           <button

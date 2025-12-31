@@ -2902,42 +2902,7 @@
             duration: 600,
           }}
         >
-          <!-- Reels Progress Overlay -->
-          <div class="reels-overlay-minimal">
-            <!-- Avatar on the left -->
-            {#if isUserReelsMode && currentUserReelsAvatar}
-              <img
-                src={currentUserReelsAvatar}
-                alt="User"
-                class="reels-avatar-mini left-avatar"
-              />
-            {/if}
-
-            {#if isUserReelsMode}
-              <!-- Progress bars -->
-              <div class="reels-progress-bars-minimal">
-                {#each posts as _, i}
-                  <div class="progress-bar-mini">
-                    <div
-                      class="progress-bar-fill-mini"
-                      class:active={i === currentReelIndex}
-                      class:completed={i < currentReelIndex}
-                    ></div>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-
-            <!-- Position counter on the right -->
-            {#if isUserReelsMode}
-              <div class="reels-info-mini">
-                <span class="reels-position-mini">
-                  {currentReelIndex + 1}/{posts.length}
-                </span>
-              </div>
-            {/if}
-          </div>
-
+          <!-- Reels Overlay Removed - Moved to PostCard -->
           <div
             bind:this={reelsContainerRef}
             class="reels-container"
@@ -3035,6 +3000,8 @@
                       onAvatarClick={handleAvatarClick}
                       onOpenOptions={handleOpenOptions}
                       onStatsClick={handleStatsClick}
+                      storyIndex={isUserReelsMode ? index : undefined}
+                      storyCount={isUserReelsMode ? posts.length : undefined}
                     />
                   </div>
                 {:else}
@@ -3581,94 +3548,4 @@
   /* ========================================
      REELS PROGRESS INDICATOR - MINIMAL
      ======================================== */
-
-  .reels-overlay-minimal {
-    position: absolute;
-    top: env(safe-area-inset-top, 0);
-    left: 0;
-    right: 0;
-    width: 100%;
-    z-index: 50;
-    padding: 8px 8px 0 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    pointer-events: none;
-  }
-
-  /* Minimal progress bars */
-  .reels-progress-bars-minimal {
-    display: flex;
-    gap: 2px;
-    flex: 1;
-  }
-
-  .progress-bar-mini {
-    flex: 1;
-    height: 2px;
-    background: rgba(255, 255, 255, 0.25);
-    border-radius: 1px;
-    overflow: hidden;
-  }
-
-  .progress-bar-fill-mini {
-    height: 100%;
-    width: 0%;
-    background: rgba(255, 255, 255, 0.4);
-    border-radius: 1px;
-    transition: width 0.2s ease;
-  }
-
-  .progress-bar-fill-mini.completed {
-    width: 100%;
-    background: rgba(255, 255, 255, 0.9);
-  }
-
-  .progress-bar-fill-mini.active {
-    width: 100%;
-    background: white;
-  }
-
-  /* Minimal counter */
-  /* Minimal info container */
-  .reels-info-mini {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.7);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .reels-info-solo {
-    position: absolute;
-    right: 8px;
-    top: 4px; /* Move slightly up when solo to align nicely */
-    padding: 2px 8px;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(4px);
-    border-radius: 12px;
-    font-size: 10px;
-  }
-
-  .reels-avatar-mini {
-    width: 20px; /* Slightly larger for better visibility */
-    height: 20px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    margin-right: 4px; /* Space between avatar and progress bars */
-    flex-shrink: 0;
-  }
-
-  .reels-separator-mini {
-    font-size: 8px;
-    opacity: 0.5;
-  }
-
-  .reels-position-mini {
-    font-variant-numeric: tabular-nums;
-  }
 </style>
