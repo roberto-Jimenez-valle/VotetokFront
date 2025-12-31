@@ -720,7 +720,7 @@
         class="px-5 pt-8 z-20 relative pb-2 bg-gradient-to-b from-black/60 via-black/30 to-transparent"
       >
         <!-- Story Progress Bars (User Reels Mode) -->
-        {#if storyCount && storyCount > 1}
+        {#if storyCount && storyCount > 0}
           <div
             class="absolute top-0 left-0 right-0 px-2 mt-[env(safe-area-inset-top,0)] pt-2 flex gap-1 z-30 pointer-events-none"
           >
@@ -1058,7 +1058,7 @@
         {@const useCarousel = count > maxVisible}
         <div
           class="w-full relative z-10 {isReels
-            ? `flex-1 flex flex-col ${post.type === 'swipe' ? 'pt-12' : 'pt-2'} px-4 pb-6 min-h-0`
+            ? `flex-1 flex flex-col ${post.type === 'swipe' ? 'pt-12' : 'pt-2'} px-4 pb-0 min-h-0 overflow-hidden`
             : 'pl-5 pr-5 pt-1'}"
         >
           <div
@@ -1387,7 +1387,7 @@
         ? ''
         : 'pb-0'} flex items-center justify-between {isReels ? 'px-6' : 'px-4'}"
       style={isReels
-        ? "padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));"
+        ? "padding-bottom: calc(1rem + env(safe-area-inset-bottom));"
         : ""}
     >
       <div class="flex items-center gap-3">
