@@ -450,44 +450,62 @@
 
   // Filter feed posts to exclude RECENT content from users with active stories (deduplication)
   let filteredFeedPosts = $derived.by(() => {
-    if (currentView === "feed") {
-      if (friendStories.length > 0) {
-        // Robust ID collection using visual list
-        const storyUserIds = new Set(
-          sortedFriendStories.map((f) => String(f.id).trim()),
-        );
+    let displayPosts = posts;
 
-        if (storyUserIds.size > 0) {
-          const now = Date.now();
-          const ONE_DAY = 24 * 60 * 60 * 1000;
+    // 1. Deduplication Filter
+    if (currentView === "feed" && friendStories.length > 0) {
+      const storyUserIds = new Set(
+        sortedFriendStories.map((f) => String(f.id).trim()),
+      );
 
-          const filtered = posts.filter((p) => {
-            const uId =
-              p.userId !== undefined
-                ? String(p.userId)
-                : p.user?.id
-                  ? String(p.user.id)
-                  : "";
-            const isStoryUser = storyUserIds.has(uId.trim());
+      if (storyUserIds.size > 0) {
+        const now = Date.now();
+        const ONE_DAY = 24 * 60 * 60 * 1000;
 
-            if (isStoryUser) {
-              // Logic: If user is in Story Bar, their Recent posts (<24h) are likely duplications of what's in the Reel.
-              // We hide Recent posts, but ALLOW Older posts (>24h) in the feed.
-              const isRecent = p.timestamp ? now - p.timestamp < ONE_DAY : true;
-              return !isRecent;
-            }
-            return true;
-          });
+        const filtered = posts.filter((p) => {
+          const uId =
+            p.userId !== undefined
+              ? String(p.userId)
+              : p.user?.id
+                ? String(p.user.id)
+                : "";
+          const isStoryUser = storyUserIds.has(uId.trim());
 
-          // If filter results in empty feed (e.g. only recent posts exist), show content anyway (Fallback)
-          if (filtered.length === 0 && posts.length > 0) {
-            return posts;
+          if (isStoryUser) {
+            // Logic: If user is in Story Bar, their Recent posts (<24h) are likely duplications of what's in the Reel.
+            // We hide Recent posts, but ALLOW Older posts (>24h) in the feed.
+            const isRecent = p.timestamp ? now - p.timestamp < ONE_DAY : true;
+            return !isRecent;
           }
-          return filtered;
+          return true;
+        });
+
+        // If filter results in empty feed (e.g. only recent posts exist), use original posts (Fallback)
+        if (filtered.length > 0 || posts.length === 0) {
+          displayPosts = filtered;
         }
       }
     }
-    return posts;
+
+    // 2. Sort: Unvoted First
+    if (currentView === "feed") {
+      // Create a shallow copy to prevent mutation issues and sort
+      return [...displayPosts].sort((a, b) => {
+        // Check local votes state
+        const aVoted = !!userVotes[a.id];
+        const bVoted = !!userVotes[b.id];
+
+        // If voting status is different, prioritize unvoted (false < true)
+        if (aVoted !== bVoted) {
+          return aVoted ? 1 : -1;
+        }
+
+        // If status is same, maintain original order (stability)
+        return 0;
+      });
+    }
+
+    return displayPosts;
   });
 
   // Load friends with recent activity
