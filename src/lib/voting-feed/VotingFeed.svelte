@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fly } from "svelte/transition";
   import { get } from "svelte/store";
   import { page as pageStore } from "$app/stores";
   import { Crown, X, Check, Loader2, Clock } from "lucide-svelte";
@@ -61,6 +62,22 @@
   // Track liked options during swipe mode (before final submission)
   let swipeLikes = $state<Record<string, string[]>>({});
   let currentView = $state<ViewMode>("feed");
+
+  // User Reels Mode - tracks when viewing a specific user's content
+  let isUserReelsMode = $state(false);
+  let feedPostsCache = $state<Post[]>([]);
+
+  // User Reels Queue (Instagram Stories style) - navigate between users
+  let userReelsQueue = $state<string[]>([]); // Queue of user IDs with reels
+  let currentUserQueueIndex = $state(0); // Current position in the queue
+  let currentUserReelsAuthor = $state(""); // Current user's display name
+  let currentUserReelsAvatar = $state(""); // Current user's avatar URL
+  let isLoadingNextUser = $state(false); // Prevent multiple loads
+  let transitionDirection = $state(1); // 1 for next, -1 for prev
+
+  // Touch tracking for next user navigation
+  let touchStartY = 0;
+  let touchEndY = 0;
 
   let expandedPostId = $state<string | null>(null);
   let expandedOptionId = $state<string | null>(null);
@@ -1377,9 +1394,7 @@
   let targetReelPostId: string | null = $state(null);
   let currentReelIndex = $state(0); // Track current reel for lazy loading
 
-  // State for preserving feed when switching to user specific reels
-  let feedPostsCache: Post[] = $state([]);
-  let isUserReelsMode = $state(false);
+  // State for preserving feed scroll position
   let feedScrollPosition = $state(0);
 
   function switchToReels(postId: string, contextPolls?: Post[]) {
@@ -1765,6 +1780,11 @@
       f.id === friendId ? { ...f, hasNewPoll: false } : f,
     );
 
+    // Build the queue of users with content (from sorted friend stories)
+    // This enables Instagram-style navigation between users
+    const queue = sortedFriendStories.map((f) => f.id);
+    const queueIndex = queue.indexOf(friendId);
+
     // Load that user's polls and switch to reels
     isLoading = true;
     try {
@@ -1777,7 +1797,21 @@
         );
 
         if (userPolls.length > 0) {
+          // Cache the current feed before overwriting with user polls
+          if (!isUserReelsMode && posts.length > 0) {
+            feedPostsCache = [...posts];
+          }
+
+          // Set up the user reels queue
+          userReelsQueue = queue;
+          currentUserQueueIndex = queueIndex >= 0 ? queueIndex : 0;
+          const storyUser = sortedFriendStories.find((f) => f.id === friendId);
+          currentUserReelsAuthor = storyUser?.name || "";
+          currentUserReelsAvatar = storyUser?.avatar || "";
+
+          isUserReelsMode = true;
           posts = userPolls;
+          currentReelIndex = 0; // Reset to first reel
           currentView = "reels";
 
           // Register views in the database for all Rels (fire and forget)
@@ -1808,11 +1842,168 @@
     }
   }
 
+  // Load the next user's reels in the queue
+  // Load the next user's reels in the queue
+  async function loadNextUserInQueue() {
+    if (!isUserReelsMode || userReelsQueue.length === 0 || isLoadingNextUser)
+      return;
+    isLoadingNextUser = true;
+    transitionDirection = 1; // Transition forward (up/left)
+
+    const nextIndex = currentUserQueueIndex + 1;
+
+    // If we've reached the end of the queue, exit reels mode
+    if (nextIndex >= userReelsQueue.length) {
+      console.log("[VotingFeed] End of user queue, returning to feed");
+      goHome();
+      isLoadingNextUser = false;
+      return;
+    }
+
+    const nextUserId = userReelsQueue[nextIndex];
+
+    // Mark current user as viewed
+    friendStories = friendStories.map((f) =>
+      f.id === nextUserId ? { ...f, hasNewPoll: false } : f,
+    );
+
+    try {
+      const response = await apiCall(`/api/users/${nextUserId}/polls`);
+      if (response.ok) {
+        const data = await response.json();
+        const userPolls = (data.data || data.polls || data || []).map(
+          transformApiPoll,
+        );
+
+        if (userPolls.length > 0) {
+          // Update queue position and author
+          currentUserQueueIndex = nextIndex;
+          const storyUser = sortedFriendStories.find(
+            (f) => f.id === nextUserId,
+          );
+          currentUserReelsAuthor = storyUser?.name || "";
+          currentUserReelsAvatar = storyUser?.avatar || "";
+
+          // Replace posts with new user's content
+          posts = userPolls;
+          currentReelIndex = 0;
+
+          // Scroll to top
+          if (reelsContainerRef) {
+            reelsContainerRef.scrollTop = 0;
+          }
+
+          // Register views
+          userPolls.forEach((poll: Post) => {
+            apiCall(`/api/polls/${poll.id}/view`, { method: "POST" }).catch(
+              () => {},
+            );
+          });
+
+          console.log(
+            `[VotingFeed] Loaded next user: ${currentUserReelsAuthor} (${userPolls.length} reels)`,
+          );
+          isLoadingNextUser = false;
+        } else {
+          // Skip users with no polls and try next
+          currentUserQueueIndex = nextIndex;
+          isLoadingNextUser = false;
+          loadNextUserInQueue();
+        }
+      }
+    } catch (e) {
+      console.error("Error loading next user reels:", e);
+      // Skip to next user on error
+      currentUserQueueIndex = nextIndex;
+      isLoadingNextUser = false;
+      loadNextUserInQueue();
+    }
+  }
+
+  // Load the previous user's reels (Swipe Down at start)
+  async function loadPreviousUserInQueue() {
+    if (!isUserReelsMode || userReelsQueue.length === 0 || isLoadingNextUser)
+      return;
+
+    const prevIndex = currentUserQueueIndex - 1;
+
+    // If it's the first user, maybe return to feed?
+    if (prevIndex < 0) {
+      console.log("[VotingFeed] Start of queue, returning to feed");
+      goHome();
+      return;
+    }
+
+    isLoadingNextUser = true; // Block other loads
+    transitionDirection = -1; // Transition backward (down/right)
+
+    const prevUserId = userReelsQueue[prevIndex];
+
+    try {
+      const response = await apiCall(`/api/users/${prevUserId}/polls`);
+      if (response.ok) {
+        const data = await response.json();
+        const userPolls = (data.data || data.polls || data || []).map(
+          transformApiPoll,
+        );
+
+        if (userPolls.length > 0) {
+          currentUserQueueIndex = prevIndex;
+          const storyUser = sortedFriendStories.find(
+            (f) => f.id === prevUserId,
+          );
+          currentUserReelsAuthor = storyUser?.name || "";
+          currentUserReelsAvatar = storyUser?.avatar || "";
+
+          // Replace posts with new user's content
+          posts = userPolls;
+
+          // Start at the LAST reel when coming from "below" (previous user)
+          currentReelIndex = posts.length - 1;
+
+          // Scroll to bottom immediately (after tick to ensure DOM is ready)
+          if (reelsContainerRef) {
+            const reelHeight =
+              reelsContainerRef.clientHeight || window.innerHeight;
+            // Calculate max scroll but ensure we don't exceed it initially to allow snap to work
+            setTimeout(() => {
+              if (reelsContainerRef) {
+                reelsContainerRef.scrollTop = currentReelIndex * reelHeight;
+              }
+            }, 0);
+          }
+        } else {
+          // Skip empty users backwards
+          currentUserQueueIndex = prevIndex;
+          isLoadingNextUser = false;
+          loadPreviousUserInQueue(); // Recursively try previous
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Error loading prev user:", e);
+      currentUserQueueIndex = prevIndex;
+      isLoadingNextUser = false;
+      loadPreviousUserInQueue();
+      return;
+    }
+
+    isLoadingNextUser = false;
+  }
+
   // Ref Updated goHome
   function goHome() {
     currentView = "feed";
-    // Reload main feed to ensure we aren't stuck on user polls
-    fetchPolls();
+
+    // If we were in user reels mode, restore the cached feed
+    if (isUserReelsMode && feedPostsCache.length > 0) {
+      posts = feedPostsCache;
+      feedPostsCache = [];
+      isUserReelsMode = false;
+    } else {
+      // Reload main feed to ensure we aren't stuck on user polls
+      fetchPolls();
+    }
 
     // Scroll to top
     const feedContainer = document.querySelector(".overflow-y-auto");
@@ -2507,82 +2698,181 @@
       </div>
     {:else if currentView === "reels"}
       {@const VISIBLE_BUFFER = 2}
-      <div
-        bind:this={reelsContainerRef}
-        class="reels-container"
-        onscroll={(e) => {
-          const target = e.target as HTMLElement;
-          const scrollTop = target.scrollTop;
-          const reelHeight = target.clientHeight || window.innerHeight;
-          const newIndex = Math.round(scrollTop / reelHeight);
+      {@const currentPost = posts[currentReelIndex]}
 
-          // Close expanded view on scroll
-          if (expandedPostId) {
-            setExpanded(null, null);
-          }
+      <!-- Full Page Transition Wrapper -->
+      {#key currentUserQueueIndex}
+        <div
+          class="absolute inset-0 w-full h-full overflow-hidden"
+          in:fly={{
+            x: transitionDirection * 100 + "%",
+            duration: 400,
+            opacity: 1,
+          }}
+          out:fly={{
+            x: -transitionDirection * 100 + "%",
+            duration: 400,
+            opacity: 0.5,
+          }}
+        >
+          <!-- Reels Progress Overlay -->
+          <div class="reels-overlay-minimal">
+            <!-- Avatar on the left -->
+            {#if isUserReelsMode && currentUserReelsAvatar}
+              <img
+                src={currentUserReelsAvatar}
+                alt="User"
+                class="reels-avatar-mini left-avatar"
+              />
+            {/if}
 
-          // Update current index for lazy rendering
-          if (newIndex !== currentReelIndex) {
-            currentReelIndex = newIndex;
-          }
-
-          // Load more when near the end
-          if (newIndex >= posts.length - 3 && hasMore && !isLoadingMore) {
-            fetchPolls(true);
-          }
-        }}
-      >
-        {#each posts as post, index (post.id)}
-          {@const shouldRender =
-            Math.abs(index - currentReelIndex) <= VISIBLE_BUFFER}
-          <div class="reel-slide" data-index={index}>
-            {#if shouldRender}
-              <div class="reel-content">
-                <PostCard
-                  {post}
-                  {userVotes}
-                  {rankingDrafts}
-                  {swipeIndices}
-                  {expandedPostId}
-                  {expandedOptionId}
-                  {addingPostId}
-                  onVote={handleVote}
-                  onToggleRank={handleToggleRank}
-                  onPopRank={handlePopRank}
-                  onSwipe={handleSwipe}
-                  onAddCollab={handleAddCollab}
-                  {setExpanded}
-                  {setAdding}
-                  {switchToReels}
-                  viewMode="reels"
-                  onComment={handleComment}
-                  onShare={handleShare}
-                  onRepost={handleRepost}
-                  onAvatarClick={handleAvatarClick}
-                  onOpenOptions={handleOpenOptions}
-                  onStatsClick={handleStatsClick}
-                />
+            {#if isUserReelsMode}
+              <!-- Progress bars -->
+              <div class="reels-progress-bars-minimal">
+                {#each posts as _, i}
+                  <div class="progress-bar-mini">
+                    <div
+                      class="progress-bar-fill-mini"
+                      class:active={i === currentReelIndex}
+                      class:completed={i < currentReelIndex}
+                    ></div>
+                  </div>
+                {/each}
               </div>
-            {:else}
-              <!-- Placeholder for non-visible reels (maintains scroll position) -->
-              <div class="reel-placeholder">
-                <div class="reel-placeholder-content">
-                  <Loader2 size={32} class="animate-spin text-white/30" />
+            {/if}
+
+            <!-- Position counter on the right -->
+            <div
+              class="reels-info-mini"
+              class:reels-info-solo={!isUserReelsMode}
+            >
+              <span class="reels-position-mini">
+                {currentReelIndex + 1}{#if isUserReelsMode}/{posts.length}{/if}
+              </span>
+            </div>
+          </div>
+
+          <div
+            bind:this={reelsContainerRef}
+            class="reels-container"
+            ontouchstart={(e) => {
+              touchStartY = e.changedTouches[0].screenY;
+            }}
+            ontouchend={(e) => {
+              touchEndY = e.changedTouches[0].screenY;
+              const diff = touchStartY - touchEndY;
+
+              if (isUserReelsMode) {
+                // Swipe Up (Next User)
+                if (currentReelIndex === posts.length - 1 && diff > 50) {
+                  loadNextUserInQueue();
+                }
+                // Swipe Down (Previous User) - only if at top
+                else if (currentReelIndex === 0 && diff < -50) {
+                  loadPreviousUserInQueue();
+                }
+              }
+            }}
+            onwheel={(e) => {
+              if (!isUserReelsMode || isLoadingNextUser) return;
+
+              const target = e.currentTarget as HTMLElement;
+              // Check if scrolled to bottom (allow 2px margin of error)
+              const isAtBottom =
+                Math.abs(
+                  target.scrollHeight - target.scrollTop - target.clientHeight,
+                ) < 2;
+              const isAtTop = target.scrollTop <= 0;
+
+              // Debounce threshold for wheel delta to prevent accidental triggers
+              const threshold = 30;
+
+              if (isAtBottom && e.deltaY > threshold) {
+                loadNextUserInQueue();
+              } else if (isAtTop && e.deltaY < -threshold) {
+                loadPreviousUserInQueue();
+              }
+            }}
+            onscroll={(e) => {
+              const target = e.target as HTMLElement;
+              const scrollTop = target.scrollTop;
+              const reelHeight = target.clientHeight || window.innerHeight;
+              const newIndex = Math.round(scrollTop / reelHeight);
+
+              // Close expanded view on scroll
+              if (expandedPostId) {
+                setExpanded(null, null);
+              }
+
+              // Update current index for lazy rendering
+              if (newIndex !== currentReelIndex) {
+                currentReelIndex = newIndex;
+              }
+
+              // Load more when near the end (only for general feed mode)
+              if (
+                !isUserReelsMode &&
+                newIndex >= posts.length - 3 &&
+                hasMore &&
+                !isLoadingMore
+              ) {
+                fetchPolls(true);
+              }
+            }}
+          >
+            {#each posts as post, index (post.id)}
+              {@const shouldRender =
+                Math.abs(index - currentReelIndex) <= VISIBLE_BUFFER}
+              <div class="reel-slide" data-index={index}>
+                {#if shouldRender}
+                  <div class="reel-content">
+                    <PostCard
+                      {post}
+                      {userVotes}
+                      {rankingDrafts}
+                      {swipeIndices}
+                      {expandedPostId}
+                      {expandedOptionId}
+                      {addingPostId}
+                      onVote={handleVote}
+                      onToggleRank={handleToggleRank}
+                      onPopRank={handlePopRank}
+                      onSwipe={handleSwipe}
+                      onAddCollab={handleAddCollab}
+                      {setExpanded}
+                      {setAdding}
+                      {switchToReels}
+                      viewMode="reels"
+                      onComment={handleComment}
+                      onShare={handleShare}
+                      onRepost={handleRepost}
+                      onAvatarClick={handleAvatarClick}
+                      onOpenOptions={handleOpenOptions}
+                      onStatsClick={handleStatsClick}
+                    />
+                  </div>
+                {:else}
+                  <!-- Placeholder for non-visible reels (maintains scroll position) -->
+                  <div class="reel-placeholder">
+                    <div class="reel-placeholder-content">
+                      <Loader2 size={32} class="animate-spin text-white/30" />
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            {/each}
+
+            <!-- Loading indicator at end -->
+            {#if isLoadingMore}
+              <div class="reel-slide">
+                <div class="reel-placeholder">
+                  <Loader2 size={40} class="animate-spin text-white/50" />
                 </div>
               </div>
             {/if}
           </div>
-        {/each}
-
-        <!-- Loading indicator at end -->
-        {#if isLoadingMore}
-          <div class="reel-slide">
-            <div class="reel-placeholder">
-              <Loader2 size={40} class="animate-spin text-white/50" />
-            </div>
-          </div>
-        {/if}
-      </div>
+        </div>
+      {/key}
     {/if}
   </main>
 
@@ -3099,5 +3389,98 @@
   :global(html),
   :global(body) {
     overscroll-behavior-y: contain;
+  }
+
+  /* ========================================
+     REELS PROGRESS INDICATOR - MINIMAL
+     ======================================== */
+
+  .reels-overlay-minimal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding: 0 8px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  /* Minimal progress bars */
+  .reels-progress-bars-minimal {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+  }
+
+  .progress-bar-mini {
+    flex: 1;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill-mini {
+    height: 100%;
+    width: 0%;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 1px;
+    transition: width 0.2s ease;
+  }
+
+  .progress-bar-fill-mini.completed {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .progress-bar-fill-mini.active {
+    width: 100%;
+    background: white;
+  }
+
+  /* Minimal counter */
+  /* Minimal info container */
+  .reels-info-mini {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .reels-info-solo {
+    position: absolute;
+    right: 8px;
+    top: 4px; /* Move slightly up when solo to align nicely */
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    border-radius: 12px;
+    font-size: 10px;
+  }
+
+  .reels-avatar-mini {
+    width: 20px; /* Slightly larger for better visibility */
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    margin-right: 4px; /* Space between avatar and progress bars */
+    flex-shrink: 0;
+  }
+
+  .reels-separator-mini {
+    font-size: 8px;
+    opacity: 0.5;
+  }
+
+  .reels-position-mini {
+    font-variant-numeric: tabular-nums;
   }
 </style>
