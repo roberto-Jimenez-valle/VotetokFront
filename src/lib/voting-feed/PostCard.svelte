@@ -712,7 +712,7 @@
     {:else}
       {@const Icon = getIconComponent(config.icon)}
       <div
-        class="px-5 pt-6 pb-2 bg-gradient-to-b from-black/60 via-black/30 to-transparent"
+        class="px-5 pt-12 z-20 relative pb-2 bg-gradient-to-b from-black/60 via-black/30 to-transparent"
       >
         <div class="flex gap-3">
           <!-- Back Button (Reels Only) -->
