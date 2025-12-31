@@ -3483,6 +3483,7 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
     padding-bottom: 0;
+    overflow-x: hidden;
   }
 
   .reels-container::-webkit-scrollbar {
@@ -3583,10 +3584,11 @@
      ======================================== */
 
   .reels-overlay-minimal {
-    position: fixed;
+    position: absolute;
     top: env(safe-area-inset-top, 0);
     left: 0;
     right: 0;
+    width: 100%;
     z-index: 50;
     padding: 8px 8px 0 8px;
     display: flex;
