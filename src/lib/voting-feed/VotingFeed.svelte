@@ -3566,11 +3566,11 @@
 
   .reels-overlay-minimal {
     position: fixed;
-    top: 0;
+    top: env(safe-area-inset-top, 0);
     left: 0;
     right: 0;
     z-index: 50;
-    padding: 0 8px 0 8px;
+    padding: 8px 8px 0 8px;
     display: flex;
     align-items: center;
     gap: 8px;
