@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { fly } from "svelte/transition";
+  import { onMount, tick } from "svelte";
+  import { fly, scale } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import { get } from "svelte/store";
   import { page as pageStore } from "$app/stores";
   import { Crown, X, Check, Loader2, Clock } from "lucide-svelte";
@@ -2122,6 +2123,20 @@
     // Refetch polls with new time filter
     fetchPolls();
   }
+  // Custom transition to keep element in background with depth effect
+  function stayBackground(node: Element, { duration }: { duration: number }) {
+    return {
+      duration,
+      css: (t: number) => {
+        return `
+          transform: scale(${0.92 + 0.08 * t});
+          opacity: ${0.5 + 0.5 * t};
+          filter: brightness(${0.5 + 0.5 * t});
+          z-index: 0;
+        `;
+      },
+    };
+  }
 </script>
 
 <div
@@ -2703,16 +2718,15 @@
       <!-- Full Page Transition Wrapper -->
       {#key currentUserQueueIndex}
         <div
-          class="absolute inset-0 w-full h-full overflow-hidden"
+          class="absolute inset-0 w-full h-full overflow-hidden bg-black"
           in:fly={{
-            x: transitionDirection * 100 + "%",
-            duration: 400,
+            y: transitionDirection * 100 + "%",
+            duration: 600,
+            easing: cubicOut,
             opacity: 1,
           }}
-          out:fly={{
-            x: -transitionDirection * 100 + "%",
-            duration: 400,
-            opacity: 0.5,
+          out:stayBackground={{
+            duration: 600,
           }}
         >
           <!-- Reels Progress Overlay -->
