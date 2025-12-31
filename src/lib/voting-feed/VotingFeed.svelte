@@ -2929,14 +2929,13 @@
             {/if}
 
             <!-- Position counter on the right -->
-            <div
-              class="reels-info-mini"
-              class:reels-info-solo={!isUserReelsMode}
-            >
-              <span class="reels-position-mini">
-                {currentReelIndex + 1}{#if isUserReelsMode}/{posts.length}{/if}
-              </span>
-            </div>
+            {#if isUserReelsMode}
+              <div class="reels-info-mini">
+                <span class="reels-position-mini">
+                  {currentReelIndex + 1}/{posts.length}
+                </span>
+              </div>
+            {/if}
           </div>
 
           <div
